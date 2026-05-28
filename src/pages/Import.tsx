@@ -241,6 +241,7 @@ export default function Import() {
         try {
           await postImport(
             watchConfig.handle,
+            pf.parentHandle,
             pf.fileHandle,
             watchConfig.postImportAction
           );

@@ -197,9 +197,10 @@ export default function Settings() {
             </Typography>
             <Typography variant="caption" color="text.secondary">
               Point Strictly Spending at a folder on your machine. New CSVs
-              you drop in are auto-detected and offered for import — with
-              content-hash deduplication so the same file is never imported
-              twice (even if renamed).
+              you drop in (or in any subfolder, up to 5 levels deep) are
+              auto-detected and offered for import — with content-hash
+              deduplication so the same file is never imported twice (even
+              if renamed or moved between folders).
             </Typography>
           </Box>
 
