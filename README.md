@@ -74,6 +74,20 @@ Override the output directory or app URL via env vars:
 SCREENSHOTS_OUT=./out STRICTLY_SPENDING_URL=http://localhost:3000 node scripts/capture-screenshots.mjs
 ```
 
+### Personal merchant rules (private, not committed)
+
+The starter pack in `src/seed.ts` is intentionally broad — many alternatives per category — so the presence of any single brand reveals nothing about who set it up.
+
+If you want to add your own merchants in code (e.g., a specific landlord, gym, or local restaurant), copy the template:
+
+```bash
+cp src/seed.local.example.ts src/seed.local.ts
+```
+
+Edit `src/seed.local.ts` and add your rules. The file is in `.gitignore` — it stays on your machine. The build merges its `LOCAL_RULES` array into the starter pack automatically (Vite resolves the optional import at build time).
+
+You can also add merchants through the **Sort** or **Rules** page at runtime; those are stored in IndexedDB. Use the **Backup** button on the Import page to preserve them across browsers.
+
 ### Parser tests
 
 The CSV parser tests under `src/parsers/parsers.test.ts` need real bank exports as fixtures. They're skipped automatically when the fixtures aren't present.

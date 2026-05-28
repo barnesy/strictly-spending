@@ -36,6 +36,10 @@ strictly-spending-backup-*.json
 *.backup
 *.backup.json
 
+# Personal seed extras — your private merchant rules (see
+# src/seed.local.example.ts). Never enters the public repo.
+src/seed.local.ts
+
 # Test fixtures (real bank CSVs live outside the repo; see parsers.test.ts)
 fixtures/
 test-fixtures/
