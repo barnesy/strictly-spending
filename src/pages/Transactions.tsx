@@ -82,7 +82,7 @@ export default function Transactions() {
   const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);
 
   const accountName = (id: number) =>
-    accounts?.find((a) => a.id === id)?.name || '—';
+    accounts?.find((a) => a.id === id)?.name || '–';
   const categoryColor = (name: string) =>
     categories?.find((c) => c.name === name)?.color || '#bdbdbd';
 

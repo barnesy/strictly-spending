@@ -83,7 +83,7 @@ export default function Import() {
       let perm = await checkPermission(watchConfig.handle);
       if (perm === 'prompt') perm = await requestPermission(watchConfig.handle);
       if (perm !== 'granted') {
-        setScanError('Folder access not granted — open Settings to re-grant');
+        setScanError('Folder access not granted. Open Settings to re-grant.');
         return;
       }
       const result = await scanFolder(watchConfig.handle);
@@ -387,9 +387,8 @@ export default function Import() {
             <Typography variant="caption" color="text.secondary">
               Export a single JSON file containing every transaction, rule,
               category, override, and budget. Keep it somewhere safe (iCloud
-              Drive, Time Machine, anywhere outside the browser) — you can
-              restore from it if your browser data gets wiped or you switch
-              machines.
+              Drive, Time Machine, anywhere outside the browser). Restore
+              from it if your browser data gets wiped or you switch machines.
             </Typography>
           </Box>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

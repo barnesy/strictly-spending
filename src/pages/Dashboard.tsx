@@ -871,7 +871,7 @@ function TopCategoriesCard({
                     </Typography>
                   ) : (
                     <Typography variant="caption" color="text.secondary">
-                      —
+                      –
                     </Typography>
                   )}
                 </TableCell>
@@ -1131,7 +1131,7 @@ function UncategorizedBanner({ allTxns }: { allTxns: Transaction[] }) {
       sx={{ alignItems: 'center' }}
     >
       <strong>{count}</strong> uncategorized transactions are skewing your
-      Dashboard totals. Triage them in the Sort view — usually a couple of
+      Dashboard totals. Triage them in the Sort view. Usually a couple of
       minutes.
     </Alert>
   );

@@ -111,7 +111,7 @@ export default function RecurringBurnCard({
 
       {rows.length === 0 ? (
         <Box sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
-          No recurring charges detected yet — need at least 3 evenly-spaced
+          No recurring charges detected yet. Needs at least 3 evenly-spaced
           charges from a merchant.
         </Box>
       ) : (

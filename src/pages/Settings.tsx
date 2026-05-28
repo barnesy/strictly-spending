@@ -70,7 +70,7 @@ export default function Settings() {
       const r = await seedDemoData();
       setDemoMsg(
         r.alreadyPresent
-          ? 'Demo data already present — nothing added'
+          ? 'Demo data already present. Nothing added.'
           : `Added ${r.added} demo transactions across 3 demo accounts`
       );
     } catch (e) {
@@ -198,7 +198,7 @@ export default function Settings() {
             <Typography variant="caption" color="text.secondary">
               Point Strictly Spending at a folder on your machine. New CSVs
               you drop in (or in any subfolder, up to 5 levels deep) are
-              auto-detected and offered for import — with content-hash
+              auto-detected and offered for import, with content-hash
               deduplication so the same file is never imported twice (even
               if renamed or moved between folders).
             </Typography>
@@ -325,7 +325,7 @@ export default function Settings() {
                   color="text.secondary"
                   sx={{ display: 'block', mt: 1 }}
                 >
-                  Default: <strong>Move</strong> — keeps history without
+                  Default: <strong>Move</strong>. Keeps history without
                   cluttering the watch folder.
                 </Typography>
               </Box>
@@ -372,7 +372,7 @@ export default function Settings() {
               through the current month. Useful for exploring features
               without your real data, screenshots, or sharing the app
               without exposing personal finances. Your real accounts are
-              never touched — demo accounts are clearly labelled with{' '}
+              never touched. Demo accounts are clearly labelled with{' '}
               <code>Demo:</code> prefixes.
             </Typography>
           </Box>
@@ -409,8 +409,8 @@ export default function Settings() {
               )}
             </Stack>
             <Typography variant="caption" color="text.secondary">
-              Hides your real accounts and transactions across every view —
-              Dashboard, Forecast, Transactions — and shows only the{' '}
+              Hides your real accounts and transactions across every view
+              (Dashboard, Forecast, Transactions) and shows only the{' '}
               <code>Demo:</code> data. Your real data stays on disk; turn this
               off to see it again. Handy for screenshots, demos, and
               share-screen moments.

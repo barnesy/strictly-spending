@@ -345,7 +345,7 @@ function RecurringCard({
 
       {items.length === 0 ? (
         <Box sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
-          No recurring charges detected yet — need at least 3 evenly-spaced
+          No recurring charges detected yet. Needs at least 3 evenly-spaced
           charges from a merchant.
         </Box>
       ) : (
@@ -599,7 +599,7 @@ function BudgetCard({
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Set what you want to spend per category next month. Initial values
-            auto-seeded from your trailing 3-month actuals — edit to budget
+            auto-seeded from your trailing 3-month actuals. Edit to budget
             differently.
           </Typography>
         </Box>

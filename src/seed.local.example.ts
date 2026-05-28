@@ -3,13 +3,13 @@
 // HOW TO USE
 //   1. Copy this file to `src/seed.local.ts` (same directory, drop the `.example`).
 //   2. Add your own merchant rules below.
-//   3. Run `npm run dev` — the rules merge in automatically.
+//   3. Run `npm run dev`. The rules merge in automatically.
 //
 // PRIVACY
 //   `src/seed.local.ts` is in .gitignore. It will NOT be committed to git,
 //   so your personal merchants stay on your machine. Only this `.example`
 //   file is checked in. The default starter pack in `seed.ts` is a wide
-//   generic US-household list — nothing in it implies personal usage.
+//   generic US-household list. Nothing in it implies personal usage.
 //
 // FORMAT
 //   Same shape as the rules in `seed.ts`. Each rule has:
@@ -34,7 +34,7 @@ import type { CategoryRule } from './types';
 type StarterRule = Omit<CategoryRule, 'id' | 'createdAt'>;
 
 export const LOCAL_RULES: StarterRule[] = [
-  // Example — uncomment and edit:
+  // Example. Uncomment and edit:
   // { pattern: 'YOUR LANDLORD NAME', category: 'Housing', priority: 100 },
   // { pattern: 'YOUR GYM', category: 'Health', priority: 100 },
   // { pattern: 'FAVORITE COFFEE SHOP', category: 'Restaurants & Coffee', priority: 100 },

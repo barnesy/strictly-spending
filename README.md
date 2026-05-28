@@ -2,7 +2,7 @@
 
 > *Where is the money actually going?*
 
-A local-first household spending dashboard. Multi-bank CSV ingestion, rule-based categorization, recurring-charge detection, per-category budgets, and a rapid-triage **Sort** view — all in the browser. **No server. No cloud. No account credentials.**
+A local-first household spending dashboard. Multi-bank CSV ingestion, rule-based categorization, recurring-charge detection, per-category budgets, and a rapid-triage **Sort** view, all in the browser. **No server. No cloud. No account credentials.**
 
 ![Strictly Spending dashboard](docs/hero.png)
 
@@ -14,13 +14,13 @@ A local-first household spending dashboard. Multi-bank CSV ingestion, rule-based
 - **Projects next month** by splitting recurring (locked-in) from per-category budgets (trailing average). Toggle individual recurring charges or budget lines to simulate cuts.
 - **Sort view** turns the dreaded post-import Uncategorized triage into a card-stack interaction. One decision per merchant categorizes every past *and* future transaction from that merchant. `Enter` accepts the suggested category, `1`–`9` pick from the grid, `⌘Z` undoes.
 - **JSON backup & restore** for moving data between browsers or surviving a *Clear site data*. Single file, plain JSON, no encryption (store it yourself).
-- **Demo mode** — a Settings toggle that hides real data and shows only `Demo:` records app-wide, useful for screenshots, demos, or share-screen calls.
+- **Demo mode**: a Settings toggle that hides real data and shows only `Demo:` records app-wide, useful for screenshots, demos, or share-screen calls.
 
 ## Privacy & data
 
-Everything lives in your browser's IndexedDB. The app never makes network requests with your financial data. There is no account, no login, no telemetry. If you `Clear site data` in DevTools, your data is gone — use the JSON Backup tool on the Import page to keep a copy outside the browser sandbox.
+Everything lives in your browser's IndexedDB. The app never makes network requests with your financial data. There is no account, no login, no telemetry. If you `Clear site data` in DevTools, your data is gone. Use the JSON Backup tool on the Import page to keep a copy outside the browser sandbox.
 
-CSV exports stay on your machine; the parsers run client-side. The watch-folder integration uses the browser's File System Access API, which holds a permission-scoped directory handle persistently in IndexedDB — re-grant once, then drops in just work.
+CSV exports stay on your machine; the parsers run client-side. The watch-folder integration uses the browser's File System Access API, which holds a permission-scoped directory handle persistently in IndexedDB. Re-grant once, then drops in just work.
 
 ## Stack
 
@@ -76,7 +76,7 @@ SCREENSHOTS_OUT=./out STRICTLY_SPENDING_URL=http://localhost:3000 node scripts/c
 
 ### Personal merchant rules (private, not committed)
 
-The starter pack in `src/seed.ts` is intentionally broad — many alternatives per category — so the presence of any single brand reveals nothing about who set it up.
+The starter pack in `src/seed.ts` is intentionally broad, with many alternatives per category, so the presence of any single brand reveals nothing about who set it up.
 
 If you want to add your own merchants in code (e.g., a specific landlord, gym, or local restaurant), copy the template:
 
@@ -84,7 +84,7 @@ If you want to add your own merchants in code (e.g., a specific landlord, gym, o
 cp src/seed.local.example.ts src/seed.local.ts
 ```
 
-Edit `src/seed.local.ts` and add your rules. The file is in `.gitignore` — it stays on your machine. The build merges its `LOCAL_RULES` array into the starter pack automatically (Vite resolves the optional import at build time).
+Edit `src/seed.local.ts` and add your rules. The file is in `.gitignore`, so it stays on your machine. The build merges its `LOCAL_RULES` array into the starter pack automatically (Vite resolves the optional import at build time).
 
 You can also add merchants through the **Sort** or **Rules** page at runtime; those are stored in IndexedDB. Use the **Backup** button on the Import page to preserve them across browsers.
 
@@ -129,7 +129,7 @@ src/
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ---
 
