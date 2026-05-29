@@ -47,6 +47,7 @@ test-fixtures/
 
 # Local script output
 screenshots/
+mobile-screenshots/
 *.webm
 !docs/**/*.webm
 
