@@ -20,6 +20,8 @@ import {
   DialogActions,
   Alert,
   Chip,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -92,7 +94,7 @@ export default function Rules() {
 
       {feedback && <Alert severity="success" onClose={() => setFeedback(null)}>{feedback}</Alert>}
 
-      <Paper>
+      <Paper sx={{ overflowX: 'auto' }}>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -182,9 +184,11 @@ function RuleDialog({
   const [pattern, setPattern] = useState(rule?.pattern || '');
   const [category, setCategory] = useState(rule?.category || categories[0] || '');
   const [priority, setPriority] = useState(rule?.priority || 100);
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth fullScreen={fullScreen}>
       <DialogTitle>{rule ? 'Edit rule' : 'New rule'}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>

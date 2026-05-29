@@ -263,6 +263,8 @@ export default function Sort() {
         spacing={2}
         alignItems="center"
         justifyContent="space-between"
+        flexWrap="wrap"
+        useFlexGap
       >
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>

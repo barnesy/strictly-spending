@@ -5,6 +5,7 @@ import {
   Stack,
   Box,
   Table,
+  TableContainer,
   TableHead,
   TableBody,
   TableRow,
@@ -115,7 +116,8 @@ export default function RecurringBurnCard({
           charges from a merchant.
         </Box>
       ) : (
-        <Table size="small" sx={{ mt: 1 }}>
+        <TableContainer sx={{ mt: 1 }}>
+        <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>Merchant</TableCell>
@@ -136,7 +138,7 @@ export default function RecurringBurnCard({
               >
                 <TableCell
                   sx={{
-                    maxWidth: 260,
+                    maxWidth: { xs: 160, sm: 260 },
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -193,6 +195,7 @@ export default function RecurringBurnCard({
             ))}
           </TableBody>
         </Table>
+        </TableContainer>
       )}
       {editingMerchant && (
         <BulkRecategorizeDialog

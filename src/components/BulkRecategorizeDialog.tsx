@@ -20,6 +20,8 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { db } from '../db';
@@ -80,6 +82,8 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
     recurrencePick ?? (existingOverride?.recurrence ?? AUTO);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
   const summary = useMemo(() => {
     if (!matchingTxns) return null;
@@ -193,7 +197,7 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
   };
 
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth fullScreen={fullScreen}>
       <DialogTitle>Recategorize merchant</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
@@ -252,7 +256,7 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
                         sx={{
                           borderBottom: 'none',
                           py: 0.5,
-                          maxWidth: 300,
+                          maxWidth: { xs: 180, sm: 300 },
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',

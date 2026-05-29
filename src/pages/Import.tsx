@@ -11,6 +11,7 @@ import {
   Chip,
   LinearProgress,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -601,7 +602,8 @@ function PreviewCard({ preview }: { preview: ImportPreview }) {
           />
         ))}
       </Stack>
-      <Table size="small" sx={{ mt: 2 }}>
+      <TableContainer sx={{ mt: 2 }}>
+      <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell>Date</TableCell>
@@ -614,7 +616,7 @@ function PreviewCard({ preview }: { preview: ImportPreview }) {
           {preview.rows.slice(0, 5).map((r, i) => (
             <TableRow key={i} sx={{ opacity: r.duplicate ? 0.4 : 1 }}>
               <TableCell>{r.parsed.date}</TableCell>
-              <TableCell sx={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <TableCell sx={{ maxWidth: { xs: 160, sm: 320 }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {r.parsed.description}
               </TableCell>
               <TableCell>{r.category}</TableCell>
@@ -625,6 +627,7 @@ function PreviewCard({ preview }: { preview: ImportPreview }) {
           ))}
         </TableBody>
       </Table>
+      </TableContainer>
       {preview.rows.length > 5 && (
         <Typography variant="caption" color="text.secondary">
           + {preview.rows.length - 5} more rows

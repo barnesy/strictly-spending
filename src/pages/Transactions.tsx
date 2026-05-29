@@ -96,7 +96,7 @@ export default function Transactions() {
       </Stack>
 
       <Paper sx={{ p: 2 }}>
-        <Stack direction="row" spacing={2}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <TextField
             placeholder="Search description"
             value={search}
@@ -170,7 +170,7 @@ export default function Transactions() {
                 </TableCell>
                 <TableCell
                   sx={{
-                    maxWidth: 380,
+                    maxWidth: { xs: 160, sm: 380 },
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',

@@ -966,6 +966,7 @@ function TopMerchantsCard({
           minHeight: 0,
           maxHeight: { xs: 480, md: 'none' },
           overflowY: 'auto',
+          overflowX: 'auto',
           border: '1px solid rgba(0,0,0,0.06)',
           borderRadius: 1,
           ...subtleScrollSx,
@@ -989,7 +990,7 @@ function TopMerchantsCard({
             >
               <TableCell
                 sx={{
-                  maxWidth: 240,
+                  maxWidth: { xs: 160, sm: 240 },
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',

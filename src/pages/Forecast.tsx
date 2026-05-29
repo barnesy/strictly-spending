@@ -7,6 +7,7 @@ import {
   Typography,
   Button,
   Table,
+  TableContainer,
   TableRow,
   TableCell,
   TableBody,
@@ -474,7 +475,7 @@ function RecurringCard({
                           >
                             <TableCell
                               sx={{
-                                maxWidth: 280,
+                                maxWidth: { xs: 160, sm: 280 },
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
@@ -631,7 +632,8 @@ function BudgetCard({
           No non-recurring spend in the last 90 days.
         </Box>
       ) : (
-        <Table size="small">
+        <TableContainer>
+        <Table size="small" sx={{ minWidth: 600 }}>
           <TableBody>
             {sorted.map((b) => {
               const isExcluded = excluded.has(b.category);
@@ -740,6 +742,7 @@ function BudgetCard({
             })}
           </TableBody>
         </Table>
+        </TableContainer>
       )}
     </Paper>
   );

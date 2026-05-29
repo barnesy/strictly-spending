@@ -15,6 +15,8 @@ import {
   Stack,
   Box,
   Alert,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { db } from '../db';
 import type { Transaction } from '../types';
@@ -30,6 +32,8 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
   const [category, setCategory] = useState(txn.category);
   const [scope, setScope] = useState<'one' | 'rule'>('rule');
   const [pattern, setPattern] = useState('');
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     // Suggest a sensible default rule pattern from the description's leading words
@@ -61,7 +65,7 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
   };
 
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth fullScreen={fullScreen}>
       <DialogTitle>Recategorize</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>

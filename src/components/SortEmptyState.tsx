@@ -57,7 +57,8 @@ export default function SortEmptyState() {
               p: 2,
               borderRadius: 2,
               bgcolor: 'action.hover',
-              minWidth: 320,
+              minWidth: { xs: 'auto', sm: 320 },
+              width: { xs: '100%', sm: 'auto' },
             }}
           >
             <Typography
@@ -80,7 +81,14 @@ export default function SortEmptyState() {
           </Box>
         )}
 
-        <Stack direction="row" spacing={1} sx={{ mt: 3 }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          flexWrap="wrap"
+          justifyContent="center"
+          useFlexGap
+          sx={{ mt: 3 }}
+        >
           <Button
             variant="contained"
             component={RouterLink}

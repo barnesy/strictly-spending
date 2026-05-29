@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState, useRef } from 'react';
 import { BarChart } from '@mui/x-charts/BarChart';
-import { Box } from '@mui/material';
+import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { monthKey, monthLabel, usd } from '../lib';
 import { ACCOUNT_COLORS } from '../theme';
 import type { Account, Category, Transaction } from '../types';
@@ -159,6 +159,8 @@ export default function SpendChart({
   }, [monthList, transactions, accounts, categories, groupBy, recurrenceMap]);
 
   const [containerRef, chartHeight] = useElementHeight(240);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   if (series.length === 0 || labels.length === 0) {
     return (
@@ -179,7 +181,7 @@ export default function SpendChart({
           valueFormatter: (v: number | null) =>
             v == null ? '' : usd.format(v),
         }))}
-        margin={{ left: 70, right: 20, top: 20, bottom: 60 }}
+        margin={{ left: isMobile ? 48 : 70, right: isMobile ? 8 : 20, top: 20, bottom: 60 }}
         slots={{ axisContent: CustomAxisTooltipContent }}
         slotProps={{ legend: { hidden: true } }}
         onAxisClick={

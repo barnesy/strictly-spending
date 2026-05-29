@@ -98,7 +98,10 @@ export default function SortCategoryGrid({
           px: 1.5,
           py: 1,
           minWidth: 0,
-          flex: '1 1 calc(33.333% - 8px)',
+          flex: {
+            xs: '1 1 calc(50% - 8px)',
+            sm: '1 1 calc(33.333% - 8px)',
+          },
           borderColor: isSuggested ? cat.color : 'divider',
           borderWidth: isSuggested ? 2 : 1,
           color: 'text.primary',
