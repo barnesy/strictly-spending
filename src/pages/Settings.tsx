@@ -33,6 +33,7 @@ import {
 } from '../watchFolder';
 import { seedDemoData, clearDemoData, hasDemoData } from '../demoData';
 import { useFilters } from '../store';
+import { DEMO_ONLY_BUILD } from '../env';
 import type {
   PostImportAction,
   WatchFolderConfig,
@@ -189,6 +190,15 @@ export default function Settings() {
     <Stack spacing={3}>
       <Typography variant="h5">Settings</Typography>
 
+      {DEMO_ONLY_BUILD && (
+        <Alert severity="info">
+          You're viewing the embedded demo build. Demo data is preloaded,
+          demo mode is forced on, and destructive controls (clear, disconnect)
+          are hidden. Visit the GitHub repo to run the full app locally.
+        </Alert>
+      )}
+
+      {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
@@ -357,7 +367,9 @@ export default function Settings() {
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </Paper>
+      )}
 
+      {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
@@ -449,6 +461,7 @@ export default function Settings() {
           )}
         </Stack>
       </Paper>
+      )}
     </Stack>
   );
 }
