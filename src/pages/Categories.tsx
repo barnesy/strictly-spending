@@ -28,7 +28,7 @@ export default function Categories() {
   return (
     <Stack spacing={3}>
       <Typography variant="h5">Categories</Typography>
-      <Paper>
+      <Paper sx={{ overflowX: 'auto' }}>
         <Table size="small">
           <TableHead>
             <TableRow>

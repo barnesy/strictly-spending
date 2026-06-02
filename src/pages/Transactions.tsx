@@ -96,7 +96,7 @@ export default function Transactions() {
       </Stack>
 
       <Paper sx={{ p: 2 }}>
-        <Stack direction="row" spacing={2}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <TextField
             placeholder="Search description"
             value={search}
@@ -116,7 +116,7 @@ export default function Transactions() {
             }}
             size="small"
             label="Account"
-            sx={{ minWidth: 180 }}
+            sx={{ minWidth: { sm: 180 } }}
           >
             <MenuItem value="all">All accounts</MenuItem>
             {accounts?.map((a) => (
@@ -134,7 +134,7 @@ export default function Transactions() {
             }}
             size="small"
             label="Category"
-            sx={{ minWidth: 180 }}
+            sx={{ minWidth: { sm: 180 } }}
           >
             <MenuItem value="all">All categories</MenuItem>
             <MenuItem value="Uncategorized">Uncategorized</MenuItem>
@@ -151,8 +151,10 @@ export default function Transactions() {
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell>Date</TableCell>
-              <TableCell>Account</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>Date</TableCell>
+              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                Account
+              </TableCell>
               <TableCell>Description</TableCell>
               <TableCell>Category</TableCell>
               <TableCell align="right">Amount</TableCell>
@@ -162,15 +164,20 @@ export default function Transactions() {
           <TableBody>
             {pageRows.map((t) => (
               <TableRow key={t.id} hover>
-                <TableCell>{t.date}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.date}</TableCell>
+                <TableCell
+                  sx={{
+                    whiteSpace: 'nowrap',
+                    display: { xs: 'none', sm: 'table-cell' },
+                  }}
+                >
                   <Typography variant="caption" color="text.secondary">
                     {accountName(t.accountId)}
                   </Typography>
                 </TableCell>
                 <TableCell
                   sx={{
-                    maxWidth: 380,
+                    maxWidth: { xs: 160, sm: 280, md: 380 },
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',

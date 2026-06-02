@@ -70,9 +70,14 @@ export default function Rules() {
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
+        spacing={1}
+      >
         <Typography variant="h5">Categorization Rules</Typography>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Button
             variant="outlined"
             onClick={onRecategorize}
@@ -92,7 +97,7 @@ export default function Rules() {
 
       {feedback && <Alert severity="success" onClose={() => setFeedback(null)}>{feedback}</Alert>}
 
-      <Paper>
+      <Paper sx={{ overflowX: 'auto' }}>
         <Table size="small">
           <TableHead>
             <TableRow>

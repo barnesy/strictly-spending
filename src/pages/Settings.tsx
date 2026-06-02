@@ -316,20 +316,23 @@ export default function Settings() {
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   After successful import
                 </Typography>
-                <ToggleButtonGroup
-                  exclusive
-                  size="small"
-                  value={config.postImportAction}
-                  onChange={(_, v) =>
-                    v && updateOption({ postImportAction: v as PostImportAction })
-                  }
-                >
-                  <ToggleButton value="leave">Leave file in folder</ToggleButton>
-                  <ToggleButton value="move">
-                    Move to .imported/ subfolder
-                  </ToggleButton>
-                  <ToggleButton value="delete">Delete file</ToggleButton>
-                </ToggleButtonGroup>
+                <Box sx={{ overflowX: 'auto', maxWidth: '100%' }}>
+                  <ToggleButtonGroup
+                    exclusive
+                    size="small"
+                    value={config.postImportAction}
+                    onChange={(_, v) =>
+                      v && updateOption({ postImportAction: v as PostImportAction })
+                    }
+                    sx={{ '& .MuiToggleButton-root': { whiteSpace: 'nowrap' } }}
+                  >
+                    <ToggleButton value="leave">Leave file in folder</ToggleButton>
+                    <ToggleButton value="move">
+                      Move to .imported/ subfolder
+                    </ToggleButton>
+                    <ToggleButton value="delete">Delete file</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
                 <Typography
                   variant="caption"
                   color="text.secondary"
