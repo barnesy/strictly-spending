@@ -473,7 +473,7 @@ export default function Import() {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         sx={{
-          p: 6,
+          p: { xs: 3, sm: 6 },
           border: '2px dashed',
           borderColor: dragOver ? 'primary.main' : 'rgba(0,0,0,0.15)',
           bgcolor: dragOver ? 'rgba(25,118,210,0.04)' : 'white',
@@ -601,10 +601,11 @@ function PreviewCard({ preview }: { preview: ImportPreview }) {
           />
         ))}
       </Stack>
+      <Box sx={{ overflowX: 'auto' }}>
       <Table size="small" sx={{ mt: 2 }}>
         <TableHead>
           <TableRow>
-            <TableCell>Date</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>Date</TableCell>
             <TableCell>Description</TableCell>
             <TableCell>Category</TableCell>
             <TableCell align="right">Amount</TableCell>
@@ -613,8 +614,8 @@ function PreviewCard({ preview }: { preview: ImportPreview }) {
         <TableBody>
           {preview.rows.slice(0, 5).map((r, i) => (
             <TableRow key={i} sx={{ opacity: r.duplicate ? 0.4 : 1 }}>
-              <TableCell>{r.parsed.date}</TableCell>
-              <TableCell sx={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{r.parsed.date}</TableCell>
+              <TableCell sx={{ maxWidth: { xs: 160, sm: 320 }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {r.parsed.description}
               </TableCell>
               <TableCell>{r.category}</TableCell>
@@ -625,6 +626,7 @@ function PreviewCard({ preview }: { preview: ImportPreview }) {
           ))}
         </TableBody>
       </Table>
+      </Box>
       {preview.rows.length > 5 && (
         <Typography variant="caption" color="text.secondary">
           + {preview.rows.length - 5} more rows

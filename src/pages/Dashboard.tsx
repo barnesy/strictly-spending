@@ -473,8 +473,17 @@ function RangePicker({ filters }: { filters: FiltersStore }) {
   const range = resolveDateRange(filters);
   const label = formatDateRange(range.start, range.end);
   return (
-    <Stack spacing={0.5} alignItems="flex-end">
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+    <Stack
+      spacing={0.5}
+      alignItems={{ xs: 'stretch', md: 'flex-end' }}
+      sx={{ width: { xs: '100%', md: 'auto' } }}
+    >
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        sx={{ overflowX: 'auto', maxWidth: '100%', py: 0.25 }}
+      >
         <Tooltip title="Shift earlier">
           <IconButton
             size="small"
@@ -489,6 +498,7 @@ function RangePicker({ filters }: { filters: FiltersStore }) {
           exclusive
           onChange={(_, v) => v && filters.setPreset(v)}
           size="small"
+          sx={{ '& .MuiToggleButton-root': { whiteSpace: 'nowrap' } }}
         >
           {PRESETS.map((p) => (
             <ToggleButton key={p.value} value={p.value}>
@@ -754,26 +764,29 @@ function ChartCard({
       }}
     >
       <Stack
-        direction="row"
+        direction={{ xs: 'column', sm: 'row' }}
         justifyContent="space-between"
-        alignItems="center"
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        spacing={1}
         sx={{ mb: 2, flexShrink: 0 }}
       >
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           Spending over time
         </Typography>
-        <ToggleButtonGroup
-          value={groupBy}
-          exclusive
-          onChange={(_, v) => v && setGroupBy(v)}
-          size="small"
-          sx={{ '& .MuiToggleButton-root': { whiteSpace: 'nowrap' } }}
-        >
-          <ToggleButton value="category">By Category</ToggleButton>
-          <ToggleButton value="account">By Account</ToggleButton>
-          <ToggleButton value="recurring">Recurring vs One-Time</ToggleButton>
-          <ToggleButton value="none">Totals</ToggleButton>
-        </ToggleButtonGroup>
+        <Box sx={{ overflowX: 'auto', maxWidth: '100%' }}>
+          <ToggleButtonGroup
+            value={groupBy}
+            exclusive
+            onChange={(_, v) => v && setGroupBy(v)}
+            size="small"
+            sx={{ '& .MuiToggleButton-root': { whiteSpace: 'nowrap' } }}
+          >
+            <ToggleButton value="category">By Category</ToggleButton>
+            <ToggleButton value="account">By Account</ToggleButton>
+            <ToggleButton value="recurring">Recurring vs One-Time</ToggleButton>
+            <ToggleButton value="none">Totals</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
       </Stack>
       <Box sx={{ flex: 1, minHeight: 0 }}>
       <SpendChart

@@ -259,9 +259,9 @@ export default function Sort() {
     <Stack spacing={2} sx={{ maxWidth: 820, mx: 'auto' }}>
       {/* Header row */}
       <Stack
-        direction="row"
+        direction={{ xs: 'column', sm: 'row' }}
         spacing={2}
-        alignItems="center"
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
         justifyContent="space-between"
       >
         <Box>
@@ -272,7 +272,13 @@ export default function Sort() {
             One decision per merchant → categorize many transactions at once.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          flexWrap="wrap"
+          useFlexGap
+        >
           <Button
             size="small"
             startIcon={<UndoIcon />}

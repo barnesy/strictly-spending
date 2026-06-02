@@ -115,6 +115,7 @@ export default function RecurringBurnCard({
           charges from a merchant.
         </Box>
       ) : (
+        <Box sx={{ overflowX: 'auto' }}>
         <Table size="small" sx={{ mt: 1 }}>
           <TableHead>
             <TableRow>
@@ -122,7 +123,12 @@ export default function RecurringBurnCard({
               <TableCell>Category</TableCell>
               <TableCell>Cadence</TableCell>
               <TableCell align="right">$/mo</TableCell>
-              <TableCell align="right">Last</TableCell>
+              <TableCell
+                align="right"
+                sx={{ display: { xs: 'none', sm: 'table-cell' } }}
+              >
+                Last
+              </TableCell>
               <TableCell width={40}></TableCell>
             </TableRow>
           </TableHead>
@@ -171,7 +177,10 @@ export default function RecurringBurnCard({
                 <TableCell align="right" sx={{ fontWeight: 600 }}>
                   {usd.format(r.info.estMonthlyCost)}
                 </TableCell>
-                <TableCell align="right">
+                <TableCell
+                  align="right"
+                  sx={{ display: { xs: 'none', sm: 'table-cell' } }}
+                >
                   <Typography variant="caption" color="text.secondary">
                     {r.info.lastDate}
                   </Typography>
@@ -193,6 +202,7 @@ export default function RecurringBurnCard({
             ))}
           </TableBody>
         </Table>
+        </Box>
       )}
       {editingMerchant && (
         <BulkRecategorizeDialog

@@ -302,9 +302,10 @@ function RecurringCard({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        direction="row"
+        direction={{ xs: 'column', sm: 'row' }}
         justifyContent="space-between"
-        alignItems="baseline"
+        alignItems={{ xs: 'flex-start', sm: 'baseline' }}
+        spacing={1}
         sx={{ mb: 1.5 }}
       >
         <Box>
@@ -316,7 +317,12 @@ function RecurringCard({
             intervals) · grouped by category
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={2}
+          alignItems="center"
+          sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, justifyContent: 'space-between' }}
+        >
           <Button
             size="small"
             onClick={collapseAll}
@@ -588,9 +594,10 @@ function BudgetCard({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        direction="row"
+        direction={{ xs: 'column', sm: 'row' }}
         justifyContent="space-between"
-        alignItems="baseline"
+        alignItems={{ xs: 'flex-start', sm: 'baseline' }}
+        spacing={1}
         sx={{ mb: 1.5 }}
       >
         <Box>
@@ -603,7 +610,12 @@ function BudgetCard({
             differently.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={2}
+          alignItems="center"
+          sx={{ alignSelf: { xs: 'stretch', sm: 'auto' }, justifyContent: 'space-between' }}
+        >
           <Button size="small" onClick={onResetAll} startIcon={<RestartAltIcon />}>
             Reset all to actuals
           </Button>
@@ -631,7 +643,8 @@ function BudgetCard({
           No non-recurring spend in the last 90 days.
         </Box>
       ) : (
-        <Table size="small">
+        <Box sx={{ overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: { xs: 440, sm: 'auto' } }}>
           <TableBody>
             {sorted.map((b) => {
               const isExcluded = excluded.has(b.category);
@@ -697,7 +710,9 @@ function BudgetCard({
                       disabled={isExcluded}
                     />
                   </TableCell>
-                  <TableCell sx={{ minWidth: 280 }}>
+                  <TableCell
+                    sx={{ minWidth: 280, display: { xs: 'none', md: 'table-cell' } }}
+                  >
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Typography variant="caption" color="text.secondary">
                         Trailing 3-mo avg: {usdCents.format(avg)}
@@ -740,6 +755,7 @@ function BudgetCard({
             })}
           </TableBody>
         </Table>
+        </Box>
       )}
     </Paper>
   );
