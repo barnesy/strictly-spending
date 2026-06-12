@@ -164,16 +164,23 @@ HOW TO FILTER CORRECTLY:
    - Example user query: "Show me Demo: Credit Card spending"
    - Correct JSON: { "action": "filter", "page": "/", "accounts": ["Demo: Credit Card"], "explanation": "Showing Demo Credit Card spending." }
 
-4. **Date Range Filters ("preset")**:
-   - Use this field to filter transactions in time. Map natural language time requests to these exact preset values:
+4. **Date Range Filters ("preset", "customStart", "customEnd")**:
+   - **Standard presets**: Map natural language time requests to these exact preset values when appropriate:
      - "last month", "previous month" -> "lastMonth"
      - "this month", "current month" -> "thisMonth"
-     - "last 30 days", "past 30 days", "past month" -> "last30"
+     - "last 30 days", "past 30 days" -> "last30"
      - "last 90 days", "past 3 months" -> "last90"
      - "year to date", "this year", "ytd" -> "ytd"
      - "all time", "everything", "history" -> "allTime"
-   - Example user query: "Show me food from last month"
-   - Correct JSON: { "action": "filter", "page": "/", "categories": ["Groceries", "Restaurants & Coffee"], "preset": "lastMonth", "explanation": "Showing food spending from last month." }
+   - **Custom ranges**: If the user specifies specific dates, months, years, or bounds not covered by presets:
+     - Set 'preset': 'custom'.
+     - Set 'customStart': 'YYYY-MM-DD' (start date, inclusive).
+     - Set 'customEnd': 'YYYY-MM-DD' (end date, inclusive).
+    - **How to resolve custom dates**:
+      - Use the 'Current Date' in the context to determine relative years or months if the user doesn't specify a year (e.g. 'January' means the January of the year stated in the Current Date).
+      - Use 'Earliest Transaction Date' and 'Latest Transaction Date' in the context to boundary-scope relative ranges like 'from the beginning' or 'since the first download'.
+   - Example custom range user query: "Show me food spending from Jan 15th to Feb 20th" (assuming Current Date is 2026-06-11)
+   - Correct JSON: { "action": "filter", "page": "/", "categories": ["Groceries", "Restaurants & Coffee"], "preset": "custom", "customStart": "2026-01-15", "customEnd": "2026-02-20", "explanation": "Showing food spending from Jan 15 to Feb 20." }
 
 SUPPORTED JSON FORMATS:
 - Filter Categories only:
@@ -225,6 +232,12 @@ Assistant: { "action": "filter", "page": "/", "categories": ["Groceries", "Resta
 
 User: let me see what I spent on food and entertainment last month
 Assistant: { "action": "filter", "page": "/", "categories": ["Groceries", "Restaurants & Coffee", "Entertainment"], "preset": "lastMonth", "explanation": "Showing food and entertainment spending from last month." }
+
+User: Show me food spending from Jan 15th to Feb 20th
+Assistant: { "action": "filter", "page": "/", "categories": ["Groceries", "Restaurants & Coffee"], "preset": "custom", "customStart": "2026-01-15", "customEnd": "2026-02-20", "explanation": "Showing food spending from Jan 15 to Feb 20." }
+
+User: Show my utilities in March 2025
+Assistant: { "action": "filter", "page": "/", "categories": ["Utilities"], "preset": "custom", "customStart": "2025-03-01", "customEnd": "2025-03-31", "explanation": "Showing utilities from March 2025." }
 
 User: Go to settings
 Assistant: { "action": "navigate", "page": "/settings", "explanation": "Navigating to settings." }

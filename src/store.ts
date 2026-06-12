@@ -36,6 +36,8 @@ export interface FiltersState {
    *  records. Real data stays in IndexedDB — this is purely a presentation
    *  filter for screenshots / share-screen moments. */
   demoMode: boolean;
+  earliestTransactionDate?: string;
+  latestTransactionDate?: string;
   // version is used as a knob to wipe stale persisted state
   version: number;
 }
@@ -50,6 +52,8 @@ const initialState: FiltersState = {
   drill: null,
   searchQuery: '',
   demoMode: false,
+  earliestTransactionDate: undefined,
+  latestTransactionDate: undefined,
   version: 1,
 };
 
@@ -68,6 +72,7 @@ export interface FiltersActions {
   shiftRange: (direction: -1 | 1) => void;
   setSearchQuery: (q: string) => void;
   setDemoMode: (v: boolean) => void;
+  setTransactionDataBounds: (earliest?: string, latest?: string) => void;
   reset: () => void;
 }
 
@@ -142,6 +147,8 @@ export const useFilters = create<FiltersStore>()(
         }),
       setSearchQuery: (q) => set({ searchQuery: q }),
       setDemoMode: (v) => set({ demoMode: v }),
+      setTransactionDataBounds: (earliest, latest) =>
+        set({ earliestTransactionDate: earliest, latestTransactionDate: latest }),
       reset: () => set(initialState),
     }),
     { name: 'spending-viz:filters' }
@@ -175,7 +182,14 @@ export function resolveDateRange(state: FiltersState): { start: Date; end: Date 
         end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59),
       };
     case 'allTime':
-      return { start: new Date(2000, 0, 1), end };
+      return {
+        start: state.earliestTransactionDate
+          ? parseLocalDate(state.earliestTransactionDate)
+          : new Date(2000, 0, 1),
+        end: state.latestTransactionDate
+          ? endOfLocalDay(parseLocalDate(state.latestTransactionDate))
+          : end,
+      };
     case 'custom':
       return {
         start: state.customStart

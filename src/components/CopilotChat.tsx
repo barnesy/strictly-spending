@@ -35,12 +35,15 @@ export default function CopilotChat({
   const {
     preset,
     setPreset,
+    setCustomRange,
     searchQuery,
     setSearchQuery,
     disabledCategories,
     setDisabledCategories,
     enabledAccountIds,
     setEnabledAccounts,
+    earliestTransactionDate,
+    latestTransactionDate,
   } = useFilters();
 
   const {
@@ -92,7 +95,10 @@ export default function CopilotChat({
         return;
       }
 
-      const stateContext = `Current Page: ${location.pathname}
+      const stateContext = `Current Date: ${new Date().toISOString().slice(0, 10)} (${new Date().toLocaleDateString()})
+Earliest Transaction Date: ${earliestTransactionDate || 'None'}
+Latest Transaction Date: ${latestTransactionDate || 'None'}
+Current Page: ${location.pathname}
 Current Filter Preset: ${preset}
 Current Search Query: "${searchQuery}"
 Available Categories: ${categories.map((c) => c.name).join(', ')}
@@ -126,7 +132,11 @@ Currently Enabled Accounts: ${enabledAccountIds.join(', ')}`;
           cmd.action === 'filter'
         ) {
           if (cmd.page && cmd.page !== location.pathname) navigate(cmd.page);
-          if (cmd.preset) setPreset(cmd.preset as DateRangePreset);
+          if (cmd.preset === 'custom' || cmd.customStart || cmd.customEnd) {
+            setCustomRange(cmd.customStart || undefined, cmd.customEnd || undefined);
+          } else if (cmd.preset) {
+            setPreset(cmd.preset as DateRangePreset);
+          }
 
           // If merchant search is specified, reset checkboxes to show everything by default.
           if (

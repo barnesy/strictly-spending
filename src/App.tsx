@@ -1,6 +1,6 @@
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Fab } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import Dashboard from './pages/Dashboard';
@@ -32,6 +32,32 @@ export default function App() {
   const demoMode = useFilters((s) => s.demoMode);
   // Live count of Uncategorized transactions, demo-mode aware, for the nav badge.
   const allTxnsAll = useLiveQuery(() => db.transactions.toArray(), []);
+  const setTransactionDataBounds = useFilters((s) => s.setTransactionDataBounds);
+
+  useEffect(() => {
+    if (!allTxnsAll || allTxnsAll.length === 0) {
+      setTransactionDataBounds(undefined, undefined);
+      return;
+    }
+    const filtered = demoMode
+      ? allTxnsAll.filter((t) => t.source === 'demo')
+      : allTxnsAll;
+
+    if (filtered.length === 0) {
+      setTransactionDataBounds(undefined, undefined);
+      return;
+    }
+
+    let earliest = filtered[0].date;
+    let latest = filtered[0].date;
+    for (let i = 1; i < filtered.length; i++) {
+      const d = filtered[i].date;
+      if (d < earliest) earliest = d;
+      if (d > latest) latest = d;
+    }
+    setTransactionDataBounds(earliest, latest);
+  }, [allTxnsAll, demoMode, setTransactionDataBounds]);
+
   const uncategorizedCount = useMemo(() => {
     if (!allTxnsAll) return 0;
     const filtered = demoMode
