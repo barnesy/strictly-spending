@@ -6,6 +6,7 @@ import {
   extractMerchantKey,
   inferTypeCategory,
 } from './categorize';
+import { localAI } from './ai';
 
 export interface ImportPreview {
   filename: string;
@@ -25,6 +26,7 @@ export interface ImportPreview {
 export interface ProcessedRow {
   parsed: ParsedTransaction;
   category: string;
+  aiCategory?: string;
   merchantKey: string;
   dedupKey: string;
   duplicate: boolean;
@@ -99,6 +101,33 @@ export async function buildPreview(
       duplicate,
     });
     byCategory[category] = (byCategory[category] || 0) + 1;
+  }
+
+  // Local AI Cross-Reference
+  const licenseSetting = await db.settings.get('license');
+  const license = licenseSetting?.value as { active: boolean } | undefined;
+  if (license?.active && localAI.isLoaded && rows.length > 0) {
+    try {
+      const allCats = await db.categories.toArray();
+      const catNames = allCats.map(c => c.name);
+      
+      // Filter out duplicates (don't waste AI tokens on duplicate rules, though they might have slight variations, we'll send unique descriptions)
+      // Actually, to keep it simple and accurate, we'll just send the non-duplicate ones or all. Let's send non-duplicates.
+      const toReview = rows.map((r) => ({
+        desc: r.parsed.description,
+        ruleCategory: r.category
+      }));
+      
+      const aiResults = await localAI.reviewTransactions(toReview, catNames);
+      
+      aiResults.forEach((cat, idx) => {
+        if (idx < rows.length && catNames.includes(cat)) {
+          rows[idx].aiCategory = cat;
+        }
+      });
+    } catch (e) {
+      console.error("Local AI categorization failed:", e);
+    }
   }
 
   return {

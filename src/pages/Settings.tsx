@@ -13,13 +13,17 @@ import {
   ToggleButton,
   Switch,
   FormControlLabel,
+  TextField,
+  LinearProgress,
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ScienceIcon from '@mui/icons-material/Science';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { db } from '../db';
 import {
   isWatchFolderSupported,
@@ -33,6 +37,7 @@ import {
 } from '../watchFolder';
 import { seedDemoData, clearDemoData, hasDemoData } from '../demoData';
 import { useFilters } from '../store';
+import { useChatStore } from '../chatStore';
 import { DEMO_ONLY_BUILD } from '../env';
 import type {
   PostImportAction,
@@ -55,6 +60,44 @@ export default function Settings() {
   const [error, setError] = useState<string | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
+
+  // License state
+  const licenseSetting = useLiveQuery(() => db.settings.get('license'), []);
+  const license = licenseSetting?.value as { active: boolean; key: string } | undefined;
+  const [licenseKey, setLicenseKey] = useState('');
+  const [licenseError, setLicenseError] = useState<string | null>(null);
+
+  const onActivateLicense = async () => {
+    setLicenseError(null);
+    if (licenseKey.trim().toUpperCase() === 'PRO-123') {
+      await db.settings.put({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } });
+      setLicenseKey('');
+    } else {
+      setLicenseError("Invalid license key. For testing, try 'PRO-123'.");
+    }
+  };
+
+  const onDeactivateLicense = async () => {
+    if (!confirm('Remove license key? Premium features will be disabled.')) return;
+    await db.settings.delete('license');
+  };
+
+  const {
+    aiLoaded,
+    aiStatus,
+    aiProgress,
+    aiProgressPercent,
+    initializeAI,
+    checkAIStatus,
+  } = useChatStore();
+
+  useEffect(() => {
+    checkAIStatus();
+  }, [checkAIStatus]);
+
+  const onInitializeAI = async () => {
+    await initializeAI();
+  };
 
   // Demo data state
   const [demoLoaded, setDemoLoaded] = useState(false);
@@ -365,6 +408,97 @@ export default function Settings() {
           )}
 
           {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </Paper>
+      )}
+
+      {!DEMO_ONLY_BUILD && (
+      <Paper sx={{ p: 3 }}>
+        <Stack spacing={2}>
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <VpnKeyIcon fontSize="small" color="primary" />
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Strictly Spending Pro
+              </Typography>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Unlock advanced features like Local AI categorization, native Watch Folders, and infinite history with a one-time license key purchase.
+            </Typography>
+          </Box>
+          
+          {license?.active ? (
+            <Stack spacing={3}>
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                <Chip label="Pro Active" color="success" />
+                <Typography variant="body2" color="text.secondary">
+                  License Key: {license.key.replace(/.(?=.{4})/g, '*')}
+                </Typography>
+                <Button size="small" color="error" onClick={onDeactivateLicense}>
+                  Deactivate
+                </Button>
+              </Stack>
+              <Divider />
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                  <AutoAwesomeIcon fontSize="small" color="primary" />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Local AI Setup
+                  </Typography>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                  Power your Strictly Copilot entirely locally using Ollama. Installs the service and downloads the Llama 3.2 1B model. 100% private and runs offline.
+                </Typography>
+                <Stack spacing={1.5} alignItems="flex-start" sx={{ width: '100%' }}>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Button 
+                      variant="outlined" 
+                      startIcon={<AutoAwesomeIcon />}
+                      onClick={onInitializeAI}
+                      disabled={aiLoaded || aiStatus === 'checking' || aiStatus === 'pulling'}
+                    >
+                      {aiStatus === 'uninstalled' ? 'Install Local AI' :
+                       aiStatus === 'stopped' ? 'Start Ollama' :
+                       aiStatus === 'running' ? 'Download AI Model' :
+                       aiStatus === 'ready' ? 'AI Ready' :
+                       aiStatus === 'checking' ? 'Checking...' :
+                       'Retry Setup'}
+                    </Button>
+                    {aiProgress && aiStatus !== 'pulling' && (
+                      <Typography variant="body2" color={aiStatus === 'error' ? 'error' : 'text.secondary'}>
+                        {aiProgress}
+                      </Typography>
+                    )}
+                  </Stack>
+                  {aiStatus === 'pulling' && (
+                    <Box sx={{ width: '100%', maxWidth: 400 }}>
+                      <LinearProgress variant="determinate" value={aiProgressPercent} sx={{ mb: 0.5, borderRadius: 1 }} />
+                      <Typography variant="caption" color="text.secondary">
+                        {aiProgress}
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
+          ) : (
+            <Stack spacing={2}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <TextField
+                  size="small"
+                  label="License Key"
+                  placeholder="PRO-..."
+                  value={licenseKey}
+                  onChange={e => setLicenseKey(e.target.value)}
+                  sx={{ width: 280 }}
+                />
+                <Button variant="contained" onClick={onActivateLicense} disabled={!licenseKey.trim()}>
+                  Activate
+                </Button>
+              </Stack>
+              {licenseError && <Alert severity="error">{licenseError}</Alert>}
+            </Stack>
+          )}
         </Stack>
       </Paper>
       )}

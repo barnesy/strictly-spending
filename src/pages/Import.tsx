@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link as RouterLink } from 'react-router-dom';
+import { listen } from '@tauri-apps/api/event';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import {
   Box,
   Paper,
@@ -20,8 +22,9 @@ import {
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import RestoreIcon from '@mui/icons-material/Restore';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { buildPreview, commitPreview, type ImportPreview } from '../import';
 import { usdCents } from '../lib';
 import { db } from '../db';
@@ -205,6 +208,48 @@ export default function Import() {
     setIsProcessing(false);
   }, []);
 
+  const handleTauriFiles = useCallback(async (paths: string[]) => {
+    setIsProcessing(true);
+    setCommittedSummary(null);
+    const results: ImportPreview[] = [];
+    for (const path of paths) {
+      if (!path.toLowerCase().endsWith('.csv')) continue;
+      try {
+        const text = await readTextFile(path);
+        const name = path.split(/[/\\]/).pop() || 'Unknown.csv';
+        const contentHash = await sha256(text);
+        const p = await buildPreview(name, text, contentHash);
+        results.push(p);
+      } catch (e) {
+        console.error("Failed to read dropped file:", path, e);
+      }
+    }
+    setPreviews(results);
+    setIsProcessing(false);
+  }, []);
+
+  useEffect(() => {
+    let unlistenDrop: (() => void) | undefined;
+    let unlistenDragDrop: (() => void) | undefined;
+    
+    if ('__TAURI_INTERNALS__' in window || '__TAURI__' in window) {
+      listen<any>('tauri://drop', (event) => {
+        const paths = Array.isArray(event.payload) ? event.payload : event.payload?.paths;
+        if (paths && paths.length > 0) handleTauriFiles(paths);
+      }).then(u => unlistenDrop = u).catch(console.error);
+
+      listen<any>('tauri://drag-drop', (event) => {
+        const paths = Array.isArray(event.payload) ? event.payload : event.payload?.paths;
+        if (paths && paths.length > 0) handleTauriFiles(paths);
+      }).then(u => unlistenDragDrop = u).catch(console.error);
+    }
+    
+    return () => {
+      if (unlistenDrop) unlistenDrop();
+      if (unlistenDragDrop) unlistenDragDrop();
+    };
+  }, [handleTauriFiles]);
+
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -266,6 +311,27 @@ export default function Import() {
     setIsProcessing(false);
     // Re-scan to clear out the now-imported files
     if (watchConfig?.handle) onScanWatchFolder();
+  };
+
+  const handleUpdateRow = (previewIdx: number, rowIdx: number, newCategory: string) => {
+    setPreviews(prev => {
+      const copy = [...prev];
+      const newPreview = { ...copy[previewIdx] };
+      const newRows = [...newPreview.rows];
+      newRows[rowIdx] = { ...newRows[rowIdx], category: newCategory };
+      
+      // Update the byCategory counts
+      const oldCategory = newPreview.rows[rowIdx].category;
+      const newByCategory = { ...newPreview.byCategory };
+      newByCategory[oldCategory] = (newByCategory[oldCategory] || 1) - 1;
+      newByCategory[newCategory] = (newByCategory[newCategory] || 0) + 1;
+      if (newByCategory[oldCategory] === 0) delete newByCategory[oldCategory];
+      
+      newPreview.byCategory = newByCategory;
+      newPreview.rows = newRows;
+      copy[previewIdx] = newPreview;
+      return copy;
+    });
   };
 
   return (
@@ -525,7 +591,11 @@ export default function Import() {
       {previews.length > 0 && (
         <Stack spacing={2}>
           {previews.map((p, i) => (
-            <PreviewCard key={i} preview={p} />
+            <PreviewCard 
+              key={i} 
+              preview={p} 
+              onUpdateRow={(rIdx, cat) => handleUpdateRow(i, rIdx, cat)} 
+            />
           ))}
           <Box>
             <Button
@@ -555,7 +625,7 @@ export default function Import() {
   );
 }
 
-function PreviewCard({ preview }: { preview: ImportPreview }) {
+function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdateRow: (idx: number, newCategory: string) => void }) {
   if (preview.error) {
     return (
       <Alert severity="error">
@@ -617,7 +687,20 @@ function PreviewCard({ preview }: { preview: ImportPreview }) {
               <TableCell sx={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {r.parsed.description}
               </TableCell>
-              <TableCell>{r.category}</TableCell>
+              <TableCell>
+                {r.category}
+                {r.aiCategory && r.aiCategory !== r.category && (
+                  <Chip 
+                    icon={<AutoAwesomeIcon />} 
+                    label={r.aiCategory} 
+                    size="small" 
+                    color="secondary" 
+                    onClick={() => onUpdateRow(i, r.aiCategory!)} 
+                    sx={{ ml: 1, cursor: 'pointer' }}
+                    title="Accept AI Suggestion"
+                  />
+                )}
+              </TableCell>
               <TableCell align="right">
                 {usdCents.format(r.parsed.amount)}
               </TableCell>

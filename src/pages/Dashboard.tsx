@@ -10,6 +10,8 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import Fab from '@mui/material/Fab';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import CopilotChat from '../components/CopilotChat';
 import { subtleScrollSx } from '../styles';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
@@ -142,6 +144,15 @@ export default function Dashboard() {
         if (filters.recurrenceFilter === 'recurring' && !isRec) return false;
         if (filters.recurrenceFilter === 'onetime' && isRec) return false;
       }
+      if (filters.searchQuery) {
+        const q = filters.searchQuery.toLowerCase();
+        if (
+          !t.description.toLowerCase().includes(q) &&
+          !t.merchantKey.toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+      }
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,6 +166,7 @@ export default function Dashboard() {
     range.end.getTime(),
     categories,
     recurrenceMap,
+    filters.searchQuery,
   ]);
 
   const monthList = useMemo(
@@ -258,6 +270,10 @@ function ResizableTopRow({
     if (typeof window === 'undefined') return true;
     return localStorage.getItem('dashboard:filterVisible') !== 'false';
   });
+  const [copilotVisible, setCopilotVisible] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('dashboard:copilotVisible') !== 'false';
+  });
   const [sidebarVisible, setSidebarVisible] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     return localStorage.getItem('dashboard:sidebarVisible') !== 'false';
@@ -265,6 +281,9 @@ function ResizableTopRow({
   useEffect(() => {
     localStorage.setItem('dashboard:filterVisible', String(filterVisible));
   }, [filterVisible]);
+  useEffect(() => {
+    localStorage.setItem('dashboard:copilotVisible', String(copilotVisible));
+  }, [copilotVisible]);
   useEffect(() => {
     localStorage.setItem('dashboard:sidebarVisible', String(sidebarVisible));
   }, [sidebarVisible]);
@@ -274,6 +293,7 @@ function ResizableTopRow({
   const panelIds = [
     ...(filterVisible ? ['filter'] : []),
     'chart',
+    ...(copilotVisible ? ['copilot'] : []),
     ...(sidebarVisible ? ['merchants'] : []),
   ];
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -304,6 +324,13 @@ function ResizableTopRow({
       onCollapse={() => setFilterVisible(false)}
     />
   );
+  const copilotPanel = (
+    <CopilotChat
+      onClose={() => setCopilotVisible(false)}
+      showCloseButton={true}
+      isEmbedded={true}
+    />
+  );
   const merchantsCard = (
     <TopMerchantsCard
       visibleTxns={visibleTxns}
@@ -316,6 +343,7 @@ function ResizableTopRow({
   if (!isDesktop) {
     return (
       <Stack spacing={2}>
+        {copilotVisible && copilotPanel}
         {filterPanel}
         {chartCard}
         {merchantsCard}
@@ -341,21 +369,29 @@ function ResizableTopRow({
         style={{ height: '100%' }}
       >
         {filterVisible && (
-          <Panel id="filter" defaultSize={22} minSize={15}>
+          <Panel id="filter" defaultSize={18} minSize={15}>
             <PanelScroll>{filterPanel}</PanelScroll>
           </Panel>
         )}
         {filterVisible && <StyledResizeHandle ariaLabel="Resize filters / chart" />}
-        <Panel id="chart" defaultSize={50} minSize={25}>
+        <Panel id="chart" defaultSize={40} minSize={25}>
           <Box sx={{ height: '100%', overflow: 'auto', ...subtleScrollSx }}>
             {chartCard}
           </Box>
         </Panel>
-        {sidebarVisible && (
-          <StyledResizeHandle ariaLabel="Resize chart / top merchants" />
+        {(copilotVisible || sidebarVisible) && (
+          <StyledResizeHandle ariaLabel="Resize chart / right panels" />
+        )}
+        {copilotVisible && (
+          <Panel id="copilot" defaultSize={22} minSize={15}>
+            <PanelScroll>{copilotPanel}</PanelScroll>
+          </Panel>
+        )}
+        {copilotVisible && sidebarVisible && (
+          <StyledResizeHandle ariaLabel="Resize copilot / top merchants" />
         )}
         {sidebarVisible && (
-          <Panel id="merchants" defaultSize={28} minSize={15}>
+          <Panel id="merchants" defaultSize={20} minSize={15}>
             <PanelScroll>{merchantsCard}</PanelScroll>
           </Panel>
         )}
@@ -370,12 +406,22 @@ function ResizableTopRow({
           onClick={() => setFilterVisible(true)}
         />
       )}
+      {!copilotVisible && (
+        <PanelEdgeOverlay
+          side="right"
+          icon={<AutoAwesomeIcon fontSize="small" />}
+          label="Show copilot"
+          onClick={() => setCopilotVisible(true)}
+          sx={{ top: sidebarVisible ? 16 : 72 }}
+        />
+      )}
       {!sidebarVisible && (
         <PanelEdgeOverlay
           side="right"
           icon={<StorefrontIcon fontSize="small" />}
           label="Show top merchants"
           onClick={() => setSidebarVisible(true)}
+          sx={{ top: 16 }}
         />
       )}
     </Box>
@@ -428,11 +474,13 @@ function PanelEdgeOverlay({
   icon,
   label,
   onClick,
+  sx,
 }: {
   side: 'left' | 'right';
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
+  sx?: any;
 }) {
   return (
     <Tooltip title={label} placement={side === 'left' ? 'right' : 'left'}>
@@ -447,6 +495,7 @@ function PanelEdgeOverlay({
           [side]: 8,
           zIndex: 4,
           boxShadow: 2,
+          ...sx,
         }}
       >
         {icon}
@@ -454,6 +503,7 @@ function PanelEdgeOverlay({
     </Tooltip>
   );
 }
+
 
 function formatDateRange(start: Date, end: Date): string {
   const sameYear = start.getFullYear() === end.getFullYear();
@@ -616,6 +666,15 @@ function FilterPanel({
             <ToggleButton value="recurring">Recurring</ToggleButton>
             <ToggleButton value="onetime">One-Time</ToggleButton>
           </ToggleButtonGroup>
+        </Box>
+        <Box sx={{ mt: 2 }}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search merchants..."
+            value={filters.searchQuery}
+            onChange={(e) => filters.setSearchQuery(e.target.value)}
+          />
         </Box>
       </Paper>
 

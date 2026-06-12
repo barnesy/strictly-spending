@@ -31,6 +31,7 @@ export interface FiltersState {
   groupBy: GroupBy;
   recurrenceFilter: RecurrenceFilter;
   drill: DrillState | null;
+  searchQuery: string;
   /** When true, every view hides real data and shows ONLY `source === 'demo'`
    *  records. Real data stays in IndexedDB — this is purely a presentation
    *  filter for screenshots / share-screen moments. */
@@ -47,6 +48,7 @@ const initialState: FiltersState = {
   groupBy: 'category',
   recurrenceFilter: 'all',
   drill: null,
+  searchQuery: '',
   demoMode: false,
   version: 1,
 };
@@ -64,6 +66,7 @@ export interface FiltersActions {
   drillToMonth: (monthKey: string) => void;
   drillBack: () => void;
   shiftRange: (direction: -1 | 1) => void;
+  setSearchQuery: (q: string) => void;
   setDemoMode: (v: boolean) => void;
   reset: () => void;
 }
@@ -137,6 +140,7 @@ export const useFilters = create<FiltersStore>()(
             drill: null,
           };
         }),
+      setSearchQuery: (q) => set({ searchQuery: q }),
       setDemoMode: (v) => set({ demoMode: v }),
       reset: () => set(initialState),
     }),

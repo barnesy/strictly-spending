@@ -59,7 +59,8 @@ export default function Transactions() {
     [txns, overrides]
   );
 
-  const [search, setSearch] = useState('');
+  const search = useFilters((s) => s.searchQuery);
+  const setSearch = useFilters((s) => s.setSearchQuery);
   const [accountFilter, setAccountFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [page, setPage] = useState(0);

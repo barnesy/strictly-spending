@@ -1,7 +1,8 @@
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo } from 'react';
-import { AppBar, Toolbar, Typography, Box, Container, Button, Chip } from '@mui/material';
+import { useMemo, useState } from 'react';
+import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Fab } from '@mui/material';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import Dashboard from './pages/Dashboard';
 import Forecast from './pages/Forecast';
 import Import from './pages/Import';
@@ -10,6 +11,7 @@ import Rules from './pages/Rules';
 import Categories from './pages/Categories';
 import Settings from './pages/Settings';
 import Sort from './pages/Sort';
+import ChatDrawer from './components/ChatDrawer';
 import { db } from './db';
 import { useFilters } from './store';
 
@@ -25,6 +27,8 @@ const NAV = [
 ];
 
 export default function App() {
+  const location = useLocation();
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const demoMode = useFilters((s) => s.demoMode);
   // Live count of Uncategorized transactions, demo-mode aware, for the nav badge.
   const allTxnsAll = useLiveQuery(() => db.transactions.toArray(), []);
@@ -34,6 +38,14 @@ export default function App() {
       ? allTxnsAll.filter((t) => t.source === 'demo')
       : allTxnsAll;
     return filtered.filter((t) => t.category === 'Uncategorized').length;
+  }, [allTxnsAll, demoMode]);
+
+  const hasTransactions = useMemo(() => {
+    if (!allTxnsAll) return false;
+    const filtered = demoMode
+      ? allTxnsAll.filter((t) => t.source === 'demo')
+      : allTxnsAll;
+    return filtered.length > 0;
   }, [allTxnsAll, demoMode]);
 
   return (
@@ -113,6 +125,19 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Container>
+      
+      {(location.pathname !== '/' || !hasTransactions) && (
+        <Fab
+          color="primary"
+          aria-label="ask ai"
+          sx={{ position: 'fixed', bottom: 24, right: 24 }}
+          onClick={() => setIsChatOpen(true)}
+        >
+          <AutoAwesomeIcon />
+        </Fab>
+      )}
+
+      <ChatDrawer open={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </Box>
   );
 }
