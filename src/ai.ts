@@ -179,8 +179,15 @@ HOW TO FILTER CORRECTLY:
     - **How to resolve custom dates**:
       - Use the 'Current Date' in the context to determine relative years or months if the user doesn't specify a year (e.g. 'January' means the January of the year stated in the Current Date).
       - Use 'Earliest Transaction Date' and 'Latest Transaction Date' in the context to boundary-scope relative ranges like 'from the beginning' or 'since the first download'.
-   - Example custom range user query: "Show me food spending from Jan 15th to Feb 20th" (assuming Current Date is 2026-06-11)
-   - Correct JSON: { "action": "filter", "page": "/", "categories": ["Groceries", "Restaurants & Coffee"], "preset": "custom", "customStart": "2026-01-15", "customEnd": "2026-02-20", "explanation": "Showing food spending from Jan 15 to Feb 20." }
+    - Example custom range user query: "Show me food spending from Jan 15th to Feb 20th" (assuming Current Date is 2026-06-11)
+    - Correct JSON: { "action": "filter", "page": "/", "categories": ["Groceries", "Restaurants & Coffee"], "preset": "custom", "customStart": "2026-01-15", "customEnd": "2026-02-20", "explanation": "Showing food spending from Jan 15 to Feb 20." }
+
+5. **Conversational Analytics & Data Querying ("query_data")**:
+   - Use this action whenever the user asks for spending totals, transaction counts, averages, or budget limits (e.g., "How much did I spend on groceries in March?", "Am I over budget on shopping?").
+   - You MUST output a JSON block with "action": "query_data", "categories": [...], "preset": "custom", "customStart": "YYYY-MM-DD", "customEnd": "YYYY-MM-DD".
+   - The frontend will intercept this command, execute the database query, and feed the numeric results back to you in a follow-up prompt. You will then explain the numbers to the user. Do NOT invent numbers yourself.
+   - Example user query: "How much did I spend on food last month?" (assuming current date is 2026-06-11)
+   - Correct JSON: { "action": "query_data", "categories": ["Groceries", "Restaurants & Coffee"], "preset": "custom", "customStart": "2026-05-01", "customEnd": "2026-05-31", "explanation": "Let me calculate your food spending for last month." }
 
 SUPPORTED JSON FORMATS:
 - Filter Categories only:
@@ -194,6 +201,9 @@ SUPPORTED JSON FORMATS:
 
 - Combined Categories and Date Range Preset:
 { "action": "filter", "page": "/", "categories": ["Groceries", "Restaurants & Coffee", "Entertainment"], "preset": "lastMonth", "explanation": "Showing food and entertainment spending from last month." }
+
+- Query spending aggregates for custom date range:
+{ "action": "query_data", "categories": ["Groceries", "Restaurants & Coffee"], "preset": "custom", "customStart": "2026-05-01", "customEnd": "2026-05-31", "explanation": "Let me check your food spending from last month." }
 
 HOW TO HANDLE MULTIPLE FILTER REQUESTS & CONTEXT TRANSITIONS:
 - **Default (Replace)**: By default, a new filter query should REPLACE the previous category and merchant filters. Do NOT keep previous filters unless the user explicitly indicates they want to combine/compound them (using words like "also", "and", "add", "as well", "additionally").
@@ -238,6 +248,9 @@ Assistant: { "action": "filter", "page": "/", "categories": ["Groceries", "Resta
 
 User: Show my utilities in March 2025
 Assistant: { "action": "filter", "page": "/", "categories": ["Utilities"], "preset": "custom", "customStart": "2025-03-01", "customEnd": "2025-03-31", "explanation": "Showing utilities from March 2025." }
+
+User: How much did I spend on food from Jan 15th to Feb 20th?
+Assistant: { "action": "query_data", "categories": ["Groceries", "Restaurants & Coffee"], "preset": "custom", "customStart": "2026-01-15", "customEnd": "2026-02-20", "explanation": "Calculating food spending from Jan 15 to Feb 20." }
 
 User: Go to settings
 Assistant: { "action": "navigate", "page": "/settings", "explanation": "Navigating to settings." }

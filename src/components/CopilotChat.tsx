@@ -78,6 +78,45 @@ export default function CopilotChat({
     }
   }, [messages, loading, aiStatus]);
 
+  const runDataQuery = async (categoriesList: string[], start: string, end: string) => {
+    const allCats = await db.categories.toArray();
+    const allTxns = await db.transactions.toArray();
+    
+    const resolvedCategoryNames = new Set<string>();
+    for (const requested of categoriesList) {
+      const reqLower = requested.toLowerCase().trim();
+      const matchedCat = allCats.find((c) => {
+        const cLower = c.name.toLowerCase();
+        return (
+          cLower === reqLower ||
+          cLower.includes(reqLower) ||
+          reqLower.includes(cLower)
+        );
+      });
+      if (matchedCat) {
+        resolvedCategoryNames.add(matchedCat.name);
+      }
+    }
+    
+    const matchedTxns = allTxns.filter(t => {
+      if (t.date < start || t.date > end) return false;
+      return resolvedCategoryNames.has(t.category);
+    });
+
+    const totalSpend = matchedTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const count = matchedTxns.length;
+    const average = count > 0 ? totalSpend / count : 0;
+
+    const budgets = await db.budgets.toArray();
+    let totalBudget = 0;
+    for (const catName of resolvedCategoryNames) {
+      const matchedBudget = budgets.find(b => b.category.toLowerCase() === catName.toLowerCase());
+      if (matchedBudget) totalBudget += matchedBudget.monthlyAmount;
+    }
+
+    return { totalSpend, count, average, totalBudget };
+  };
+
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
@@ -126,7 +165,30 @@ Currently Enabled Accounts: ${enabledAccountIds.join(', ')}`;
         }
 
         const cmd = JSON.parse(jsonStr);
-        if (
+        if (cmd.action === 'query_data') {
+          const start = cmd.customStart || '2000-01-01';
+          const end = cmd.customEnd || new Date().toISOString().slice(0, 10);
+          const queryCats = cmd.categories || [];
+          
+          const queryResult = await runDataQuery(queryCats, start, end);
+          
+          const resultsMsg: ChatMessage = {
+            role: 'system',
+            content: `Database Query Results for categories [${queryCats.join(', ')}] between ${start} and ${end}:
+- Total Spent: $${queryResult.totalSpend.toFixed(2)}
+- Number of Transactions: ${queryResult.count}
+- Average Transaction: $${queryResult.average.toFixed(2)}
+- Total Monthly Budget Limit: $${queryResult.totalBudget.toFixed(2)}
+Please explain these numbers to the user in a natural, conversational response.`
+          };
+          
+          const finalResponseText = await localAI.chatCopilot(
+            [...messages, userMsg, { role: 'assistant', content: responseText }, resultsMsg],
+            stateContext
+          );
+          
+          addMessage({ role: 'assistant', content: finalResponseText });
+        } else if (
           cmd.action === 'navigate' ||
           cmd.action === 'search' ||
           cmd.action === 'filter'

@@ -27,6 +27,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { db } from '../db';
 import type { CategoryRule } from '../types';
 import { recategorizeAll } from '../categorize';
+import { mineRuleSuggestions } from '../ruleMiner';
 
 export default function Rules() {
   const rules = useLiveQuery(
@@ -34,6 +35,7 @@ export default function Rules() {
     []
   );
   const categories = useLiveQuery(() => db.categories.toArray(), []);
+  const suggestions = useLiveQuery(() => mineRuleSuggestions(), [rules]);
   const [editing, setEditing] = useState<CategoryRule | 'new' | null>(null);
   const [recategorizing, setRecategorizing] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -91,6 +93,65 @@ export default function Rules() {
       </Stack>
 
       {feedback && <Alert severity="success" onClose={() => setFeedback(null)}>{feedback}</Alert>}
+
+      {suggestions && suggestions.length > 0 && (
+        <Stack spacing={1.5} sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+            Recommended Rules (Mined from manual overrides)
+          </Typography>
+          <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', pb: 1.5, '&::-webkit-scrollbar': { height: 6 } }}>
+            {suggestions.map((s, idx) => (
+              <Paper
+                key={idx}
+                elevation={0}
+                sx={{
+                  p: 2,
+                  minWidth: 320,
+                  maxWidth: 320,
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  borderRadius: 2,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.5,
+                  bgcolor: 'rgba(25, 118, 210, 0.03)',
+                  flexShrink: 0,
+                }}
+              >
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Create rule for "{s.pattern}"
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    Matches: <code>{s.sampleDescription}</code> ({s.overridesCount} overrides)
+                  </Typography>
+                </Box>
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                  <Chip
+                    size="small"
+                    label={s.category}
+                    sx={{
+                      bgcolor:
+                        (categories?.find((c) => c.name === s.category)
+                          ?.color || '#bdbdbd') + '22',
+                      color:
+                        categories?.find((c) => c.name === s.category)?.color ||
+                        '#666',
+                      fontWeight: 500,
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => onSave({ pattern: s.pattern, category: s.category, priority: 100 })}
+                  >
+                    Add Rule
+                  </Button>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        </Stack>
+      )}
 
       <Paper>
         <Table size="small">
