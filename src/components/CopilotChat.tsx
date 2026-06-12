@@ -27,6 +27,27 @@ interface CopilotChatProps {
   isEmbedded?: boolean;
 }
 
+function renderMessageContent(m: ChatMessage): string {
+  if (m.role !== 'assistant') return m.content;
+  try {
+    let jsonStr = m.content.trim();
+    const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (match) {
+      jsonStr = match[1].trim();
+    } else {
+      const start = jsonStr.indexOf('{');
+      const end = jsonStr.lastIndexOf('}');
+      if (start >= 0 && end >= 0) {
+        jsonStr = jsonStr.slice(start, end + 1);
+      }
+    }
+    const parsed = JSON.parse(jsonStr);
+    return parsed.explanation || m.content;
+  } catch {
+    return m.content;
+  }
+}
+
 export default function CopilotChat({
   onClose,
   showCloseButton = false,
@@ -269,13 +290,7 @@ Please explain these numbers to the user in a natural, conversational response.`
             setEnabledAccounts(Array.from(desiredAccountIds));
           }
 
-          const assistantText =
-            cmd.explanation ||
-            `*(Action: Applied filters. Preset: ${
-              cmd.preset || preset
-            }, Categories: ${cmd.categories?.join(', ') || 'unchanged'})*`;
-
-          addMessage({ role: 'assistant', content: assistantText });
+          addMessage({ role: 'assistant', content: responseText });
         } else {
           addMessage({ role: 'assistant', content: responseText });
         }
@@ -422,7 +437,7 @@ Please explain these numbers to the user in a natural, conversational response.`
                   }}
                 >
                   <Typography className="copilot-msg-text" variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {m.content}
+                    {renderMessageContent(m)}
                   </Typography>
                 </Paper>
               </Box>
