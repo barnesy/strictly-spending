@@ -557,6 +557,20 @@ export default function AgentSkills() {
   const [testCasePromptText, setTestCasePromptText] = useState('');
   const [testCaseCriteriaText, setTestCaseCriteriaText] = useState('');
 
+  // Form states for baseline test case editing/creating
+  const [showAddBaselineTestCaseForm, setShowAddBaselineTestCaseForm] = useState(false);
+  const [editingBaselineTestCaseIndex, setEditingBaselineTestCaseIndex] = useState<number | null>(null);
+  const [baselineTestCasePromptText, setBaselineTestCasePromptText] = useState('');
+  const [baselineTestCaseCriteriaText, setBaselineTestCaseCriteriaText] = useState('');
+
+  const baselineTestCasesSetting = useLiveQuery(
+    () => db.settings.get('app:baselineTestCases'),
+    []
+  );
+  const baselineTestCases = useMemo(() => {
+    return (baselineTestCasesSetting?.value as SkillTestCase[]) || BASELINE_TEST_CASES;
+  }, [baselineTestCasesSetting]);
+
   const handleOpenAddSkill = () => {
     setEditorSkill({
       id: '',
@@ -662,6 +676,44 @@ export default function AgentSkills() {
     setSnackbarMessage('Test case deleted successfully!');
   };
 
+  const handleSaveBaselineTestCase = async () => {
+    const newTestCase: SkillTestCase = {
+      prompt: baselineTestCasePromptText.trim(),
+      criteria: baselineTestCaseCriteriaText.trim()
+    };
+
+    const currentCases = [...baselineTestCases];
+    if (editingBaselineTestCaseIndex !== null) {
+      currentCases[editingBaselineTestCaseIndex] = newTestCase;
+    } else {
+      currentCases.push(newTestCase);
+    }
+
+    await db.settings.put({
+      key: 'app:baselineTestCases',
+      value: currentCases
+    });
+
+    setShowAddBaselineTestCaseForm(false);
+    setEditingBaselineTestCaseIndex(null);
+    setBaselineTestCasePromptText('');
+    setBaselineTestCaseCriteriaText('');
+    setSnackbarMessage(editingBaselineTestCaseIndex !== null ? 'Baseline test case updated!' : 'Baseline test case added!');
+  };
+
+  const handleDeleteBaselineTestCase = async (index: number) => {
+    const currentCases = baselineTestCases.filter((_, idx) => idx !== index);
+    await db.settings.put({
+      key: 'app:baselineTestCases',
+      value: currentCases
+    });
+
+    const updatedResults = { ...baselineDiagnosticResults };
+    delete updatedResults[index];
+    setBaselineDiagnosticResults(updatedResults);
+    setSnackbarMessage('Baseline test case deleted.');
+  };
+
   const handleRunDiagnostics = async () => {
     if (!editorSkill || !editorSkill.testCases || editorSkill.testCases.length === 0) return;
 
@@ -718,10 +770,11 @@ export default function AgentSkills() {
   };
 
   const handleRunBaselineDiagnostics = async () => {
+    if (isBaselineRunningSuite) return;
     setIsBaselineRunningSuite(true);
     setBaselineDiagnosticResults({});
 
-    const total = BASELINE_TEST_CASES.length;
+    const total = baselineTestCases.length;
 
     for (let i = 0; i < total; i++) {
       setBaselineSuiteProgress(`Running test case ${i + 1} of ${total}...`);
@@ -731,7 +784,7 @@ export default function AgentSkills() {
       }));
 
       try {
-        const testCase = BASELINE_TEST_CASES[i];
+        const testCase = baselineTestCases[i];
         const result = await runSystemPromptTestCase(systemPromptText, testCase);
         
         setBaselineDiagnosticResults(prev => ({
@@ -770,7 +823,7 @@ export default function AgentSkills() {
     }));
 
     try {
-      const testCase = BASELINE_TEST_CASES[index];
+      const testCase = baselineTestCases[index];
       const result = await runSystemPromptTestCase(systemPromptText, testCase);
       
       setBaselineDiagnosticResults(prev => ({
@@ -2178,6 +2231,88 @@ export default function AgentSkills() {
 
                       <Box sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)', my: 1.5 }} />
 
+                      {/* Inline form to Add/Edit Baseline Test Case */}
+                      {showAddBaselineTestCaseForm || editingBaselineTestCaseIndex !== null ? (
+                        <Paper
+                          variant="outlined"
+                          sx={{
+                            p: 2,
+                            borderColor: 'primary.light',
+                            bgcolor: 'rgba(25, 118, 210, 0.01)',
+                            mb: 2,
+                          }}
+                        >
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, fontSize: 12 }}>
+                            {editingBaselineTestCaseIndex !== null ? 'Edit Baseline Test Case' : 'New Baseline Test Case'}
+                          </Typography>
+                          <Stack spacing={2}>
+                            <TextField
+                              label="Test Prompt"
+                              placeholder="e.g., Show food spending"
+                              value={baselineTestCasePromptText}
+                              onChange={(e) => setBaselineTestCasePromptText(e.target.value)}
+                              size="small"
+                              fullWidth
+                              multiline
+                              rows={2}
+                              required
+                              slotProps={{ inputLabel: { shrink: true } }}
+                            />
+                            <TextField
+                              label="Expected Criteria"
+                              placeholder="e.g., Must map to Groceries"
+                              value={baselineTestCaseCriteriaText}
+                              onChange={(e) => setBaselineTestCaseCriteriaText(e.target.value)}
+                              size="small"
+                              fullWidth
+                              multiline
+                              rows={2}
+                              required
+                              slotProps={{ inputLabel: { shrink: true } }}
+                            />
+                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                              <Button
+                                size="small"
+                                onClick={() => {
+                                  setShowAddBaselineTestCaseForm(false);
+                                  setEditingBaselineTestCaseIndex(null);
+                                  setBaselineTestCasePromptText('');
+                                  setBaselineTestCaseCriteriaText('');
+                                }}
+                                sx={{ textTransform: 'none' }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                onClick={handleSaveBaselineTestCase}
+                                disabled={!baselineTestCasePromptText.trim() || !baselineTestCaseCriteriaText.trim()}
+                                sx={{ textTransform: 'none' }}
+                              >
+                                Save
+                              </Button>
+                            </Stack>
+                          </Stack>
+                        </Paper>
+                      ) : (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<AddIcon />}
+                          onClick={() => {
+                            setShowAddBaselineTestCaseForm(true);
+                            setEditingBaselineTestCaseIndex(null);
+                            setBaselineTestCasePromptText('');
+                            setBaselineTestCaseCriteriaText('');
+                          }}
+                          sx={{ mb: 2, textTransform: 'none', fontWeight: 600 }}
+                          fullWidth
+                        >
+                          Add Baseline Test Case
+                        </Button>
+                      )}
+
                       {/* Test Cases List */}
                       <Typography
                         variant="subtitle2"
@@ -2190,11 +2325,11 @@ export default function AgentSkills() {
                           mb: 1.5,
                         }}
                       >
-                        Baseline Test Cases ({BASELINE_TEST_CASES.length})
+                        Baseline Test Cases ({baselineTestCases.length})
                       </Typography>
 
                       <Stack spacing={1.5} sx={{ pb: 2 }}>
-                        {BASELINE_TEST_CASES.map((tc, index) => {
+                        {baselineTestCases.map((tc, index) => {
                           const res = baselineDiagnosticResults[index];
                           return (
                             <Paper
@@ -2293,6 +2428,33 @@ export default function AgentSkills() {
                                       Inspect Output
                                     </Button>
                                   </Box>
+                                )}
+
+                                {!isBaselineRunningSuite && (
+                                  <Stack direction="row" spacing={0.5} justifyContent="flex-end" sx={{ mt: 0.5 }}>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        setEditingBaselineTestCaseIndex(index);
+                                        setShowAddBaselineTestCaseForm(false);
+                                        setBaselineTestCasePromptText(tc.prompt);
+                                        setBaselineTestCaseCriteriaText(tc.criteria);
+                                      }}
+                                      title="Edit Test Case"
+                                      sx={{ p: 0.25 }}
+                                    >
+                                      <EditIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => handleDeleteBaselineTestCase(index)}
+                                      title="Delete Test Case"
+                                      sx={{ p: 0.25 }}
+                                    >
+                                      <DeleteIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                  </Stack>
                                 )}
                               </Stack>
                             </Paper>
