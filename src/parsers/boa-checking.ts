@@ -49,6 +49,7 @@ export function parseBoaChecking(
       accountName: 'BOA Checking',
       accountType: 'checking',
       institution: 'Bank of America',
+      balance: parseMoney(row['Running Bal.']),
     });
   }
 

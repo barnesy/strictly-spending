@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-interface ForecastState {
+interface BudgetState {
   excludedMerchants: Set<string>;
   excludedBudgetCategories: Set<string>;
   toggleMerchant: (key: string) => void;
@@ -10,7 +10,7 @@ interface ForecastState {
   isExcluded: (key: string) => boolean;
 }
 
-export const useForecastStore = create<ForecastState>((set, get) => ({
+export const useBudgetStore = create<BudgetState>((set, get) => ({
   excludedMerchants: new Set(),
   excludedBudgetCategories: new Set(),
   toggleMerchant: (key) =>

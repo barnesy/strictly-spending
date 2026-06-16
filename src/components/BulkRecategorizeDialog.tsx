@@ -27,7 +27,7 @@ import type { Category, RecurrenceKind } from '../types';
 import { usdCents } from '../lib';
 import { recategorizeAll } from '../categorize';
 import {
-  buildRecurrenceMap,
+  detectRecurrence,
   isRecurring,
   recurrenceLabel,
 } from '../recurrence';
@@ -51,22 +51,15 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
     () => db.transactions.where('merchantKey').equals(merchantKey).toArray(),
     [merchantKey]
   );
-  const allTxns = useLiveQuery(() => db.transactions.toArray(), []);
   const overrides = useLiveQuery(() => db.merchantOverrides.toArray(), []);
   const existingOverride = useMemo(
     () => overrides?.find((o) => o.merchantKey === merchantKey),
     [overrides, merchantKey]
   );
   const autoInfo = useMemo(() => {
-    if (!allTxns) return null;
-    // Build the recurrence map WITHOUT this merchant's override applied so we
-    // can show the user the auto-detected cadence as a reference point.
-    const otherOverrides = (overrides || []).filter(
-      (o) => o.merchantKey !== merchantKey
-    );
-    const map = buildRecurrenceMap(allTxns, otherOverrides);
-    return map.get(merchantKey) || null;
-  }, [allTxns, overrides, merchantKey]);
+    if (!matchingTxns) return null;
+    return detectRecurrence(matchingTxns);
+  }, [matchingTxns]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [newCategoryName, setNewCategoryName] = useState('');

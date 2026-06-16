@@ -7,16 +7,9 @@ import {
 } from 'react-resizable-panels';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import Fab from '@mui/material/Fab';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import StorefrontIcon from '@mui/icons-material/Storefront';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import CopilotChat from '../components/CopilotChat';
-import { subtleScrollSx } from '../styles';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Box,
-  Grid,
   Paper,
   Stack,
   Typography,
@@ -24,65 +17,115 @@ import {
   IconButton,
   ToggleButton,
   ToggleButtonGroup,
-  Checkbox,
-  FormControlLabel,
   Chip,
   Table,
   TableHead,
   TableRow,
   TableCell,
   TableBody,
-  Alert,
-  TextField,
+  TableContainer,
+  TablePagination,
   Tooltip,
+  Alert,
 } from '@mui/material';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { Link as RouterLink } from 'react-router-dom';
+import EditIcon from '@mui/icons-material/Edit';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+
 import { db } from '../db';
 import {
   useFilters,
   resolveDateRange,
-  type DateRangePreset,
-  type GroupBy,
-  type FiltersStore,
 } from '../store';
-import { usd, monthKey, monthsBetween } from '../lib';
+import { usd, usdCents, monthsBetween } from '../lib';
 import SpendChart from '../components/SpendChart';
 import BulkRecategorizeDialog from '../components/BulkRecategorizeDialog';
-import RecurringBurnCard from '../components/RecurringBurnCard';
+import FilterPanel from '../components/FilterPanel';
+import RangePicker from '../components/RangePicker';
+import RecategorizeDialog from '../components/RecategorizeDialog';
+import { subtleScrollSx } from '../styles';
 import {
   buildRecurrenceMap,
   isRecurring,
   recurrenceLabel,
 } from '../recurrence';
-import type { Account, Category, Transaction } from '../types';
-
-const PRESETS: { value: DateRangePreset; label: string }[] = [
-  { value: 'ytd', label: 'YTD' },
-  { value: 'last30', label: 'Last 30D' },
-  { value: 'last90', label: 'Last 90D' },
-  { value: 'thisMonth', label: 'This Month' },
-  { value: 'lastMonth', label: 'Last Month' },
-  { value: 'allTime', label: 'All Time' },
-  { value: 'custom', label: 'Custom' },
-];
+import type { Transaction } from '../types';
 
 export default function Dashboard() {
-  const filters = useFilters();
-  const demoMode = filters.demoMode;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const viewMode = location.pathname === '/transactions' ? 'table' : 'chart';
+
+  const setViewMode = (mode: 'chart' | 'table') => {
+    navigate(mode === 'table' ? '/transactions' : '/', { replace: true });
+  };
+
+  const [filterVisible, setFilterVisible] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('dashboard:filterVisible') !== 'false';
+  });
+  const [sidebarVisible, setSidebarVisible] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('dashboard:sidebarVisible') !== 'false';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('dashboard:filterVisible', String(filterVisible));
+  }, [filterVisible]);
+  useEffect(() => {
+    localStorage.setItem('dashboard:sidebarVisible', String(sidebarVisible));
+  }, [sidebarVisible]);
+
+  const preset = useFilters((s) => s.preset);
+  const customStart = useFilters((s) => s.customStart);
+  const customEnd = useFilters((s) => s.customEnd);
+  const earliestTransactionDate = useFilters((s) => s.preset === 'allTime' ? s.earliestTransactionDate : undefined);
+  const latestTransactionDate = useFilters((s) => s.preset === 'allTime' ? s.latestTransactionDate : undefined);
+
+  const enabledAccountIds = useFilters((s) => s.enabledAccountIds);
+  const disabledCategories = useFilters((s) => s.disabledCategories);
+  const spendOnly = useFilters((s) => s.spendOnly);
+  const recurrenceFilter = useFilters((s) => s.recurrenceFilter);
+  const searchQuery = useFilters((s) => s.searchQuery);
+  const minPrice = useFilters((s) => s.minPrice);
+  const maxPrice = useFilters((s) => s.maxPrice);
+  const demoMode = useFilters((s) => s.demoMode);
+  
+  const setEnabledAccounts = useFilters((s) => s.setEnabledAccounts);
+  const setGroupBy = useFilters((s) => s.setGroupBy);
+  const drillToMonth = useFilters((s) => s.drillToMonth);
+  const groupBy = useFilters((s) => s.groupBy);
+
   const accountsAll = useLiveQuery(() => db.accounts.toArray(), []);
   const categories = useLiveQuery(
     () => db.categories.orderBy('sortOrder').toArray(),
     []
   );
-  const allTxnsAll = useLiveQuery(() => db.transactions.toArray(), []);
+
+  const range = useMemo(() => {
+    return resolveDateRange({
+      preset,
+      customStart,
+      customEnd,
+      earliestTransactionDate,
+      latestTransactionDate,
+    } as any);
+  }, [preset, customStart, customEnd, earliestTransactionDate, latestTransactionDate]);
+
+  const startISO = useMemo(() => range.start.toISOString().slice(0, 10), [range.start]);
+  const endISO = useMemo(() => range.end.toISOString().slice(0, 10), [range.end]);
+
+  const allTxnsAll = useLiveQuery(
+    () => db.transactions.where('date').between(startISO, endISO, true, true).toArray(),
+    [startISO, endISO]
+  );
   const merchantOverrides = useLiveQuery(
     () => db.merchantOverrides.toArray(),
     []
   );
-  // Demo-mode filter: hide real accounts/transactions from every downstream
-  // computation. Real data is untouched on disk.
+
+  // Demo-mode filter: hide real accounts/transactions.
   const accounts = useMemo(
     () =>
       accountsAll && demoMode
@@ -105,29 +148,23 @@ export default function Dashboard() {
   // Default-enable any newly-discovered accounts.
   useEffect(() => {
     if (!accounts || accounts.length === 0) return;
-    const known = new Set(filters.enabledAccountIds);
+    const known = new Set(enabledAccountIds);
     const newOnes = accounts.filter((a) => !known.has(a.id!)).map((a) => a.id!);
     if (newOnes.length > 0) {
-      filters.setEnabledAccounts([...filters.enabledAccountIds, ...newOnes]);
+      setEnabledAccounts([...enabledAccountIds, ...newOnes]);
     }
-    // Drop ids for deleted accounts
     const accountIdSet = new Set(accounts.map((a) => a.id!));
-    const cleaned = filters.enabledAccountIds.filter((id) => accountIdSet.has(id));
-    if (cleaned.length !== filters.enabledAccountIds.length) {
-      filters.setEnabledAccounts(cleaned);
+    const cleaned = enabledAccountIds.filter((id) => accountIdSet.has(id));
+    if (cleaned.length !== enabledAccountIds.length) {
+      setEnabledAccounts(cleaned);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts?.length]);
+  }, [accounts?.length, enabledAccountIds, setEnabledAccounts]);
 
-  const range = resolveDateRange(filters);
-
-  // Filter transactions
+  // Filter transactions globally
   const visibleTxns = useMemo(() => {
     if (!allTxns) return [];
-    const enabledSet = new Set(filters.enabledAccountIds);
-    const disabledCatSet = new Set(filters.disabledCategories);
-    const startISO = range.start.toISOString().slice(0, 10);
-    const endISO = range.end.toISOString().slice(0, 10);
+    const enabledSet = new Set(enabledAccountIds);
+    const disabledCatSet = new Set(disabledCategories);
     const transferIncomeNames = new Set(
       (categories || [])
         .filter((c) => c.type !== 'spend')
@@ -137,15 +174,15 @@ export default function Dashboard() {
       if (!enabledSet.has(t.accountId)) return false;
       if (disabledCatSet.has(t.category)) return false;
       if (t.date < startISO || t.date > endISO) return false;
-      if (filters.spendOnly && transferIncomeNames.has(t.category)) return false;
-      if (filters.recurrenceFilter !== 'all') {
+      if (spendOnly && transferIncomeNames.has(t.category)) return false;
+      if (recurrenceFilter !== 'all') {
         const info = recurrenceMap.get(t.merchantKey);
         const isRec = info ? isRecurring(info.kind) : false;
-        if (filters.recurrenceFilter === 'recurring' && !isRec) return false;
-        if (filters.recurrenceFilter === 'onetime' && isRec) return false;
+        if (recurrenceFilter === 'recurring' && !isRec) return false;
+        if (recurrenceFilter === 'onetime' && isRec) return false;
       }
-      if (filters.searchQuery) {
-        const q = filters.searchQuery.toLowerCase();
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
         if (
           !t.description.toLowerCase().includes(q) &&
           !t.merchantKey.toLowerCase().includes(q)
@@ -153,26 +190,68 @@ export default function Dashboard() {
           return false;
         }
       }
+      if (minPrice !== undefined) {
+        const amt = Math.abs(t.amount);
+        if (amt < minPrice) return false;
+      }
+      if (maxPrice !== undefined) {
+        const amt = Math.abs(t.amount);
+        if (amt > maxPrice) return false;
+      }
       return true;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allTxns,
-    filters.enabledAccountIds,
-    filters.disabledCategories,
-    filters.spendOnly,
-    filters.recurrenceFilter,
-    range.start.getTime(),
-    range.end.getTime(),
+    enabledAccountIds,
+    disabledCategories,
+    spendOnly,
+    recurrenceFilter,
+    startISO,
+    endISO,
     categories,
     recurrenceMap,
-    filters.searchQuery,
+    searchQuery,
+    minPrice,
+    maxPrice,
   ]);
 
   const monthList = useMemo(
     () => monthsBetween(range.start, range.end),
     [range.start, range.end]
   );
+
+  // Table pagination & edit states
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [editTxn, setEditTxn] = useState<Transaction | null>(null);
+
+  const pageRows = useMemo(() => {
+    return visibleTxns.slice(page * pageSize, page * pageSize + pageSize);
+  }, [visibleTxns, page, pageSize]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [visibleTxns.length]);
+
+  const accountName = (id: number) =>
+    accounts?.find((a) => a.id === id)?.name || '–';
+  const categoryColor = (name: string) =>
+    categories?.find((c) => c.name === name)?.color || '#bdbdbd';
+
+  // Persist resizable panel layout sizes.
+  const panelIds = [
+    ...(filterVisible ? ['filter'] : []),
+    'chart',
+    ...(sidebarVisible ? ['merchants'] : []),
+  ];
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: `unified-top-row-${panelIds.join('-')}`,
+    panelIds,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  });
+
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
   if (!accounts || !categories || !allTxns) {
     return <Typography>Loading…</Typography>;
@@ -185,255 +264,355 @@ export default function Dashboard() {
         <Alert severity="info" sx={{ width: '100%' }}>
           No transactions yet. Import a CSV to get started.
         </Alert>
-        <Button
-          component={RouterLink}
-          to="/import"
-          variant="contained"
-          size="large"
-        >
+        <Button component={RouterLink} to="/import" variant="contained" size="large">
           Import CSVs
         </Button>
       </Stack>
     );
   }
 
-  return (
-    <Stack spacing={2}>
-      <UncategorizedBanner allTxns={allTxns} />
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={2}
-        justifyContent="space-between"
-        alignItems={{ xs: 'flex-start', md: 'center' }}
-      >
-        <Typography variant="h5">Dashboard</Typography>
-        <RangePicker filters={filters} />
-      </Stack>
-
-      <ResizableTopRow
-        accounts={accounts}
-        categories={categories}
-        filters={filters}
-        allTxns={allTxns}
-        visibleTxns={visibleTxns}
-        monthList={monthList}
-        recurrenceMap={recurrenceMap}
-      />
-
-      <Grid container spacing={2}>
-        <Grid size={12}>
-          <TopCategoriesCard
-            visibleTxns={visibleTxns}
-            categories={categories}
-            monthList={monthList}
-          />
-        </Grid>
-        <Grid size={12}>
-          <RecurringBurnCard
-            allTxns={allTxns}
-            recurrenceMap={recurrenceMap}
-            categories={categories}
-          />
-        </Grid>
-        <Grid size={12}>
-          <AccountSummary visibleTxns={visibleTxns} accounts={accounts} />
-        </Grid>
-      </Grid>
+  const mainTable = (
+    <Stack spacing={2} sx={{ height: '100%' }}>
+      <TableContainer sx={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 1, bgcolor: 'background.paper', flex: 1, minHeight: 0, overflow: 'auto', ...subtleScrollSx }}>
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell>Date</TableCell>
+              <TableCell>Account</TableCell>
+              <TableCell>Description</TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell align="right">Amount</TableCell>
+              <TableCell width={40}></TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {pageRows.map((t) => (
+              <TableRow key={t.id} hover>
+                <TableCell>{t.date}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {accountName(t.accountId)}
+                  </Typography>
+                </TableCell>
+                <TableCell
+                  sx={{
+                    maxWidth: 380,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={t.description}
+                >
+                  {(() => {
+                    const info = recurrenceMap.get(t.merchantKey);
+                    if (info && isRecurring(info.kind)) {
+                      return (
+                        <Tooltip
+                          title={`${recurrenceLabel(info.kind)} · ~${usdCents.format(info.estMonthlyCost)}/mo`}
+                        >
+                          <Box
+                            component="span"
+                            sx={{
+                              color: 'primary.main',
+                              fontSize: 14,
+                              mr: 0.5,
+                              cursor: 'help',
+                            }}
+                          >
+                            &#x21bb;
+                          </Box>
+                        </Tooltip>
+                      );
+                    }
+                    return null;
+                  })()}
+                  {t.description}
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={t.category}
+                    size="small"
+                    sx={{
+                      bgcolor: categoryColor(t.category) + '22',
+                      color: categoryColor(t.category),
+                      fontWeight: 500,
+                      border: t.userOverridden ? '1px solid' : 'none',
+                      borderColor: t.userOverridden
+                        ? categoryColor(t.category)
+                        : 'transparent',
+                    }}
+                  />
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: t.amount < 0 ? 'inherit' : 'success.main',
+                    fontWeight: 500,
+                  }}
+                >
+                  {usdCents.format(t.amount)}
+                </TableCell>
+                <TableCell>
+                  <Tooltip title="Recategorize">
+                    <IconButton
+                      size="small"
+                      onClick={() => setEditTxn(t)}
+                      aria-label={`Recategorize ${t.description.slice(0, 40)}`}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
+            ))}
+            {pageRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6}>
+                  <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
+                    No transactions match.
+                  </Box>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+        <TablePagination
+          component="div"
+          count={visibleTxns.length}
+          page={page}
+          onPageChange={(_, p) => setPage(p)}
+          rowsPerPage={pageSize}
+          onRowsPerPageChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[25, 50, 100, 250]}
+        />
+      </TableContainer>
     </Stack>
   );
-}
 
-// ----- Resizable top row (Figma-style: collapse hides panel + adds edge overlay) -----
+  const middleSectionContent = (
+    <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Middle Section Header */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        sx={{ mb: 2, flexShrink: 0 }}
+      >
+        <ToggleButtonGroup
+          value={viewMode}
+          exclusive
+          onChange={(_, v) => v && setViewMode(v)}
+          size="small"
+        >
+          <ToggleButton value="chart" sx={{ textTransform: 'none', minWidth: 80, fontWeight: 600 }}>
+            Chart
+          </ToggleButton>
+          <ToggleButton value="table" sx={{ textTransform: 'none', minWidth: 80, fontWeight: 600 }}>
+            Table
+          </ToggleButton>
+        </ToggleButtonGroup>
 
-function ResizableTopRow({
-  accounts,
-  categories,
-  filters,
-  allTxns,
-  visibleTxns,
-  monthList,
-  recurrenceMap,
-}: {
-  accounts: Account[];
-  categories: Category[];
-  filters: FiltersStore;
-  allTxns: Transaction[];
-  visibleTxns: Transaction[];
-  monthList: string[];
-  recurrenceMap: ReturnType<typeof buildRecurrenceMap>;
-}) {
-  const theme = useTheme();
-  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+        {viewMode === 'chart' && (
+          <ToggleButtonGroup
+            value={groupBy}
+            exclusive
+            onChange={(_, v) => v && setGroupBy(v)}
+            size="small"
+            sx={{
+              '& .MuiToggleButton-root': { whiteSpace: 'nowrap' },
+              overflowX: 'auto',
+              ...subtleScrollSx,
+            }}
+          >
+            <ToggleButton value="category">By Category</ToggleButton>
+            <ToggleButton value="account">By Account</ToggleButton>
+            <ToggleButton value="recurring">Recurring vs One-Time</ToggleButton>
+            <ToggleButton value="none">Totals</ToggleButton>
+          </ToggleButtonGroup>
+        )}
+      </Stack>
 
-  // Persist visibility across reloads so the user's last layout sticks.
-  const [filterVisible, setFilterVisible] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('dashboard:filterVisible') !== 'false';
-  });
-  const [copilotVisible, setCopilotVisible] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('dashboard:copilotVisible') !== 'false';
-  });
-  const [sidebarVisible, setSidebarVisible] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('dashboard:sidebarVisible') !== 'false';
-  });
-  useEffect(() => {
-    localStorage.setItem('dashboard:filterVisible', String(filterVisible));
-  }, [filterVisible]);
-  useEffect(() => {
-    localStorage.setItem('dashboard:copilotVisible', String(copilotVisible));
-  }, [copilotVisible]);
-  useEffect(() => {
-    localStorage.setItem('dashboard:sidebarVisible', String(sidebarVisible));
-  }, [sidebarVisible]);
-
-  // Persist panel sizes too. The set of panelIds passed depends on which
-  // panels are currently visible — that's how `useDefaultLayout` knows.
-  const panelIds = [
-    ...(filterVisible ? ['filter'] : []),
-    'chart',
-    ...(copilotVisible ? ['copilot'] : []),
-    ...(sidebarVisible ? ['merchants'] : []),
-  ];
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-    id: `dashboard-top-row-${panelIds.join('-')}`,
-    panelIds,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-  });
-
-  const chartCard = (
-    <ChartCard
-      monthList={monthList}
-      visibleTxns={visibleTxns}
-      accounts={accounts}
-      categories={categories}
-      groupBy={filters.groupBy}
-      setGroupBy={(g) => filters.setGroupBy(g)}
-      recurrenceMap={recurrenceMap}
-      onMonthClick={(monthKey) => filters.drillToMonth(monthKey)}
-    />
+      {/* Content */}
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', ...subtleScrollSx }}>
+        {viewMode === 'chart' ? (
+          <Box sx={{ height: '100%', minHeight: 400 }}>
+            <SpendChart
+              monthList={monthList}
+              transactions={visibleTxns}
+              accounts={accounts}
+              categories={categories}
+              groupBy={groupBy}
+              recurrenceMap={recurrenceMap}
+              onMonthClick={(monthKey) => drillToMonth(monthKey)}
+              allTxns={allTxns}
+            />
+          </Box>
+        ) : (
+          mainTable
+        )}
+      </Box>
+    </Paper>
   );
+
   const filterPanel = (
     <FilterPanel
       accounts={accounts}
       categories={categories}
-      filters={filters}
       allTxns={allTxns}
       visibleTxns={visibleTxns}
-      onCollapse={() => setFilterVisible(false)}
+      recurrenceMap={recurrenceMap}
     />
   );
-  const copilotPanel = (
-    <CopilotChat
-      onClose={() => setCopilotVisible(false)}
-      showCloseButton={true}
-      isEmbedded={true}
-    />
-  );
+
   const merchantsCard = (
     <TopMerchantsCard
       visibleTxns={visibleTxns}
       recurrenceMap={recurrenceMap}
-      onCollapse={() => setSidebarVisible(false)}
     />
   );
 
-  // Mobile: stack vertically, no resize, no collapse.
-  if (!isDesktop) {
-    return (
-      <Stack spacing={2}>
-        {copilotVisible && copilotPanel}
-        {filterPanel}
-        {chartCard}
-        {merchantsCard}
-      </Stack>
-    );
-  }
-
   return (
-    <Box
-      sx={{
-        // Fill the viewport from below the page header (Dashboard title + range picker)
-        // down to the bottom edge, with a small bottom margin so the bottom-row
-        // sections show a peek and remain reachable by scroll.
-        height: 'calc(100vh - 200px)',
-        minHeight: 540,
-        position: 'relative',
-      }}
-    >
-      <PanelGroup
-        orientation="horizontal"
-        defaultLayout={defaultLayout}
-        onLayoutChanged={onLayoutChanged}
-        style={{ height: '100%' }}
-      >
-        {filterVisible && (
-          <Panel id="filter" defaultSize={18} minSize={15}>
-            <PanelScroll>{filterPanel}</PanelScroll>
-          </Panel>
-        )}
-        {filterVisible && <StyledResizeHandle ariaLabel="Resize filters / chart" />}
-        <Panel id="chart" defaultSize={40} minSize={25}>
-          <Box sx={{ height: '100%', overflow: 'auto', ...subtleScrollSx }}>
-            {chartCard}
-          </Box>
-        </Panel>
-        {(copilotVisible || sidebarVisible) && (
-          <StyledResizeHandle ariaLabel="Resize chart / right panels" />
-        )}
-        {copilotVisible && (
-          <Panel id="copilot" defaultSize={22} minSize={15}>
-            <PanelScroll>{copilotPanel}</PanelScroll>
-          </Panel>
-        )}
-        {copilotVisible && sidebarVisible && (
-          <StyledResizeHandle ariaLabel="Resize copilot / top merchants" />
-        )}
-        {sidebarVisible && (
-          <Panel id="merchants" defaultSize={20} minSize={15}>
-            <PanelScroll>{merchantsCard}</PanelScroll>
-          </Panel>
-        )}
-      </PanelGroup>
+    <Stack spacing={2} sx={{ height: isDesktop ? '100%' : 'auto', minHeight: 0 }}>
+      <UncategorizedBanner />
 
-      {/* Edge overlays when a panel is collapsed */}
-      {!filterVisible && (
-        <PanelEdgeOverlay
-          side="left"
-          icon={<FilterListIcon fontSize="small" />}
-          label="Show filters"
-          onClick={() => setFilterVisible(true)}
+      {/* Combined Unified Toolbar */}
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', md: 'center' }}
+        sx={{ width: '100%' }}
+      >
+        {/* Left Side: Filters button */}
+        <Stack
+          direction="row"
+          spacing={2}
+          alignItems="center"
+          justifyContent={{ xs: 'space-between', md: 'flex-start' }}
+        >
+          <Stack direction="row" spacing={2} alignItems="center">
+            <ToggleButtonGroup size="small">
+              <ToggleButton
+                value="filters"
+                selected={filterVisible}
+                onClick={() => setFilterVisible(!filterVisible)}
+                sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
+                title="Toggle Filters Panel"
+              >
+                <FilterListIcon fontSize="small" />
+                Filters
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+
+          {/* On mobile, show Merchants toggle on the far right of this first row */}
+          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+            <ToggleButtonGroup size="small">
+              <ToggleButton
+                value="merchants"
+                selected={sidebarVisible}
+                onClick={() => setSidebarVisible(!sidebarVisible)}
+                sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
+                title="Toggle Top Merchants Panel"
+              >
+                <StorefrontIcon fontSize="small" />
+                Merchants
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        </Stack>
+
+        {/* Center: RangePicker */}
+        <Stack
+          direction="row"
+          spacing={2}
+          alignItems="center"
+          justifyContent="center"
+          sx={{ flexGrow: 1 }}
+        >
+          <RangePicker />
+        </Stack>
+
+        {/* Right Side: Merchants button (desktop only) */}
+        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+          <ToggleButtonGroup size="small">
+            <ToggleButton
+              value="merchants"
+              selected={sidebarVisible}
+              onClick={() => setSidebarVisible(!sidebarVisible)}
+              sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
+              title="Toggle Top Merchants Panel"
+            >
+              <StorefrontIcon fontSize="small" />
+              Merchants
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      </Stack>
+
+      {/* Resizable content panel */}
+      {!isDesktop ? (
+        <Stack spacing={2}>
+          {filterVisible && filterPanel}
+          {middleSectionContent}
+          {sidebarVisible && merchantsCard}
+        </Stack>
+      ) : (
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            position: 'relative',
+          }}
+        >
+          <PanelGroup
+            orientation="horizontal"
+            defaultLayout={defaultLayout}
+            onLayoutChanged={onLayoutChanged}
+            style={{ height: '100%' }}
+          >
+            {filterVisible && (
+              <Panel id="filter" defaultSize={18} minSize={15}>
+                <PanelScroll>{filterPanel}</PanelScroll>
+              </Panel>
+            )}
+            {filterVisible && <StyledResizeHandle ariaLabel="Resize filters / content" />}
+
+            <Panel id="chart" defaultSize={40} minSize={25}>
+              {middleSectionContent}
+            </Panel>
+
+            {sidebarVisible && <StyledResizeHandle ariaLabel="Resize content / top merchants" />}
+            {sidebarVisible && (
+              <Panel id="merchants" defaultSize={20} minSize={15}>
+                <PanelScroll>{merchantsCard}</PanelScroll>
+              </Panel>
+            )}
+          </PanelGroup>
+        </Box>
+      )}
+
+
+
+      {editTxn && (
+        <RecategorizeDialog
+          txn={editTxn}
+          onClose={() => setEditTxn(null)}
         />
       )}
-      {!copilotVisible && (
-        <PanelEdgeOverlay
-          side="right"
-          icon={<AutoAwesomeIcon fontSize="small" />}
-          label="Show copilot"
-          onClick={() => setCopilotVisible(true)}
-          sx={{ top: sidebarVisible ? 16 : 72 }}
-        />
-      )}
-      {!sidebarVisible && (
-        <PanelEdgeOverlay
-          side="right"
-          icon={<StorefrontIcon fontSize="small" />}
-          label="Show top merchants"
-          onClick={() => setSidebarVisible(true)}
-          sx={{ top: 16 }}
-        />
-      )}
-    </Box>
+    </Stack>
   );
 }
 
+// ----- Subcomponents & Helpers -----
+
 function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
   return (
-    <PanelResizeHandle
-      aria-label={ariaLabel}
-      style={{ width: 8, position: 'relative' }}
-    >
+    <PanelResizeHandle aria-label={ariaLabel} style={{ width: 8, position: 'relative' }}>
       <Box
         sx={{
           position: 'absolute',
@@ -455,509 +634,22 @@ function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
 
 function PanelScroll({ children }: { children: React.ReactNode }) {
   return (
-    <Box
-      sx={{
-        height: '100%',
-        overflow: 'auto',
-        ...subtleScrollSx,
-      }}
-    >
+    <Box sx={{ height: '100%', overflow: 'auto', ...subtleScrollSx }}>
       {children}
     </Box>
   );
 }
 
-/** Fixed overlay button anchored to the screen edge — shown when a side
- *  panel is collapsed. Click expands it back. */
-function PanelEdgeOverlay({
-  side,
-  icon,
-  label,
-  onClick,
-  sx,
-}: {
-  side: 'left' | 'right';
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  sx?: any;
-}) {
-  return (
-    <Tooltip title={label} placement={side === 'left' ? 'right' : 'left'}>
-      <Fab
-        size="small"
-        color="primary"
-        onClick={onClick}
-        aria-label={label}
-        sx={{
-          position: 'absolute',
-          top: 16,
-          [side]: 8,
-          zIndex: 4,
-          boxShadow: 2,
-          ...sx,
-        }}
-      >
-        {icon}
-      </Fab>
-    </Tooltip>
-  );
-}
 
 
-function formatDateRange(start: Date, end: Date): string {
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const opts: Intl.DateTimeFormatOptions = sameYear
-    ? { month: 'short', day: 'numeric' }
-    : { month: 'short', day: 'numeric', year: 'numeric' };
-  const startStr = start.toLocaleDateString('en-US', opts);
-  const endStr = end.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  return `${startStr} – ${endStr}`;
-}
 
-function RangePicker({ filters }: { filters: FiltersStore }) {
-  const range = resolveDateRange(filters);
-  const label = formatDateRange(range.start, range.end);
-  return (
-    <Stack spacing={0.5} alignItems="flex-end">
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-        <Tooltip title="Shift earlier">
-          <IconButton
-            size="small"
-            onClick={() => filters.shiftRange(-1)}
-            aria-label="Shift date range earlier"
-          >
-            <ChevronLeftIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <ToggleButtonGroup
-          value={filters.preset}
-          exclusive
-          onChange={(_, v) => v && filters.setPreset(v)}
-          size="small"
-        >
-          {PRESETS.map((p) => (
-            <ToggleButton key={p.value} value={p.value}>
-              {p.label}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-        <Tooltip title="Shift later">
-          <IconButton
-            size="small"
-            onClick={() => filters.shiftRange(1)}
-            aria-label="Shift date range later"
-          >
-            <ChevronRightIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Stack>
-      <Typography variant="caption" color="text.secondary">
-        {label}
-      </Typography>
-      {filters.preset === 'custom' && (
-        <Stack direction="row" spacing={1}>
-          <TextField
-            type="date"
-            size="small"
-            value={filters.customStart || ''}
-            onChange={(e) =>
-              filters.setCustomRange(e.target.value, filters.customEnd)
-            }
-            label="Start"
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <TextField
-            type="date"
-            size="small"
-            value={filters.customEnd || ''}
-            onChange={(e) =>
-              filters.setCustomRange(filters.customStart, e.target.value)
-            }
-            label="End"
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-        </Stack>
-      )}
-    </Stack>
-  );
-}
-
-function FilterPanel({
-  accounts,
-  categories,
-  filters,
-  allTxns,
-  visibleTxns,
-  onCollapse,
-}: {
-  accounts: Account[];
-  categories: Category[];
-  filters: FiltersStore;
-  allTxns: Transaction[];
-  visibleTxns: Transaction[];
-  onCollapse?: () => void;
-}) {
-  const totalSpend = visibleTxns
-    .filter((t) => t.amount < 0)
-    .reduce((s, t) => s + Math.abs(t.amount), 0);
-  const totalIncome = visibleTxns
-    .filter((t) => t.amount > 0)
-    .reduce((s, t) => s + t.amount, 0);
-
-  return (
-    <Stack spacing={2}>
-      <Paper sx={{ p: 2, position: 'relative' }}>
-        {onCollapse && (
-          <Tooltip title="Hide filters panel">
-            <IconButton
-              size="small"
-              onClick={onCollapse}
-              aria-label="Hide filters panel"
-              sx={{ position: 'absolute', top: 8, right: 8 }}
-            >
-              <ChevronLeftIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-        <Typography variant="overline" color="text.secondary">
-          Net spend in range
-        </Typography>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          {usd.format(totalSpend)}
-        </Typography>
-        {!filters.spendOnly && totalIncome > 0 && (
-          <Typography variant="caption" color="success.main">
-            + {usd.format(totalIncome)} in
-          </Typography>
-        )}
-        <FormControlLabel
-          sx={{ mt: 1, display: 'block' }}
-          control={
-            <Checkbox
-              checked={filters.spendOnly}
-              onChange={(e) => filters.setSpendOnly(e.target.checked)}
-              size="small"
-            />
-          }
-          label={
-            <Typography variant="body2">
-              Spend only (exclude transfers & income)
-            </Typography>
-          }
-        />
-        <Box sx={{ mt: 1 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            Recurrence
-          </Typography>
-          <ToggleButtonGroup
-            value={filters.recurrenceFilter}
-            exclusive
-            onChange={(_, v) => v && filters.setRecurrenceFilter(v)}
-            size="small"
-            fullWidth
-            sx={{ '& .MuiToggleButton-root': { whiteSpace: 'nowrap' } }}
-          >
-            <ToggleButton value="all">All</ToggleButton>
-            <ToggleButton value="recurring">Recurring</ToggleButton>
-            <ToggleButton value="onetime">One-Time</ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-        <Box sx={{ mt: 2 }}>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Search merchants..."
-            value={filters.searchQuery}
-            onChange={(e) => filters.setSearchQuery(e.target.value)}
-          />
-        </Box>
-      </Paper>
-
-      <Paper sx={{ p: 2 }}>
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          sx={{ mb: 1 }}
-        >
-          <Typography variant="subtitle2">Accounts</Typography>
-          <Stack direction="row" spacing={0.5}>
-            <Button
-              size="small"
-              onClick={() =>
-                filters.setEnabledAccounts(accounts.map((a) => a.id!))
-              }
-            >
-              All
-            </Button>
-            <Button size="small" onClick={() => filters.setEnabledAccounts([])}>
-              None
-            </Button>
-          </Stack>
-        </Stack>
-        <Stack spacing={0.5}>
-          {accounts.map((a) => {
-            const txCount = allTxns.filter((t) => t.accountId === a.id).length;
-            return (
-              <FormControlLabel
-                key={a.id}
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={filters.enabledAccountIds.includes(a.id!)}
-                    onChange={() => filters.toggleAccount(a.id!)}
-                  />
-                }
-                label={
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2">{a.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {txCount}
-                    </Typography>
-                  </Stack>
-                }
-              />
-            );
-          })}
-        </Stack>
-      </Paper>
-
-      <Paper sx={{ p: 2 }}>
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          sx={{ mb: 1 }}
-        >
-          <Typography variant="subtitle2">Categories</Typography>
-          <Stack direction="row" spacing={0.5}>
-            <Button
-              size="small"
-              onClick={() => filters.setDisabledCategories([])}
-            >
-              All
-            </Button>
-            <Button
-              size="small"
-              onClick={() =>
-                filters.setDisabledCategories(categories.map((c) => c.name))
-              }
-            >
-              None
-            </Button>
-          </Stack>
-        </Stack>
-        <Stack spacing={0.25}>
-          {categories.map((c) => (
-            <FormControlLabel
-              key={c.id}
-              control={
-                <Checkbox
-                  size="small"
-                  checked={!filters.disabledCategories.includes(c.name)}
-                  onChange={() => filters.toggleCategory(c.name)}
-                />
-              }
-              label={
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Box
-                    sx={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      bgcolor: c.color,
-                    }}
-                  />
-                  <Typography variant="body2">{c.name}</Typography>
-                </Stack>
-              }
-            />
-          ))}
-        </Stack>
-      </Paper>
-    </Stack>
-  );
-}
-
-function ChartCard({
-  monthList,
-  visibleTxns,
-  accounts,
-  categories,
-  groupBy,
-  setGroupBy,
-  recurrenceMap,
-  onMonthClick,
-}: {
-  monthList: string[];
-  visibleTxns: Transaction[];
-  accounts: Account[];
-  categories: Category[];
-  groupBy: GroupBy;
-  setGroupBy: (g: GroupBy) => void;
-  recurrenceMap: ReturnType<typeof buildRecurrenceMap>;
-  onMonthClick?: (monthKey: string) => void;
-}) {
-  return (
-    <Paper
-      sx={{
-        p: 2,
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2, flexShrink: 0 }}
-      >
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          Spending over time
-        </Typography>
-        <ToggleButtonGroup
-          value={groupBy}
-          exclusive
-          onChange={(_, v) => v && setGroupBy(v)}
-          size="small"
-          sx={{ '& .MuiToggleButton-root': { whiteSpace: 'nowrap' } }}
-        >
-          <ToggleButton value="category">By Category</ToggleButton>
-          <ToggleButton value="account">By Account</ToggleButton>
-          <ToggleButton value="recurring">Recurring vs One-Time</ToggleButton>
-          <ToggleButton value="none">Totals</ToggleButton>
-        </ToggleButtonGroup>
-      </Stack>
-      <Box sx={{ flex: 1, minHeight: 0 }}>
-      <SpendChart
-        monthList={monthList}
-        transactions={visibleTxns}
-        accounts={accounts}
-        categories={categories}
-        groupBy={groupBy}
-        recurrenceMap={recurrenceMap}
-        onMonthClick={onMonthClick}
-      />
-      </Box>
-    </Paper>
-  );
-}
-
-function TopCategoriesCard({
-  visibleTxns,
-  categories,
-  monthList,
-}: {
-  visibleTxns: Transaction[];
-  categories: Category[];
-  monthList: string[];
-}) {
-  const byCategory = visibleTxns.reduce<
-    Record<string, { total: number; byMonth: Record<string, number> }>
-  >((acc, t) => {
-    if (t.amount >= 0) return acc;
-    const k = t.category;
-    if (!acc[k]) acc[k] = { total: 0, byMonth: {} };
-    acc[k].total += Math.abs(t.amount);
-    const m = monthKey(t.date);
-    acc[k].byMonth[m] = (acc[k].byMonth[m] || 0) + Math.abs(t.amount);
-    return acc;
-  }, {});
-
-  const last = monthList[monthList.length - 1];
-  const prev = monthList[monthList.length - 2];
-
-  const rows = Object.entries(byCategory)
-    .map(([category, info]) => ({
-      category,
-      total: info.total,
-      lastMonth: last ? info.byMonth[last] || 0 : 0,
-      prevMonth: prev ? info.byMonth[prev] || 0 : 0,
-      color: categories.find((c) => c.name === category)?.color || '#bdbdbd',
-    }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 10);
-
-  return (
-    <Paper sx={{ p: 2, height: '100%' }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-        Top categories
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Category</TableCell>
-            <TableCell align="right">Total</TableCell>
-            <TableCell align="right">MoM</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((r) => {
-            const delta = r.lastMonth - r.prevMonth;
-            const pct = r.prevMonth > 0 ? (delta / r.prevMonth) * 100 : 0;
-            return (
-              <TableRow key={r.category} hover>
-                <TableCell>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Box
-                      sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        bgcolor: r.color,
-                      }}
-                    />
-                    <Typography variant="body2">{r.category}</Typography>
-                  </Stack>
-                </TableCell>
-                <TableCell align="right">{usd.format(r.total)}</TableCell>
-                <TableCell align="right">
-                  {prev && r.prevMonth > 0 ? (
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: delta > 0 ? 'error.main' : 'success.main',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {delta > 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(0)}%
-                    </Typography>
-                  ) : (
-                    <Typography variant="caption" color="text.secondary">
-                      –
-                    </Typography>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={3} sx={{ color: 'text.secondary' }}>
-                No spend in range.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Paper>
-  );
-}
 
 function TopMerchantsCard({
   visibleTxns,
   recurrenceMap,
-  onCollapse,
 }: {
   visibleTxns: Transaction[];
   recurrenceMap: ReturnType<typeof buildRecurrenceMap>;
-  onCollapse?: () => void;
 }) {
   const [editingMerchant, setEditingMerchant] = useState<string | null>(null);
 
@@ -971,6 +663,7 @@ function TopMerchantsCard({
     acc[k].count += 1;
     return acc;
   }, {});
+
   const rows = Object.entries(byMerchant)
     .map(([merchant, info]) => ({
       merchant,
@@ -978,38 +671,13 @@ function TopMerchantsCard({
       recurrence: recurrenceMap.get(merchant),
     }))
     .sort((a, b) => b.total - a.total);
+
   return (
-    <Paper
-      sx={{
-        p: 2,
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="baseline"
-        sx={{ mb: 0.5, flexShrink: 0 }}
-      >
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          {onCollapse && (
-            <Tooltip title="Hide top merchants panel">
-              <IconButton
-                size="small"
-                onClick={onCollapse}
-                aria-label="Hide top merchants panel"
-                sx={{ ml: -0.5 }}
-              >
-                <ChevronRightIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Top merchants
-          </Typography>
-        </Stack>
+    <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 0.5, flexShrink: 0 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Top merchants
+        </Typography>
         <Typography variant="caption" color="text.secondary">
           {rows.length} merchant{rows.length === 1 ? '' : 's'}
         </Typography>
@@ -1020,7 +688,6 @@ function TopMerchantsCard({
       <Box
         sx={{
           mt: 1,
-          // Fill the remaining card height; the panel itself caps height.
           flex: 1,
           minHeight: 0,
           maxHeight: { xs: 480, md: 'none' },
@@ -1030,69 +697,65 @@ function TopMerchantsCard({
           ...subtleScrollSx,
         }}
       >
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell>Merchant</TableCell>
-            <TableCell align="right">Visits</TableCell>
-            <TableCell align="right">Total</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((r) => (
-            <TableRow
-              key={r.merchant}
-              hover
-              onClick={() => setEditingMerchant(r.merchant)}
-              sx={{ cursor: 'pointer' }}
-            >
-              <TableCell
-                sx={{
-                  maxWidth: 240,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  {r.recurrence && isRecurring(r.recurrence.kind) && (
-                    <Box
-                      component="span"
-                      title={`${recurrenceLabel(r.recurrence.kind)} · ~$${r.recurrence.estMonthlyCost.toFixed(0)}/mo`}
-                      sx={{
-                        fontSize: 12,
-                        color: 'primary.main',
-                        lineHeight: 1,
-                      }}
-                    >
-                      &#x21bb;
-                    </Box>
-                  )}
-                  <Typography variant="body2">{r.merchant}</Typography>
-                </Stack>
-                <Typography variant="caption" color="text.secondary">
-                  {r.category}
-                  {r.recurrence && isRecurring(r.recurrence.kind) && (
-                    <>
-                      {' · '}
-                      {recurrenceLabel(r.recurrence.kind)}
-                    </>
-                  )}
-                </Typography>
-              </TableCell>
-              <TableCell align="right">{r.count}</TableCell>
-              <TableCell align="right">{usd.format(r.total)}</TableCell>
-            </TableRow>
-          ))}
-          {rows.length === 0 && (
+        <Table size="small" stickyHeader>
+          <TableHead>
             <TableRow>
-              <TableCell colSpan={3} sx={{ color: 'text.secondary' }}>
-                No spend in range.
-              </TableCell>
+              <TableCell>Merchant</TableCell>
+              <TableCell align="right">Visits</TableCell>
+              <TableCell align="right">Total</TableCell>
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow
+                key={r.merchant}
+                hover
+                onClick={() => setEditingMerchant(r.merchant)}
+                sx={{ cursor: 'pointer' }}
+              >
+                <TableCell
+                  sx={{
+                    maxWidth: 240,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    {r.recurrence && isRecurring(r.recurrence.kind) && (
+                      <Box
+                        component="span"
+                        title={`${recurrenceLabel(r.recurrence.kind)} · ~$${r.recurrence.estMonthlyCost.toFixed(0)}/mo`}
+                        sx={{ fontSize: 12, color: 'primary.main', lineHeight: 1 }}
+                      >
+                        &#x21bb;
+                      </Box>
+                    )}
+                    <Typography variant="body2">{r.merchant}</Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    {r.category}
+                    {r.recurrence && isRecurring(r.recurrence.kind) && (
+                      <>
+                        {' · '}
+                        {recurrenceLabel(r.recurrence.kind)}
+                      </>
+                    )}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">{r.count}</TableCell>
+                <TableCell align="right">{usd.format(r.total)}</TableCell>
+              </TableRow>
+            ))}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={3} sx={{ color: 'text.secondary' }}>
+                  No spend in range.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </Box>
       {editingMerchant && (
         <BulkRecategorizeDialog
@@ -1104,68 +767,19 @@ function TopMerchantsCard({
   );
 }
 
-function AccountSummary({
-  visibleTxns,
-  accounts,
-}: {
-  visibleTxns: Transaction[];
-  accounts: Account[];
-}) {
-  const byAccount = visibleTxns.reduce<Record<number, { spend: number; income: number }>>(
-    (acc, t) => {
-      if (!acc[t.accountId]) acc[t.accountId] = { spend: 0, income: 0 };
-      if (t.amount < 0) acc[t.accountId].spend += Math.abs(t.amount);
-      else acc[t.accountId].income += t.amount;
-      return acc;
-    },
-    {}
-  );
-  return (
-    <Paper sx={{ p: 2 }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-        By account
-      </Typography>
-      <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-        {accounts.map((a) => {
-          const info = byAccount[a.id!] || { spend: 0, income: 0 };
-          return (
-            <Box key={a.id} sx={{ minWidth: 180 }}>
-              <Typography variant="caption" color="text.secondary">
-                {a.name}
-              </Typography>
-              <Typography variant="h6">{usd.format(info.spend)}</Typography>
-              {info.income > 0 && (
-                <Chip
-                  size="small"
-                  label={`+${usd.format(info.income)} in`}
-                  color="success"
-                  sx={{ mt: 0.5 }}
-                />
-              )}
-            </Box>
-          );
-        })}
-      </Stack>
-    </Paper>
-  );
-}
+
 
 const SORT_BANNER_DISMISS_KEY = 'spending-viz:sortBannerDismissed';
 const SORT_BANNER_THRESHOLD = 20;
 
-/**
- * Dismissable session-scoped banner that surfaces Uncategorized backlogs and
- * pushes the user to /sort. Hidden once dismissed for the rest of the tab
- * session (sessionStorage). Only renders when count exceeds the threshold.
- */
-function UncategorizedBanner({ allTxns }: { allTxns: Transaction[] }) {
+function UncategorizedBanner() {
   const [dismissed, setDismissed] = useState(
     () => sessionStorage.getItem(SORT_BANNER_DISMISS_KEY) === '1'
   );
-  const count = useMemo(
-    () => allTxns.filter((t) => t.category === 'Uncategorized').length,
-    [allTxns]
-  );
+  const count = useLiveQuery(
+    () => db.transactions.where('category').equals('Uncategorized').count(),
+    []
+  ) || 0;
   if (dismissed) return null;
   if (count < SORT_BANNER_THRESHOLD) return null;
   return (

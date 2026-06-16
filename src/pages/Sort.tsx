@@ -41,7 +41,10 @@ import SortEmptyState from '../components/SortEmptyState';
 export default function Sort() {
   const demoMode = useFilters((s) => s.demoMode);
 
-  const allTxnsAll = useLiveQuery(() => db.transactions.toArray(), []);
+  const uncategorizedAll = useLiveQuery(
+    () => db.transactions.where('category').equals('Uncategorized').toArray(),
+    []
+  );
   const categories = useLiveQuery(
     () => db.categories.orderBy('sortOrder').toArray(),
     []
@@ -49,22 +52,37 @@ export default function Sort() {
   const rules = useLiveQuery(() => db.rules.toArray(), []);
   const overrides = useLiveQuery(() => db.merchantOverrides.toArray(), []);
 
-  const allTxns = useMemo(
+  const uncategorized = useMemo(
     () =>
-      allTxnsAll && demoMode
-        ? allTxnsAll.filter((t) => t.source === 'demo')
-        : allTxnsAll,
-    [allTxnsAll, demoMode]
+      uncategorizedAll && demoMode
+        ? uncategorizedAll.filter((t) => t.source === 'demo')
+        : uncategorizedAll || [],
+    [uncategorizedAll, demoMode]
+  );
+
+  const merchantKeys = useMemo(() => {
+    return Array.from(new Set(uncategorized.map((t) => t.merchantKey).filter(Boolean)));
+  }, [uncategorized]);
+
+  const relevantTxnsAll = useLiveQuery(
+    () =>
+      merchantKeys.length > 0
+        ? db.transactions.where('merchantKey').anyOf(merchantKeys).toArray()
+        : Promise.resolve([]),
+    [merchantKeys.join(',')]
+  );
+
+  const relevantTxns = useMemo(
+    () =>
+      relevantTxnsAll && demoMode
+        ? relevantTxnsAll.filter((t) => t.source === 'demo')
+        : relevantTxnsAll || [],
+    [relevantTxnsAll, demoMode]
   );
 
   const recurrenceMap = useMemo(
-    () => buildRecurrenceMap(allTxns || [], overrides || []),
-    [allTxns, overrides]
-  );
-
-  const uncategorized = useMemo(
-    () => (allTxns || []).filter((t) => t.category === 'Uncategorized'),
-    [allTxns]
+    () => buildRecurrenceMap(relevantTxns, overrides || []),
+    [relevantTxns, overrides]
   );
 
   // Build queue from current state. useLiveQuery means this rebuilds as the
@@ -245,7 +263,7 @@ export default function Sort() {
     return () => window.removeEventListener('keydown', onKey);
   }, [onPick, onUndo, onSkip, isInteractive, currentCard, helpOpen]);
 
-  if (!allTxns || !categories || !rules) {
+  if (!uncategorizedAll || !relevantTxnsAll || !categories || !rules) {
     return null;
   }
 

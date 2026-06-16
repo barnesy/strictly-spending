@@ -30,14 +30,19 @@ import {
   type MerchantForecast,
 } from '../forecast';
 import { categoryTrailingAvg } from '../budgets';
-import { useForecastStore } from '../forecastStore';
+import { useBudgetStore } from '../budgetStore';
 import { useFilters } from '../store';
 import BulkRecategorizeDialog from '../components/BulkRecategorizeDialog';
-import type { Budget, Category } from '../types';
+import type { Budget as BudgetType, Category } from '../types';
 
-export default function Forecast() {
+export default function Budget() {
   const demoMode = useFilters((s) => s.demoMode);
-  const allTxnsAll = useLiveQuery(() => db.transactions.toArray(), []);
+  const allTxnsAll = useLiveQuery(() => {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 24);
+    const cutoffISO = cutoff.toISOString().slice(0, 10);
+    return db.transactions.where('date').aboveOrEqual(cutoffISO).toArray();
+  }, []);
   const allTxns = useMemo(
     () =>
       allTxnsAll && demoMode
@@ -51,14 +56,14 @@ export default function Forecast() {
   );
   const overrides = useLiveQuery(() => db.merchantOverrides.toArray(), []);
   const budgets = useLiveQuery(() => db.budgets.toArray(), []);
-  const excludedMerchants = useForecastStore((s) => s.excludedMerchants);
-  const excludedBudgetCategories = useForecastStore(
+  const excludedMerchants = useBudgetStore((s) => s.excludedMerchants);
+  const excludedBudgetCategories = useBudgetStore(
     (s) => s.excludedBudgetCategories
   );
-  const toggleMerchant = useForecastStore((s) => s.toggleMerchant);
-  const setMerchantsExcluded = useForecastStore((s) => s.setMerchantsExcluded);
-  const toggleBudgetCategory = useForecastStore((s) => s.toggleBudgetCategory);
-  const reset = useForecastStore((s) => s.reset);
+  const toggleMerchant = useBudgetStore((s) => s.toggleMerchant);
+  const setMerchantsExcluded = useBudgetStore((s) => s.setMerchantsExcluded);
+  const toggleBudgetCategory = useBudgetStore((s) => s.toggleBudgetCategory);
+  const reset = useBudgetStore((s) => s.reset);
 
   const recurrenceMap = useMemo(
     () => buildRecurrenceMap(allTxns || [], overrides || []),
@@ -97,7 +102,7 @@ export default function Forecast() {
   useEffect(() => {
     if (!budgets || !categories) return;
     const existing = new Set(budgets.map((b) => b.category));
-    const toAdd: Budget[] = [];
+    const toAdd: BudgetType[] = [];
     for (const [cat, avg] of trailingAvgByCategory) {
       if (existing.has(cat)) continue;
       toAdd.push({
@@ -118,7 +123,7 @@ export default function Forecast() {
   if (allTxns.length === 0) {
     return (
       <Stack spacing={2}>
-        <Typography variant="h5">Forecast</Typography>
+        <Typography variant="h5">Budget</Typography>
         <Alert severity="info">
           No transactions yet. Import a CSV from the Import tab first.
         </Alert>
@@ -156,7 +161,7 @@ export default function Forecast() {
         justifyContent="space-between"
         alignItems="center"
       >
-        <Typography variant="h5">Forecast next month</Typography>
+        <Typography variant="h5">Budget next month</Typography>
         {totalExclusions > 0 && (
           <Button onClick={reset} size="small">
             Reset toggles
@@ -287,17 +292,17 @@ function RecurringCard({
       .sort((a, b) => b.total - a.total);
   }, [items]);
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const toggleCollapsed = (cat: string) =>
-    setCollapsed((prev) => {
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (cat: string) =>
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(cat)) next.delete(cat);
       else next.add(cat);
       return next;
     });
-  const allCollapsed = grouped.length > 0 && collapsed.size === grouped.length;
-  const collapseAll = () =>
-    setCollapsed(allCollapsed ? new Set() : new Set(grouped.map((g) => g.category)));
+  const allExpanded = grouped.length > 0 && expanded.size === grouped.length;
+  const expandAll = () =>
+    setExpanded(allExpanded ? new Set() : new Set(grouped.map((g) => g.category)));
 
   return (
     <Paper sx={{ p: 2 }}>
@@ -319,10 +324,10 @@ function RecurringCard({
         <Stack direction="row" spacing={2} alignItems="center">
           <Button
             size="small"
-            onClick={collapseAll}
+            onClick={expandAll}
             disabled={grouped.length === 0}
           >
-            {allCollapsed ? 'Expand all' : 'Collapse all'}
+            {allExpanded ? 'Collapse all' : 'Expand all'}
           </Button>
           <Box sx={{ textAlign: 'right' }}>
             <Typography variant="overline" color="text.secondary">
@@ -359,14 +364,14 @@ function RecurringCard({
               .filter((i) => !excluded.has(i.merchantKey))
               .reduce((s, i) => s + i.monthlyEstimate, 0);
             const color = categoryColor(g.category);
-            const isCollapsed = collapsed.has(g.category);
+            const isExpanded = expanded.has(g.category);
             return (
               <Box key={g.category}>
                 <Stack
                   direction="row"
                   alignItems="center"
                   spacing={1}
-                  onClick={() => toggleCollapsed(g.category)}
+                  onClick={() => toggleExpanded(g.category)}
                   sx={{
                     p: 1,
                     bgcolor: color + '14',
@@ -377,10 +382,10 @@ function RecurringCard({
                   }}
                 >
                   <IconButton size="small" sx={{ p: 0.25 }}>
-                    {isCollapsed ? (
-                      <ExpandMoreIcon fontSize="small" />
-                    ) : (
+                    {isExpanded ? (
                       <ExpandLessIcon fontSize="small" />
+                    ) : (
+                      <ExpandMoreIcon fontSize="small" />
                     )}
                   </IconButton>
                   <Box
@@ -451,7 +456,7 @@ function RecurringCard({
                     />
                   </Tooltip>
                 </Stack>
-                <Collapse in={!isCollapsed} timeout="auto" unmountOnExit>
+                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                   <Table size="small">
                     <TableBody>
                       {g.list.map((item) => {
@@ -541,7 +546,7 @@ function BudgetCard({
   excluded,
   onToggle,
 }: {
-  budgets: Budget[];
+  budgets: BudgetType[];
   categories: Category[];
   trailingAvgByCategory: Map<string, number>;
   excluded: Set<string>;
@@ -576,7 +581,7 @@ function BudgetCard({
 
   const onResetAll = async () => {
     if (!confirm('Reset all budgets to your trailing 3-month actuals?')) return;
-    const next: Budget[] = budgets.map((b) => ({
+    const next: BudgetType[] = budgets.map((b) => ({
       category: b.category,
       monthlyAmount:
         Math.round((trailingAvgByCategory.get(b.category) || 0) * 100) / 100,
@@ -649,35 +654,35 @@ function BudgetCard({
                   }}
                 >
                   <TableCell sx={{ width: 240 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Box
-                        sx={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          bgcolor: color,
-                        }}
-                      />
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: 600,
-                          textDecoration: isExcluded ? 'line-through' : 'none',
-                        }}
-                      >
-                        {b.category}
-                      </Typography>
-                      {b.userSet && (
-                        <Typography
-                          variant="caption"
-                          color="primary.main"
-                          sx={{ fontWeight: 600 }}
-                        >
-                          edited
-                        </Typography>
-                      )}
-                    </Stack>
-                  </TableCell>
+                     <Stack direction="row" spacing={1} alignItems="center">
+                       <Box
+                         sx={{
+                           width: 10,
+                           height: 10,
+                           borderRadius: '50%',
+                           bgcolor: color,
+                         }}
+                       />
+                       <Typography
+                         variant="body2"
+                         sx={{
+                           fontWeight: 600,
+                           textDecoration: isExcluded ? 'line-through' : 'none',
+                         }}
+                       >
+                         {b.category}
+                       </Typography>
+                       {b.userSet && (
+                         <Typography
+                           variant="caption"
+                           color="primary.main"
+                           sx={{ fontWeight: 600 }}
+                         >
+                           edited
+                         </Typography>
+                       )}
+                     </Stack>
+                   </TableCell>
                   <TableCell sx={{ width: 200 }}>
                     <TextField
                       size="small"

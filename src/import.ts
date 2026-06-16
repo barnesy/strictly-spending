@@ -65,9 +65,23 @@ export async function buildPreview(
   }
 
   const rules = await db.rules.toArray();
-  const existingKeys = new Set(
-    (await db.transactions.toArray()).map((t) => t.dedupKey)
-  );
+
+  const potentialKeys: string[] = [];
+  const tempSeqCounter = new Map<string, number>();
+  for (const p of parseResult.transactions) {
+    const bucket = `${p.accountName}|${p.date}|${p.amount.toFixed(2)}|${p.description
+      .trim()
+      .toLowerCase()}`;
+    const seq = tempSeqCounter.get(bucket) ?? 0;
+    tempSeqCounter.set(bucket, seq + 1);
+    potentialKeys.push(dedupKey(p.accountName, p.date, p.amount, p.description, seq));
+  }
+
+  const existingKeys = potentialKeys.length > 0
+    ? new Set(
+        (await db.transactions.where('dedupKey').anyOf(potentialKeys).toArray()).map((t) => t.dedupKey)
+      )
+    : new Set<string>();
 
   const rows: ProcessedRow[] = [];
   const byCategory: Record<string, number> = {};
@@ -172,6 +186,7 @@ export async function commitPreview(preview: ImportPreview): Promise<{
         last4: sample.last4,
         source: sample.source,
         enabled: true,
+        currentBalance: 0,
       } as Account)) as number;
       accountIdByName.set(name, id);
     }
@@ -225,6 +240,23 @@ export async function commitPreview(preview: ImportPreview): Promise<{
       allKeys: true,
     });
     imported = result.length;
+  }
+
+  // Update account balances
+  for (const [name, sample] of uniqueAccounts) {
+    const accountId = accountIdByName.get(name)!;
+    const accountRows = preview.rows.filter((r) => r.parsed.accountName === name);
+    const sortedRows = [...accountRows].sort((a, b) => b.parsed.date.localeCompare(a.parsed.date));
+    const latestBalanceRow = sortedRows.find((r) => r.parsed.balance !== undefined);
+    const importedBalance = latestBalanceRow?.parsed.balance;
+
+    if (importedBalance !== undefined) {
+      await db.accounts.update(accountId, { currentBalance: importedBalance });
+    } else if (sample.accountType === 'credit') {
+      const txns = await db.transactions.where('accountId').equals(accountId).toArray();
+      const balance = txns.reduce((sum, t) => sum + t.amount, 0);
+      await db.accounts.update(accountId, { currentBalance: balance });
+    }
   }
 
   return { imported, skippedDuplicates, batchId };

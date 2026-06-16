@@ -12,6 +12,7 @@ export interface Account {
   last4?: string;
   source: Source;
   enabled: boolean;
+  currentBalance?: number;
 }
 
 export interface Transaction {
@@ -103,4 +104,81 @@ export interface ParsedTransaction {
   accountType: AccountType;
   institution: string;
   last4?: string;
+  balance?: number;
 }
+
+export interface WorkspaceBlock {
+  id: string;
+  type: 'insights' | 'chart' | 'actions' | 'simulator' | 'dataset';
+  title: string;
+  // insights
+  summary?: string;
+  color?: 'info' | 'success' | 'warning' | 'error' | 'primary';
+  // chart
+  chartCategories?: string[];
+  chartMonths?: number;
+  chartType?: 'historical' | 'forecast';
+  chartVisualType?: 'bar' | 'line' | 'pie' | 'area';
+  // actions
+  actionItems?: { text: string; impact: string; completed?: boolean }[];
+  // simulator
+  simCategory?: string;
+  simCurrentMonthly?: number;
+  simTargetSavings?: number;
+  simExplanation?: string;
+  // dataset (searchable logs)
+  querySearch?: string;
+  queryLimit?: number;
+  expanded?: boolean;
+}
+
+export interface WorkspaceConfig {
+  id: string;
+  name: string;
+  blocks: WorkspaceBlock[];
+  createdAt: string;
+  timeRangeMonths?: number;
+  disabledCategories?: string[];
+}
+
+export interface SkillTestCase {
+  prompt: string;
+  criteria: string;
+}
+
+export interface AgentSkill {
+  id: string;
+  name: string;
+  description: string;
+  systemPromptExtension: string;
+  enabled: boolean;
+  isBuiltIn?: boolean;
+  testCases?: SkillTestCase[];
+}
+
+export interface ChatArtifact {
+  id: string;
+  type: 'skill' | 'markdown' | 'spreadsheet';
+  title: string;
+  content: string;
+  explanation?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DbChatMessage {
+  id?: number;
+  threadId: string;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  actionResult?: any;
+  createdAt: string;
+}
+

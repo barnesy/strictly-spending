@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
 import type { ParsedTransaction } from '../types';
-import { toIsoDate } from './index';
+import { toIsoDate, parseMoney } from './index';
 
 interface TruistRow {
   'Posted Date': string;
@@ -89,6 +89,7 @@ export function parseTruistChecking(
       accountType: 'checking',
       institution: 'Truist',
       last4,
+      balance: parseMoney(row['Daily Posted Balance']),
     });
   }
 

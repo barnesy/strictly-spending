@@ -24,7 +24,6 @@ import DownloadIcon from '@mui/icons-material/Download';
 import RestoreIcon from '@mui/icons-material/Restore';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { buildPreview, commitPreview, type ImportPreview } from '../import';
 import { usdCents } from '../lib';
 import { db } from '../db';
@@ -229,6 +228,7 @@ export default function Import() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     let unlistenDrop: (() => void) | undefined;
     let unlistenDragDrop: (() => void) | undefined;
     
@@ -236,15 +236,28 @@ export default function Import() {
       listen<any>('tauri://drop', (event) => {
         const paths = Array.isArray(event.payload) ? event.payload : event.payload?.paths;
         if (paths && paths.length > 0) handleTauriFiles(paths);
-      }).then(u => unlistenDrop = u).catch(console.error);
+      }).then(u => {
+        if (active) {
+          unlistenDrop = u;
+        } else {
+          u();
+        }
+      }).catch(console.error);
 
       listen<any>('tauri://drag-drop', (event) => {
         const paths = Array.isArray(event.payload) ? event.payload : event.payload?.paths;
         if (paths && paths.length > 0) handleTauriFiles(paths);
-      }).then(u => unlistenDragDrop = u).catch(console.error);
+      }).then(u => {
+        if (active) {
+          unlistenDragDrop = u;
+        } else {
+          u();
+        }
+      }).catch(console.error);
     }
     
     return () => {
+      active = false;
       if (unlistenDrop) unlistenDrop();
       if (unlistenDragDrop) unlistenDragDrop();
     };
@@ -691,8 +704,12 @@ function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdat
                 {r.category}
                 {r.aiCategory && r.aiCategory !== r.category && (
                   <Chip 
-                    icon={<AutoAwesomeIcon />} 
-                    label={r.aiCategory} 
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Box component="span" sx={{ fontWeight: 900, fontSize: 10, textShadow: '0 0 0.5px currentColor' }}>AI</Box>
+                        {r.aiCategory}
+                      </Box>
+                    }
                     size="small" 
                     color="secondary" 
                     onClick={() => onUpdateRow(i, r.aiCategory!)} 

@@ -1,22 +1,28 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { detectSource, parseCsv } from './index';
+import { getChaseMockCsv, getBoaCreditMockCsv, getBoaCheckingMockCsv } from './mockFixtures';
 
-// Parser tests run against real bank-export CSVs that are NOT committed (they
-// contain personal financial data). Point STRICTLY_SPENDING_FIXTURES at a
-// local directory laid out like:
-//   <fixtures>/Chase/Chase1060_Activity20260101_20260523_20260523.CSV
-//   <fixtures>/BOA/stmt-5.csv
-//   <fixtures>/BOA/stmt-6.csv
-// If the env var is unset (or the directory is missing), these tests are
-// skipped — CI and other contributors get a green run without needing the
-// private data.
+// Parser tests run against real bank-export CSVs that are NOT committed.
+// If STRICTLY_SPENDING_FIXTURES is missing, we fall back to mock CSV generators.
 const FIXTURES = process.env.STRICTLY_SPENDING_FIXTURES;
 const fixturesAvailable = !!FIXTURES && existsSync(FIXTURES);
-const describeIfFixtures = fixturesAvailable ? describe : describe.skip;
+const describeIfFixtures = describe; // Always run the tests!
 
 function read(relPath: string): string {
-  return readFileSync(`${FIXTURES}/${relPath}`, 'utf-8');
+  if (fixturesAvailable) {
+    return readFileSync(`${FIXTURES}/${relPath}`, 'utf-8');
+  }
+  if (relPath.includes('Chase')) {
+    return getChaseMockCsv();
+  }
+  if (relPath.includes('stmt-5.csv')) {
+    return getBoaCreditMockCsv();
+  }
+  if (relPath.includes('stmt-6.csv')) {
+    return getBoaCheckingMockCsv();
+  }
+  throw new Error(`Mock fixture not found for path: ${relPath}`);
 }
 
 describeIfFixtures('detectSource', () => {

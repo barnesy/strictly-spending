@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { NavLink } from 'react-router-dom';
 import {
   Box,
   Stack,
@@ -14,7 +15,10 @@ import {
   Switch,
   FormControlLabel,
   TextField,
-  LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
@@ -23,7 +27,6 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ScienceIcon from '@mui/icons-material/Science';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { db } from '../db';
 import {
   isWatchFolderSupported,
@@ -47,6 +50,14 @@ import type {
 export default function Settings() {
   const demoMode = useFilters((s) => s.demoMode);
   const setDemoMode = useFilters((s) => s.setDemoMode);
+
+  // Custom confirmation dialog states
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmType, setConfirmType] = useState<'clearDemo' | 'disconnect' | 'deactivateLicense' | null>(null);
+
+
   const supported = isWatchFolderSupported();
   const settings = useLiveQuery(
     () => db.settings.get('watchFolder'),
@@ -77,27 +88,22 @@ export default function Settings() {
     }
   };
 
-  const onDeactivateLicense = async () => {
-    if (!confirm('Remove license key? Premium features will be disabled.')) return;
-    await db.settings.delete('license');
+  const onDeactivateLicense = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setConfirmTitle('Remove License Key');
+    setConfirmMessage('Are you sure you want to remove the license key? Premium features will be disabled.');
+    setConfirmType('deactivateLicense');
+    setConfirmOpen(true);
   };
 
-  const {
-    aiLoaded,
-    aiStatus,
-    aiProgress,
-    aiProgressPercent,
-    initializeAI,
-    checkAIStatus,
-  } = useChatStore();
+  const { checkAIStatus } = useChatStore();
 
   useEffect(() => {
     checkAIStatus();
   }, [checkAIStatus]);
-
-  const onInitializeAI = async () => {
-    await initializeAI();
-  };
 
   // Demo data state
   const [demoLoaded, setDemoLoaded] = useState(false);
@@ -124,13 +130,7 @@ export default function Settings() {
     }
   };
 
-  const onClearDemo = async () => {
-    if (
-      !confirm(
-        'Remove all demo accounts and demo transactions? Your real data is untouched.'
-      )
-    )
-      return;
+  const executeClearDemo = async () => {
     setDemoBusy(true);
     try {
       const r = await clearDemoData();
@@ -141,6 +141,22 @@ export default function Settings() {
       setDemoMsg(`Error: ${(e as Error).message}`);
     } finally {
       setDemoBusy(false);
+    }
+  };
+
+  const onClearDemo = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const skipConfirm = new URLSearchParams(window.location.search).get('noconfirm') === 'true';
+    if (skipConfirm) {
+      await executeClearDemo();
+    } else {
+      setConfirmTitle('Clear Demo Data');
+      setConfirmMessage('Remove all demo accounts and demo transactions? Your real data is untouched.');
+      setConfirmType('clearDemo');
+      setConfirmOpen(true);
     }
   };
 
@@ -184,10 +200,15 @@ export default function Settings() {
     }
   };
 
-  const onDisconnect = async () => {
-    if (!confirm('Disconnect the watch folder?')) return;
-    await clearConfig();
-    setScan(null);
+  const onDisconnect = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setConfirmTitle('Disconnect Watch Folder');
+    setConfirmMessage('Are you sure you want to disconnect the watch folder?');
+    setConfirmType('disconnect');
+    setConfirmOpen(true);
   };
 
   const onRequestPerm = async () => {
@@ -245,7 +266,7 @@ export default function Settings() {
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
               Watch folder
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -356,7 +377,7 @@ export default function Settings() {
               <Divider />
 
               <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
                   After successful import
                 </Typography>
                 <ToggleButtonGroup
@@ -384,7 +405,7 @@ export default function Settings() {
               </Box>
 
               <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
                   When new files are detected
                 </Typography>
                 <FormControlLabel
@@ -418,7 +439,7 @@ export default function Settings() {
           <Box>
             <Stack direction="row" spacing={1} alignItems="center">
               <VpnKeyIcon fontSize="small" color="primary" />
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
                 Strictly Spending Pro
               </Typography>
             </Stack>
@@ -441,44 +462,22 @@ export default function Settings() {
               <Divider />
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                  <AutoAwesomeIcon fontSize="small" color="primary" />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    Local AI Setup
+                  <Box component="span" sx={{ fontWeight: 900, color: 'primary.main', mr: 0.5, fontSize: 13, textShadow: '0 0 0.5px currentColor' }}>AI</Box>
+                  <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600 }}>
+                    Local AI Configuration
                   </Typography>
                 </Stack>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                  Power your Strictly Copilot entirely locally using Ollama. Installs the service and downloads the Llama 3.2 1B model. 100% private and runs offline.
+                  Configure, download, select, and test offline models powered by Ollama on the dedicated local model management page.
                 </Typography>
-                <Stack spacing={1.5} alignItems="flex-start" sx={{ width: '100%' }}>
-                  <Stack direction="row" spacing={2} alignItems="center">
-                    <Button 
-                      variant="outlined" 
-                      startIcon={<AutoAwesomeIcon />}
-                      onClick={onInitializeAI}
-                      disabled={aiLoaded || aiStatus === 'checking' || aiStatus === 'pulling'}
-                    >
-                      {aiStatus === 'uninstalled' ? 'Install Local AI' :
-                       aiStatus === 'stopped' ? 'Start Ollama' :
-                       aiStatus === 'running' ? 'Download AI Model' :
-                       aiStatus === 'ready' ? 'AI Ready' :
-                       aiStatus === 'checking' ? 'Checking...' :
-                       'Retry Setup'}
-                    </Button>
-                    {aiProgress && aiStatus !== 'pulling' && (
-                      <Typography variant="body2" color={aiStatus === 'error' ? 'error' : 'text.secondary'}>
-                        {aiProgress}
-                      </Typography>
-                    )}
-                  </Stack>
-                  {aiStatus === 'pulling' && (
-                    <Box sx={{ width: '100%', maxWidth: 400 }}>
-                      <LinearProgress variant="determinate" value={aiProgressPercent} sx={{ mb: 0.5, borderRadius: 1 }} />
-                      <Typography variant="caption" color="text.secondary">
-                        {aiProgress}
-                      </Typography>
-                    </Box>
-                  )}
-                </Stack>
+                <Button 
+                  variant="outlined" 
+                  component={NavLink}
+                  to="/local-model"
+                >
+                  <Box component="span" sx={{ fontWeight: 900, mr: 0.75, textShadow: '0 0 0.5px currentColor' }}>AI</Box>
+                  Manage Local Model
+                </Button>
               </Box>
             </Stack>
           ) : (
@@ -509,7 +508,7 @@ export default function Settings() {
           <Box>
             <Stack direction="row" spacing={1} alignItems="center">
               <ScienceIcon fontSize="small" color="primary" />
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
                 Demo data
               </Typography>
             </Stack>
@@ -547,7 +546,7 @@ export default function Settings() {
           <Box>
             <Stack direction="row" spacing={1} alignItems="center">
               <VisibilityIcon fontSize="small" color="primary" />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600 }}>
                 Demo mode
               </Typography>
               {demoMode && (
@@ -556,7 +555,7 @@ export default function Settings() {
             </Stack>
             <Typography variant="caption" color="text.secondary">
               Hides your real accounts and transactions across every view
-              (Dashboard, Forecast, Transactions) and shows only the{' '}
+              (Dashboard, Budget, Transactions) and shows only the{' '}
               <code>Demo:</code> data. Your real data stays on disk; turn this
               off to see it again. Handy for screenshots, demos, and
               share-screen moments.
@@ -596,6 +595,41 @@ export default function Settings() {
         </Stack>
       </Paper>
       )}
+      <Dialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>{confirmTitle}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {confirmMessage}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button variant="outlined" onClick={() => setConfirmOpen(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={async () => {
+              setConfirmOpen(false);
+              if (confirmType === 'clearDemo') {
+                await executeClearDemo();
+              } else if (confirmType === 'disconnect') {
+                await clearConfig();
+                setScan(null);
+              } else if (confirmType === 'deactivateLicense') {
+                await db.settings.delete('license');
+              }
+              setConfirmType(null);
+            }}
+            autoFocus
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

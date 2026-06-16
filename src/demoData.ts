@@ -124,6 +124,7 @@ export function buildDemoTransactions(
   const subs = [
     { day: 10, label: 'NETFLIX.COM', amount: -17.99 },
     { day: 15, label: 'SPOTIFY USA', amount: -12.99 },
+    { day: 18, label: 'APPLE MUSIC SUBSCRIPTION', amount: -10.99 },
     { day: 5, label: 'APPLE.COM/BILL', amount: -4.99 },
     { day: 20, label: 'CLAUDE.AI SUBSCRIPTION', amount: -20.0 },
   ];
@@ -132,7 +133,17 @@ export function buildDemoTransactions(
       out.push({
         date: isoDate(year, m, clampDay(year, m, s.day)),
         description: s.label,
-        amount: s.amount,
+        amount: m === throughMonth && s.label === 'NETFLIX.COM' ? -22.99 : s.amount,
+        category: 'Subscriptions',
+        account: 'credit',
+      });
+    }
+    // Claude.ai duplicate charge in the current/last month
+    if (m === throughMonth) {
+      out.push({
+        date: isoDate(year, m, 22),
+        description: 'CLAUDE.AI SUBSCRIPTION',
+        amount: -20.00,
         category: 'Subscriptions',
         account: 'credit',
       });
@@ -183,6 +194,30 @@ export function buildDemoTransactions(
         amount: -jitter(40, 95),
         category: 'Groceries',
         account: rand() < 0.7 ? 'credit' : 'joint',
+      });
+    }
+    // Add outlier and pacing spike transactions in the last month
+    if (m === throughMonth) {
+      out.push({
+        date: isoDate(year, m, 12),
+        description: 'DEMO FRESH FOODS BULK STOCK',
+        amount: -180.00,
+        category: 'Groceries',
+        account: 'credit',
+      });
+      out.push({
+        date: isoDate(year, m, 18),
+        description: 'DEMO MARKET GIANT TRIP',
+        amount: -290.00,
+        category: 'Groceries',
+        account: 'joint',
+      });
+      out.push({
+        date: isoDate(year, m, 25),
+        description: 'DEMO GROCER SPLURGE',
+        amount: -220.00,
+        category: 'Groceries',
+        account: 'credit',
       });
     }
   }
@@ -362,17 +397,27 @@ export async function seedDemoData(): Promise<SeedResult> {
     const existing = await db.accounts.where('name').equals(name).first();
     if (existing) {
       accountIds[key] = existing.id!;
+      const balance = key === 'checking' ? 12000 : key === 'credit' ? -1500 : -800;
+      await db.accounts.update(existing.id!, { currentBalance: balance });
     } else {
+      const balance = key === 'checking' ? 12000 : key === 'credit' ? -1500 : -800;
       const id = await db.accounts.add({
         name,
         type: key === 'checking' ? 'checking' : 'credit',
         institution: 'Demo Bank',
         source: 'demo',
         enabled: true,
+        currentBalance: balance,
       } as Account);
       accountIds[key] = id as number;
     }
   }
+
+  // 1.5. Seed merchant overrides to force recurring classification for demo services
+  await db.merchantOverrides.put({ merchantKey: 'netflix', recurrence: 'monthly' });
+  await db.merchantOverrides.put({ merchantKey: 'claudeai', recurrence: 'monthly' });
+  await db.merchantOverrides.put({ merchantKey: 'spotify', recurrence: 'monthly' });
+  await db.merchantOverrides.put({ merchantKey: 'applemusic', recurrence: 'monthly' });
 
   // 2. Build transactions for the current year through this month
   const demoTxns = buildDemoTransactions(year, throughMonth);
@@ -418,6 +463,9 @@ export async function clearDemoData(): Promise<ClearResult> {
 
   const accts = await db.accounts.where('source').equals('demo').toArray();
   await db.accounts.bulkDelete(accts.map((a) => a.id!));
+
+  // Clear demo overrides
+  await db.merchantOverrides.bulkDelete(['netflix', 'claudeai', 'spotify', 'applemusic']);
 
   return {
     removedTransactions: txnIds.length,

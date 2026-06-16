@@ -8,6 +8,9 @@ import type {
   MerchantOverride,
   Budget,
   AppSetting,
+  ChatArtifact,
+  ChatThread,
+  DbChatMessage,
 } from './types';
 
 class SpendingDB extends Dexie {
@@ -19,6 +22,9 @@ class SpendingDB extends Dexie {
   merchantOverrides!: Table<MerchantOverride, string>;
   budgets!: Table<Budget, string>;
   settings!: Table<AppSetting, string>;
+  artifacts!: Table<ChatArtifact, string>;
+  threads!: Table<ChatThread, string>;
+  messages!: Table<DbChatMessage, number>;
 
   constructor() {
     super('spending-viz');
@@ -41,6 +47,13 @@ class SpendingDB extends Dexie {
       // contentHash=undefined (treated as "no fingerprint" — safe).
       imports: '++id, importedAt, contentHash',
       settings: '&key',
+    });
+    this.version(5).stores({
+      artifacts: 'id, type, createdAt',
+    });
+    this.version(6).stores({
+      threads: 'id, title, createdAt, updatedAt',
+      messages: '++id, threadId, role, createdAt',
     });
   }
 }

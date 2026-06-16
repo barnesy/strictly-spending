@@ -18,12 +18,18 @@ export default function Categories() {
     () => db.categories.orderBy('sortOrder').toArray(),
     []
   );
-  const txns = useLiveQuery(() => db.transactions.toArray(), []);
-
-  const counts = (txns || []).reduce<Record<string, number>>((acc, t) => {
-    acc[t.category] = (acc[t.category] || 0) + 1;
-    return acc;
-  }, {});
+  const counts = useLiveQuery(async () => {
+    if (!categories) return {};
+    const entries = await Promise.all(
+      categories.map(async (c) => {
+        const count = await db.transactions.where('category').equals(c.name).count();
+        return [c.name, count];
+      })
+    );
+    const uncategorizedCount = await db.transactions.where('category').equals('Uncategorized').count();
+    entries.push(['Uncategorized', uncategorizedCount]);
+    return Object.fromEntries(entries);
+  }, [categories]) || {};
 
   return (
     <Stack spacing={3}>

@@ -30,8 +30,6 @@ CSV exports stay on your machine; the parsers run client-side. The watch-folder 
 - **Zustand** for filter / forecast / sort session state
 - **PapaParse** for CSV
 - **react-resizable-panels** for the Figma-style 3-panel dashboard layout
-- **Playwright** for screenshot / video automation scripts
-
 ## Quick start
 
 ```bash
@@ -52,27 +50,6 @@ Then open **Settings → Load demo data → Demo mode** to explore the app witho
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Vitest unit tests |
-
-### Capture scripts (Playwright)
-
-Optional automation under `scripts/` for capturing screenshots and a feature-walkthrough video. They drive a headless Chromium against a running dev server.
-
-```bash
-# In one terminal:
-npm run dev
-
-# In another:
-node scripts/capture-screenshots.mjs     # static PNGs of key views
-node scripts/capture-sort.mjs            # the populated Sort view (mutates demo data)
-node scripts/record-demo.mjs             # ~40s WebM walkthrough
-node scripts/reset-demo.mjs              # clears + reseeds demo data
-```
-
-Override the output directory or app URL via env vars:
-
-```bash
-SCREENSHOTS_OUT=./out STRICTLY_SPENDING_URL=http://localhost:3000 node scripts/capture-screenshots.mjs
-```
 
 ### Personal merchant rules (private, not committed)
 
