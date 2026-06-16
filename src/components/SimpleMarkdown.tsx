@@ -30,10 +30,15 @@ function parseMarkdown(content: string): MarkdownBlock[] {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Check if it's a table row starting with a pipe character
-    if (trimmed.startsWith('|')) {
+    // Check if it's a table (contains at least one pipe, and the next line is a separator containing pipes/dashes/colons/spaces)
+    const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
+    if (
+      trimmed.includes('|') &&
+      nextLine.includes('|') &&
+      /^[|:\-\s]+$/.test(nextLine)
+    ) {
       const tableLines: string[] = [];
-      while (i < lines.length && lines[i].trim().startsWith('|')) {
+      while (i < lines.length && lines[i].includes('|')) {
         tableLines.push(lines[i].trim());
         i++;
       }
