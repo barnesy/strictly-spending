@@ -83,6 +83,54 @@ function parseMarkdown(content: string): MarkdownBlock[] {
   return blocks;
 }
 
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  const regex = /(\*\*.*?\*\*|`.*?`|\*.*?\*|\[.*?\]\(.*?\))/g;
+  const parts = text.split(regex);
+  
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={idx}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code
+          key={idx}
+          style={{
+            fontFamily: 'monospace',
+            backgroundColor: 'rgba(0,0,0,0.06)',
+            padding: '1.5px 3px',
+            borderRadius: '3px',
+            fontSize: '90%',
+            color: '#d32f2f',
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={idx}>{part.slice(1, -1)}</em>;
+    }
+    if (part.startsWith('[') && part.includes('](') && part.endsWith(')')) {
+      const closingBracket = part.indexOf(']');
+      const label = part.slice(1, closingBracket);
+      const url = part.slice(closingBracket + 2, -1);
+      return (
+        <a
+          key={idx}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: '#1976d2', textDecoration: 'underline', fontWeight: 500 }}
+        >
+          {label}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 export default function SimpleMarkdown({ content }: { content: string }) {
   const blocks = parseMarkdown(content);
   return (
@@ -102,7 +150,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                   color: 'text.primary',
                 }}
               >
-                {block.text}
+                {renderInlineMarkdown(block.text)}
               </Typography>
             );
           case 'h2':
@@ -112,7 +160,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                 variant="subtitle1"
                 sx={{ fontWeight: 700, mt: 1, color: 'text.primary' }}
               >
-                {block.text}
+                {renderInlineMarkdown(block.text)}
               </Typography>
             );
           case 'h3':
@@ -122,7 +170,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                 variant="subtitle2"
                 sx={{ fontWeight: 700, color: 'text.secondary', mt: 0.5 }}
               >
-                {block.text}
+                {renderInlineMarkdown(block.text)}
               </Typography>
             );
           case 'bullet':
@@ -143,10 +191,10 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                 />
                 <Typography
                   variant="body2"
-                  color="text.secondary"
+                  color="text.primary"
                   sx={{ fontSize: 13, lineHeight: 1.5 }}
                 >
-                  {block.text}
+                  {renderInlineMarkdown(block.text)}
                 </Typography>
               </Box>
             );
@@ -180,7 +228,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                             borderBottom: '2px solid rgba(0,0,0,0.08)',
                           }}
                         >
-                          {h}
+                          {renderInlineMarkdown(h)}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -199,10 +247,10 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                               sx={{
                                 fontSize: '11px',
                                 py: 0.75,
-                                color: 'text.secondary',
+                                color: 'text.primary',
                               }}
                             >
-                              {cell}
+                              {renderInlineMarkdown(cell)}
                             </TableCell>
                           );
                         })}
@@ -218,10 +266,10 @@ export default function SimpleMarkdown({ content }: { content: string }) {
               <Typography
                 key={idx}
                 variant="body2"
-                color="text.secondary"
+                color="text.primary"
                 sx={{ fontSize: 13, lineHeight: 1.5 }}
               >
-                {block.text}
+                {renderInlineMarkdown(block.text)}
               </Typography>
             );
         }
