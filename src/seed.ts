@@ -12,31 +12,32 @@
 
 import { db } from './db';
 import { recategorizeAll } from './categorize';
+import { refreshRecurrenceAll } from './recurrence';
 import type { Category, CategoryRule } from './types';
 
-export const SEED_VERSION = 7;
+export const SEED_VERSION = 8;
 
 const DEFAULT_CATEGORIES: Omit<Category, 'id'>[] = [
-  { name: 'Groceries', color: '#4caf50', type: 'spend', sortOrder: 10 },
-  { name: 'Restaurants & Coffee', color: '#ff7043', type: 'spend', sortOrder: 20 },
-  { name: 'Transportation', color: '#5c6bc0', type: 'spend', sortOrder: 30 },
-  { name: 'Auto Loan', color: '#3949ab', type: 'spend', sortOrder: 35 },
-  { name: 'Utilities', color: '#26a69a', type: 'spend', sortOrder: 40 },
-  { name: 'Subscriptions', color: '#ab47bc', type: 'spend', sortOrder: 50 },
-  { name: 'Housing', color: '#8d6e63', type: 'spend', sortOrder: 60 },
-  { name: 'Mortgage', color: '#6d4c41', type: 'spend', sortOrder: 65 },
-  { name: 'Student Loans', color: '#5d4037', type: 'spend', sortOrder: 67 },
-  { name: 'Shopping', color: '#ec407a', type: 'spend', sortOrder: 70 },
-  { name: 'Entertainment', color: '#ffa726', type: 'spend', sortOrder: 80 },
-  { name: 'Health', color: '#42a5f5', type: 'spend', sortOrder: 90 },
-  { name: 'Insurance', color: '#0288d1', type: 'spend', sortOrder: 95 },
-  { name: 'Taxes', color: '#455a64', type: 'spend', sortOrder: 100 },
-  { name: 'Travel', color: '#66bb6a', type: 'spend', sortOrder: 110 },
-  { name: 'Personal Care', color: '#d4af37', type: 'spend', sortOrder: 120 },
-  { name: 'Fees & Interest', color: '#bdbdbd', type: 'spend', sortOrder: 130 },
-  { name: 'Income', color: '#2e7d32', type: 'income', sortOrder: 200 },
-  { name: 'Transfers', color: '#90a4ae', type: 'transfer', sortOrder: 210 },
-  { name: 'Uncategorized', color: '#9e9e9e', type: 'spend', sortOrder: 999 },
+  { name: 'Groceries', color: '#4caf50', type: 'spend', sortOrder: 10, defaultRecurrence: 'onetime' },
+  { name: 'Restaurants & Coffee', color: '#ff7043', type: 'spend', sortOrder: 20, defaultRecurrence: 'onetime' },
+  { name: 'Transportation', color: '#5c6bc0', type: 'spend', sortOrder: 30, defaultRecurrence: 'onetime' },
+  { name: 'Auto Loan', color: '#3949ab', type: 'spend', sortOrder: 35, defaultRecurrence: 'recurring' },
+  { name: 'Utilities', color: '#26a69a', type: 'spend', sortOrder: 40, defaultRecurrence: 'recurring' },
+  { name: 'Subscriptions', color: '#ab47bc', type: 'spend', sortOrder: 50, defaultRecurrence: 'recurring' },
+  { name: 'Housing', color: '#8d6e63', type: 'spend', sortOrder: 60, defaultRecurrence: 'recurring' },
+  { name: 'Mortgage', color: '#6d4c41', type: 'spend', sortOrder: 65, defaultRecurrence: 'recurring' },
+  { name: 'Student Loans', color: '#5d4037', type: 'spend', sortOrder: 67, defaultRecurrence: 'recurring' },
+  { name: 'Shopping', color: '#ec407a', type: 'spend', sortOrder: 70, defaultRecurrence: 'onetime' },
+  { name: 'Entertainment', color: '#ffa726', type: 'spend', sortOrder: 80, defaultRecurrence: 'onetime' },
+  { name: 'Health', color: '#42a5f5', type: 'spend', sortOrder: 90, defaultRecurrence: 'onetime' },
+  { name: 'Insurance', color: '#0288d1', type: 'spend', sortOrder: 95, defaultRecurrence: 'recurring' },
+  { name: 'Taxes', color: '#455a64', type: 'spend', sortOrder: 100, defaultRecurrence: 'onetime' },
+  { name: 'Travel', color: '#66bb6a', type: 'spend', sortOrder: 110, defaultRecurrence: 'onetime' },
+  { name: 'Personal Care', color: '#d4af37', type: 'spend', sortOrder: 120, defaultRecurrence: 'onetime' },
+  { name: 'Fees & Interest', color: '#bdbdbd', type: 'spend', sortOrder: 130, defaultRecurrence: 'onetime' },
+  { name: 'Income', color: '#2e7d32', type: 'income', sortOrder: 200, defaultRecurrence: 'recurring' },
+  { name: 'Transfers', color: '#90a4ae', type: 'transfer', sortOrder: 210, defaultRecurrence: 'onetime' },
+  { name: 'Uncategorized', color: '#9e9e9e', type: 'spend', sortOrder: 999, defaultRecurrence: 'onetime' },
 ];
 
 type StarterRule = Omit<CategoryRule, 'id' | 'createdAt'>;
@@ -689,6 +690,17 @@ export async function seedAndMigrate(): Promise<void> {
     await db.rules.bulkAdd(newRules);
   }
 
+  // Update recurrence defaults for existing categories
+  const allDbCategories = await db.categories.toArray();
+  for (const dbCat of allDbCategories) {
+    const defaultCat = DEFAULT_CATEGORIES.find((c) => c.name === dbCat.name);
+    if (defaultCat && dbCat.defaultRecurrence !== defaultCat.defaultRecurrence) {
+      await db.categories.update(dbCat.id!, {
+        defaultRecurrence: defaultCat.defaultRecurrence,
+      });
+    }
+  }
+
   // If we shipped a new SEED_VERSION and the user already had transactions
   // imported under an older rule set, re-run categorization so new rules
   // retroactively re-bucket existing transactions.
@@ -697,6 +709,7 @@ export async function seedAndMigrate(): Promise<void> {
     const hasTransactions = (await db.transactions.count()) > 0;
     if (hasTransactions) {
       await recategorizeAll();
+      await refreshRecurrenceAll();
     }
     localStorage.setItem('seed_version', String(SEED_VERSION));
   }

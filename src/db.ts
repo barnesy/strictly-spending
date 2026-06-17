@@ -60,6 +60,10 @@ class SpendingDB extends Dexie {
     this.version(7).stores({
       csvMappings: '++id, &headerHash',
     });
+    this.version(8).stores({
+      transactions:
+        '++id, accountId, date, category, source, merchantKey, &dedupKey, importBatchId, recurrence',
+    });
   }
 }
 

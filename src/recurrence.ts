@@ -1,4 +1,5 @@
-import type { RecurrenceKind, Transaction, MerchantOverride } from './types';
+import type { RecurrenceKind, Transaction, MerchantOverride, Category } from './types';
+import { db } from './db';
 
 export interface RecurrenceInfo {
   kind: RecurrenceKind;
@@ -141,8 +142,22 @@ export function buildRecurrenceMap(
   const overrideMap = new Map(overrides.map((o) => [o.merchantKey, o]));
   const result = new Map<string, RecurrenceInfo>();
   for (const [merchantKey, txns] of byMerchant) {
-    const auto = detectRecurrence(txns);
+    const recurringTxns = txns.filter(t => t.recurrence === 'recurring');
+    if (recurringTxns.length === 0) continue;
+
+    const auto = detectRecurrence(txns.filter(t => t.amount < 0));
     const final = applyOverride(auto, overrideMap.get(merchantKey));
+
+    if (final.kind === 'none') {
+      final.kind = 'monthly';
+      const meanAmount = recurringTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0) / recurringTxns.length;
+      final.meanAmount = meanAmount;
+      final.estMonthlyCost = meanAmount;
+    }
+
+    final.count = recurringTxns.length;
+    final.lastDate = recurringTxns[recurringTxns.length - 1]?.date ?? null;
+
     result.set(merchantKey, final);
   }
   return result;
@@ -165,4 +180,81 @@ export function recurrenceLabel(kind: RecurrenceKind): string {
     case 'none':
       return 'One-time';
   }
+}
+
+export function resolveRecurrenceForTransaction(
+  txn: Omit<Transaction, 'id' | 'recurrence'> & { recurrenceOverride?: 'recurring' | 'onetime' | null },
+  categoryMap: Map<string, Category>,
+  merchantOverrideMap: Map<string, MerchantOverride>,
+  autoRecurringMerchantKeys: Set<string>
+): 'recurring' | 'onetime' {
+  // 1. Transaction override
+  if (txn.recurrenceOverride === 'recurring') return 'recurring';
+  if (txn.recurrenceOverride === 'onetime') return 'onetime';
+
+  // 2. Merchant override
+  const mkey = txn.merchantKey;
+  if (mkey) {
+    const override = merchantOverrideMap.get(mkey);
+    if (override) {
+      return override.recurrence === 'none' ? 'onetime' : 'recurring';
+    }
+  }
+
+  // 3. Auto-detection fallback
+  if (mkey && autoRecurringMerchantKeys.has(mkey)) {
+    return 'recurring';
+  }
+
+  // 4. Category default
+  const cat = categoryMap.get(txn.category);
+  if (cat?.defaultRecurrence) {
+    return cat.defaultRecurrence;
+  }
+
+  return 'onetime';
+}
+
+export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
+  const categories = await db.categories.toArray();
+  const overrides = await db.merchantOverrides.toArray();
+  const allTxns = await db.transactions.toArray();
+
+  const categoryMap = new Map(categories.map((c) => [c.name, c]));
+  const merchantOverrideMap = new Map(overrides.map((o) => [o.merchantKey, o]));
+
+  const byMerchant = new Map<string, Transaction[]>();
+  for (const t of allTxns) {
+    const k = t.merchantKey || '';
+    if (!k) continue;
+    const list = byMerchant.get(k);
+    if (list) list.push(t);
+    else byMerchant.set(k, [t]);
+  }
+
+  const autoRecurringMerchantKeys = new Set<string>();
+  for (const [mkey, txns] of byMerchant) {
+    const auto = detectRecurrence(txns);
+    if (auto.kind !== 'none') {
+      autoRecurringMerchantKeys.add(mkey);
+    }
+  }
+
+  let updated = 0;
+  await db.transaction('rw', db.transactions, async () => {
+    for (const t of allTxns) {
+      const resolved = resolveRecurrenceForTransaction(
+        t,
+        categoryMap,
+        merchantOverrideMap,
+        autoRecurringMerchantKeys
+      );
+      if (t.recurrence !== resolved) {
+        await db.transactions.update(t.id!, { recurrence: resolved });
+        updated++;
+      }
+    }
+  });
+
+  return { updated };
 }

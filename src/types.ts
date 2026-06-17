@@ -28,6 +28,8 @@ export interface Transaction {
   userOverridden: boolean;
   dedupKey: string;
   importBatchId?: number;
+  recurrence: 'recurring' | 'onetime';
+  recurrenceOverride?: 'recurring' | 'onetime' | null;
 }
 
 export interface CategoryRule {
@@ -44,6 +46,7 @@ export interface Category {
   color: string;
   type: CategoryType;
   sortOrder: number;
+  defaultRecurrence?: 'recurring' | 'onetime';
 }
 
 export interface ImportBatch {
