@@ -486,7 +486,7 @@ export default function App() {
                 }}
               >
                 <Slide direction="left" in={true} mountOnEnter unmountOnExit>
-                  <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 350 }}>
                     <CopilotChat
                       onClose={() => setIsChatOpen(false)}
                       showCloseButton={true}

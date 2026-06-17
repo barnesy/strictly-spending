@@ -136,6 +136,7 @@ export default function CopilotChat({
       className="copilot-chat-container"
       sx={{
         width: isEmbedded ? '100%' : { xs: '100vw', sm: 400 },
+        minWidth: isEmbedded ? 350 : undefined,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
