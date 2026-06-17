@@ -18,7 +18,17 @@ import {
   TableCell,
   TableBody,
   Divider,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  TextField,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  Grid,
 } from '@mui/material';
+import Papa from 'papaparse';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import RestoreIcon from '@mui/icons-material/Restore';
@@ -44,7 +54,7 @@ import {
   postImport,
   type PendingFile,
 } from '../watchFolder';
-import type { WatchFolderConfig } from '../types';
+import type { WatchFolderConfig, CsvMapping } from '../types';
 
 const SOURCE_LABELS: Record<string, string> = {
   chase: 'Chase',
@@ -347,6 +357,37 @@ export default function Import() {
     });
   };
 
+  const handleSaveMapping = async (
+    index: number,
+    mappingData: Omit<CsvMapping, 'headerHash' | 'headers'>,
+    headers: string[],
+    rawText: string,
+    contentHash?: string
+  ) => {
+    setIsProcessing(true);
+    try {
+      const headerHash = headers.join(',');
+      const fullMapping: CsvMapping = {
+        ...mappingData,
+        headerHash,
+        headers,
+      };
+      
+      await db.csvMappings.add(fullMapping);
+      
+      const p = await buildPreview(previews[index].filename, rawText, contentHash);
+      setPreviews((prev) => {
+        const copy = [...prev];
+        copy[index] = p;
+        return copy;
+      });
+    } catch (e) {
+      console.error('Failed to save mapping:', e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <Stack spacing={3}>
       <Typography variant="h5">Import Transactions</Typography>
@@ -603,13 +644,29 @@ export default function Import() {
 
       {previews.length > 0 && (
         <Stack spacing={2}>
-          {previews.map((p, i) => (
-            <PreviewCard 
-              key={i} 
-              preview={p} 
-              onUpdateRow={(rIdx, cat) => handleUpdateRow(i, rIdx, cat)} 
-            />
-          ))}
+          {previews.map((p, i) => {
+            if (p.requiresMapping) {
+              return (
+                <ColumnMapperCard
+                  key={i}
+                  preview={p}
+                  onSave={(mappingData) =>
+                    handleSaveMapping(i, mappingData, p.headers || [], p.rawText || '', p.contentHash)
+                  }
+                  onCancel={() => {
+                    setPreviews((prev) => prev.filter((_, idx) => idx !== i));
+                  }}
+                />
+              );
+            }
+            return (
+              <PreviewCard
+                key={i}
+                preview={p}
+                onUpdateRow={(rIdx, cat) => handleUpdateRow(i, rIdx, cat)}
+              />
+            );
+          })}
           <Box>
             <Button
               variant="contained"
@@ -617,6 +674,7 @@ export default function Import() {
               onClick={onCommit}
               disabled={
                 isProcessing ||
+                previews.some((p) => p.requiresMapping) ||
                 previews.every((p) => p.error || p.newCount === 0)
               }
             >
@@ -657,8 +715,10 @@ function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdat
             {preview.filename}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {SOURCE_LABELS[preview.source!] || preview.source} ·{' '}
-            {preview.totalCount} transactions ({preview.newCount} new,{' '}
+            {preview.source === 'custom' && preview.rows.length > 0
+              ? `${preview.rows[0].parsed.institution} (${preview.rows[0].parsed.accountName})`
+              : SOURCE_LABELS[preview.source!] || preview.source}{' '}
+            · {preview.totalCount} transactions ({preview.newCount} new,{' '}
             {preview.duplicateCount} duplicates)
           </Typography>
         </Box>
@@ -730,6 +790,367 @@ function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdat
           + {preview.rows.length - 5} more rows
         </Typography>
       )}
+    </Paper>
+  );
+}
+
+function ColumnMapperCard({
+  preview,
+  onSave,
+  onCancel,
+}: {
+  preview: ImportPreview;
+  onSave: (mapping: Omit<CsvMapping, 'headerHash' | 'headers'>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const headers = preview.headers || [];
+
+  // Parse first 3 data rows of CSV for visual preview
+  const parsedRows = preview.rawText
+    ? Papa.parse<string[]>(preview.rawText, { preview: 4, skipEmptyLines: true }).data.slice(1)
+    : [];
+
+  // Helper to guess initial column selection
+  const guessColumn = (pattern: RegExp): string => {
+    const match = headers.find((h) => pattern.test(h.toLowerCase()));
+    return match || '';
+  };
+
+  // Pre-detect columns
+  const initialDate = guessColumn(/date/i) || headers[0] || '';
+  const initialDesc = guessColumn(/desc|payee|merchant|memo/i) || headers[1] || '';
+
+  const initialAmount = guessColumn(/amount|value|total/i);
+  const initialDebit = guessColumn(/debit|withdrawal|charge/i);
+  const initialCredit = guessColumn(/credit|deposit|payment/i);
+  const initialBalance = guessColumn(/balance|bal/i);
+
+  const initialMode = (initialDebit || initialCredit) && !initialAmount ? 'split' : 'single';
+
+  // Form State
+  const [name, setName] = useState(
+    preview.filename.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')
+  );
+  const [institution, setInstitution] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [accountType, setAccountType] = useState<'checking' | 'credit' | 'savings'>('checking');
+
+  const [dateColumn, setDateColumn] = useState(initialDate);
+  const [descriptionColumn, setDescriptionColumn] = useState(initialDesc);
+  const [amountMode, setAmountMode] = useState<'single' | 'split'>(initialMode);
+
+  const [amountColumn, setAmountColumn] = useState(initialAmount || headers[2] || '');
+  const [debitColumn, setDebitColumn] = useState(initialDebit || '');
+  const [creditColumn, setCreditColumn] = useState(initialCredit || '');
+  const [balanceColumn, setBalanceColumn] = useState(initialBalance || '');
+
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!name.trim()) {
+      setError('Configuration Name is required');
+      return;
+    }
+    if (!institution.trim()) {
+      setError('Institution Name is required');
+      return;
+    }
+    if (!accountName.trim()) {
+      setError('Account Name is required');
+      return;
+    }
+    if (!dateColumn) {
+      setError('Date Column is required');
+      return;
+    }
+    if (!descriptionColumn) {
+      setError('Description Column is required');
+      return;
+    }
+    if (amountMode === 'single' && !amountColumn) {
+      setError('Amount Column is required when using a single column');
+      return;
+    }
+    if (amountMode === 'split' && !debitColumn && !creditColumn) {
+      setError('At least one of Debit Column or Credit Column must be selected in split mode');
+      return;
+    }
+
+    onSave({
+      name: name.trim(),
+      institution: institution.trim(),
+      accountName: accountName.trim(),
+      accountType,
+      dateColumn,
+      descriptionColumn,
+      amountColumn: amountMode === 'single' ? amountColumn : undefined,
+      debitColumn: amountMode === 'split' ? debitColumn : undefined,
+      creditColumn: amountMode === 'split' ? creditColumn : undefined,
+      balanceColumn: balanceColumn || undefined,
+    });
+  };
+
+  return (
+    <Paper sx={{ p: 3, borderLeft: '4px solid', borderLeftColor: 'primary.main', background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(8px)' }}>
+      <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
+        Configure Column Mapping: {preview.filename}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        This CSV file layout is unrecognized. Map the columns to standard database fields to save the configuration for future imports.
+      </Typography>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* CSV Preview Table */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+          CSV Data Preview (First 3 rows)
+        </Typography>
+        <Box sx={{ overflowX: 'auto', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 1, bgcolor: '#fafafa' }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                {headers.map((h, index) => (
+                  <TableCell key={index} sx={{ fontWeight: 600, py: 1, borderBottom: '2px solid rgba(0,0,0,0.12)', whiteSpace: 'nowrap' }}>
+                    {h}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {parsedRows.map((row, rIdx) => (
+                <TableRow key={rIdx}>
+                  {headers.map((_, cIdx) => (
+                    <TableCell key={cIdx} sx={{ py: 0.75, whiteSpace: 'nowrap' }}>
+                      {row[cIdx] || ''}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+              {parsedRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={headers.length} align="center">
+                    No preview data rows found
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Box>
+      </Box>
+
+      <form onSubmit={handleSubmit}>
+        <Grid container spacing={3}>
+          {/* Account Metadata Details */}
+          <Grid size={12}>
+            <Divider sx={{ mb: 2 }}><Chip label="Account Info" size="small" /></Divider>
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              label="Mapping Config Name"
+              placeholder="e.g. My Credit Union Checking"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              fullWidth
+              size="small"
+              required
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              label="Institution / Bank"
+              placeholder="e.g. Chase, Credit Union, etc."
+              value={institution}
+              onChange={(e) => setInstitution(e.target.value)}
+              fullWidth
+              size="small"
+              required
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              label="Account Name"
+              placeholder="e.g. Checking 1234"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+              fullWidth
+              size="small"
+              required
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Account Type</InputLabel>
+              <Select
+                value={accountType}
+                label="Account Type"
+                onChange={(e) => setAccountType(e.target.value as any)}
+              >
+                <MenuItem value="checking">Checking</MenuItem>
+                <MenuItem value="credit">Credit Card</MenuItem>
+                <MenuItem value="savings">Savings</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Column Mapping Configuration */}
+          <Grid size={12}>
+            <Divider sx={{ my: 1 }}><Chip label="Column Mapping" size="small" /></Divider>
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <FormControl fullWidth size="small" required>
+              <InputLabel>Date Column</InputLabel>
+              <Select
+                value={dateColumn}
+                label="Date Column"
+                onChange={(e) => setDateColumn(e.target.value)}
+              >
+                {headers.map((h, idx) => (
+                  <MenuItem key={idx} value={h}>
+                    {h}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <FormControl fullWidth size="small" required>
+              <InputLabel>Description Column</InputLabel>
+              <Select
+                value={descriptionColumn}
+                label="Description Column"
+                onChange={(e) => setDescriptionColumn(e.target.value)}
+              >
+                {headers.map((h, idx) => (
+                  <MenuItem key={idx} value={h}>
+                    {h}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid size={12}>
+            <FormControl component="fieldset">
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                Amount Column Mode
+              </Typography>
+              <RadioGroup
+                row
+                value={amountMode}
+                onChange={(e) => setAmountMode(e.target.value as any)}
+              >
+                <FormControlLabel value="single" control={<Radio />} label="Single Amount Column" />
+                <FormControlLabel value="split" control={<Radio />} label="Separate Debit & Credit Columns" />
+              </RadioGroup>
+            </FormControl>
+          </Grid>
+
+          {amountMode === 'single' ? (
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Amount Column</InputLabel>
+                <Select
+                  value={amountColumn}
+                  label="Amount Column"
+                  onChange={(e) => setAmountColumn(e.target.value)}
+                >
+                  {headers.map((h, idx) => (
+                    <MenuItem key={idx} value={h}>
+                      {h}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          ) : (
+            <>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Debit Column</InputLabel>
+                  <Select
+                    value={debitColumn}
+                    label="Debit Column"
+                    onChange={(e) => setDebitColumn(e.target.value)}
+                  >
+                    <MenuItem value="">
+                      <em>None</em>
+                    </MenuItem>
+                    {headers.map((h, idx) => (
+                      <MenuItem key={idx} value={h}>
+                        {h}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Credit Column</InputLabel>
+                  <Select
+                    value={creditColumn}
+                    label="Credit Column"
+                    onChange={(e) => setCreditColumn(e.target.value)}
+                  >
+                    <MenuItem value="">
+                      <em>None</em>
+                    </MenuItem>
+                    {headers.map((h, idx) => (
+                      <MenuItem key={idx} value={h}>
+                        {h}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </>
+          )}
+
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Balance Column (Optional)</InputLabel>
+              <Select
+                value={balanceColumn}
+                label="Balance Column (Optional)"
+                onChange={(e) => setBalanceColumn(e.target.value)}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {headers.map((h, idx) => (
+                  <MenuItem key={idx} value={h}>
+                    {h}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid size={12}>
+            <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+              <Button type="submit" variant="contained" color="primary">
+                Save Mapping and Preview
+              </Button>
+              <Button variant="outlined" color="inherit" onClick={onCancel}>
+                Cancel / Skip File
+              </Button>
+            </Stack>
+          </Grid>
+        </Grid>
+      </form>
     </Paper>
   );
 }
