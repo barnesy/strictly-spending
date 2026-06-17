@@ -47,7 +47,33 @@ import type {
   WatchFolderConfig,
 } from '../types';
 
+const THEME_PRESETS = [
+  { name: 'Classic Blue', primary: '#1976d2', secondary: '#5c6bc0' },
+  { name: 'Emerald Green', primary: '#059669', secondary: '#10b981' },
+  { name: 'Royal Purple', primary: '#7c3aed', secondary: '#a78bfa' },
+  { name: 'Crimson Red', primary: '#e11d48', secondary: '#fda4af' },
+  { name: 'Warm Orange', primary: '#ea580c', secondary: '#fb923c' },
+  { name: 'Slate Gray', primary: '#475569', secondary: '#64748b' },
+];
+
 export default function Settings() {
+  const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
+  const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string } | undefined;
+
+  const themeMode = themeConfig?.mode || 'light';
+  const activePrimary = themeConfig?.primaryColor || '#1976d2';
+
+  const handleModeChange = async (mode: 'light' | 'dark') => {
+    const primary = themeConfig?.primaryColor || '#1976d2';
+    const secondary = themeConfig?.secondaryColor || '#5c6bc0';
+    await db.settings.put({ key: 'themeConfig', value: { mode, primaryColor: primary, secondaryColor: secondary } });
+  };
+
+  const handlePresetChange = async (primaryColor: string, secondaryColor: string) => {
+    const mode = themeConfig?.mode || 'light';
+    await db.settings.put({ key: 'themeConfig', value: { mode, primaryColor, secondaryColor } });
+  };
+
   const demoMode = useFilters((s) => s.demoMode);
   const setDemoMode = useFilters((s) => s.setDemoMode);
 
@@ -433,6 +459,86 @@ export default function Settings() {
         </Stack>
       </Paper>
       )}
+
+      {/* Theme Settings Card */}
+      <Paper sx={{ p: 3 }}>
+        <Stack spacing={2.5}>
+          <Box>
+            <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+              Theme customization
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Configure light/dark mode and personalize your primary application color scheme. Changes are applied instantly.
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
+              Theme Mode
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={themeMode}
+              onChange={(_, v) => v && handleModeChange(v as 'light' | 'dark')}
+            >
+              <ToggleButton value="light">Light Mode</ToggleButton>
+              <ToggleButton value="dark">Dark Mode</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
+          <Box>
+            <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600, mb: 1.5 }}>
+              Color Preset
+            </Typography>
+            <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ gap: 1.5 }}>
+              {THEME_PRESETS.map((preset) => {
+                const isActive = activePrimary === preset.primary;
+                return (
+                  <Button
+                    key={preset.name}
+                    variant={isActive ? 'contained' : 'outlined'}
+                    onClick={() => handlePresetChange(preset.primary, preset.secondary)}
+                    sx={{
+                      textTransform: 'none',
+                      px: 2,
+                      py: 1,
+                      borderRadius: 2,
+                      borderColor: isActive ? 'primary.main' : 'divider',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      fontWeight: isActive ? 600 : 500,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', gap: 0.25 }}>
+                      <Box
+                        sx={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          bgcolor: preset.primary,
+                          border: '1px solid rgba(0,0,0,0.1)',
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          bgcolor: preset.secondary,
+                          border: '1px solid rgba(0,0,0,0.1)',
+                        }}
+                      />
+                    </Box>
+                    {preset.name}
+                  </Button>
+                );
+              })}
+            </Stack>
+          </Box>
+        </Stack>
+      </Paper>
 
       {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
