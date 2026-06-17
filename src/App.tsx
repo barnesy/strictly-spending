@@ -373,7 +373,7 @@ export default function App() {
               : {}),
           }}
         >
-          <PageTransition key={location.pathname}>
+          <PageTransition key={location.pathname === '/' || location.pathname === '/transactions' ? 'dashboard' : location.pathname}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/sort" element={<Sort />} />
@@ -395,95 +395,95 @@ export default function App() {
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
-      {isChatOpen ? (
-        <PanelGroup key={activeArtifact ? 'with-artifact' : 'no-artifact'} orientation="horizontal">
-          <Panel id="main-content" minSize={30} defaultSize={activeArtifact ? 40 : 70}>
-            {renderMainWindow()}
-          </Panel>
+      <PanelGroup orientation="horizontal">
+        <Panel id="main-content" minSize={30}>
+          {renderMainWindow()}
+        </Panel>
 
-          <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
-            <Box
-              sx={{
-                position: 'absolute',
-                inset: 0,
-                margin: '0 auto',
-                width: 2,
-                bgcolor: 'rgba(0,0,0,0.08)',
-                borderRadius: 1,
-                transition: 'background-color 120ms ease',
-                '[data-resize-handle-active] &, &:hover': {
-                  bgcolor: 'primary.main',
-                  width: 3,
-                },
-              }}
-            />
-          </PanelResizeHandle>
-
-          {activeArtifact && (
-            <>
-              <Panel
-                id="artifact-viewer"
-                minSize={20}
-                defaultSize={35}
-                collapsible={true}
-                onResize={(size) => {
-                  if (size.asPercentage === 0) {
-                    useChatStore.getState().setActiveArtifact(null);
-                  }
+        {activeArtifact && (
+          <>
+            <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  margin: '0 auto',
+                  width: 2,
+                  bgcolor: 'rgba(0,0,0,0.08)',
+                  borderRadius: 1,
+                  transition: 'background-color 120ms ease',
+                  '[data-resize-handle-active] &, &:hover': {
+                    bgcolor: 'primary.main',
+                    width: 3,
+                  },
                 }}
-              >
-                <Slide direction="left" in={true} mountOnEnter unmountOnExit>
-                  <Box sx={{ height: '100%', borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column' }}>
-                    <ArtifactViewer />
-                  </Box>
-                </Slide>
-              </Panel>
+              />
+            </PanelResizeHandle>
 
-              <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    inset: 0,
-                    margin: '0 auto',
-                    width: 2,
-                    bgcolor: 'rgba(0,0,0,0.08)',
-                    borderRadius: 1,
-                    transition: 'background-color 120ms ease',
-                    '[data-resize-handle-active] &, &:hover': {
-                      bgcolor: 'primary.main',
-                      width: 3,
-                    },
-                  }}
-                />
-              </PanelResizeHandle>
-            </>
-          )}
+            <Panel
+              id="artifact-viewer"
+              minSize={20}
+              defaultSize={35}
+              collapsible={true}
+              onResize={(size) => {
+                if (size.asPercentage === 0) {
+                  useChatStore.getState().setActiveArtifact(null);
+                }
+              }}
+            >
+              <Slide direction="left" in={true} mountOnEnter unmountOnExit>
+                <Box sx={{ height: '100%', borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column' }}>
+                  <ArtifactViewer />
+                </Box>
+              </Slide>
+            </Panel>
+          </>
+        )}
 
-          <Panel
-            id="copilot-chat"
-            minSize={15}
-            defaultSize={activeArtifact ? 25 : 30}
-            collapsible={true}
-            onResize={(size) => {
-              if (size.asPercentage === 0) {
-                setIsChatOpen(false);
-              }
-            }}
-          >
-            <Slide direction="left" in={true} mountOnEnter unmountOnExit>
-              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CopilotChat
-                  onClose={() => setIsChatOpen(false)}
-                  showCloseButton={true}
-                  isEmbedded={true}
-                />
-              </Box>
-            </Slide>
-          </Panel>
-        </PanelGroup>
-      ) : (
-        renderMainWindow()
-      )}
+        {isChatOpen && (
+          <>
+            <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
+              <Box
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  margin: '0 auto',
+                  width: 2,
+                  bgcolor: 'rgba(0,0,0,0.08)',
+                  borderRadius: 1,
+                  transition: 'background-color 120ms ease',
+                  '[data-resize-handle-active] &, &:hover': {
+                    bgcolor: 'primary.main',
+                    width: 3,
+                  },
+                }}
+              />
+            </PanelResizeHandle>
+
+            <Panel
+              id="copilot-chat"
+              minSize={15}
+              defaultSize={activeArtifact ? 25 : 30}
+              collapsible={true}
+              onResize={(size) => {
+                if (size.asPercentage === 0) {
+                  setIsChatOpen(false);
+                }
+              }}
+            >
+              <Slide direction="left" in={true} mountOnEnter unmountOnExit>
+                <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <CopilotChat
+                    onClose={() => setIsChatOpen(false)}
+                    showCloseButton={true}
+                    isEmbedded={true}
+                  />
+                </Box>
+              </Slide>
+            </Panel>
+          </>
+        )}
+      </PanelGroup>
     </Box>
   );
 }
