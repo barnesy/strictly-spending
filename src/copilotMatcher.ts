@@ -84,29 +84,71 @@ export function matchAccounts(requested: (string | number)[], accounts: { name: 
 }
 
 export function cleanChatHistory(messages: ChatMessage[]): ChatMessage[] {
-  return messages.map((m) => {
-    if (m.role !== 'assistant') return m;
-    try {
-      let jsonStr = m.content.trim();
-      const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (match) {
-        jsonStr = match[1].trim();
-      } else {
-        const start = jsonStr.indexOf('{');
-        const end = jsonStr.lastIndexOf('}');
-        if (start >= 0 && end >= 0) {
-          jsonStr = jsonStr.slice(start, end + 1);
-        }
-      }
-      const parsed = JSON.parse(jsonStr);
-      if (parsed.explanation) {
-        return { role: 'assistant' as const, content: parsed.explanation };
-      }
-    } catch {
-      // Fall back to original content if not JSON
+  const cleaned: ChatMessage[] = [];
+
+  // Find the index of the last user message. Any messages after this index
+  // are part of the current active ReAct loop and must be preserved exactly as-is.
+  let lastUserIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      lastUserIdx = i;
+      break;
     }
-    return m;
-  });
+  }
+
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+
+    // If the message is part of the current turn's active loop, preserve it completely.
+    if (i >= lastUserIdx && lastUserIdx !== -1) {
+      cleaned.push(m);
+      continue;
+    }
+
+    if (m.role === 'system') {
+      // Skip all system results messages from previous turns.
+      continue;
+    }
+
+    if (m.role === 'assistant') {
+      try {
+        let jsonStr = m.content.trim();
+        const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (match) {
+          jsonStr = match[1].trim();
+        } else {
+          const start = jsonStr.indexOf('{');
+          const end = jsonStr.lastIndexOf('}');
+          if (start >= 0 && end >= 0) {
+            jsonStr = jsonStr.slice(start, end + 1);
+          }
+        }
+        const parsed = JSON.parse(jsonStr);
+        const action = parsed?.agent_action?.action || parsed?.action;
+
+        // Skip Stage 1 intermediate assistant query messages (which have a query action but no actionResult)
+        if (action && action !== 'none' && action !== 'filter' && action !== 'navigate' && !m.actionResult) {
+          continue;
+        }
+
+        // Clean Stage 2 assistant messages or final responses to plain text body/explanation
+        if (parsed.body) {
+          cleaned.push({ role: 'assistant' as const, content: parsed.body });
+          continue;
+        }
+        if (parsed.explanation) {
+          cleaned.push({ role: 'assistant' as const, content: parsed.explanation });
+          continue;
+        }
+      } catch {
+        // Fall back to original content if not JSON
+      }
+    }
+
+    cleaned.push(m);
+  }
+
+  return cleaned;
 }
 
 export function getMonthsInRange(startDateStr: string, endDateStr: string): number {

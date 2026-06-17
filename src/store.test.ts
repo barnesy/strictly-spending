@@ -157,6 +157,72 @@ describe('copilotMatcher - Chat History Cleaning', () => {
     expect(cleaned).toEqual(rawMessages);
   });
 
+  it('correctly handles multi-turn two-stage query histories containing Stage 1 and Stage 2 responses', () => {
+    const rawMessages = [
+      { role: 'user' as const, content: 'How much did I spend on dining out last month?' },
+      {
+        role: 'assistant' as const,
+        content: JSON.stringify({
+          title: 'Dining Out',
+          body: 'Querying last month dining spend.',
+          gen_ux: { type: 'none', options: [] },
+          suggested_actions: ['Reset filters'],
+          agent_action: { action: 'query_data', categories: ['Restaurants & Coffee'], preset: 'lastMonth' }
+        })
+      },
+      {
+        role: 'system' as const,
+        content: 'Database Query Results for categories [Restaurants & Coffee] between ...: - Total Spent: $252.78'
+      },
+      {
+        role: 'assistant' as const,
+        content: JSON.stringify({
+          title: 'Dining Out Spend',
+          body: 'You spent $252.78 on dining out last month.',
+          gen_ux: { type: 'none', options: [] },
+          suggested_actions: ['Reset filters'],
+          agent_action: { action: 'none' }
+        }),
+        actionResult: {
+          action: 'query_data',
+          categories: ['Restaurants & Coffee'],
+          metrics: { totalSpend: 252.78 }
+        }
+      },
+      { role: 'user' as const, content: 'Show me groceries for the year' }
+    ];
+
+    const cleaned = cleanChatHistory(rawMessages);
+    expect(cleaned.length).toBe(3);
+    expect(cleaned[0]).toEqual({ role: 'user', content: 'How much did I spend on dining out last month?' });
+    expect(cleaned[1]).toEqual({ role: 'assistant', content: 'You spent $252.78 on dining out last month.' });
+    expect(cleaned[2]).toEqual({ role: 'user', content: 'Show me groceries for the year' });
+  });
+
+  it('preserves all active loop messages that appear at or after the last user message', () => {
+    const rawMessages = [
+      { role: 'user' as const, content: 'Old question' },
+      { role: 'assistant' as const, content: 'Old answer' },
+      { role: 'user' as const, content: 'Show me Apple transactions' },
+      {
+        role: 'assistant' as const,
+        content: JSON.stringify({
+          agent_action: { action: 'query_data', search: 'Apple' }
+        })
+      },
+      {
+        role: 'system' as const,
+        content: 'Database Query Results: - Total Spent: $95.88'
+      }
+    ];
+
+    const cleaned = cleanChatHistory(rawMessages);
+    expect(cleaned.length).toBe(5);
+    expect(cleaned[0]).toEqual({ role: 'user', content: 'Old question' });
+    expect(cleaned[1]).toEqual({ role: 'assistant', content: 'Old answer' });
+    expect(cleaned[2]).toEqual({ role: 'user', content: 'Show me Apple transactions' });
+    expect(cleaned[3]).toEqual(rawMessages[3]);
+    expect(cleaned[4]).toEqual(rawMessages[4]);
   });
 });
 
