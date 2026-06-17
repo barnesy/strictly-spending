@@ -7,6 +7,7 @@ const rulesData: any[] = [];
 const transactionsData: any[] = [];
 const accountsData: any[] = [];
 const importsData: any[] = [];
+const csvMappingsData: any[] = [];
 const categoriesData: any[] = [{ name: 'Groceries' }, { name: 'Utilities' }];
 let licenseSetting: any = { value: { active: false } };
 
@@ -60,6 +61,18 @@ vi.mock('./db', () => {
       categories: {
         toArray: async () => [...categoriesData]
       },
+      csvMappings: {
+        where: (field: string) => ({
+          equals: (val: any) => ({
+            first: async () => csvMappingsData.find((m) => m[field] === val),
+          }),
+        }),
+        add: async (m: any) => {
+          const newMapping = { ...m, id: csvMappingsData.length + 1 };
+          csvMappingsData.push(newMapping);
+          return newMapping.id;
+        },
+      },
       settings: {
         get: async (key: string) => {
           if (key === 'license') return licenseSetting;
@@ -87,6 +100,7 @@ describe('CSV Import Engine', () => {
     transactionsData.length = 0;
     accountsData.length = 0;
     importsData.length = 0;
+    csvMappingsData.length = 0;
     licenseSetting = { value: { active: false } };
     expect(db).toBeDefined();
     vi.clearAllMocks();
@@ -171,6 +185,43 @@ JOHN DOE,05/22/2026,05/23/2026,Netflix Card,Subscriptions,Sale,-15.00,`;
       expect(commitRes.imported).toBe(1);
       expect(commitRes.skippedDuplicates).toBe(1);
       expect(transactionsData.length).toBe(2); // Initial 1 + Imported 1 = 2
+    });
+  });
+
+  describe('Custom CSV Mapped Import', () => {
+    const customCsvText = `TxnDate,Merchant,TotalAmount,Balance\n06/15/2026,Coffee Shop,-4.50,100.00\n06/16/2026,Salary,2500.00,2600.00`;
+
+    it('returns requiresMapping: true when layout is unrecognized', async () => {
+      const preview = await buildPreview('statement_9999.csv', customCsvText);
+      expect(preview.requiresMapping).toBe(true);
+      expect(preview.headers).toEqual(['TxnDate', 'Merchant', 'TotalAmount', 'Balance']);
+      expect(preview.rawText).toBe(customCsvText);
+    });
+
+    it('parses correctly once mapping is saved to DB', async () => {
+      // Pre-add custom mapping to mock DB
+      csvMappingsData.push({
+        name: 'Test Union',
+        headerHash: 'TxnDate,Merchant,TotalAmount,Balance',
+        headers: ['TxnDate', 'Merchant', 'TotalAmount', 'Balance'],
+        dateColumn: 'TxnDate',
+        descriptionColumn: 'Merchant',
+        amountColumn: 'TotalAmount',
+        balanceColumn: 'Balance',
+        accountName: 'My Savings',
+        accountType: 'savings',
+        institution: 'Union Bank',
+      });
+
+      const preview = await buildPreview('statement_9999.csv', customCsvText);
+      expect(preview.requiresMapping).toBeUndefined();
+      expect(preview.source).toBe('custom');
+      expect(preview.totalCount).toBe(2);
+      expect(preview.newCount).toBe(2);
+      expect(preview.rows[0].parsed.amount).toBe(-4.5);
+      expect(preview.rows[0].parsed.description).toBe('Coffee Shop');
+      expect(preview.rows[0].parsed.balance).toBe(100.0);
+      expect(preview.rows[1].parsed.amount).toBe(2500.0);
     });
   });
 });

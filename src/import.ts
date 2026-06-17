@@ -1,6 +1,6 @@
 import { db } from './db';
 import type { Account, ParsedTransaction, Transaction, Source } from './types';
-import { parseCsv } from './parsers';
+import { parseCsv, detectSource, extractCsvHeaders, parseCustomCsv } from './parsers';
 import {
   categorize,
   extractMerchantKey,
@@ -21,6 +21,9 @@ export interface ImportPreview {
   /** SHA-256 of the file's text; carried so commitPreview can store it on
    *  the ImportBatch row for watch-folder dedup. */
   contentHash?: string;
+  requiresMapping?: boolean;
+  headers?: string[];
+  rawText?: string;
 }
 
 export interface ProcessedRow {
@@ -49,19 +52,48 @@ export async function buildPreview(
   rawText: string,
   contentHash?: string
 ): Promise<ImportPreview> {
-  const parseResult = parseCsv(filename, rawText);
-  if ('error' in parseResult) {
-    return {
-      filename,
-      source: null,
-      rows: [],
-      warnings: [],
-      error: parseResult.error,
-      totalCount: 0,
-      newCount: 0,
-      duplicateCount: 0,
-      byCategory: {},
-    };
+  let source = detectSource(rawText);
+  let parseResult;
+
+  if (source) {
+    parseResult = parseCsv(filename, rawText);
+    if ('error' in parseResult) {
+      return {
+        filename,
+        source: null,
+        rows: [],
+        warnings: [],
+        error: parseResult.error,
+        totalCount: 0,
+        newCount: 0,
+        duplicateCount: 0,
+        byCategory: {},
+      };
+    }
+  } else {
+    // Check if there is a saved mapping for these headers
+    const headers = extractCsvHeaders(rawText);
+    const headerHash = headers.join(',');
+    const existingMapping = await db.csvMappings.where('headerHash').equals(headerHash).first();
+    if (existingMapping) {
+      source = 'custom';
+      parseResult = { source: 'custom' as const, ...parseCustomCsv(filename, rawText, existingMapping) };
+    } else {
+      return {
+        filename,
+        source: null,
+        rows: [],
+        warnings: [],
+        totalCount: 0,
+        newCount: 0,
+        duplicateCount: 0,
+        byCategory: {},
+        contentHash,
+        requiresMapping: true,
+        headers,
+        rawText,
+      };
+    }
   }
 
   const rules = await db.rules.toArray();
