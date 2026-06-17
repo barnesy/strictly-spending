@@ -1,4 +1,4 @@
-export type Source = 'chase' | 'boa-credit' | 'boa-checking' | 'truist-checking' | 'demo';
+export type Source = 'chase' | 'boa-credit' | 'boa-checking' | 'truist-checking' | 'demo' | 'custom';
 
 export type AccountType = 'checking' | 'credit' | 'savings';
 
@@ -187,5 +187,21 @@ export interface DbChatMessage {
     total: number;
   };
   purpose?: 'tool_select' | 'explanation';
+}
+
+export interface CsvMapping {
+  id?: number;
+  name: string;
+  headerHash: string;
+  headers: string[];
+  dateColumn: string;
+  descriptionColumn: string;
+  amountColumn?: string;
+  debitColumn?: string;
+  creditColumn?: string;
+  balanceColumn?: string;
+  accountName: string;
+  accountType: AccountType;
+  institution: string;
 }
 

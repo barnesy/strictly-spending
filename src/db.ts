@@ -11,6 +11,7 @@ import type {
   ChatArtifact,
   ChatThread,
   DbChatMessage,
+  CsvMapping,
 } from './types';
 
 class SpendingDB extends Dexie {
@@ -25,6 +26,7 @@ class SpendingDB extends Dexie {
   artifacts!: Table<ChatArtifact, string>;
   threads!: Table<ChatThread, string>;
   messages!: Table<DbChatMessage, number>;
+  csvMappings!: Table<CsvMapping, number>;
 
   constructor() {
     super('spending-viz');
@@ -54,6 +56,9 @@ class SpendingDB extends Dexie {
     this.version(6).stores({
       threads: 'id, title, createdAt, updatedAt',
       messages: '++id, threadId, role, createdAt',
+    });
+    this.version(7).stores({
+      csvMappings: '++id, &headerHash',
     });
   }
 }
