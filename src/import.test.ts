@@ -23,6 +23,10 @@ vi.mock('./db', () => {
           transactionsData.push(...txns);
           return txns;
         },
+        update: async (id: number, updates: any) => {
+          const t = transactionsData.find(x => x.id === id);
+          if (t) Object.assign(t, updates);
+        },
         where: (field: string) => ({
           equals: (val: any) => ({
             toArray: async () => transactionsData.filter(t => t[field] === val)
@@ -61,6 +65,9 @@ vi.mock('./db', () => {
       categories: {
         toArray: async () => [...categoriesData]
       },
+      merchantOverrides: {
+        toArray: async () => []
+      },
       csvMappings: {
         where: (field: string) => ({
           equals: (val: any) => ({
@@ -78,6 +85,9 @@ vi.mock('./db', () => {
           if (key === 'license') return licenseSetting;
           return null;
         }
+      },
+      transaction: async (_mode: string, _tables: any, callback: () => Promise<void>) => {
+        await callback();
       }
     }
   };

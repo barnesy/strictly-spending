@@ -18,6 +18,7 @@
 import { db } from './db';
 import type { Account, Transaction } from './types';
 import { extractMerchantKey } from './categorize';
+import { refreshRecurrenceAll } from './recurrence';
 
 const ACCOUNTS = {
   checking: 'Demo: Checking',
@@ -441,11 +442,12 @@ export async function seedDemoData(): Promise<SeedResult> {
       merchantKey,
       userOverridden: true, // demo data shouldn't be re-categorized by rules
       dedupKey: `${bucket}|${seq}`,
+      recurrence: 'onetime',
     };
   });
 
   await db.transactions.bulkAdd(rows as Transaction[]);
-
+  await refreshRecurrenceAll();
   return { added: rows.length, alreadyPresent: false };
 }
 

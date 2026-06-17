@@ -25,6 +25,12 @@ vi.mock('./db', () => {
           if (t) Object.assign(t, updates);
         },
       },
+      categories: {
+        toArray: async () => [],
+      },
+      merchantOverrides: {
+        toArray: async () => [],
+      },
       transaction: async (_mode: string, _tables: any, callback: () => Promise<void>) => {
         await callback();
       }

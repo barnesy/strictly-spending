@@ -1,5 +1,6 @@
 import { db } from './db';
 import type { Account, ParsedTransaction, Transaction, Source } from './types';
+import { refreshRecurrenceAll } from './recurrence';
 import { parseCsv, detectSource, extractCsvHeaders, parseCustomCsv } from './parsers';
 import {
   categorize,
@@ -262,6 +263,7 @@ export async function commitPreview(preview: ImportPreview): Promise<{
       userOverridden: false,
       dedupKey: row.dedupKey,
       importBatchId: batchId,
+      recurrence: 'onetime',
     });
   }
 
@@ -291,5 +293,8 @@ export async function commitPreview(preview: ImportPreview): Promise<{
     }
   }
 
+  // Refresh the recurrence cache database-wide to account for the new data
+  await refreshRecurrenceAll();
+  
   return { imported, skippedDuplicates, batchId };
 }

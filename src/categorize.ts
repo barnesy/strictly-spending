@@ -1,5 +1,6 @@
 import type { CategoryRule, Source } from './types';
 import { db } from './db';
+import { refreshRecurrenceAll } from './recurrence';
 
 const SOURCE_CATEGORY_MAP: Record<string, string> = {
   // Chase top-level Categories
@@ -222,6 +223,8 @@ export async function recategorizeAll(): Promise<{ updated: number }> {
       }
     }
   });
+  
+  await refreshRecurrenceAll();
   return { updated };
 }
 
