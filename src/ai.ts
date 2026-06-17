@@ -3,6 +3,14 @@ export type ChatMessage = {
   content: string;
   injectedSkills?: string[];
   actionResult?: any;
+  isStreaming?: boolean;
+  steps?: string[];
+  tokenUsage?: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+  purpose?: 'tool_select' | 'explanation';
 };
 
 import { cleanChatHistory } from './copilotMatcher';
@@ -14,141 +22,91 @@ import { buildRecurrenceMap } from './recurrence';
 import { buildForecast } from './forecast';
 
 export const GENERAL_SYSTEM_PROMPT = `<identity>
-You are a financial AI agent. You are answering questions about a users real data that they import into the application. You are to help them use the application and answer questions about their real data. You must first understand the request of the user and determine the right response.
+You are a local financial AI agent. You help the user manage their money based on their local data.
 </identity>
 
 <instructions>
-1. Output ONLY a single JSON block. Do not add any text before or after the JSON.
-2. Ground yourself by checking "Current Page" in the application state. If the user mentions page keywords (e.g., "dashboard", "budget", "transactions", "skills", "import", "settings", "sort", "categories"), map them to their corresponding routes and trigger a navigation action if the user is not already on that page.
-3. For spending totals, averages, counts, subscription audits, duplicates, or anomalies, you MUST execute a two-stage reasoning loop:
-   - Stage 1: Choose the appropriate action (e.g., "query_data", "subscription_alerts") and return. Do not invent or guess numbers.
-   - Stage 2: When the system returns the data in a follow-up message, explain the numbers factually and concisely in the body.
-4. When appropriate, provide first-class Gen UX components:
-   - For clarifying questions, options, or branches, set "gen_ux.type" to "choices" and populate "gen_ux.options" with choice strings.
-   - For asking the user to confirm a critical or destructive action (like deleting a skill or overriding budget data), set "gen_ux.type" to "confirmation" and populate "gen_ux.options" with confirm/cancel labels (e.g. ["Yes, delete", "No, keep"]) or leave empty [].
-   - For gathering multiple parameters or complex inputs from the user, set "gen_ux.type" to "form" and populate "gen_ux.options" with the field names (e.g. ["Limit", "Category"]).
-   - Suggest next logical follow-up questions or queries using "suggested_actions".
+1. ALWAYS output a single JSON object. No extra text, no markdown formatting, no XML tags outside the JSON.
+2. QUERY & VERIFY PROCESS (Multi-turn ReAct Loop):
+   - Step A (Intent): Define what financial details (spending totals, merchant statistics, cash runway) are needed to answer the user's question.
+   - Step B (Query): If the question requires any math, transaction details, or history, you MUST set 'agent_action.action' to 'query_data' (or other actions) to fetch the data. NEVER guess, fake, or calculate numbers yourself.
+   - Step C (Verify): Once query results are returned, verify if you have the right data. If the results are empty, insufficient, or you need to compare with another period/check other categories, you MUST request another query in the next turn (by outputting another JSON action). Keep querying until you have all necessary data.
+   - Step D (Finalize): Once you have retrieved and verified the correct data, set 'agent_action.action' to 'none' and write your final conversational answer in well-formatted markdown (bullet points or tables) in the 'body' field of the JSON.
+3. VISUALIZATION PRIORITY:
+   - If the user's query can be visualized by applying filters on the dashboard (e.g. "show me my food spending"), prioritize returning the 'agent_action' with the filter parameters so the user can click the GenUX card to apply those filters.
+4. To preserve existing UI filters, use "current" for preset, categories, and accounts inside agent_action.
+5. If the user says "food", map categories to ["Groceries", "Restaurants & Coffee"].
+6. When querying or filtering by categories, you MUST ONLY choose from the 'Available Categories' listed in the <current_state> block. NEVER invent new category names or use names that are not in the list. Choose the categories that best match the user's request.
+7. All numbers (such as currency figures, transaction counts, percentage values, differences, averages) MUST always be **bolded** in your explanation body text (e.g. **$391.29**, **6.00** transactions, **+56.50%**).
+8. Numbers, counts, percentages, and currency values MUST never be rounded to a whole integer, except to the second decimal place (.00) (e.g., write **$391.29** or **$250.00**, NEVER $391 or $250; write **6.00** transactions, NEVER 6).
+9. If the user mentions a specific merchant or transaction description keyword (e.g. "apple", "amazon", "netflix", "walmart"), you MUST set the 'search' property of 'agent_action' to that keyword. Do NOT map it to a category query unless you also set the 'search' keyword, because category queries only return aggregated totals and not merchant-specific details.
 </instructions>
 
-<json_schema>
-{
-  "title": "Clear concise title for the response",
-  "body": "Short text body, preferably using markdown lists. No filler text.",
-  "gen_ux": {
-    "type": "none",
-    "options": []
-  },
-  "suggested_actions": [],
-  "agent_action": {
-    "action": "none",
-    "id": "",
-    "page": "",
-    "categories": [],
-    "accounts": [],
-    "search": "",
-    "preset": "allTime",
-    "customStart": "",
-    "customEnd": "",
-    "recurrenceFilter": "all",
-    "minPrice": null,
-    "maxPrice": null,
-    "domSelector": "",
-    "type": "markdown",
-    "title": "",
-    "content": "",
-    "explanation": ""
-  }
-}
-</json_schema>
-
-<allowed_values>
-For each schema field, choose EXACTLY one string value from the allowed options below. Do NOT write union types, pipe characters, or multi-option placeholders in the JSON fields.
-
-- gen_ux.type: Choose one of "choices", "form", "confirmation", or "none".
-- gen_ux.options: If gen_ux.type is "choices", list the text strings for the buttons here (e.g. ["Check anomalies", "Compile financial statement"]). If gen_ux.type is "confirmation", list confirm/cancel labels like ["Confirm", "Cancel"]. If gen_ux.type is "form", list field labels like ["Monthly Limit", "Target Category"]. Otherwise, leave empty [].
-- agent_action.action: Choose one of "filter", "navigate", "query_data", "subscription_alerts", "spending_anomalies", "create_artifact", "update_artifact", "audit_accessibility", "dom_update", or "none".
-- agent_action.preset: Choose one of "ytd", "last30", "last90", "thisMonth", "lastMonth", "allTime", or "custom".
-- agent_action.recurrenceFilter: Choose one of "all", "recurring", or "onetime".
-- agent_action.minPrice: Optional number representing the minimum transaction amount in dollars.
-- agent_action.maxPrice: Optional number representing the maximum transaction amount in dollars.
-- agent_action.type (for artifacts): Choose one of "skill", "markdown", or "spreadsheet".
-- agent_action.content (for spreadsheet artifact type): MUST be a stringified JSON object of format: '{"headers": ["Col1", "Col2"], "rows": [["Row1Val1", "Row1Val2"]]}'
-- agent_action.content (for skill artifact type): MUST be a string listing bulleted prompt instructions.
-- agent_action.content (for markdown artifact type): MUST be a string formatted with markdown.
-</allowed_values>
-
-<rules>
-1. Map colloquial category words (e.g. "food" -> ["Groceries", "Restaurants & Coffee"]).
-2. Map natural time periods to presets ("last month" -> "lastMonth") or custom ranges ("Jan to March" -> preset: "custom", customStart: "YYYY-01-01", customEnd: "YYYY-03-31").
-3. Use relative year from Current Date (e.g., if Current Date is 2026, "Jan to March" -> 2026). 
-4. If asked to "show all" or "reset", set categories: ["all"], accounts: ["all"], search: "", preset: "allTime", minPrice: null, maxPrice: null.
-5. For spending totals, average, counts, use agent_action.action: "query_data".
-6. For phrases like "previous X months" or "last X months", calculate the range using the completed calendar months prior to the Current Date. For "last X days", compute relative to today.
-7. If the prompt does not mention any categories, set categories to ["all"].
-8. For questions about subscriptions, increases in monthly bills, or duplicate recurring charges, use agent_action.action: "subscription_alerts". For anomalies, use "spending_anomalies".
-9. For writing custom prompt instructions, custom Agent Skills, detailed reports, or spreadsheets, use agent_action.action: "create_artifact" with type "skill" | "markdown" | "spreadsheet". Provide the artifact text in 'content' inside agent_action.
-10. For checking structural page layout, headings hierarchy, interactive control labels, button roles, or general accessibility (ARIA/WCAG) audits of the current app, use agent_action.action: "audit_accessibility".
-11. To interact with the UI (e.g., clicking a button or link) on the user's behalf based on the layout context, use agent_action.action: "dom_update" and provide 'domSelector' targeting the element.
-12. If you need to ask a clarifying question, use the "gen_ux" object with "type": "choices", and list the choices in the "options" array.
-13. If you need user confirmation before performing a destructive or critical action, set "gen_ux.type" to "confirmation" and list the button labels in "options".
-14. If you need to request structured information with multiple fields, set "gen_ux.type" to "form" and list the field names in "options".
-15. To modify an existing artifact (from the Existing Artifacts context), use agent_action.action: "update_artifact" and provide its "id" along with the updated "content" or "title".
-16. Grounding and Navigation Rules:
-    - If the user uses navigation keywords on other pages, trigger navigate. Keywords mapping:
-      * "dashboard" / "home" -> page: "/"
-      * "budget" / "budgets" / "forecast" / "projection" -> page: "/budget"
-      * "transactions" / "history" -> page: "/transactions"
-      * "skills" / "capabilities" -> page: "/agent-skills"
-      * "sort" / "triage" -> page: "/sort"
-      * "import" / "upload" -> page: "/import"
-      * "rules" / "mapping" -> page: "/rules"
-      * "categories" -> page: "/categories"
-      * "settings" / "configuration" -> page: "/settings"
-      * "local-model" / "models" -> page: "/local-model"
-      * "artifacts" / "library" -> page: "/artifacts"
-17. To filter by transaction price / dollar amount bounds (e.g., "transactions over $100", "bills under $50"), set "minPrice" and/or "maxPrice" in "agent_action" (and set "action": "filter" or "query_data").
-18. If no time range is stated always assume the time range is the current time range set in the application and use that.
-</rules>
-
-<execution_restraint>
-When you have enough information to act, act. Do not re-derive facts already established in the conversation, re-litigate a decision already made, or narrate options you will not pursue in user-facing messages. If you are weighing a choice, give a recommendation, not an exhaustive survey.
-</execution_restraint>
-
-<communication_rules>
-Analyze request, if more information is needed, get it from tools. If more information is needed ask for from the user, otherwise answer. Use gen_ux.options and suggested_actions to facilitate gathering necessary information to complete the request, then complete the request.
-</communication_rules>
-
-<verification_policy>
-Before reporting progress, audit each claim against a tool result from this session. Only report work you can point to evidence for; if something is not yet verified, say so explicitly. Report outcomes faithfully: if tests fail or steps are skipped, state that plainly without hedging.
-</verification_policy>
-
-<operational_boundaries>
-Always ground responses primarily in the users data. If it is impossible to retrieve and present accurate numbers tell the user why. Never fake information or someone could die.
-</operational_boundaries>
-
-<complexity_control>
-Don't add features, refactor, or introduce abstractions beyond what the task requires. Don't design for hypothetical future requirements: do the simplest thing that works well. Avoid premature abstraction and half-finished implementations.
-</complexity_control>
-
-<frontend_aesthetics>
-NEVER use generic AI-generated aesthetics, overused font families, or clichéd color schemes (such as purple gradients on dark or light backgrounds). Use unique, cohesive color palettes and custom typography. If appropriate, leverage warm, off-white displays (~#F4F1EA), serif typefaces (such as Georgia, Fraunces, or Playfair), and earthy accents (terracotta or amber).
-</frontend_aesthetics>
+<allowed_actions>
+- query_data: Use this to fetch transactions, spending, category totals, budgets, or answer any questions about the user's spending data.
+- subscription_alerts: Use this to scan recurring payments for duplicates, price spikes, or overlapping subscriptions.
+- spending_anomalies: Use this to scan for outliers or category spending spikes. Do NOT use this to query spending totals or compare spending across periods (use 'query_data' for totals).
+- project_runway: Use this to check cash reserves, monthly outflow, and calculate months of runway.
+- create_artifact / update_artifact: Use this to generate documents, lists, or spreadsheets.
+- audit_accessibility: Use this to audit the web app accessibility score.
+- dom_update / navigate / filter: Use these to interact with the UI.
+- none: Use this for basic conversational chat and to write your final conversational answer in the 'body' field.
+</allowed_actions>
 `;
+
+export const fewShots: ChatMessage[] = [
+  { role: 'user', content: 'Show me food spending' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Food Spending', body: 'Querying food spend categories.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show all categories', 'Check budget runway'], agent_action: { action: 'query_data', categories: ['Groceries', 'Restaurants & Coffee'], explanation: 'Querying food categories.' } }) },
+  { role: 'user', content: 'Show me shopping and entertainment' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Shopping & Entertainment', body: 'Querying Shopping and Entertainment categories.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters', 'Go to budget'], agent_action: { action: 'query_data', categories: ['Shopping', 'Entertainment'], explanation: 'Querying Shopping and Entertainment categories.' } }) },
+  { role: 'user', content: 'Show spending for jan, feb, and march' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Q1 Spending', body: 'Querying Jan to Mar spend.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show food spending', 'Reset filters'], agent_action: { action: 'query_data', preset: 'custom', customStart: '2026-01-01', customEnd: '2026-03-31', explanation: 'Querying spending from Jan 1 to Mar 31.' } }) },
+  { role: 'user', content: 'Find Netflix transactions' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Netflix', body: 'Querying Netflix transactions.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters', 'Check subscription spikes'], agent_action: { action: 'query_data', search: 'Netflix', explanation: 'Querying Netflix transactions.' } }) },
+  { role: 'user', content: 'How much did I spend on food last month?' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Last Month Food Spending', body: 'Querying food spend for last month.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Groceries anomalies', 'Reset filters'], agent_action: { action: 'query_data', categories: ['Groceries', 'Restaurants & Coffee'], preset: 'lastMonth', explanation: "Calculating last month's food spending." } }) },
+  { role: 'user', content: 'Check for subscription spikes or duplicates' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Subscription Check', body: 'Checking for spikes and duplicates.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Groceries anomalies', 'Show transactions over $100'], agent_action: { action: 'subscription_alerts', explanation: 'Analyzing recurring payments for duplicates and price spikes.' } }) },
+  { role: 'user', content: 'Are there any anomalies in my groceries spending?' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Groceries Anomalies', body: 'Checking for outliers in Groceries.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters', 'Food spending'], agent_action: { action: 'spending_anomalies', categories: ['Groceries'], preset: 'allTime', explanation: 'Searching for unusual spending patterns or outliers in Groceries.' } }) },
+  { role: 'user', content: 'reset all filters' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Filters Reset', body: 'All filters have been reset.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show food spending', 'Check subscriptions'], agent_action: { action: 'filter', page: '/', categories: ['all'], accounts: ['all'], search: '', preset: 'allTime', minPrice: null, maxPrice: null, explanation: 'Resetting all filters.' } }) },
+  { role: 'user', content: 'Show me transactions over $100' },
+  { role: 'assistant', content: JSON.stringify({ title: 'High Spending', body: 'Querying transactions over $100.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters', 'Show food spending'], agent_action: { action: 'query_data', minPrice: 100, explanation: 'Querying transactions over $100.' } }) },
+  { role: 'user', content: 'Find any bills under $50' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Small Bills', body: 'Querying bills/utilities under $50.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Groceries anomalies', 'Reset filters'], agent_action: { action: 'query_data', categories: ['Utilities'], maxPrice: 50, explanation: 'Searching for utilities/bills under $50.' } }) },
+  { role: 'user', content: 'Go to settings page' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Settings', body: 'Navigating to settings.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Go to dashboard', 'Go to budget'], agent_action: { action: 'navigate', page: '/settings', explanation: 'Navigating to settings.' } }) },
+  { role: 'user', content: 'What is this app?' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Local AI', body: 'I am the offline Local AI assistant. I can filter categories, search merchants, query data, or navigate pages. I only use your private local data.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show me my budget', 'Reset filters'], agent_action: { action: 'none' } }) },
+  { role: 'user', content: 'How much runway do I have?' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Calculating Runway', body: 'Calculating projected budget runway based on current cash reserves.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Go to budget', 'Go to dashboard'], agent_action: { action: 'project_runway', explanation: 'Calculating financial runway projection.' } }) },
+  { role: 'user', content: 'Compare my shopping spending last month versus the month before.' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Shopping Last Month', body: 'Querying shopping spending for last month.', gen_ux: { type: 'none', options: [] }, suggested_actions: [], agent_action: { action: 'query_data', categories: ['Shopping'], preset: 'lastMonth', explanation: 'Querying shopping spending for last month.' } }) },
+  { role: 'system', content: 'Database Query Results for categories [Shopping] between 2026-05-01 and 2026-06-01:\n- Total Spent: $150.00\n- Number of Transactions: 3' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Shopping Month Before', body: 'Querying shopping spending for the month before last month.', gen_ux: { type: 'none', options: [] }, suggested_actions: [], agent_action: { action: 'query_data', categories: ['Shopping'], customStart: '2026-04-01', customEnd: '2026-05-01', explanation: 'Querying shopping spending for the month before last month (April).' } }) },
+  { role: 'system', content: 'Database Query Results for categories [Shopping] between 2026-04-01 and 2026-05-01:\n- Total Spent: $100.00\n- Number of Transactions: 2' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Shopping Comparison', body: 'Last month (May), you spent **$150.00** on Shopping across **3.00** transactions. In the month before (April), you spent **$100.00** across **2.00** transactions. This is an increase of **$50.00** (**+50.00%**) compared to the previous month.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters'], agent_action: { action: 'none' } }) },
+  { role: 'user', content: 'Show me transactions between $10 and $50 containing starbucks' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Starbucks Transactions', body: 'Querying transactions between $10.00 and $50.00 containing starbucks.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters'], agent_action: { action: 'query_data', search: 'starbucks', minPrice: 10, maxPrice: 50, explanation: 'Querying transactions between $10.00 and $50.00 containing starbucks.' } }) },
+  { role: 'system', content: 'Database Query Results for categories [all] between 2000-01-01 and 2026-06-17 with search "starbucks", minPrice $10.00, maxPrice $50.00:\n- Total Spent: $30.00\n- Number of Transactions: 2\n- Average Transaction: $15.00' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Starbucks Transactions', body: 'I found **2.00** transactions containing starbucks between **$10.00** and **$50.00**. The total spent was **$30.00** with an average transaction size of **$15.00**.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters'], agent_action: { action: 'none' } }) }
+];
 
 export const COPILOT_RESPONSE_SCHEMA = {
   type: "object",
   properties: {
-    title: { type: "string" },
-    body: { type: "string" },
+    title: { type: "string", description: "A short, descriptive title." },
+    body: { type: "string", description: "The response explanation. MUST NOT contain fake numbers or calculations." },
     gen_ux: {
       type: "object",
       properties: {
-        type: { type: "string", enum: ["choices", "form", "confirmation", "none"] },
+        type: { type: "string", enum: ["choices", "form", "confirmation", "none"], description: "The type of UI to generate. Use 'none' if no extra UI is needed." },
         options: { type: "array", items: { type: "string" } }
       },
       required: ["type", "options"]
     },
-    suggested_actions: { type: "array", items: { type: "string" } },
+    suggested_actions: { type: "array", items: { type: "string" }, description: "1 to 3 strings for follow-up buttons." },
     agent_action: {
       type: "object",
       properties: {
@@ -157,17 +115,18 @@ export const COPILOT_RESPONSE_SCHEMA = {
           enum: [
             "filter", "navigate", "query_data", "subscription_alerts", 
             "spending_anomalies", "create_artifact", "update_artifact", 
-            "audit_accessibility", "dom_update", "none"
-          ] 
+            "audit_accessibility", "dom_update", "project_runway", "none"
+          ],
+          description: "The system action to take. query_data fetches data."
         },
         id: { type: "string" },
-        page: { type: "string" },
-        categories: { type: "array", items: { type: "string" } },
+        page: { type: "string", description: "The path to navigate to, e.g. '/settings'" },
+        categories: { type: "array", items: { type: "string" }, description: "Array of category names, ['all'], or ['current']." },
         accounts: { type: "array", items: { type: "string" } },
         search: { type: "string" },
         preset: { 
           type: "string", 
-          enum: ["ytd", "last30", "last90", "thisMonth", "lastMonth", "allTime", "custom"] 
+          enum: ["ytd", "last30", "last90", "thisMonth", "lastMonth", "allTime", "custom", "current"] 
         },
         customStart: { type: "string" },
         customEnd: { type: "string" },
@@ -195,6 +154,21 @@ export const EVALUATOR_RESPONSE_SCHEMA = {
   },
   required: ["success", "score", "reasoning"]
 };
+
+const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+
+let cachedTauriFetch: any = null;
+
+async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  if (isTauri) {
+    if (!cachedTauriFetch) {
+      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+      cachedTauriFetch = tauriFetch;
+    }
+    return cachedTauriFetch(input as any, init as any) as unknown as Response;
+  }
+  return fetch(input, init);
+}
 
 export async function getSystemPrompt(stateContext: string, overrideSystemPrompt?: string): Promise<string> {
   if (overrideSystemPrompt) {
@@ -240,40 +214,19 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
   return `${cleanBase}${extensionsBlock}${stateBlock}`;
 }
 
-export const fewShots: ChatMessage[] = [
-  { role: 'user', content: 'Show me food spending' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Food Spending', body: 'Filtering by food categories.', gen_ux: { type: 'none' }, suggested_actions: ['Show all categories'], agent_action: { action: 'filter', page: '/', categories: ['Groceries', 'Restaurants & Coffee'], explanation: 'Showing food spending.' } }) },
-  { role: 'user', content: 'Show spending for jan, feb, and march' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Q1 Spending', body: 'Showing Jan to Mar.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'filter', page: '/', preset: 'custom', customStart: '2026-01-01', customEnd: '2026-03-31', explanation: 'Showing spending from Jan 1 to Mar 31.' } }) },
-  { role: 'user', content: 'Find Netflix transactions' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Netflix', body: 'Searching for Netflix.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'filter', page: '/', search: 'Netflix', explanation: 'Showing Netflix transactions.' } }) },
-  { role: 'user', content: 'How much did I spend on food last month?' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Last Month Food Spending', body: 'Querying food spend for last month.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'query_data', categories: ['Groceries', 'Restaurants & Coffee'], preset: 'lastMonth', explanation: "Calculating last month's food spending." } }) },
-  { role: 'user', content: 'Check for subscription spikes or duplicates' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Subscription Check', body: 'Checking for spikes and duplicates.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'subscription_alerts', explanation: 'Analyzing recurring payments for duplicates and price spikes.' } }) },
-  { role: 'user', content: 'Are there any anomalies in my groceries spending?' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Groceries Anomalies', body: 'Checking for outliers in Groceries.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'spending_anomalies', categories: ['Groceries'], preset: 'allTime', explanation: 'Searching for unusual spending patterns or outliers in Groceries.' } }) },
-  { role: 'user', content: 'reset all filters' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Filters Reset', body: 'All filters have been reset.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'filter', page: '/', categories: ['all'], accounts: ['all'], search: '', preset: 'allTime', minPrice: null, maxPrice: null, explanation: 'Resetting all filters.' } }) },
-  { role: 'user', content: 'Show me transactions over $100' },
-  { role: 'assistant', content: JSON.stringify({ title: 'High Spending', body: 'Filtering to transactions over $100.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'filter', page: '/transactions', minPrice: 100, explanation: 'Showing transactions over $100.' } }) },
-  { role: 'user', content: 'Find any bills under $50' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Small Bills', body: 'Querying bills/utilities under $50.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'query_data', categories: ['Utilities'], maxPrice: 50, explanation: 'Searching for utilities/bills under $50.' } }) },
-  { role: 'user', content: 'Go to settings page' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Settings', body: 'Navigating to settings.', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'navigate', page: '/settings', explanation: 'Navigating to settings.' } }) },
-  { role: 'user', content: 'What is this app?' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Local AI', body: 'I am the offline Local AI assistant. I can filter categories, search merchants, query data, or navigate pages. I only use your private local data.', gen_ux: { type: 'none' }, suggested_actions: ['Show me my budget'], agent_action: { action: 'none' } }) },
-  { role: 'user', content: 'How much runway do I have?' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Financial Runway', body: 'Based on your dashboard filter drawer:\n- **Net Cash Starting Reserves**: $10,000.00\n- **Current Monthly Outflow**: $1,000.00\n\nYour calculated budget runway is **10.0 months** ($10,000.00 reserves / $1,000.00 monthly budget).', gen_ux: { type: 'none' }, suggested_actions: [], agent_action: { action: 'none' } }) }
-];
-
 export interface AIProvider {
   id: string;
   name: string;
   isLoaded: boolean;
   modelName: string;
   init(progressCallback?: (progress: string, percent?: number) => void): Promise<void>;
-  chatCopilot(messages: ChatMessage[], stateContext: string, overrideSystemPrompt?: string, responseSchema?: any): Promise<string>;
+  chatCopilot(
+    messages: ChatMessage[],
+    stateContext: string,
+    overrideSystemPrompt?: string,
+    responseSchema?: any,
+    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void
+  ): Promise<string>;
   reviewTransactions(transactions: { desc: string; ruleCategory: string }[], availableCategories: string[]): Promise<string[]>;
   pullModel?(progressCallback?: (progress: number, status: string) => void): Promise<void>;
   abortPull?(): void;
@@ -289,7 +242,7 @@ export class OllamaProvider implements AIProvider {
   async init(progressCallback?: (progress: string, percent?: number) => void): Promise<void> {
     try {
       progressCallback?.("Checking connection to Ollama server...", 30);
-      const response = await fetch('http://localhost:11434/api/tags');
+      const response = await safeFetch('http://localhost:11434/api/tags');
       if (!response.ok) {
         throw new Error('Ollama server is not running.');
       }
@@ -330,11 +283,11 @@ export class OllamaProvider implements AIProvider {
   async pullModel(progressCallback?: (progress: number, status: string) => void): Promise<void> {
     this.pullAbortController = new AbortController();
     try {
-      const response = await fetch('http://localhost:11434/api/pull', {
+      const response = await safeFetch('http://localhost:11434/api/pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: this.modelName }),
-        signal: this.pullAbortController.signal,
+        signal: this.pullAbortController.signal as any,
       });
 
       if (!response.ok) {
@@ -397,7 +350,13 @@ export class OllamaProvider implements AIProvider {
     }
   }
 
-  async chatCopilot(messages: ChatMessage[], stateContext: string, overrideSystemPrompt?: string, responseSchema?: any): Promise<string> {
+  async chatCopilot(
+    messages: ChatMessage[],
+    stateContext: string,
+    overrideSystemPrompt?: string,
+    responseSchema?: any,
+    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void
+  ): Promise<string> {
     if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
 
     const extendedSystemPrompt = await getSystemPrompt(stateContext, overrideSystemPrompt);
@@ -418,7 +377,7 @@ export class OllamaProvider implements AIProvider {
     const body: any = {
       model: this.modelName,
       messages: fullMessages,
-      stream: false,
+      stream: !!onChunk,
       options: { temperature: 0.2, num_predict: 1024 }
     };
 
@@ -426,15 +385,81 @@ export class OllamaProvider implements AIProvider {
       body.format = schema;
     }
 
-    const response = await fetch('http://localhost:11434/api/chat', {
+    const response = await safeFetch('http://localhost:11434/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
 
     if (!response.ok) throw new Error(`Ollama chat error: ${response.statusText}`);
-    const data = await response.json();
-    return data.message?.content || '';
+
+    if (onChunk) {
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable.');
+      }
+
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let accumulatedContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const parsedChunk = JSON.parse(trimmed);
+            const content = parsedChunk.message?.content || '';
+            if (content) {
+              accumulatedContent += content;
+              onChunk(content);
+            }
+            if (parsedChunk.done) {
+              const pCount = parsedChunk.prompt_eval_count;
+              const eCount = parsedChunk.eval_count;
+              if (pCount !== undefined || eCount !== undefined) {
+                onChunk('', { promptTokens: pCount || 0, completionTokens: eCount || 0 });
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to parse streaming line:', trimmed, e);
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const parsedChunk = JSON.parse(buffer.trim());
+          const content = parsedChunk.message?.content || '';
+          if (content) {
+            accumulatedContent += content;
+            onChunk(content);
+          }
+          if (parsedChunk.done) {
+            const pCount = parsedChunk.prompt_eval_count;
+            const eCount = parsedChunk.eval_count;
+            if (pCount !== undefined || eCount !== undefined) {
+              onChunk('', { promptTokens: pCount || 0, completionTokens: eCount || 0 });
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      return accumulatedContent;
+    } else {
+      const data = await response.json();
+      return data.message?.content || '';
+    }
   }
 
   async reviewTransactions(
@@ -458,7 +483,7 @@ Example valid JSON output:
 }
 `;
 
-    const response = await fetch('http://localhost:11434/api/chat', {
+    const response = await safeFetch('http://localhost:11434/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -534,7 +559,7 @@ export class LocalAI implements AIProvider {
 
   public setProviderId(id: 'ollama' | 'web-llm') {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('app:aiProvider', 'ollama');
+      localStorage.setItem('app:aiProvider', id);
     }
   }
 
@@ -543,9 +568,15 @@ export class LocalAI implements AIProvider {
     await this.activeProvider.init(progressCallback);
   }
 
-  async chatCopilot(messages: ChatMessage[], stateContext: string, overrideSystemPrompt?: string, responseSchema?: any): Promise<string> {
+  async chatCopilot(
+    messages: ChatMessage[],
+    stateContext: string,
+    overrideSystemPrompt?: string,
+    responseSchema?: any,
+    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void
+  ): Promise<string> {
     this.syncActiveProvider();
-    return this.activeProvider.chatCopilot(messages, stateContext, overrideSystemPrompt, responseSchema);
+    return this.activeProvider.chatCopilot(messages, stateContext, overrideSystemPrompt, responseSchema, onChunk);
   }
 
   async reviewTransactions(transactions: any[], availableCategories: string[]): Promise<string[]> {
@@ -679,7 +710,8 @@ export function extractFieldUsingRegex(text: string, fieldName: string): string 
   return null;
 }
 
-export function getMessageDisplayContent(parsed: any): string {
+export function getMessageDisplayContent(parsed: any, isStreaming?: boolean): string {
+  if (!parsed || Object.keys(parsed).length === 0) return "*Thinking...*";
   if (parsed.body && typeof parsed.body === 'string') return parsed.body;
   if (parsed.explanation && typeof parsed.explanation === 'string') return parsed.explanation;
   if (parsed.agent_action?.explanation && typeof parsed.agent_action.explanation === 'string') {
@@ -697,6 +729,12 @@ export function getMessageDisplayContent(parsed: any): string {
     if (action === 'update_artifact') return `Updated artifact: ${parsed.agent_action.title || 'Untitled'}.`;
     if (action === 'audit_accessibility') return 'Audited application accessibility.';
     if (action === 'dom_update') return 'Updated application element.';
+    if (action === 'project_runway') return 'Calculated financial runway projection.';
+  }
+
+  // If we have a title but no body yet, let's show the title with thinking status if streaming
+  if (isStreaming && parsed.title && typeof parsed.title === 'string') {
+    return `### ${parsed.title}\n\n*Thinking...*`;
   }
 
   if (parsed.title && typeof parsed.title === 'string') return parsed.title;
@@ -734,10 +772,43 @@ export function parseAIResponse(text: string): any {
   let res = parseWithClean(jsonStr);
   if (res) return res;
 
-  // If parsing fails, try to repair truncated JSON
+  // Try direct repair (closing open string/braces)
+  try {
+    let temp = jsonStr.trim();
+    let inStr = false;
+    let esc = false;
+    const stack: string[] = [];
+    for (let i = 0; i < temp.length; i++) {
+      if (temp[i] === '\\' && !esc) { esc = true; continue; }
+      if (temp[i] === '"' && !esc) inStr = !inStr;
+      if (!inStr) {
+        if (temp[i] === '{') stack.push('{');
+        else if (temp[i] === '[') stack.push('[');
+        else if (temp[i] === '}') {
+          if (stack[stack.length - 1] === '{') stack.pop();
+        }
+        else if (temp[i] === ']') {
+          if (stack[stack.length - 1] === '[') stack.pop();
+        }
+      }
+      esc = false;
+    }
+    if (inStr) temp += '"';
+    while (stack.length > 0) {
+      const op = stack.pop();
+      if (op === '{') temp += '}';
+      else if (op === '[') temp += ']';
+    }
+    
+    const directRepaired = parseWithClean(temp);
+    if (directRepaired) return directRepaired;
+  } catch (err) {
+    // Ignore and proceed to iterative chop-repair
+  }
+
+  // If direct repair fails, try to repair by iterative chopping from the end
   try {
     let s = jsonStr.trim();
-    // Iteratively chop off from the end until the last comma, and close open braces
     for (let attempts = 0; attempts < 10; attempts++) {
       const lastComma = s.lastIndexOf(',');
       if (lastComma < 0) break;
@@ -796,7 +867,13 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee, Subscr
 Available Accounts: Checking, Savings, Credit Card
 Currently Disabled Categories: None
 Currently Enabled Accounts: Checking, Savings, Credit Card
-Category Monthly Baselines: Restaurants & Coffee: $500/month, Groceries: $400/month, Subscriptions: $100/month`;
+Category Monthly Baselines: Restaurants & Coffee: $500/month, Groceries: $400/month, Subscriptions: $100/month
+Net Cash starting reserves: $10,000.00
+Current Monthly Outflow: $1,000.00
+Calculated Budget Runway: 10.0 months
+Current Cash Balance: $12,000.00
+Current Credit CC Debt: $2,000.00
+Expected Monthly Income: $2,500.00`;
 
   let overridePromptText = '';
   try {
@@ -836,21 +913,89 @@ Category Monthly Baselines: Restaurants & Coffee: $500/month, Groceries: $400/mo
   }
 
   const parsedAssistant = parseAIResponse(modelOutput);
+  let finalOutput = modelOutput;
+  let finalParsed = parsedAssistant;
+
+  if (parsedAssistant && parsedAssistant.agent_action?.action === 'query_data') {
+    const queryCats = parsedAssistant.agent_action.categories || [];
+    let budgetLimit = 1000;
+    if (queryCats.length > 0 && !queryCats.includes('all')) {
+      budgetLimit = 0;
+      if (queryCats.some((c: string) => c.toLowerCase().includes('restaurant') || c.toLowerCase().includes('coffee'))) budgetLimit += 500;
+      if (queryCats.some((c: string) => c.toLowerCase().includes('grocer'))) budgetLimit += 400;
+      if (queryCats.some((c: string) => c.toLowerCase().includes('sub'))) budgetLimit += 100;
+    }
+
+    const mockSystemMsg = `Database Query Results for categories [${queryCats.join(', ')}] between 2026-01-01 and 2026-06-12:
+- Total Spent: $5000.00
+- Number of Transactions: 100
+- Average Transaction: $50.00
+- Total Monthly Budget Limit: $${budgetLimit.toFixed(2)}
+Please explain these numbers to the user in a natural, conversational response. Make sure to report the monthly and yearly breakdown of budget usage explicitly in your response.`;
+
+    try {
+      finalOutput = await localAI.chatCopilot(
+        [
+          { role: 'user', content: testCase.prompt },
+          { role: 'assistant', content: modelOutput },
+          { role: 'system', content: mockSystemMsg }
+        ],
+        dummyState,
+        overridePromptText
+      );
+      finalParsed = parseAIResponse(finalOutput);
+    } catch (err: any) {
+      return {
+        success: false,
+        score: 0,
+        reasoning: `Assistant Stage 2 execution failure: ${err.message}`,
+        output: modelOutput
+      };
+    }
+  } else if (parsedAssistant && parsedAssistant.agent_action?.action === 'project_runway') {
+    const mockSystemMsg = `Project Runway Results:
+- Cash Balance: $12000.00
+- Credit Debt: $2000.00
+- Net Cash Starting Reserves: $10000.00
+- Current Monthly Outflow: $1000.00
+- Calculated Budget Runway: 10.0 months
+Please explain these numbers to the user.`;
+
+    try {
+      finalOutput = await localAI.chatCopilot(
+        [
+          { role: 'user', content: testCase.prompt },
+          { role: 'assistant', content: modelOutput },
+          { role: 'system', content: mockSystemMsg }
+        ],
+        dummyState,
+        overridePromptText
+      );
+      finalParsed = parseAIResponse(finalOutput);
+    } catch (err: any) {
+      return {
+        success: false,
+        score: 0,
+        reasoning: `Assistant Stage 2 execution failure: ${err.message}`,
+        output: modelOutput
+      };
+    }
+  }
 
   // Fast-path deterministic evaluation for built-in skills
 
   if (skill.id === 'builtin:runway') {
-    const action = parsedAssistant?.agent_action?.action;
-    const body = parsedAssistant?.body || '';
+    const action = finalParsed?.agent_action?.action;
+    const body = finalParsed?.body || '';
     const lowerBody = body.toLowerCase();
-    const hasTable = body.includes('|') || modelOutput.includes('|');
+    const hasTable = body.includes('|') || finalOutput.includes('|');
     const isRunwayOk = lowerBody.includes('runway') || lowerBody.includes('month');
-    if (action === 'none' && hasTable && isRunwayOk) {
+    if ((action === 'none' || action === 'project_runway') && hasTable && isRunwayOk) {
       return {
         success: true,
         score: 100,
-        reasoning: "All criteria met: action is none, displays runway metrics in a markdown table, and presents correct runway calculations.",
-        output: modelOutput
+        reasoning: "All criteria met: displays runway metrics in a markdown table, and presents correct runway calculations.",
+        output: finalOutput
       };
     }
   }
@@ -933,7 +1078,7 @@ If no, return {"success": false, "score": 0 to 80, "reasoning": "Explain what is
 export const BASELINE_TEST_CASES: SkillTestCase[] = [
   {
     prompt: "Show me food spending",
-    criteria: "Must map to 'Groceries' and 'Restaurants & Coffee' categories and output action 'filter'"
+    criteria: "Must map to 'Groceries' and 'Restaurants & Coffee' categories and output action 'query_data'"
   },
   {
     prompt: "Go to settings",
@@ -941,7 +1086,7 @@ export const BASELINE_TEST_CASES: SkillTestCase[] = [
   },
   {
     prompt: "reset all filters",
-    criteria: "Must reset categories to ['all'], accounts to ['all'], preset to 'allTime'"
+    criteria: "Must reset categories to ['all'], accounts to ['all'], preset to 'allTime', action to 'filter'"
   },
   {
     prompt: "How much did I spend on food last month?",
@@ -953,7 +1098,7 @@ export const BASELINE_TEST_CASES: SkillTestCase[] = [
   },
   {
     prompt: "What are the top spending categories?",
-    criteria: "Must return a table breakdown of each category spending with accurate calculations and totals. Passing criteria is that the math totals are verified and accurate."
+    criteria: "Must output action 'query_data' with preset 'allTime' and 'all' categories. Must NOT output a markdown table or fake any numbers."
   }
 ];
 
@@ -1221,6 +1366,74 @@ export async function calculateGlobalRunwayData() {
 
 if (typeof window !== 'undefined') {
   (window as any).calculateGlobalRunwayData = calculateGlobalRunwayData;
+}
+
+export function forceBoldAndTwoDecimals(text: string): string {
+  // 1. Protect code blocks, links, HTML tags, and dates
+  const placeholders: string[] = [];
+  
+  const toAlpha = (num: number): string => {
+    let str = '';
+    let temp = num;
+    do {
+      str = String.fromCharCode(65 + (temp % 26)) + str;
+      temp = Math.floor(temp / 26) - 1;
+    } while (temp >= 0);
+    return str;
+  };
+
+  const savePlaceholder = (val: string) => {
+    const ph = `__PLACEHOLDER_${toAlpha(placeholders.length)}__`;
+    placeholders.push(val);
+    return ph;
+  };
+
+  // Protect triple backtick code blocks
+  let processed = text.replace(/```[\s\S]*?```/g, savePlaceholder);
+  // Protect inline code blocks
+  processed = processed.replace(/`[^`]*?`/g, savePlaceholder);
+  // Protect markdown links
+  processed = processed.replace(/\[[^\]]*?\]\([^\)]*?\)/g, savePlaceholder);
+  // Protect HTML tags
+  processed = processed.replace(/<[^>]*?>/g, savePlaceholder);
+  // Protect standard ISO dates (YYYY-MM-DD)
+  processed = processed.replace(/\b\d{4}-\d{2}-\d{2}\b/g, savePlaceholder);
+
+  // 2. Process numbers in the remaining text
+  // Matches optional asterisks, optional sign/dollar prefix, digits, optional decimal, optional percent, optional asterisks
+  const regex = /(\*\*)?([+\-]?\$?)(\d+(?:,\d{3})*)(\.\d+)?(%)?(\*\*)?/g;
+
+  processed = processed.replace(regex, (match, _leftAsterisks, prefix, integerPart, decimalPart, percent, _rightAsterisks) => {
+    const cleanedInteger = integerPart.replace(/,/g, '');
+    const numValue = parseFloat(cleanedInteger + (decimalPart || ''));
+
+    if (isNaN(numValue)) {
+      return match;
+    }
+
+    // Exclude years (bare 4-digit integers starting with 19 or 20)
+    const isYear = !prefix.includes('$') && !percent && !decimalPart && numValue >= 1900 && numValue <= 2099 && integerPart.length === 4;
+    if (isYear) {
+      return match;
+    }
+
+    // Format to 2 decimal places
+    const formattedVal = numValue.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    const finalPrefix = prefix || '';
+    const finalPercent = percent || '';
+    return `**${finalPrefix}${formattedVal}${finalPercent}**`;
+  });
+
+  // 3. Restore placeholders in reverse order
+  for (let i = placeholders.length - 1; i >= 0; i--) {
+    processed = processed.replace(`__PLACEHOLDER_${toAlpha(i)}__`, placeholders[i]);
+  }
+
+  return processed;
 }
 
 
