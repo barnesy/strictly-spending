@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import type { ParsedTransaction, Source } from '../types';
+import type { ParsedTransaction, Source, CsvMapping } from '../types';
 import { parseChase } from './chase';
 import { parseBoaCredit } from './boa-credit';
 import { parseBoaChecking } from './boa-checking';
@@ -61,11 +61,24 @@ export function papaParse<T = string[]>(text: string): T[] {
   return result.data;
 }
 
-export function toIsoDate(mmddyyyy: string): string {
-  const m = mmddyyyy.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return mmddyyyy;
-  const [, mo, d, y] = m;
-  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+export function toIsoDate(dateStr: string): string {
+  const trimmed = dateStr.trim();
+  // MM/DD/YYYY or M/D/YYYY
+  const m1 = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m1) {
+    const [, mo, d, y] = m1;
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // YYYY-MM-DD
+  const m2 = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m2) return trimmed;
+  // YYYY/MM/DD
+  const m3 = trimmed.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (m3) {
+    const [, y, mo, d] = m3;
+    return `${y}-${mo}-${d}`;
+  }
+  return trimmed;
 }
 
 export function parseMoney(s: string): number {
@@ -74,4 +87,76 @@ export function parseMoney(s: string): number {
   if (cleaned === '' || cleaned === '-') return 0;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
+}
+
+export function extractCsvHeaders(rawText: string): string[] {
+  const parsed = Papa.parse<string[]>(rawText, { preview: 1, skipEmptyLines: true });
+  if (parsed.data && parsed.data.length > 0) {
+    return parsed.data[0].map(h => (h || '').trim());
+  }
+  return [];
+}
+
+export function parseCustomCsv(
+  filename: string,
+  rawText: string,
+  mapping: CsvMapping
+): { transactions: ParsedTransaction[]; warnings: string[] } {
+  const warnings: string[] = [];
+
+  const parsed = Papa.parse<any>(rawText, {
+    header: true,
+    skipEmptyLines: true,
+  });
+
+  if (parsed.errors.length > 0) {
+    warnings.push(`Custom CSV parse errors: ${parsed.errors.length}`);
+  }
+
+  const transactions: ParsedTransaction[] = [];
+  for (const row of parsed.data) {
+    const dateStr = row[mapping.dateColumn];
+    const description = (row[mapping.descriptionColumn] || '').trim();
+
+    let amount = 0;
+    if (mapping.amountColumn) {
+      amount = parseMoney(row[mapping.amountColumn]);
+    } else {
+      const debit = mapping.debitColumn ? parseMoney(row[mapping.debitColumn]) : 0;
+      const credit = mapping.creditColumn ? parseMoney(row[mapping.creditColumn]) : 0;
+      if (debit !== 0) {
+        amount = -Math.abs(debit);
+      } else if (credit !== 0) {
+        amount = Math.abs(credit);
+      }
+    }
+
+    if (!dateStr || !description) continue;
+
+    let balance: number | undefined = undefined;
+    if (mapping.balanceColumn && row[mapping.balanceColumn] != null) {
+      balance = parseMoney(row[mapping.balanceColumn]);
+    }
+
+    let last4 = undefined;
+    const last4Match = filename.match(/(\d{4})/);
+    if (last4Match) {
+      last4 = last4Match[1];
+    }
+
+    transactions.push({
+      date: toIsoDate(dateStr.trim()),
+      description,
+      amount,
+      rawCategory: undefined,
+      source: 'custom',
+      accountName: mapping.accountName,
+      accountType: mapping.accountType,
+      institution: mapping.institution,
+      last4,
+      balance,
+    });
+  }
+
+  return { transactions, warnings };
 }

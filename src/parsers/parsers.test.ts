@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
-import { detectSource, parseCsv } from './index';
+import { detectSource, parseCsv, extractCsvHeaders, parseCustomCsv } from './index';
 import { getChaseMockCsv, getBoaCreditMockCsv, getBoaCheckingMockCsv } from './mockFixtures';
 
 // Parser tests run against real bank-export CSVs that are NOT committed.
@@ -110,5 +110,75 @@ describeIfFixtures('parseCsv', () => {
       /Beginning balance|Ending balance/i.test(t.description)
     );
     expect(balanceRows.length).toBe(0);
+  });
+});
+
+describe('Custom CSV Parsing', () => {
+  it('extracts CSV headers accurately', () => {
+    const raw = `Date,Merchant,Amount,Balance\n2026-06-15,Starbucks,-4.50,120.00`;
+    expect(extractCsvHeaders(raw)).toEqual(['Date', 'Merchant', 'Amount', 'Balance']);
+  });
+
+  it('parses custom CSV with single Amount column', () => {
+    const raw = `TxnDate,Merchant,TotalAmount,Balance\n06/15/2026,Coffee Shop,-4.50,100.00\n06/16/2026,Salary,2500.00,2600.00`;
+    const mapping = {
+      name: 'Test Union',
+      headerHash: 'TxnDate,Merchant,TotalAmount,Balance',
+      headers: ['TxnDate', 'Merchant', 'TotalAmount', 'Balance'],
+      dateColumn: 'TxnDate',
+      descriptionColumn: 'Merchant',
+      amountColumn: 'TotalAmount',
+      balanceColumn: 'Balance',
+      accountName: 'My Savings',
+      accountType: 'savings' as const,
+      institution: 'Union Bank'
+    };
+
+    const result = parseCustomCsv('statement_9999.csv', raw, mapping);
+    expect(result.warnings.length).toBe(0);
+    expect(result.transactions.length).toBe(2);
+
+    expect(result.transactions[0]).toEqual({
+      date: '2026-06-15',
+      description: 'Coffee Shop',
+      amount: -4.50,
+      rawCategory: undefined,
+      source: 'custom',
+      accountName: 'My Savings',
+      accountType: 'savings',
+      institution: 'Union Bank',
+      last4: '9999',
+      balance: 100.00
+    });
+
+    expect(result.transactions[1].amount).toBe(2500.00);
+  });
+
+  it('parses custom CSV with separate Debit and Credit columns', () => {
+    const raw = `Date,Desc,Debit,Credit,Balance\n2026-06-15,Supermarket,45.20,,1000.00\n2026-06-16,Refund,,10.00,1010.00`;
+    const mapping = {
+      name: 'Checking Test',
+      headerHash: 'Date,Desc,Debit,Credit,Balance',
+      headers: ['Date', 'Desc', 'Debit', 'Credit', 'Balance'],
+      dateColumn: 'Date',
+      descriptionColumn: 'Desc',
+      debitColumn: 'Debit',
+      creditColumn: 'Credit',
+      balanceColumn: 'Balance',
+      accountName: 'My Checking',
+      accountType: 'checking' as const,
+      institution: 'Union Bank'
+    };
+
+    const result = parseCustomCsv('statement.csv', raw, mapping);
+    expect(result.transactions.length).toBe(2);
+
+    // Debit row should be negative
+    expect(result.transactions[0].amount).toBe(-45.20);
+    expect(result.transactions[0].date).toBe('2026-06-15');
+
+    // Credit row should be positive
+    expect(result.transactions[1].amount).toBe(10.00);
+    expect(result.transactions[1].balance).toBe(1010.00);
   });
 });
