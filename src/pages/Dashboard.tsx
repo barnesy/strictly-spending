@@ -195,8 +195,7 @@ export default function Dashboard() {
       if (t.date < startISO || t.date > endISO) return false;
       if (spendOnly && transferIncomeNames.has(t.category)) return false;
       if (recurrenceFilter !== 'all') {
-        const info = recurrenceMap.get(t.merchantKey);
-        const isRec = info ? isRecurring(info.kind) : false;
+        const isRec = t.recurrence === 'recurring';
         if (recurrenceFilter === 'recurring' && !isRec) return false;
         if (recurrenceFilter === 'onetime' && isRec) return false;
       }
@@ -323,27 +322,27 @@ export default function Dashboard() {
                   title={t.description}
                 >
                   {(() => {
+                    if (t.recurrence !== 'recurring') return null;
                     const info = recurrenceMap.get(t.merchantKey);
-                    if (info && isRecurring(info.kind)) {
-                      return (
-                        <Tooltip
-                          title={`${recurrenceLabel(info.kind)} · ~${usdCents.format(info.estMonthlyCost)}/mo`}
+                    const label = info ? recurrenceLabel(info.kind) : 'Recurring';
+                    const estimate = info ? info.estMonthlyCost : Math.abs(t.amount);
+                    return (
+                      <Tooltip
+                        title={`${label} · ~${usdCents.format(estimate)}/mo`}
+                      >
+                        <Box
+                          component="span"
+                          sx={{
+                            color: 'primary.main',
+                            fontSize: 14,
+                            mr: 0.5,
+                            cursor: 'help',
+                          }}
                         >
-                          <Box
-                            component="span"
-                            sx={{
-                              color: 'primary.main',
-                              fontSize: 14,
-                              mr: 0.5,
-                              cursor: 'help',
-                            }}
-                          >
-                            &#x21bb;
-                          </Box>
-                        </Tooltip>
-                      );
-                    }
-                    return null;
+                          &#x21bb;
+                        </Box>
+                      </Tooltip>
+                    );
                   })()}
                   {t.description}
                 </TableCell>

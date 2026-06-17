@@ -14,7 +14,7 @@ import { useFilters, resolveDateRange } from '../store';
 import type { Account, Category, Transaction } from '../types';
 import { usd, monthKey, monthsBetween } from '../lib';
 import { useMemo } from 'react';
-import { type RecurrenceInfo, isRecurring } from '../recurrence';
+import { type RecurrenceInfo } from '../recurrence';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useBudgetStore } from '../budgetStore';
@@ -128,9 +128,8 @@ export default function FilterPanel({
         if (disabledCatSet.has(t.category)) return false;
         if (t.date < startISO || t.date > endISO) return false;
         if (filters.spendOnly && transferIncomeNames.has(t.category)) return false;
-        if (filters.recurrenceFilter !== 'all' && recurrenceMap) {
-          const info = recurrenceMap.get(t.merchantKey);
-          const isRec = info ? isRecurring(info.kind) : false;
+        if (filters.recurrenceFilter !== 'all') {
+          const isRec = t.recurrence === 'recurring';
           if (filters.recurrenceFilter === 'recurring' && !isRec) return false;
           if (filters.recurrenceFilter === 'onetime' && isRec) return false;
         }

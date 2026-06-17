@@ -16,7 +16,6 @@ function daysAgoIso(today: Date, days: number): string {
 export function categoryTrailingAvg(
   allTxns: Transaction[],
   categories: Category[],
-  recurringMerchantKeys: Set<string>,
   today: Date = new Date()
 ): Map<string, number> {
   const spendCategoryNames = new Set(
@@ -29,7 +28,7 @@ export function categoryTrailingAvg(
     if (t.amount >= 0) continue;
     if (!spendCategoryNames.has(t.category)) continue;
     if (t.date < trailingCutoff) continue;
-    if (recurringMerchantKeys.has(t.merchantKey)) continue;
+    if (t.recurrence === 'recurring') continue;
     totals.set(t.category, (totals.get(t.category) || 0) + Math.abs(t.amount));
   }
   // Divide each total by 3 (months) to get $/mo

@@ -23,7 +23,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { db } from '../db';
 import { usd, usdCents } from '../lib';
-import { buildRecurrenceMap, recurrenceLabel, isRecurring } from '../recurrence';
+import { buildRecurrenceMap, recurrenceLabel } from '../recurrence';
 import {
   buildForecast,
   lastMonthActualSpend,
@@ -75,22 +75,14 @@ export default function Budget() {
     [allTxns, recurrenceMap, categories]
   );
 
-  const recurringMerchantKeys = useMemo(() => {
-    const s = new Set<string>();
-    for (const [k, info] of recurrenceMap) {
-      if (isRecurring(info.kind)) s.add(k);
-    }
-    return s;
-  }, [recurrenceMap]);
 
   const trailingAvgByCategory = useMemo(
     () =>
       categoryTrailingAvg(
         allTxns || [],
-        categories || [],
-        recurringMerchantKeys
+        categories || []
       ),
-    [allTxns, categories, recurringMerchantKeys]
+    [allTxns, categories]
   );
 
   const lastMonth = useMemo(

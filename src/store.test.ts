@@ -437,7 +437,7 @@ import type { Transaction, MerchantOverride } from './types';
 
 describe('copilotAnalytics - Subscription Alerts', () => {
   it('detects subscription price spikes', () => {
-    const txns: Transaction[] = [
+    const txns = [
       {
         accountId: 1,
         date: '2026-05-01',
@@ -460,7 +460,7 @@ describe('copilotAnalytics - Subscription Alerts', () => {
         userOverridden: false,
         dedupKey: 'netflix-2'
       }
-    ];
+    ] as any as Transaction[];
     
     // We pass an override to force recurrence: 'monthly'
     const overrides: MerchantOverride[] = [
@@ -476,7 +476,7 @@ describe('copilotAnalytics - Subscription Alerts', () => {
   });
 
   it('detects duplicate billing / double charges', () => {
-    const txns: Transaction[] = [
+    const txns = [
       {
         accountId: 1,
         date: '2026-06-01',
@@ -499,7 +499,7 @@ describe('copilotAnalytics - Subscription Alerts', () => {
         userOverridden: false,
         dedupKey: 'acme-2'
       }
-    ];
+    ] as any as Transaction[];
 
     const overrides: MerchantOverride[] = [
       { merchantKey: 'acme', recurrence: 'monthly' }
@@ -514,16 +514,16 @@ describe('copilotAnalytics - Subscription Alerts', () => {
 
   it('detects overlapping active subscriptions in same group', () => {
     // Actually let's use exact 30 day spacing to make it simpler and pass overrides
-    const spotifyTxns: Transaction[] = [
+    const spotifyTxns = [
       { accountId: 1, date: '2026-04-01', description: 'Spotify Premium', amount: -10.99, category: 'Subscriptions', source: 'demo', merchantKey: 'spotify', userOverridden: false, dedupKey: 'spot-1' },
       { accountId: 1, date: '2026-05-01', description: 'Spotify Premium', amount: -10.99, category: 'Subscriptions', source: 'demo', merchantKey: 'spotify', userOverridden: false, dedupKey: 'spot-2' },
       { accountId: 1, date: '2026-05-31', description: 'Spotify Premium', amount: -10.99, category: 'Subscriptions', source: 'demo', merchantKey: 'spotify', userOverridden: false, dedupKey: 'spot-3' },
-    ];
-    const appleTxns: Transaction[] = [
+    ] as any as Transaction[];
+    const appleTxns = [
       { accountId: 1, date: '2026-04-02', description: 'Apple Music', amount: -10.99, category: 'Subscriptions', source: 'demo', merchantKey: 'applemusic', userOverridden: false, dedupKey: 'apple-1' },
       { accountId: 1, date: '2026-05-02', description: 'Apple Music', amount: -10.99, category: 'Subscriptions', source: 'demo', merchantKey: 'applemusic', userOverridden: false, dedupKey: 'apple-2' },
       { accountId: 1, date: '2026-06-01', description: 'Apple Music', amount: -10.99, category: 'Subscriptions', source: 'demo', merchantKey: 'applemusic', userOverridden: false, dedupKey: 'apple-3' },
-    ];
+    ] as any as Transaction[];
 
     const alerts = detectSubscriptionAlerts([...spotifyTxns, ...appleTxns], []);
     expect(alerts.overlappingSubscriptions.length).toBe(1);
@@ -539,7 +539,7 @@ describe('copilotAnalytics - Spending Anomalies', () => {
     // Historical period: March 3rd to May 31st (90 days)
     // We spend $500 in June on Groceries
     // We spend $300 in total across the 90 days baseline (e.g. $100 per month)
-    const txns: Transaction[] = [
+    const txns = [
       // Baseline transactions
       { accountId: 1, date: '2026-03-15', description: 'Market', amount: -100.00, category: 'Groceries', source: 'demo', merchantKey: 'market', userOverridden: false, dedupKey: 'm-1' },
       { accountId: 1, date: '2026-04-15', description: 'Market', amount: -100.00, category: 'Groceries', source: 'demo', merchantKey: 'market', userOverridden: false, dedupKey: 'm-2' },
@@ -547,7 +547,7 @@ describe('copilotAnalytics - Spending Anomalies', () => {
       
       // Current transaction
       { accountId: 1, date: '2026-06-15', description: 'Market', amount: -500.00, category: 'Groceries', source: 'demo', merchantKey: 'market', userOverridden: false, dedupKey: 'm-4' }
-    ];
+    ] as any as Transaction[];
 
     const result = detectSpendingAnomalies(txns, ['Groceries'], '2026-06-01', '2026-06-30', []);
     expect(result.categorySpikes.length).toBe(1);
@@ -575,7 +575,7 @@ describe('copilotAnalytics - Spending Anomalies', () => {
         merchantKey: 'grocery',
         userOverridden: false,
         dedupKey: `g-${i}`
-      });
+      } as any);
     }
 
     // Add a huge current transaction in June (outlier)
@@ -590,7 +590,7 @@ describe('copilotAnalytics - Spending Anomalies', () => {
       merchantKey: 'grocery',
       userOverridden: false,
       dedupKey: 'g-99'
-    });
+    } as any);
 
     const result = detectSpendingAnomalies(txns, ['Groceries'], '2026-06-01', '2026-06-30', []);
     expect(result.outliers.length).toBe(1);
