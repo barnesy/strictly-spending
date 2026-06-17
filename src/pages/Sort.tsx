@@ -31,7 +31,7 @@ import SkipNextIcon from '@mui/icons-material/SkipNext';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { db } from '../db';
 import { useFilters } from '../store';
-import { buildRecurrenceMap } from '../recurrence';
+import { buildRecurrenceMap, refreshRecurrenceAll } from '../recurrence';
 import { buildSortQueue, type SortCard as SortCardData } from '../sort';
 import { useSortStore } from '../sortStore';
 import SortCard from '../components/SortCard';
@@ -159,6 +159,8 @@ export default function Sort() {
         ruleId,
         decidedAt: Date.now(),
       });
+
+      await refreshRecurrenceAll();
     },
     [pushDecision]
   );
@@ -188,6 +190,7 @@ export default function Sort() {
         await db.rules.delete(d.ruleId);
       }
     });
+    await refreshRecurrenceAll();
   }, [popLast]);
 
   const onSkip = useCallback(() => {

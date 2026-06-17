@@ -10,8 +10,11 @@ import {
   TableBody,
   Box,
   Chip,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import { db } from '../db';
+import { refreshRecurrenceAll } from '../recurrence';
 
 export default function Categories() {
   const [categories, setCategories] = useState<any[]>([]);
@@ -25,6 +28,7 @@ export default function Categories() {
       active = false;
     };
   }, []);
+
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -49,6 +53,14 @@ export default function Categories() {
     };
   }, [categories]);
 
+  const handleRecurrenceChange = async (categoryId: number, value: 'recurring' | 'onetime') => {
+    await db.categories.update(categoryId, { defaultRecurrence: value });
+    setCategories(prev =>
+      prev.map(c => (c.id === categoryId ? { ...c, defaultRecurrence: value } : c))
+    );
+    await refreshRecurrenceAll();
+  };
+
   return (
     <Stack spacing={3}>
       <Typography variant="h5">Categories</Typography>
@@ -58,6 +70,7 @@ export default function Categories() {
             <TableRow>
               <TableCell>Name</TableCell>
               <TableCell>Type</TableCell>
+              <TableCell>Recurrence Default</TableCell>
               <TableCell align="right">Transactions</TableCell>
             </TableRow>
           </TableHead>
@@ -79,6 +92,23 @@ export default function Categories() {
                 </TableCell>
                 <TableCell>
                   <Chip size="small" label={c.type} />
+                </TableCell>
+                <TableCell>
+                  {c.type === 'spend' || c.type === 'income' ? (
+                    <Select
+                      size="small"
+                      value={c.defaultRecurrence || 'onetime'}
+                      onChange={(e) => handleRecurrenceChange(c.id!, e.target.value as any)}
+                      sx={{ minWidth: 160 }}
+                    >
+                      <MenuItem value="onetime">One-Time / Variable</MenuItem>
+                      <MenuItem value="recurring">Recurring</MenuItem>
+                    </Select>
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">
+                      N/A (Transfer)
+                    </Typography>
+                  )}
                 </TableCell>
                 <TableCell align="right">{counts[c.name] || 0}</TableCell>
               </TableRow>

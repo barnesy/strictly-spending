@@ -30,6 +30,7 @@ import {
   detectRecurrence,
   isRecurring,
   recurrenceLabel,
+  refreshRecurrenceAll,
 } from '../recurrence';
 
 interface Props {
@@ -177,6 +178,9 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
         // new rule might match.
         await recategorizeAll();
       }
+
+      // Re-evaluate recurrence status database-wide since overrides changed
+      await refreshRecurrenceAll();
 
       onClose();
     } catch (e) {

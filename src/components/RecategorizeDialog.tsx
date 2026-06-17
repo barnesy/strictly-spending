@@ -19,6 +19,7 @@ import {
 import { db } from '../db';
 import type { Transaction } from '../types';
 import { recategorizeAll } from '../categorize';
+import { refreshRecurrenceAll } from '../recurrence';
 
 interface Props {
   txn: Transaction;
@@ -28,6 +29,9 @@ interface Props {
 export default function RecategorizeDialog({ txn, onClose }: Props) {
   const categories = useLiveQuery(() => db.categories.toArray(), []);
   const [category, setCategory] = useState(txn.category);
+  const [recurrenceOverride, setRecurrenceOverride] = useState<'recurring' | 'onetime' | 'default'>(
+    txn.recurrenceOverride || 'default'
+  );
   const [scope, setScope] = useState<'one' | 'rule'>('rule');
   const [pattern, setPattern] = useState('');
 
@@ -42,10 +46,12 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
   }, [txn]);
 
   const onSave = async () => {
+    const ro = recurrenceOverride === 'default' ? null : recurrenceOverride;
     if (scope === 'one') {
       await db.transactions.update(txn.id!, {
         category,
         userOverridden: true,
+        recurrenceOverride: ro,
       });
     } else {
       // Create a high-priority rule
@@ -55,8 +61,13 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
         priority: 1000,
         createdAt: new Date().toISOString(),
       });
+      // Update recurrence override on this transaction specifically
+      await db.transactions.update(txn.id!, {
+        recurrenceOverride: ro,
+      });
       await recategorizeAll();
     }
+    await refreshRecurrenceAll();
     onClose();
   };
 
@@ -100,6 +111,19 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
                 {c.name}
               </MenuItem>
             ))}
+          </TextField>
+
+          <TextField
+            select
+            label="Recurrence Override"
+            value={recurrenceOverride}
+            onChange={(e) => setRecurrenceOverride(e.target.value as any)}
+            fullWidth
+            helperText="Force this transaction's recurrence, overriding Category or Merchant defaults"
+          >
+            <MenuItem value="default">Default (Category / Merchant default)</MenuItem>
+            <MenuItem value="recurring">Force Recurring</MenuItem>
+            <MenuItem value="onetime">Force One-Time / Variable</MenuItem>
           </TextField>
 
           <RadioGroup
