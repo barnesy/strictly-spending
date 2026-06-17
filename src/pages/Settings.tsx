@@ -134,6 +134,7 @@ export default function Settings() {
     setDemoBusy(true);
     try {
       const r = await clearDemoData();
+      setDemoMode(false);
       setDemoMsg(
         `Removed ${r.removedTransactions} demo transactions and ${r.removedAccounts} demo accounts`
       );
@@ -566,7 +567,7 @@ export default function Settings() {
                   <Switch
                     checked={demoMode}
                     onChange={(e) => setDemoMode(e.target.checked)}
-                    disabled={!demoLoaded}
+                    disabled={!demoLoaded && !demoMode}
                   />
                 }
                 label={

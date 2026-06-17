@@ -20,8 +20,6 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Grid,
-  ToggleButtonGroup,
-  ToggleButton,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -29,8 +27,6 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DownloadIcon from '@mui/icons-material/Download';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import PsychologyIcon from '@mui/icons-material/Psychology';
-import MemoryIcon from '@mui/icons-material/Memory';
 
 import { db } from '../db';
 import { useChatStore, formatModelName } from '../chatStore';

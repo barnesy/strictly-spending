@@ -180,5 +180,12 @@ export interface DbChatMessage {
   content: string;
   actionResult?: any;
   createdAt: string;
+  steps?: string[];
+  tokenUsage?: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+  purpose?: 'tool_select' | 'explanation';
 }
 

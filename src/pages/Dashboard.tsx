@@ -27,6 +27,7 @@ import {
   TablePagination,
   Tooltip,
   Alert,
+  Collapse,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -70,6 +71,24 @@ export default function Dashboard() {
     return localStorage.getItem('dashboard:sidebarVisible') !== 'false';
   });
 
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const toggleFilters = () => {
+    setIsTransitioning(true);
+    setFilterVisible((prev) => !prev);
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 220);
+  };
+
+  const toggleSidebar = () => {
+    setIsTransitioning(true);
+    setSidebarVisible((prev) => !prev);
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 220);
+  };
+
   useEffect(() => {
     localStorage.setItem('dashboard:filterVisible', String(filterVisible));
   }, [filterVisible]);
@@ -102,6 +121,8 @@ export default function Dashboard() {
     () => db.categories.orderBy('sortOrder').toArray(),
     []
   );
+  const dbTxnCount = useLiveQuery(() => db.transactions.count(), []);
+  const dbAcctCount = useLiveQuery(() => db.accounts.count(), []);
 
   const range = useMemo(() => {
     return resolveDateRange({
@@ -145,20 +166,18 @@ export default function Dashboard() {
     [allTxns, merchantOverrides]
   );
 
-  // Default-enable any newly-discovered accounts.
+  // Default-enable any newly-discovered accounts safely.
   useEffect(() => {
     if (!accounts || accounts.length === 0) return;
-    const known = new Set(enabledAccountIds);
-    const newOnes = accounts.filter((a) => !known.has(a.id!)).map((a) => a.id!);
-    if (newOnes.length > 0) {
-      setEnabledAccounts([...enabledAccountIds, ...newOnes]);
-    }
     const accountIdSet = new Set(accounts.map((a) => a.id!));
     const cleaned = enabledAccountIds.filter((id) => accountIdSet.has(id));
-    if (cleaned.length !== enabledAccountIds.length) {
-      setEnabledAccounts(cleaned);
+    const known = new Set(cleaned);
+    const newOnes = accounts.filter((a) => !known.has(a.id!)).map((a) => a.id!);
+    
+    if (newOnes.length > 0 || cleaned.length !== enabledAccountIds.length) {
+      setEnabledAccounts([...cleaned, ...newOnes]);
     }
-  }, [accounts?.length, enabledAccountIds, setEnabledAccounts]);
+  }, [accounts, enabledAccountIds, setEnabledAccounts]);
 
   // Filter transactions globally
   const visibleTxns = useMemo(() => {
@@ -253,13 +272,13 @@ export default function Dashboard() {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
-  if (!accounts || !categories || !allTxns) {
+  if (!accounts || !categories || !allTxns || dbTxnCount === undefined || dbAcctCount === undefined) {
     return <Typography>Loading…</Typography>;
   }
 
-  if (allTxns.length === 0) {
+  if (dbTxnCount === 0) {
     return (
-      <Stack spacing={3} alignItems="flex-start">
+      <Stack spacing={3} alignItems="flex-start" sx={{ width: '100%' }}>
         <Typography variant="h5">Dashboard</Typography>
         <Alert severity="info" sx={{ width: '100%' }}>
           No transactions yet. Import a CSV to get started.
@@ -438,7 +457,39 @@ export default function Dashboard() {
 
       {/* Content */}
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', ...subtleScrollSx }}>
-        {viewMode === 'chart' ? (
+        {allTxns.length === 0 || visibleTxns.length === 0 ? (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              minHeight: 300,
+              p: 3,
+              textAlign: 'center',
+              gap: 2,
+            }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              No transactions match current filters
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400 }}>
+              Your database has {dbTxnCount} total transactions, but none match the selected date range ({startISO} to {endISO}) or active accounts.
+            </Typography>
+            <Button
+              variant="contained"
+              onClick={() => {
+                const filterState = useFilters.getState();
+                filterState.reset();
+                filterState.setPreset('allTime');
+              }}
+              sx={{ textTransform: 'none', borderRadius: 2 }}
+            >
+              Reset Filters & Show All Time
+            </Button>
+          </Box>
+        ) : viewMode === 'chart' ? (
           <Box sx={{ height: '100%', minHeight: 400 }}>
             <SpendChart
               monthList={monthList}
@@ -476,7 +527,8 @@ export default function Dashboard() {
   );
 
   return (
-    <Stack spacing={2} sx={{ height: isDesktop ? '100%' : 'auto', minHeight: 0 }}>
+    <Box className={isTransitioning ? 'transitioning-panels' : ''} sx={{ height: isDesktop ? '100%' : 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <DemoModeBanner />
       <UncategorizedBanner />
 
       {/* Combined Unified Toolbar */}
@@ -499,7 +551,7 @@ export default function Dashboard() {
               <ToggleButton
                 value="filters"
                 selected={filterVisible}
-                onClick={() => setFilterVisible(!filterVisible)}
+                onClick={toggleFilters}
                 sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
                 title="Toggle Filters Panel"
               >
@@ -515,7 +567,7 @@ export default function Dashboard() {
               <ToggleButton
                 value="merchants"
                 selected={sidebarVisible}
-                onClick={() => setSidebarVisible(!sidebarVisible)}
+                onClick={toggleSidebar}
                 sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
                 title="Toggle Top Merchants Panel"
               >
@@ -543,7 +595,7 @@ export default function Dashboard() {
             <ToggleButton
               value="merchants"
               selected={sidebarVisible}
-              onClick={() => setSidebarVisible(!sidebarVisible)}
+              onClick={toggleSidebar}
               sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
               title="Toggle Top Merchants Panel"
             >
@@ -557,9 +609,13 @@ export default function Dashboard() {
       {/* Resizable content panel */}
       {!isDesktop ? (
         <Stack spacing={2}>
-          {filterVisible && filterPanel}
+          <Collapse in={filterVisible} timeout={220} mountOnEnter unmountOnExit>
+            {filterPanel}
+          </Collapse>
           {middleSectionContent}
-          {sidebarVisible && merchantsCard}
+          <Collapse in={sidebarVisible} timeout={220} mountOnEnter unmountOnExit>
+            {merchantsCard}
+          </Collapse>
         </Stack>
       ) : (
         <Box
@@ -604,7 +660,7 @@ export default function Dashboard() {
           onClose={() => setEditTxn(null)}
         />
       )}
-    </Stack>
+    </Box>
   );
 }
 
@@ -768,6 +824,33 @@ function TopMerchantsCard({
 }
 
 
+
+function DemoModeBanner() {
+  const demoMode = useFilters((s) => s.demoMode);
+  const setDemoMode = useFilters((s) => s.setDemoMode);
+
+  if (!demoMode) return null;
+
+  return (
+    <Alert
+      severity="warning"
+      action={
+        <Button
+          size="small"
+          variant="contained"
+          color="warning"
+          onClick={() => setDemoMode(false)}
+          sx={{ textTransform: 'none', mr: 1 }}
+        >
+          Switch to Real Data
+        </Button>
+      }
+      sx={{ alignItems: 'center' }}
+    >
+      <strong>Demo Mode is active.</strong> Your real accounts and transactions are hidden.
+    </Alert>
+  );
+}
 
 const SORT_BANNER_DISMISS_KEY = 'spending-viz:sortBannerDismissed';
 const SORT_BANNER_THRESHOLD = 20;

@@ -39,41 +39,45 @@ pub async fn check_ollama_status(app: AppHandle) -> Result<OllamaStatus, String>
 pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let app_data = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;
-        
-        let zip_path = app_data.join("ollama.zip");
-        
-        // Download using system curl
-        let status = std::process::Command::new("curl")
-            .arg("-L")
-            .arg("-o")
-            .arg(&zip_path)
-            .arg("https://ollama.com/download/Ollama-darwin.zip")
-            .status()
-            .map_err(|e| e.to_string())?;
+        tauri::async_runtime::spawn_blocking(move || {
+            let app_data = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+            std::fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;
             
-        if !status.success() {
-            return Err("Failed to download Ollama package via curl".into());
-        }
-        
-        // Extract using system unzip
-        let status = std::process::Command::new("unzip")
-            .arg("-o")
-            .arg(&zip_path)
-            .arg("-d")
-            .arg(&app_data)
-            .status()
-            .map_err(|e| e.to_string())?;
+            let zip_path = app_data.join("ollama.zip");
             
-        if !status.success() {
-            return Err("Failed to extract Ollama zip package".into());
-        }
-        
-        // Clean up the ZIP file
-        let _ = std::fs::remove_file(zip_path);
-        
-        Ok(())
+            // Download using system curl
+            let status = std::process::Command::new("curl")
+                .arg("-L")
+                .arg("-o")
+                .arg(&zip_path)
+                .arg("https://ollama.com/download/Ollama-darwin.zip")
+                .status()
+                .map_err(|e| e.to_string())?;
+                
+            if !status.success() {
+                return Err("Failed to download Ollama package via curl".to_string());
+            }
+            
+            // Extract using system unzip
+            let status = std::process::Command::new("unzip")
+                .arg("-o")
+                .arg(&zip_path)
+                .arg("-d")
+                .arg(&app_data)
+                .status()
+                .map_err(|e| e.to_string())?;
+                
+            if !status.success() {
+                return Err("Failed to extract Ollama zip package".to_string());
+            }
+            
+            // Clean up the ZIP file
+            let _ = std::fs::remove_file(zip_path);
+            
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -85,28 +89,32 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
 pub async fn start_ollama(app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let global_app = std::path::Path::new("/Applications/Ollama.app");
+        let global_app = std::path::Path::new("/Applications/Ollama.app").to_path_buf();
         let local_app = get_ollama_app_path(&app);
         
         let target_app = if global_app.exists() {
             global_app
         } else if local_app.exists() {
-            &local_app
+            local_app
         } else {
             return Err("Ollama is not installed".into());
         };
         
         // Run open command on Ollama.app (runs it in tray/background natively)
-        let status = std::process::Command::new("open")
-            .arg(target_app)
-            .status()
-            .map_err(|e| e.to_string())?;
+        tauri::async_runtime::spawn_blocking(move || {
+            let status = std::process::Command::new("open")
+                .arg(target_app)
+                .status()
+                .map_err(|e| e.to_string())?;
+                
+            if !status.success() {
+                return Err("Failed to launch Ollama.app".to_string());
+            }
             
-        if !status.success() {
-            return Err("Failed to launch Ollama.app".into());
-        }
-        
-        Ok(())
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?
     }
     #[cfg(not(target_os = "macos"))]
     {

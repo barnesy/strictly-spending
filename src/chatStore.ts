@@ -4,6 +4,15 @@ import { localAI, type ChatMessage } from './ai';
 import { db } from './db';
 import type { WorkspaceConfig, ChatArtifact, ChatThread } from './types';
 
+let cachedTauriInvoke: any = null;
+async function getTauriInvoke() {
+  if (!cachedTauriInvoke) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    cachedTauriInvoke = invoke;
+  }
+  return cachedTauriInvoke;
+}
+
 export function formatModelName(name: string): string {
   if (!name) return 'AI';
   let label = name;
@@ -30,6 +39,10 @@ interface ChatStore {
   modelName: string;
   setModelName: (name: string) => void;
   addMessage: (msg: ChatMessage) => void;
+  startStreamingMessage: (initialSteps?: string[], purpose?: 'tool_select' | 'explanation') => void;
+  appendStreamingToken: (token: string) => void;
+  updateStreamingMetadata: (steps: string[], tokenUsage?: { prompt: number; completion: number; total: number }) => void;
+  finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: string[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation') => Promise<void>;
   setMessages: (messages: ChatMessage[]) => void;
   clearMessages: () => void;
   checkAIStatus: () => Promise<void>;
@@ -94,6 +107,93 @@ export const useChatStore = create<ChatStore>()(
           }
         }
       },
+
+      startStreamingMessage: (initialSteps, purpose) => {
+        set((state) => {
+          const lastMsg = state.messages[state.messages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+            const updated = [...state.messages];
+            updated[updated.length - 1] = {
+              role: 'assistant',
+              content: '',
+              isStreaming: true,
+              steps: initialSteps || [],
+              purpose
+            };
+            return { messages: updated };
+          }
+          return {
+            messages: [...state.messages, { role: 'assistant', content: '', isStreaming: true, steps: initialSteps || [], purpose }]
+          };
+        });
+      },
+
+      appendStreamingToken: (token) => {
+        set((state) => {
+          const lastMsg = state.messages[state.messages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+            const updated = [...state.messages];
+            updated[updated.length - 1] = {
+              ...lastMsg,
+              content: lastMsg.content + token
+            };
+            return { messages: updated };
+          }
+          return {};
+        });
+      },
+
+      updateStreamingMetadata: (steps, tokenUsage) => {
+        set((state) => {
+          const lastMsg = state.messages[state.messages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+            const updated = [...state.messages];
+            updated[updated.length - 1] = {
+              ...lastMsg,
+              steps,
+              tokenUsage: tokenUsage || lastMsg.tokenUsage
+            };
+            return { messages: updated };
+          }
+          return {};
+        });
+      },
+
+      finalizeStreamingMessage: async (finalContent, actionResult, steps, tokenUsage, purpose) => {
+        set((state) => {
+          const lastMsg = state.messages[state.messages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant') {
+            const updated = [...state.messages];
+            updated[updated.length - 1] = {
+              role: 'assistant',
+              content: finalContent,
+              actionResult,
+              steps: steps || lastMsg.steps,
+              tokenUsage: tokenUsage || lastMsg.tokenUsage,
+              purpose: purpose || lastMsg.purpose
+            };
+            return { messages: updated };
+          }
+          return {};
+        });
+
+        const threadId = get().activeThreadId;
+        if (threadId) {
+          const lastMsg = get().messages[get().messages.length - 1];
+          await db.messages.add({
+            threadId,
+            role: 'assistant',
+            content: finalContent,
+            actionResult,
+            steps: steps || lastMsg?.steps,
+            tokenUsage: tokenUsage || lastMsg?.tokenUsage,
+            purpose: purpose || lastMsg?.purpose,
+            createdAt: new Date().toISOString()
+          });
+
+          await db.threads.update(threadId, { updatedAt: new Date().toISOString() });
+        }
+      },
       setMessages: (messages) => set({ messages }),
       clearMessages: async () => {
         const threadId = get().activeThreadId;
@@ -110,7 +210,7 @@ export const useChatStore = create<ChatStore>()(
         set({ aiStatus: 'checking', aiProgress: 'Checking Ollama status...' });
         try {
           if (isTauri) {
-            const { invoke } = await import('@tauri-apps/api/core');
+            const invoke = await getTauriInvoke();
             const status: { installed: boolean; running: boolean } = await invoke('check_ollama_status');
             
             if (status.running) {
@@ -153,7 +253,7 @@ export const useChatStore = create<ChatStore>()(
         
         set({ aiStatus: 'checking', aiProgress: 'Downloading & unzipping Ollama.app to App Support... (takes 10-30s)', aiProgressPercent: 30 });
         try {
-          const { invoke } = await import('@tauri-apps/api/core');
+          const invoke = await getTauriInvoke();
           await invoke('install_ollama');
           set({ aiProgress: 'Starting Ollama service...', aiProgressPercent: 80 });
           await invoke('start_ollama');
@@ -177,7 +277,7 @@ export const useChatStore = create<ChatStore>()(
         
         set({ aiStatus: 'checking', aiProgress: 'Starting Ollama background process...', aiProgressPercent: 50 });
         try {
-          const { invoke } = await import('@tauri-apps/api/core');
+          const invoke = await getTauriInvoke();
           await invoke('start_ollama');
           
           for (let i = 0; i < 20; i++) {
@@ -315,11 +415,20 @@ export const useChatStore = create<ChatStore>()(
 
       loadThreadMessages: async (threadId) => {
         const list = await db.messages.where('threadId').equals(threadId).sortBy('id');
-        const formatted = list.map(m => ({
-          role: m.role,
-          content: m.content,
-          actionResult: m.actionResult
-        }));
+        const formatted = list.map(m => {
+          if (m.actionResult?.metrics?.transactions) {
+            delete m.actionResult.metrics.transactions;
+            db.messages.put(m); // scrub legacy data from db
+          }
+          return {
+            role: m.role,
+            content: m.content,
+            actionResult: m.actionResult,
+            steps: m.steps,
+            tokenUsage: m.tokenUsage,
+            purpose: m.purpose
+          };
+        });
         set({ messages: formatted });
       }
     }),

@@ -6,7 +6,6 @@ import {
   Button,
   Paper,
   Stack,
-  Divider,
   Table,
   TableHead,
   TableRow,

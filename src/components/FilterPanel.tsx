@@ -3,8 +3,6 @@ import {
   Paper,
   Stack,
   Typography,
-  IconButton,
-  Tooltip,
   Checkbox,
   FormControlLabel,
   ToggleButtonGroup,
@@ -12,8 +10,7 @@ import {
   TextField,
   Button,
 } from '@mui/material';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import { useFilters, type FiltersStore, resolveDateRange } from '../store';
+import { useFilters, resolveDateRange } from '../store';
 import type { Account, Category, Transaction } from '../types';
 import { usd, monthKey, monthsBetween } from '../lib';
 import { useMemo } from 'react';

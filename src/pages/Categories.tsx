@@ -1,4 +1,4 @@
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useState, useEffect } from 'react';
 import {
   Stack,
   Typography,
@@ -14,22 +14,40 @@ import {
 import { db } from '../db';
 
 export default function Categories() {
-  const categories = useLiveQuery(
-    () => db.categories.orderBy('sortOrder').toArray(),
-    []
-  );
-  const counts = useLiveQuery(async () => {
-    if (!categories) return {};
-    const entries = await Promise.all(
-      categories.map(async (c) => {
-        const count = await db.transactions.where('category').equals(c.name).count();
-        return [c.name, count];
-      })
-    );
-    const uncategorizedCount = await db.transactions.where('category').equals('Uncategorized').count();
-    entries.push(['Uncategorized', uncategorizedCount]);
-    return Object.fromEntries(entries);
-  }, [categories]) || {};
+  const [categories, setCategories] = useState<any[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    db.categories.orderBy('sortOrder').toArray().then(res => {
+      if (active) setCategories(res);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!categories) return;
+    let active = true;
+    async function fetchCounts() {
+      const entries = await Promise.all(
+        categories.map(async (c) => {
+          const count = await db.transactions.where('category').equals(c.name).count();
+          return [c.name, count];
+        })
+      );
+      const uncategorizedCount = await db.transactions.where('category').equals('Uncategorized').count();
+      entries.push(['Uncategorized', uncategorizedCount]);
+      if (active) {
+        setCounts(Object.fromEntries(entries));
+      }
+    }
+    fetchCounts();
+    return () => {
+      active = false;
+    };
+  }, [categories]);
 
   return (
     <Stack spacing={3}>

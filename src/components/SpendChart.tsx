@@ -32,14 +32,45 @@ function useElementHeight(minHeight = 240) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
+    // Run an immediate synchronous measurement on mount to prevent the 240px layout jump
+    const initialHeight = Math.max(minHeight, Math.floor(el.clientHeight));
+    setHeight(initialHeight);
+    
+    let timerId: any = null;
+    let rAFId: number | null = null;
+    
     const measure = () => {
-      const next = Math.max(minHeight, Math.floor(el.clientHeight));
-      setHeight((prev) => (prev === next ? prev : next));
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+      // Debounce by 60ms to prevent heavy redrawing on every drag frame
+      timerId = setTimeout(() => {
+        timerId = null;
+        if (rAFId !== null) {
+          cancelAnimationFrame(rAFId);
+        }
+        rAFId = requestAnimationFrame(() => {
+          rAFId = null;
+          if (el) {
+            const next = Math.max(minHeight, Math.floor(el.clientHeight));
+            setHeight((prev) => (Math.abs(prev - next) < 4 ? prev : next));
+          }
+        });
+      }, 60);
     };
-    measure();
+    
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+      if (rAFId !== null) {
+        cancelAnimationFrame(rAFId);
+      }
+    };
   }, [minHeight]);
   return [ref, height] as const;
 }
@@ -398,7 +429,7 @@ export default function SpendChart({
       data: [...historicalNulls, currentMonthRunway, ...projectionData],
     };
 
-    const finalSeriesList = [...paddedSpendSeries];
+    const finalSeriesList: any[] = [...paddedSpendSeries];
     if (!spendOnly) {
       finalSeriesList.push(paddedIncomeSeries);
     }
@@ -428,23 +459,24 @@ export default function SpendChart({
         yAxis={[{ valueFormatter: (v: number) => usd.format(v) }]}
         series={finalSeries}
         margin={{ left: 70, right: 20, top: 20, bottom: 60 }}
-        onAxisClick={
-          onMonthClick && monthList.length > 1
-            ? (_, data) => {
-                const idx = data?.dataIndex;
-                if (idx != null && idx >= 0 && idx < monthList.length) {
-                  onMonthClick(monthList[idx]);
-                }
-              }
-            : undefined
-        }
         sx={
           onMonthClick && monthList.length > 1
             ? { '& .MuiBarElement-root': { cursor: 'pointer' } }
             : undefined
         }
       >
-        <BarPlot />
+        <BarPlot
+          onItemClick={
+            onMonthClick && monthList.length > 1
+              ? (_, data) => {
+                  const idx = data?.dataIndex;
+                  if (idx != null && idx >= 0 && idx < monthList.length) {
+                    onMonthClick(monthList[idx]);
+                  }
+                }
+              : undefined
+          }
+        />
         <LinePlot />
         <MarkPlot />
         <ChartsXAxis />

@@ -1,7 +1,7 @@
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo, useState, useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, keyframes } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -24,14 +24,15 @@ import Rules from './pages/Rules';
 import Categories from './pages/Categories';
 import Settings from './pages/Settings';
 import LocalModel from './pages/LocalModel';
-import AgentSkills from './pages/AgentSkills';
+import { AgentSkills } from './pages/AgentSkills';
 import Sort from './pages/Sort';
 import ArtifactsLibrary from './pages/ArtifactsLibrary';
 import CopilotChat from './components/CopilotChat';
 import ArtifactViewer from './components/ArtifactViewer';
-import { useChatStore, formatModelName } from './chatStore';
+import { useChatStore } from './chatStore';
 import { db } from './db';
 import { useFilters } from './store';
+import { PageTransition } from './components/PageTransition';
 
 function AnimatedLogo() {
   const [rotY, setRotY] = useState(0);
@@ -161,7 +162,7 @@ const MANAGE_NAV = [
 ];
 
 export default function App() {
-  const modelName = useChatStore((s) => s.modelName);
+
   const location = useLocation();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
@@ -283,50 +284,53 @@ export default function App() {
             >
               Manage
             </Button>
-            <Menu
-              anchorEl={manageAnchorEl}
-              open={isManageOpen}
-              onClose={handleManageClose}
-              MenuListProps={{
-                'aria-labelledby': 'manage-nav-button',
-              }}
-              sx={{
-                '& .MuiPaper-root': {
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                  minWidth: 180,
-                  borderRadius: 2,
-                  mt: 0.5,
-                }
-              }}
-            >
-              {MANAGE_NAV.map((item) => {
-                const isItemActive = location.pathname === item.to;
-                return (
-                  <MenuItem
-                    key={item.to}
-                    component={NavLink}
-                    to={item.to}
-                    onClick={handleManageClose}
-                    sx={{
-                      color: isItemActive ? 'primary.main' : 'text.primary',
-                      fontWeight: isItemActive ? 600 : 400,
-                      gap: 1.5,
-                      py: 1,
-                      px: 2,
-                      '&:hover': {
-                        bgcolor: 'action.hover',
-                      }
-                    }}
-                  >
-                    {item.icon}
-                    <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
-                      {item.label}
-                    </Typography>
-                  </MenuItem>
-                );
-              })}
-            </Menu>
+            {isManageOpen && (
+              <Menu
+                anchorEl={manageAnchorEl}
+                open={isManageOpen}
+                onClose={handleManageClose}
+                transitionDuration={0}
+                MenuListProps={{
+                  'aria-labelledby': 'manage-nav-button',
+                }}
+                sx={{
+                  '& .MuiPaper-root': {
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                    minWidth: 180,
+                    borderRadius: 2,
+                    mt: 0.5,
+                  }
+                }}
+              >
+                {MANAGE_NAV.map((item) => {
+                  const isItemActive = location.pathname === item.to;
+                  return (
+                    <MenuItem
+                      key={item.to}
+                      component={NavLink}
+                      to={item.to}
+                      onClick={handleManageClose}
+                      sx={{
+                        color: isItemActive ? 'primary.main' : 'text.primary',
+                        fontWeight: isItemActive ? 600 : 400,
+                        gap: 1.5,
+                        py: 1,
+                        px: 2,
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        }
+                      }}
+                    >
+                      {item.icon}
+                      <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
+                        {item.label}
+                      </Typography>
+                    </MenuItem>
+                  );
+                })}
+              </Menu>
+            )}
           </Box>
           <Button
             onClick={() => setIsChatOpen((prev) => !prev)}
@@ -341,7 +345,7 @@ export default function App() {
             }}
           >
             <Box component="span" sx={{ fontWeight: 900, mr: 0.75, textShadow: '0 0 0.5px currentColor' }}>AI</Box>
-            {isChatOpen ? `Close ${formatModelName(modelName)}` : `Local ${formatModelName(modelName)}`}
+            {isChatOpen ? 'Close' : 'Copilot'}
           </Button>
         </Toolbar>
       </AppBar>
@@ -369,19 +373,21 @@ export default function App() {
               : {}),
           }}
         >
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/sort" element={<Sort />} />
-            <Route path="/budget" element={<Budget />} />
-            <Route path="/transactions" element={<Dashboard />} />
-            <Route path="/import" element={<Import />} />
-            <Route path="/rules" element={<Rules />} />
-            <Route path="/categories" element={<Categories />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/local-model" element={<LocalModel />} />
-            <Route path="/agent-skills" element={<AgentSkills />} />
-            <Route path="/artifacts" element={<ArtifactsLibrary />} />
-          </Routes>
+          <PageTransition key={location.pathname}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/sort" element={<Sort />} />
+              <Route path="/budget" element={<Budget />} />
+              <Route path="/transactions" element={<Dashboard />} />
+              <Route path="/import" element={<Import />} />
+              <Route path="/rules" element={<Rules />} />
+              <Route path="/categories" element={<Categories />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/local-model" element={<LocalModel />} />
+              <Route path="/agent-skills" element={<AgentSkills />} />
+              <Route path="/artifacts" element={<ArtifactsLibrary />} />
+            </Routes>
+          </PageTransition>
         </Container>
       </Box>
     </Box>
@@ -426,9 +432,11 @@ export default function App() {
                   }
                 }}
               >
-                <Box sx={{ height: '100%', borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column' }}>
-                  <ArtifactViewer />
-                </Box>
+                <Slide direction="left" in={true} mountOnEnter unmountOnExit>
+                  <Box sx={{ height: '100%', borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column' }}>
+                    <ArtifactViewer />
+                  </Box>
+                </Slide>
               </Panel>
 
               <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
@@ -462,13 +470,15 @@ export default function App() {
               }
             }}
           >
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <CopilotChat
-                onClose={() => setIsChatOpen(false)}
-                showCloseButton={true}
-                isEmbedded={true}
-              />
-            </Box>
+            <Slide direction="left" in={true} mountOnEnter unmountOnExit>
+              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <CopilotChat
+                  onClose={() => setIsChatOpen(false)}
+                  showCloseButton={true}
+                  isEmbedded={true}
+                />
+              </Box>
+            </Slide>
           </Panel>
         </PanelGroup>
       ) : (

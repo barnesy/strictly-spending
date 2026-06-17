@@ -59,3 +59,7 @@ class SpendingDB extends Dexie {
 }
 
 export const db = new SpendingDB();
+
+if (typeof window !== 'undefined') {
+  (window as any).db = db;
+}

@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Stack,
@@ -30,12 +29,34 @@ import { recategorizeAll } from '../categorize';
 import { mineRuleSuggestions } from '../ruleMiner';
 
 export default function Rules() {
-  const rules = useLiveQuery(
-    () => db.rules.orderBy('priority').reverse().toArray(),
-    []
-  );
-  const categories = useLiveQuery(() => db.categories.toArray(), []);
-  const suggestions = useLiveQuery(() => mineRuleSuggestions(), [rules]);
+  const [rules, setRules] = useState<CategoryRule[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+
+  const loadData = async () => {
+    const r = await db.rules.orderBy('priority').reverse().toArray();
+    const c = await db.categories.toArray();
+    setRules(r);
+    setCategories(c);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadSuggestions() {
+      const res = await mineRuleSuggestions();
+      if (active) {
+        setSuggestions(res);
+      }
+    }
+    loadSuggestions();
+    return () => {
+      active = false;
+    };
+  }, [rules]);
   const [editing, setEditing] = useState<CategoryRule | 'new' | null>(null);
   const [recategorizing, setRecategorizing] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -56,11 +77,13 @@ export default function Rules() {
       });
     }
     setEditing(null);
+    await loadData();
   };
 
   const onDelete = async (id: number) => {
     if (!confirm('Delete this rule?')) return;
     await db.rules.delete(id);
+    await loadData();
   };
 
   const onRecategorize = async () => {
