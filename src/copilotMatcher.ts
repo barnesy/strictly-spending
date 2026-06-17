@@ -22,15 +22,15 @@ export const CATEGORY_SYNONYMS: Record<string, string[]> = {
   subscription: ['Subscriptions'],
   netflix: ['Subscriptions'],
   spotify: ['Subscriptions'],
-  entertainment: ['Subscriptions'],
+  entertainment: ['Entertainment'],
   transport: ['Transportation'],
   transportation: ['Transportation'],
   transit: ['Transportation'],
   car: ['Transportation', 'Auto Loan'],
-  travel: ['Transportation'],
+  travel: ['Travel'],
   housing: ['Housing'],
   rent: ['Housing'],
-  mortgage: ['Housing'],
+  mortgage: ['Mortgage'],
 };
 
 export function matchCategories(requested: string[], categories: { name: string }[]): string[] {
@@ -250,10 +250,10 @@ export function executeCopilotCommand(cmd: any, ctx: CommandExecutorContext) {
     (cmd.search !== undefined && cmd.search !== null && cmd.search !== '') ||
     (cmd.query !== undefined && cmd.query !== null && cmd.query !== '')
   ) {
-    if (!cmd.categories) {
+    if (!cmd.categories || cmd.categories.length === 0) {
       ctx.setDisabledCategories([]);
     }
-    if (!cmd.accounts) {
+    if (!cmd.accounts || cmd.accounts.length === 0) {
       ctx.setEnabledAccounts(ctx.accounts.map((a) => a.id!));
     }
   }
@@ -268,7 +268,7 @@ export function executeCopilotCommand(cmd: any, ctx: CommandExecutorContext) {
   }
 
   if (cmd.categories && Array.isArray(cmd.categories)) {
-    if (cmd.categories.includes('all')) {
+    if (cmd.categories.includes('all') || cmd.categories.length === 0) {
       ctx.setDisabledCategories([]);
     } else {
       const matched = matchCategories(cmd.categories, ctx.categories);
@@ -280,7 +280,7 @@ export function executeCopilotCommand(cmd: any, ctx: CommandExecutorContext) {
   }
 
   if (cmd.accounts && Array.isArray(cmd.accounts)) {
-    if (cmd.accounts.includes('all')) {
+    if (cmd.accounts.includes('all') || cmd.accounts.length === 0) {
       ctx.setEnabledAccounts(ctx.accounts.map((a) => a.id!));
     } else {
       const matchedIds = matchAccounts(cmd.accounts, ctx.accounts);
@@ -297,8 +297,8 @@ export function executeCopilotCommand(cmd: any, ctx: CommandExecutorContext) {
 
   // Reset price filters on explicit reset all filters action
   if (
-    cmd.categories && cmd.categories.includes('all') &&
-    cmd.accounts && cmd.accounts.includes('all') &&
+    cmd.categories && (cmd.categories.includes('all') || cmd.categories.length === 0) &&
+    cmd.accounts && (cmd.accounts.includes('all') || cmd.accounts.length === 0) &&
     (cmd.search === '' || cmd.search === undefined) &&
     cmd.preset === 'allTime'
   ) {

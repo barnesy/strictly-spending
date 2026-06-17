@@ -13,6 +13,7 @@ describe('resolveDateRange - allTime scoping', () => {
       drill: null,
       searchQuery: '',
       demoMode: false,
+      showRunway: false,
       version: 1,
     };
     const range = resolveDateRange(dummyState);
@@ -40,6 +41,7 @@ describe('resolveDateRange - allTime scoping', () => {
       drill: null,
       searchQuery: '',
       demoMode: false,
+      showRunway: false,
       version: 1,
     };
     const range = resolveDateRange(dummyState);
@@ -84,6 +86,18 @@ describe('copilotMatcher - Category Matching', () => {
   it('resolves specific synonym to exact category (e.g. rent -> Housing)', () => {
     expect(matchCategories(['rent'], mockCategories)).toEqual(['Housing']);
     expect(matchCategories(['netflix'], mockCategories)).toEqual(['Subscriptions']);
+  });
+
+  it('resolves travel, entertainment, and mortgage synonyms to their specific categories', () => {
+    const categoriesWithAll = [
+      ...mockCategories,
+      { name: 'Travel' },
+      { name: 'Entertainment' },
+      { name: 'Mortgage' }
+    ];
+    expect(matchCategories(['travel'], categoriesWithAll)).toEqual(['Travel']);
+    expect(matchCategories(['entertainment'], categoriesWithAll)).toEqual(['Entertainment']);
+    expect(matchCategories(['mortgage'], categoriesWithAll)).toEqual(['Mortgage']);
   });
 
   it('matches fuzzy partials', () => {
@@ -141,6 +155,8 @@ describe('copilotMatcher - Chat History Cleaning', () => {
     ];
     const cleaned = cleanChatHistory(rawMessages);
     expect(cleaned).toEqual(rawMessages);
+  });
+
   });
 });
 
@@ -205,6 +221,8 @@ describe('copilotMatcher - Command Execution', () => {
       setDisabledCategories: () => {},
       setEnabledAccounts: () => {},
       setSearchQuery: () => {},
+      setMinPrice: () => {},
+      setMaxPrice: () => {},
     };
 
     // Test with startDate/endDate
@@ -244,6 +262,8 @@ describe('copilotMatcher - Command Execution', () => {
       },
       setEnabledAccounts: () => {},
       setSearchQuery: () => {},
+      setMinPrice: () => {},
+      setMaxPrice: () => {},
     };
 
     executeCopilotCommand({
@@ -254,6 +274,38 @@ describe('copilotMatcher - Command Execution', () => {
     expect(disabledCats).toContain('Restaurants & Coffee');
     expect(disabledCats).toContain('Utilities');
     expect(disabledCats).not.toContain('Groceries');
+  });
+
+  it('keeps all categories and accounts enabled when empty arrays are provided', () => {
+    let disabledCats: string[] = ['DummyCategory'];
+    let enabledAccts: number[] = [];
+    const mockCtx = {
+      categories: mockCategories,
+      accounts: mockAccounts,
+      currentPath: '/',
+      navigate: () => {},
+      setPreset: () => {},
+      setCustomRange: () => {},
+      setDisabledCategories: (cats: string[]) => {
+        disabledCats = cats;
+      },
+      setEnabledAccounts: (ids: number[]) => {
+        enabledAccts = ids;
+      },
+      setSearchQuery: () => {},
+      setMinPrice: () => {},
+      setMaxPrice: () => {},
+    };
+
+    executeCopilotCommand({
+      action: 'filter',
+      categories: [],
+      accounts: [],
+    }, mockCtx);
+
+    // Empty arrays should result in 0 disabled categories and all accounts enabled
+    expect(disabledCats).toEqual([]);
+    expect(enabledAccts).toEqual([1, 2]);
   });
 });
 
@@ -588,7 +640,7 @@ describe('useChatStore - Thread-ID Session Isolation & Dexie checkpointers', () 
   });
 });
 
-import { parseAIResponse, extractFieldUsingRegex, getMessageDisplayContent, runSkillTestCase, localAI } from './ai';
+import { parseAIResponse, extractFieldUsingRegex, getMessageDisplayContent, runSkillTestCase, localAI, forceBoldAndTwoDecimals } from './ai';
 
 describe('parseAIResponse & cleanJSONString', () => {
   it('raw input formatting checks', () => {
@@ -663,6 +715,28 @@ describe('parseAIResponse & cleanJSONString', () => {
       }
     };
     expect(getMessageDisplayContent(parsed)).toBe('Created artifact: Report Title.');
+  });
+
+  describe('forceBoldAndTwoDecimals', () => {
+    it('formats plain integers and decimals and bolds them', () => {
+      expect(forceBoldAndTwoDecimals('you spent $250 across 6 transactions')).toBe('you spent **$250.00** across **6.00** transactions');
+      expect(forceBoldAndTwoDecimals('difference of $141.29 (+56.5%)')).toBe('difference of **$141.29** (**+56.50%**)');
+      expect(forceBoldAndTwoDecimals('negative amount -$15.5')).toBe('negative amount **-$15.50**');
+    });
+
+    it('handles already bolded numbers', () => {
+      expect(forceBoldAndTwoDecimals('spent **$391.29** across **6** transactions')).toBe('spent **$391.29** across **6.00** transactions');
+    });
+
+    it('does not format years or dates', () => {
+      expect(forceBoldAndTwoDecimals('Between 2026-05-01 and 2026-06-01')).toBe('Between 2026-05-01 and 2026-06-01');
+      expect(forceBoldAndTwoDecimals('In the year 2026, you spent $200.')).toBe('In the year 2026, you spent **$200.00**.');
+    });
+
+    it('does not touch markdown links, HTML or code blocks', () => {
+      expect(forceBoldAndTwoDecimals('[link](file:///path/to/file#L123)')).toBe('[link](file:///path/to/file#L123)');
+      expect(forceBoldAndTwoDecimals('`code 123` and `<div id="1">`')).toBe('`code 123` and `<div id="1">`');
+    });
   });
 });
 
