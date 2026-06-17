@@ -19,10 +19,7 @@ if (typeof window !== 'undefined') {
   };
 }
 import { BrowserRouter, HashRouter } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import App from './App';
-import { theme } from './theme';
 import { seedAndMigrate } from './seed';
 import { hasDemoData, seedDemoData } from './demoData';
 import { useFilters } from './store';
@@ -33,7 +30,7 @@ import { DEMO_ONLY_BUILD } from './env';
  *   - is mounted with HashRouter so the bundle works under any static host
  *     without server-side SPA fallback
  *   - auto-seeds demo data on first load if the IndexedDB is empty
- *   - forces demoMode on, hiding real-data paths so visitors can't
+ *     forces demoMode on, hiding real-data paths so visitors can't
  *     accidentally clear anything
  */
 async function bootstrap() {
@@ -59,10 +56,7 @@ const Router = DEMO_ONLY_BUILD ? HashRouter : BrowserRouter;
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Router>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <App />
-      </ThemeProvider>
+      <App />
     </Router>
   </StrictMode>
 );

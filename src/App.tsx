@@ -1,8 +1,9 @@
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useState, useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide } from '@mui/material';
+import { useState, useEffect, useMemo } from 'react';
+import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { getAppTheme } from './theme';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
@@ -162,6 +163,15 @@ const MANAGE_NAV = [
 ];
 
 export default function App() {
+  const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
+  const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string } | undefined;
+
+  const dynamicTheme = useMemo(() => {
+    const mode = themeConfig?.mode || 'light';
+    const primary = themeConfig?.primaryColor || '#1976d2';
+    const secondary = themeConfig?.secondaryColor || '#5c6bc0';
+    return getAppTheme(mode, primary, secondary);
+  }, [themeConfig]);
 
   const location = useLocation();
   const theme = useTheme();
@@ -227,9 +237,10 @@ export default function App() {
         position="static"
         elevation={0}
         sx={{
-          bgcolor: 'white',
+          bgcolor: 'background.paper',
           color: 'text.primary',
-          borderBottom: '1px solid rgba(0,0,0,0.08)',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
@@ -295,7 +306,8 @@ export default function App() {
                 }}
                 sx={{
                   '& .MuiPaper-root': {
-                    border: '1px solid rgba(0,0,0,0.08)',
+                    border: '1px solid',
+                    borderColor: 'divider',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                     minWidth: 180,
                     borderRadius: 2,
@@ -394,96 +406,99 @@ export default function App() {
   );
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
-      <PanelGroup orientation="horizontal">
-        <Panel id="main-content" minSize={30}>
-          {renderMainWindow()}
-        </Panel>
+    <ThemeProvider theme={dynamicTheme}>
+      <CssBaseline />
+      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
+        <PanelGroup orientation="horizontal">
+          <Panel id="main-content" minSize={30}>
+            {renderMainWindow()}
+          </Panel>
 
-        {activeArtifact && (
-          <>
-            <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
-              <Box
-                sx={{
-                  position: 'absolute',
-                  inset: 0,
-                  margin: '0 auto',
-                  width: 2,
-                  bgcolor: 'rgba(0,0,0,0.08)',
-                  borderRadius: 1,
-                  transition: 'background-color 120ms ease',
-                  '[data-resize-handle-active] &, &:hover': {
-                    bgcolor: 'primary.main',
-                    width: 3,
-                  },
+          {activeArtifact && (
+            <>
+              <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    margin: '0 auto',
+                    width: 2,
+                    bgcolor: 'divider',
+                    borderRadius: 1,
+                    transition: 'background-color 120ms ease',
+                    '[data-resize-handle-active] &, &:hover': {
+                      bgcolor: 'primary.main',
+                      width: 3,
+                    },
+                  }}
+                />
+              </PanelResizeHandle>
+
+              <Panel
+                id="artifact-viewer"
+                minSize={20}
+                defaultSize={35}
+                collapsible={true}
+                onResize={(size) => {
+                  if (size.asPercentage === 0) {
+                    useChatStore.getState().setActiveArtifact(null);
+                  }
                 }}
-              />
-            </PanelResizeHandle>
+              >
+                <Slide direction="left" in={true} mountOnEnter unmountOnExit>
+                  <Box sx={{ height: '100%', borderRight: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
+                    <ArtifactViewer />
+                  </Box>
+                </Slide>
+              </Panel>
+            </>
+          )}
 
-            <Panel
-              id="artifact-viewer"
-              minSize={20}
-              defaultSize={35}
-              collapsible={true}
-              onResize={(size) => {
-                if (size.asPercentage === 0) {
-                  useChatStore.getState().setActiveArtifact(null);
-                }
-              }}
-            >
-              <Slide direction="left" in={true} mountOnEnter unmountOnExit>
-                <Box sx={{ height: '100%', borderRight: '1px solid rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column' }}>
-                  <ArtifactViewer />
-                </Box>
-              </Slide>
-            </Panel>
-          </>
-        )}
+          {isChatOpen && (
+            <>
+              <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    margin: '0 auto',
+                    width: 2,
+                    bgcolor: 'divider',
+                    borderRadius: 1,
+                    transition: 'background-color 120ms ease',
+                    '[data-resize-handle-active] &, &:hover': {
+                      bgcolor: 'primary.main',
+                      width: 3,
+                    },
+                  }}
+                />
+              </PanelResizeHandle>
 
-        {isChatOpen && (
-          <>
-            <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
-              <Box
-                sx={{
-                  position: 'absolute',
-                  inset: 0,
-                  margin: '0 auto',
-                  width: 2,
-                  bgcolor: 'rgba(0,0,0,0.08)',
-                  borderRadius: 1,
-                  transition: 'background-color 120ms ease',
-                  '[data-resize-handle-active] &, &:hover': {
-                    bgcolor: 'primary.main',
-                    width: 3,
-                  },
+              <Panel
+                id="copilot-chat"
+                minSize={15}
+                defaultSize={activeArtifact ? 25 : 30}
+                collapsible={true}
+                onResize={(size) => {
+                  if (size.asPercentage === 0) {
+                    setIsChatOpen(false);
+                  }
                 }}
-              />
-            </PanelResizeHandle>
-
-            <Panel
-              id="copilot-chat"
-              minSize={15}
-              defaultSize={activeArtifact ? 25 : 30}
-              collapsible={true}
-              onResize={(size) => {
-                if (size.asPercentage === 0) {
-                  setIsChatOpen(false);
-                }
-              }}
-            >
-              <Slide direction="left" in={true} mountOnEnter unmountOnExit>
-                <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <CopilotChat
-                    onClose={() => setIsChatOpen(false)}
-                    showCloseButton={true}
-                    isEmbedded={true}
-                  />
-                </Box>
-              </Slide>
-            </Panel>
-          </>
-        )}
-      </PanelGroup>
-    </Box>
+              >
+                <Slide direction="left" in={true} mountOnEnter unmountOnExit>
+                  <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <CopilotChat
+                      onClose={() => setIsChatOpen(false)}
+                      showCloseButton={true}
+                      isEmbedded={true}
+                    />
+                  </Box>
+                </Slide>
+              </Panel>
+            </>
+          )}
+        </PanelGroup>
+      </Box>
+    </ThemeProvider>
   );
 }
