@@ -474,3 +474,23 @@ export async function clearDemoData(): Promise<ClearResult> {
     removedAccounts: accts.length,
   };
 }
+
+export async function clearImportedData(): Promise<ClearResult> {
+  const txnIds = await db.transactions
+    .where('source')
+    .notEqual('demo')
+    .primaryKeys();
+  await db.transactions.bulkDelete(txnIds as number[]);
+
+  const accts = await db.accounts.where('source').notEqual('demo').toArray();
+  await db.accounts.bulkDelete(accts.map((a) => a.id!));
+
+  await db.imports.clear();
+  await refreshRecurrenceAll();
+
+  return {
+    removedTransactions: txnIds.length,
+    removedAccounts: accts.length,
+  };
+}
+

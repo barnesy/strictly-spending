@@ -38,7 +38,7 @@ import {
   scanFolder,
   type ScanResult,
 } from '../watchFolder';
-import { seedDemoData, clearDemoData, hasDemoData } from '../demoData';
+import { seedDemoData, clearDemoData, hasDemoData, clearImportedData } from '../demoData';
 import { useFilters } from '../store';
 import { useChatStore } from '../chatStore';
 import { DEMO_ONLY_BUILD } from '../env';
@@ -81,7 +81,18 @@ export default function Settings() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('');
   const [confirmMessage, setConfirmMessage] = useState('');
-  const [confirmType, setConfirmType] = useState<'clearDemo' | 'disconnect' | 'deactivateLicense' | null>(null);
+  const [confirmType, setConfirmType] = useState<'clearDemo' | 'disconnect' | 'deactivateLicense' | 'clearImported' | null>(null);
+
+  const [clearImportedBusy, setClearImportedBusy] = useState(false);
+  const [clearImportedMsg, setClearImportedMsg] = useState<string | null>(null);
+
+  const hasImportedData = useLiveQuery(
+    async () => {
+      const count = await db.transactions.where('source').notEqual('demo').count();
+      return count > 0;
+    },
+    []
+  );
 
 
   const supported = isWatchFolderSupported();
@@ -185,6 +196,32 @@ export default function Settings() {
       setConfirmType('clearDemo');
       setConfirmOpen(true);
     }
+  };
+
+  const executeClearImported = async () => {
+    setClearImportedBusy(true);
+    setClearImportedMsg(null);
+    try {
+      const r = await clearImportedData();
+      setClearImportedMsg(
+        `Successfully removed ${r.removedTransactions} imported transactions and ${r.removedAccounts} imported accounts.`
+      );
+    } catch (e) {
+      setClearImportedMsg(`Error: ${(e as Error).message}`);
+    } finally {
+      setClearImportedBusy(false);
+    }
+  };
+
+  const onClearImported = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setConfirmTitle('Clear All Imported Data');
+    setConfirmMessage('Are you sure you want to delete all transactions, accounts, and batch history you imported? This will not affect the Demo data or your customization rules.');
+    setConfirmType('clearImported');
+    setConfirmOpen(true);
   };
 
   // When config changes, query current permission state.
@@ -702,6 +739,47 @@ export default function Settings() {
         </Stack>
       </Paper>
       )}
+
+      {!DEMO_ONLY_BUILD && (
+      <Paper sx={{ p: 3 }}>
+        <Stack spacing={2}>
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <DeleteIcon fontSize="small" color="error" />
+              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, color: 'error.main' }}>
+                Imported data
+              </Typography>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Removes all transactions, accounts, and batch history you imported. 
+              This will not affect demo data, default categories, or customization rules.
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={onClearImported}
+              disabled={clearImportedBusy || !hasImportedData}
+            >
+              Clear all imported data
+            </Button>
+          </Stack>
+
+          {clearImportedMsg && (
+            <Alert
+              severity={clearImportedMsg.startsWith('Error') ? 'error' : 'success'}
+              onClose={() => setClearImportedMsg(null)}
+            >
+              {clearImportedMsg}
+            </Alert>
+          )}
+        </Stack>
+      </Paper>
+      )}
+
       <Dialog
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
@@ -723,6 +801,8 @@ export default function Settings() {
               setConfirmOpen(false);
               if (confirmType === 'clearDemo') {
                 await executeClearDemo();
+              } else if (confirmType === 'clearImported') {
+                await executeClearImported();
               } else if (confirmType === 'disconnect') {
                 await clearConfig();
                 setScan(null);
