@@ -595,8 +595,8 @@ export default function Import() {
         sx={{
           p: 6,
           border: '2px dashed',
-          borderColor: dragOver ? 'primary.main' : 'rgba(0,0,0,0.15)',
-          bgcolor: dragOver ? 'rgba(25,118,210,0.04)' : 'white',
+          borderColor: dragOver ? 'primary.main' : 'divider',
+          bgcolor: dragOver ? 'rgba(25,118,210,0.04)' : 'background.paper',
           textAlign: 'center',
           cursor: 'pointer',
           transition: 'all 0.15s',
@@ -894,7 +894,13 @@ function ColumnMapperCard({
   };
 
   return (
-    <Paper sx={{ p: 3, borderLeft: '4px solid', borderLeftColor: 'primary.main', background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(8px)' }}>
+    <Paper sx={{
+      p: 3,
+      borderLeft: '4px solid',
+      borderLeftColor: 'primary.main',
+      background: (theme) => theme.palette.mode === 'dark' ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+      backdropFilter: 'blur(8px)'
+    }}>
       <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
         Configure Column Mapping: {preview.filename}
       </Typography>
@@ -913,7 +919,7 @@ function ColumnMapperCard({
         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
           CSV Data Preview (First 3 rows)
         </Typography>
-        <Box sx={{ overflowX: 'auto', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 1, bgcolor: '#fafafa' }}>
+        <Box sx={{ overflowX: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
           <Table size="small">
             <TableHead>
               <TableRow>
