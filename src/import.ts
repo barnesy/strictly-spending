@@ -110,11 +110,9 @@ export async function buildPreview(
     potentialKeys.push(dedupKey(p.accountName, p.date, p.amount, p.description, seq));
   }
 
-  const existingKeys = potentialKeys.length > 0
-    ? new Set(
-        (await db.transactions.where('dedupKey').anyOf(potentialKeys).toArray()).map((t) => t.dedupKey)
-      )
-    : new Set<string>();
+  const existingKeys = new Set<string>(
+    (await db.transactions.orderBy('dedupKey').keys()) as string[]
+  );
 
   const rows: ProcessedRow[] = [];
   const byCategory: Record<string, number> = {};

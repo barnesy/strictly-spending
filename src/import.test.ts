@@ -34,6 +34,9 @@ vi.mock('./db', () => {
           anyOf: (vals: any[]) => ({
             toArray: async () => transactionsData.filter(t => vals.includes(t[field]))
           })
+        }),
+        orderBy: (field: string) => ({
+          keys: async () => transactionsData.map(t => t[field]).filter(Boolean)
         })
       },
       accounts: {
