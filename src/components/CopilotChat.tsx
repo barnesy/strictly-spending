@@ -149,7 +149,7 @@ export default function CopilotChat({
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        sx={{ p: 2, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
+        sx={{ px: 2, height: 64, borderBottom: 0, flexShrink: 0 }}
       >
         <Stack direction="row" alignItems="center" spacing={0.75}>
           <Box component="span" sx={{ fontWeight: 900, textShadow: '0 0 0.5px currentColor', color: 'primary.main', fontSize: '0.9rem' }}>
@@ -176,7 +176,14 @@ export default function CopilotChat({
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'grey.50', flexShrink: 0 }}
+          sx={{
+            px: 2,
+            py: 1,
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.default',
+            flexShrink: 0,
+          }}
         >
           <TextField
             select
@@ -344,9 +351,10 @@ function ThreadFiltersBanner() {
       sx={{
         px: 2,
         py: 0.5,
-        borderBottom: '1px solid #ffe0b2',
-        bgcolor: '#fff3e0',
-        color: '#e65100',
+        borderBottom: '1px solid',
+        borderColor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(237, 108, 2, 0.3)' : '#ffe0b2'),
+        bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(237, 108, 2, 0.15)' : '#fff3e0'),
+        color: (theme) => (theme.palette.mode === 'dark' ? '#ffb74d' : '#e65100'),
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
