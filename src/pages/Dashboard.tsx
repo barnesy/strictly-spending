@@ -688,7 +688,7 @@ function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
           inset: 0,
           margin: '0 auto',
           width: 2,
-          bgcolor: 'rgba(0,0,0,0.08)',
+          bgcolor: 'divider',
           borderRadius: 1,
           transition: 'background-color 120ms ease',
           '[data-resize-handle-active] &, &:hover': {

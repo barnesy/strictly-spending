@@ -193,12 +193,26 @@ export function getAppTheme(config: ThemeConfig) {
           root: ({ ownerState }) => ({
             height: ownerState.multiline ? 'auto' : CONTROL_HEIGHT,
           }),
+          underline: {
+            '&:before': {
+              borderBottomColor: dividerColor,
+            },
+            '&:hover:not(.Mui-disabled):before': {
+              borderBottomColor: dividerColor,
+            },
+          },
         },
       },
       MuiOutlinedInput: {
         styleOverrides: {
           root: ({ ownerState }) => ({
             height: ownerState.multiline ? 'auto' : CONTROL_HEIGHT,
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: dividerColor,
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: dividerColor,
+            },
           }),
         },
       },
