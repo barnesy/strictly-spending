@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Stack,
@@ -6,34 +6,47 @@ import {
   Button,
   Paper,
   Slider,
-  Divider,
-  Card,
   CardContent,
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore';
-import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useAnimationStore } from '../animationStore';
+import AnimatedCard from '../components/AnimatedCard';
+
+const MOCK_CARDS = [
+  { name: 'Acme Corporation', amount: '$42.50 total', color: '#1976d2', subtitle: 'Card A' },
+  { name: 'Whole Foods Market', amount: '$124.80 total', color: '#2e7d32', subtitle: 'Card B' },
+  { name: 'Netflix Subscription', amount: '$15.99 recurring', color: '#9c27b0', subtitle: 'Card C' },
+  { name: 'Starbucks Coffee', amount: '$6.75 total', color: '#e65100', subtitle: 'Card D' },
+  { name: 'Chevron Gas Station', amount: '$45.00 total', color: '#006064', subtitle: 'Card E' },
+  { name: 'Apple App Store', amount: '$2.99 total', color: '#311b92', subtitle: 'Card F' },
+];
 
 export default function AnimationSettings() {
   const config = useAnimationStore();
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [previewState, setPreviewState] = useState<
     | 'idle'
     | 'exitRight'
-    | 'exitLeft'
+    | 'entryRight'
     | 'inspectStart'
-    | 'inspectMidRight'
-    | 'inspectMidLeft'
-    | 'inspectEndRight'
-    | 'inspectEndLeft'
+    | 'inspectMid'
+    | 'inspectEnd'
   >('idle');
-  const previewCardRef = useRef<HTMLDivElement>(null);
 
   const triggerPreview = (direction: 'right' | 'left') => {
     setPreviewState('idle');
     // Force reflow
     setTimeout(() => {
-      setPreviewState(direction === 'right' ? 'exitRight' : 'exitLeft');
+      if (direction === 'right') {
+        setCurrentIndex((prev) => (prev + 1) % MOCK_CARDS.length);
+        setPreviewState('exitRight');
+      } else {
+        setCurrentIndex((prev) => (prev - 1 + MOCK_CARDS.length) % MOCK_CARDS.length);
+        setPreviewState('entryRight');
+      }
     }, 10);
   };
 
@@ -67,7 +80,7 @@ export default function AnimationSettings() {
       </Stack>
 
       {/* Resizable Panels Group */}
-      <PanelGroup direction="horizontal" style={{ flex: 1, minHeight: 0 }}>
+      <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
         
         {/* Left Panel: Sliders (Scrollable) */}
         <Panel id="sliders-panel" defaultSize={45} minSize={30} style={{ display: 'flex', flexDirection: 'column' }}>
@@ -276,19 +289,7 @@ export default function AnimationSettings() {
                       onChange={(_, val) => config.updateConfig({ exitXRight: val as number })}
                     />
                   </Box>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>X Swing (Left)</span>
-                      <span>{config.exitXLeft}px</span>
-                    </Typography>
-                    <Slider
-                      value={config.exitXLeft}
-                      min={-600}
-                      max={-100}
-                      step={10}
-                      onChange={(_, val) => config.updateConfig({ exitXLeft: val as number })}
-                    />
-                  </Box>
+
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
                       <span>Y Rise/Dip</span>
@@ -389,19 +390,7 @@ export default function AnimationSettings() {
                       onChange={(_, val) => config.updateConfig({ finalXRight: val as number })}
                     />
                   </Box>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Final X (Left)</span>
-                      <span>{config.finalXLeft}px</span>
-                    </Typography>
-                    <Slider
-                      value={config.finalXLeft}
-                      min={10}
-                      max={400}
-                      step={5}
-                      onChange={(_, val) => config.updateConfig({ finalXLeft: val as number })}
-                    />
-                  </Box>
+
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
                       <span>Final Y (Bottom)</span>
@@ -480,19 +469,7 @@ export default function AnimationSettings() {
                       onChange={(_, val) => config.updateConfig({ finalScale: val as number })}
                     />
                   </Box>
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Z-Index Shift Pct</span>
-                      <span>{config.zSplitPct}%</span>
-                    </Typography>
-                    <Slider
-                      value={config.zSplitPct}
-                      min={10}
-                      max={90}
-                      step={5}
-                      onChange={(_, val) => config.updateConfig({ zSplitPct: val as number })}
-                    />
-                  </Box>
+
                 </Stack>
               </Paper>
             </Stack>
@@ -560,82 +537,143 @@ export default function AnimationSettings() {
                 width: '100%',
               }}
             >
-              {/* Mock Card */}
-              <Card
-                ref={previewCardRef}
-                sx={(theme) => ({
-                  width: '100%',
-                  maxWidth: 600,
-                  minHeight: 460,
-                  borderRadius: 4,
-                  borderLeft: '5px solid #1976d2',
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 30px 60px -15px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08)'
-                    : '0 30px 60px -15px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
-                  bgcolor: 'background.paper',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  p: 2,
-                  zIndex:
-                    previewState === 'inspectMidRight' || previewState === 'inspectMidLeft'
-                      ? config.midStepPct < config.zSplitPct ? 10 : 7
-                      : previewState === 'inspectEndRight' || previewState === 'inspectEndLeft'
-                      ? 7
-                      : 10,
-                  transform:
-                    previewState === 'inspectStart' || previewState === 'idle'
-                      ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
-                      : previewState === 'inspectMidRight'
-                      ? `perspective(1200px) translate3d(${config.exitXRight}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`
-                      : previewState === 'inspectMidLeft'
-                      ? `perspective(1200px) translate3d(${config.exitXLeft}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(-${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`
-                      : previewState === 'inspectEndRight'
-                      ? `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
-                      : previewState === 'inspectEndLeft'
-                      ? `perspective(1200px) translate3d(${config.finalXLeft}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(-${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
-                      : 'none',
-                  animation:
-                    previewState === 'exitRight'
-                      ? `exitFlipRight ${config.duration}ms ${bezierString} forwards`
-                      : previewState === 'exitLeft'
-                      ? `exitFlipLeft ${config.duration}ms ${bezierString} forwards`
-                      : 'none',
-                })}
-              >
-                <CardContent sx={{ p: 1, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      Preview Merchant
-                    </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                      Acme Corporation
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mt: 0.5 }}>
-                      $42.50 total
-                    </Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: 'action.selected', p: 1, borderRadius: 2 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      Animation Status:
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'uppercase', color: 'primary.main' }}>
-                      {previewState === 'idle'
-                        ? 'Ready to Flip'
-                        : previewState === 'inspectStart'
-                        ? 'Start (0%)'
-                        : previewState === 'inspectMidRight'
-                        ? 'Midpoint (Right)'
-                        : previewState === 'inspectMidLeft'
-                        ? 'Midpoint (Left)'
-                        : previewState === 'inspectEndRight'
-                        ? 'Landing (Right)'
-                        : previewState === 'inspectEndLeft'
-                        ? 'Landing (Left)'
-                        : `Flipping ${previewState === 'exitRight' ? 'Right' : 'Left'}`}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
+              {/* Stack Wrapper */}
+              <Box sx={{ position: 'relative', width: '100%', maxWidth: 680, height: 560 }}>
+                {(() => {
+                  const slots = [
+                    { slotIndex: 0, card: null as typeof MOCK_CARDS[0] | null, stackIndex: -2 },
+                    { slotIndex: 1, card: null as typeof MOCK_CARDS[0] | null, stackIndex: -2 },
+                    { slotIndex: 2, card: null as typeof MOCK_CARDS[0] | null, stackIndex: -2 },
+                  ];
+
+                  const prevIdx = (currentIndex - 1 + MOCK_CARDS.length) % MOCK_CARDS.length;
+                  const activeIdx = currentIndex % MOCK_CARDS.length;
+                  const nextIdx = (currentIndex + 1) % MOCK_CARDS.length;
+
+                  slots[activeIdx % 3] = {
+                    slotIndex: activeIdx % 3,
+                    card: MOCK_CARDS[activeIdx],
+                    stackIndex: 0,
+                  };
+
+                  slots[nextIdx % 3] = {
+                    slotIndex: nextIdx % 3,
+                    card: MOCK_CARDS[nextIdx],
+                    stackIndex: 1,
+                  };
+
+                  slots[prevIdx % 3] = {
+                    slotIndex: prevIdx % 3,
+                    card: MOCK_CARDS[prevIdx],
+                    stackIndex: -1,
+                  };
+
+                  const sortedSlots = [...slots].sort((a, b) => b.stackIndex - a.stackIndex);
+
+                  return sortedSlots.map((slot) => {
+                    if (!slot.card) return null;
+
+                    const card = slot.card;
+                    const stackIndex = slot.stackIndex;
+                    const isAnimating = previewState === 'exitRight' || previewState === 'entryRight';
+
+                    // z-index transitions
+                    let zIndex = 9;
+                    if (previewState === 'exitRight') {
+                      zIndex = stackIndex === -1 ? (undefined as any) : (stackIndex === 0 ? 10 : 9);
+                    } else if (previewState === 'entryRight') {
+                      zIndex = stackIndex === 0 ? (undefined as any) : (stackIndex === 1 ? 9 : 0);
+                    } else if (previewState === 'inspectMid') {
+                      zIndex = stackIndex === 0 ? 0 : stackIndex === -1 ? 10 : 9;
+                    } else if (previewState === 'inspectEnd') {
+                      zIndex = stackIndex === 0 ? 0 : stackIndex === -1 ? 10 : 9;
+                    } else {
+                      zIndex = stackIndex === 0 ? 10 : stackIndex === -1 ? 0 : 9;
+                    }
+
+                    // transform transitions
+                    let transform = 'none';
+                    if (isAnimating) {
+                      transform = 'none';
+                    } else if (previewState === 'inspectStart' || previewState === 'idle') {
+                      transform =
+                        stackIndex === 0
+                          ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
+                          : stackIndex === 1
+                          ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
+                          : `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`;
+                    } else if (previewState === 'inspectMid') {
+                      transform =
+                        stackIndex === 0
+                          ? `perspective(1200px) translate3d(${config.exitXRight}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`
+                          : stackIndex === 1
+                          ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
+                          : `perspective(1200px) translate3d(${config.exitXRight}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`;
+                    } else if (previewState === 'inspectEnd') {
+                      transform =
+                        stackIndex === 0
+                          ? `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
+                          : stackIndex === 1
+                          ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
+                          : `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`;
+                    }
+
+                    // keyframe animations
+                    let animation = 'none';
+                    if (previewState === 'exitRight' && stackIndex === -1) {
+                      animation = `exitFlipRight ${config.duration}ms ${bezierString} forwards`;
+                    } else if (previewState === 'entryRight' && stackIndex === 0) {
+                      animation = `entryFlipRight ${config.duration}ms ${bezierString} forwards`;
+                    }
+
+                    return (
+                      <AnimatedCard
+                        key={slot.slotIndex}
+                        suggestedColor={card.color}
+                        stackIndex={stackIndex}
+                        transformOverride={transform}
+                        animationOverride={animation}
+                        zIndexOverride={zIndex}
+                        isAnimatingOverride={isAnimating}
+                      >
+                        <CardContent sx={{ p: 1, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                              {card.subtitle} ({stackIndex === 0 ? 'Active' : stackIndex === 1 ? 'Next' : 'Previous'})
+                            </Typography>
+                            <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
+                              {card.name}
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', mt: 0.5 }}>
+                              {card.amount}
+                            </Typography>
+                          </Box>
+                          {stackIndex === 0 && (
+                            <Box sx={{ bgcolor: 'action.selected', p: 1, borderRadius: 2 }}>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                Animation Status:
+                              </Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'uppercase', color: 'primary.main' }}>
+                                {previewState === 'idle'
+                                  ? 'Ready to Flip'
+                                  : previewState === 'inspectStart'
+                                  ? 'Start (0%)'
+                                  : previewState === 'inspectMid'
+                                  ? 'Midpoint'
+                                  : previewState === 'inspectEnd'
+                                  ? 'Landing (100%)'
+                                  : previewState === 'exitRight'
+                                  ? 'Flipping (Sort)'
+                                  : 'Flipping (Undo)'}
+                              </Typography>
+                            </Box>
+                          )}
+                        </CardContent>
+                      </AnimatedCard>
+                    );
+                  });
+                })()}
+              </Box>
             </Box>
 
             {/* Step Mode / Inspection controls */}
@@ -655,39 +693,21 @@ export default function AnimationSettings() {
                 </Button>
                 <Button
                   size="small"
-                  variant={previewState === 'inspectMidRight' ? 'contained' : 'outlined'}
+                  variant={previewState === 'inspectMid' ? 'contained' : 'outlined'}
                   color="secondary"
-                  onClick={() => setPreviewState('inspectMidRight')}
+                  onClick={() => setPreviewState('inspectMid')}
                   sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
                 >
-                  Mid Right
+                  Midpoint
                 </Button>
                 <Button
                   size="small"
-                  variant={previewState === 'inspectMidLeft' ? 'contained' : 'outlined'}
-                  color="secondary"
-                  onClick={() => setPreviewState('inspectMidLeft')}
-                  sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
-                >
-                  Mid Left
-                </Button>
-                <Button
-                  size="small"
-                  variant={previewState === 'inspectEndRight' ? 'contained' : 'outlined'}
+                  variant={previewState === 'inspectEnd' ? 'contained' : 'outlined'}
                   color="success"
-                  onClick={() => setPreviewState('inspectEndRight')}
+                  onClick={() => setPreviewState('inspectEnd')}
                   sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
                 >
-                  End Right
-                </Button>
-                <Button
-                  size="small"
-                  variant={previewState === 'inspectEndLeft' ? 'contained' : 'outlined'}
-                  color="success"
-                  onClick={() => setPreviewState('inspectEndLeft')}
-                  sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
-                >
-                  End Left
+                  Landing (100%)
                 </Button>
               </Stack>
             </Box>
@@ -697,20 +717,20 @@ export default function AnimationSettings() {
               <Button
                 variant="contained"
                 color="primary"
-                startIcon={<PlayArrowIcon />}
+                startIcon={<ArrowForwardIcon />}
                 onClick={() => triggerPreview('right')}
                 sx={{ flex: 1, textTransform: 'none', borderRadius: 2, whiteSpace: 'nowrap', px: 1.5 }}
               >
-                Flip Right
+                Arrow Right (Sort)
               </Button>
               <Button
                 variant="contained"
                 color="secondary"
-                startIcon={<PlayArrowIcon />}
+                startIcon={<ArrowBackIcon />}
                 onClick={() => triggerPreview('left')}
                 sx={{ flex: 1, textTransform: 'none', borderRadius: 2, whiteSpace: 'nowrap', px: 1.5 }}
               >
-                Flip Left
+                Arrow Left (Back / Undo)
               </Button>
               <Button
                 variant="outlined"

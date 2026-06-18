@@ -141,6 +141,12 @@ export default function Dashboard() {
     () => db.transactions.where('date').between(startISO, endISO, true, true).toArray(),
     [startISO, endISO]
   );
+  const forecastTxnsAll = useLiveQuery(() => {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 24);
+    const cutoffISO = cutoff.toISOString().slice(0, 10);
+    return db.transactions.where('date').aboveOrEqual(cutoffISO).toArray();
+  }, []);
   const merchantOverrides = useLiveQuery(
     () => db.merchantOverrides.toArray(),
     []
@@ -161,9 +167,16 @@ export default function Dashboard() {
         : allTxnsAll?.filter((t) => t.source !== 'demo'),
     [allTxnsAll, demoMode]
   );
+  const forecastTxns = useMemo(
+    () =>
+      forecastTxnsAll && demoMode
+        ? forecastTxnsAll.filter((t) => t.source === 'demo')
+        : forecastTxnsAll?.filter((t) => t.source !== 'demo'),
+    [forecastTxnsAll, demoMode]
+  );
   const recurrenceMap = useMemo(
-    () => buildRecurrenceMap(allTxns || [], merchantOverrides || []),
-    [allTxns, merchantOverrides]
+    () => buildRecurrenceMap(forecastTxns || [], merchantOverrides || []),
+    [forecastTxns, merchantOverrides]
   );
 
   // Default-enable any newly-discovered accounts safely.
@@ -498,7 +511,7 @@ export default function Dashboard() {
               groupBy={groupBy}
               recurrenceMap={recurrenceMap}
               onMonthClick={(monthKey) => drillToMonth(monthKey)}
-              allTxns={allTxns}
+              allTxns={forecastTxns || []}
             />
           </Box>
         ) : (
@@ -512,7 +525,7 @@ export default function Dashboard() {
     <FilterPanel
       accounts={accounts}
       categories={categories}
-      allTxns={allTxns}
+      allTxns={forecastTxns || []}
       visibleTxns={visibleTxns}
       recurrenceMap={recurrenceMap}
     />

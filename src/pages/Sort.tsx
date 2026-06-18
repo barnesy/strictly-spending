@@ -30,6 +30,7 @@ import {
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import CheckIcon from '@mui/icons-material/Check';
 import { db } from '../db';
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 
 import { useFilters } from '../store';
 import { buildRecurrenceMap, refreshRecurrenceAll } from '../recurrence';
@@ -126,7 +127,6 @@ export default function Sort() {
   const fetchingKeysRef = useRef<Set<string>>(new Set());
 
   const [helpOpen, setHelpOpen] = useState(false);
-  const [leaving, setLeaving] = useState<{ color: string } | null>(null);
 
   // Sync state when active card or suggestions or selections change
   useEffect(() => {
@@ -356,12 +356,7 @@ export default function Sort() {
         }
       }));
 
-      // Animate card transition
-      setLeaving({ color: lookupCategoryColor(categoryName) });
-      await new Promise((r) => setTimeout(r, 180));
-      setLeaving(null);
-
-      // Auto-advance to the next uncategorized card
+      // Auto-advance to the next uncategorized card immediately (animations play in background)
       const nextIndex = visibleQueue.findIndex((card, idx) => idx > currentIndex && !selections[card.merchantKey]?.category);
       if (nextIndex !== -1) {
         setCurrentIndex(nextIndex);
@@ -372,7 +367,7 @@ export default function Sort() {
         }
       }
     },
-    [currentCard, currentIndex, visibleQueue, selections, rulePattern, saveRule, lookupCategoryColor, aiSuggestEnabled, aiSuggestions, updateScore]
+    [currentCard, currentIndex, visibleQueue, selections, rulePattern, saveRule, aiSuggestEnabled, aiSuggestions, updateScore]
   );
 
   // Keyboard handler — single global listener while the page is mounted.
@@ -449,7 +444,7 @@ export default function Sort() {
   const remaining = visibleQueue.length;
 
   return (
-    <Stack spacing={2} sx={{ width: '100%' }}>
+    <Stack spacing={2} sx={{ width: '100%', height: 'calc(100vh - 120px)', pb: 2 }}>
       {/* Header row */}
       <Stack
         direction="row"
@@ -635,137 +630,192 @@ export default function Sort() {
 
       {/* Card or empty state */}
       {currentCard ? (
-        <>
-          {/* 3D Stack of Cards */}
-          <Box sx={{ position: 'relative', width: '100%', maxWidth: 600, mx: 'auto', pb: 5 }}>
-            {(() => {
-              const startIndex = Math.max(0, currentIndex - 1);
-              const endIndex = currentIndex + 3;
-              const slice = visibleQueue.slice(startIndex, endIndex);
-
-              const cardsWithStackIndex = slice.map((card, index) => {
-                const queueIndex = startIndex + index;
-                const stackIndex = queueIndex - currentIndex;
-                return { card, stackIndex };
-              });
-
-              // Sort by stackIndex descending so that cards deeper in the stack render first,
-              // and the active (stackIndex=0) and leaving (stackIndex=-1) cards render last (on top).
-              cardsWithStackIndex.sort((a, b) => b.stackIndex - a.stackIndex);
-
-              return cardsWithStackIndex.map(({ card, stackIndex }) => {
-                const isTop = stackIndex === 0;
-                const cardSuggestion = aiSuggestEnabled
-                  ? (aiSuggestions[card.merchantKey]?.category || null)
-                  : card.suggestedCategory;
-
-                const hasSelection = !!selections[card.merchantKey]?.category;
-                const zipDirection = hasSelection ? 'right' : 'left';
-
-                return (
-                  <SortCard
-                    key={card.merchantKey}
-                    card={card}
-                    suggestedColor={
-                      cardSuggestion
-                        ? lookupCategoryColor(cardSuggestion)
-                        : undefined
-                    }
-                    leaving={isTop ? leaving : null}
-                    suggestedCategoryOverride={aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined}
-                    aiSuggesting={aiSuggesting[card.merchantKey] || false}
-                    aiError={aiErrors[card.merchantKey] || null}
-                    stackIndex={stackIndex}
-                    zipDirection={zipDirection}
-                  />
-                );
-              });
-            })()}
-          </Box>
-
-          {/* Category grid */}
-          <Paper sx={{ p: 2, borderRadius: 3 }}>
-            <Stack spacing={1.5}>
-              <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}
-                  >
-                    Pick a category
-                  </Typography>
-                  {selections[currentCard.merchantKey]?.category && (
-                    <Chip
-                      size="small"
-                      label="Clear Selection"
-                      onClick={handleClearSelection}
-                      onDelete={handleClearSelection}
-                      color="warning"
-                      variant="outlined"
-                      sx={{ height: 20, fontSize: '0.65rem', borderRadius: 1 }}
+        <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
+          {/* Left Panel: Controls (Scrollable) */}
+          <Panel id="sort-controls-panel" defaultSize={45} minSize={30} style={{ display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
+              <Stack spacing={2}>
+                <Paper sx={{ p: 3, borderRadius: 3 }}>
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}
+                        >
+                          Pick a category
+                        </Typography>
+                        {selections[currentCard.merchantKey]?.category && (
+                          <Chip
+                            size="small"
+                            label="Clear Selection"
+                            onClick={handleClearSelection}
+                            onDelete={handleClearSelection}
+                            color="warning"
+                            variant="outlined"
+                            sx={{ height: 20, fontSize: '0.65rem', borderRadius: 1 }}
+                          />
+                        )}
+                      </Stack>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={saveRule}
+                            onChange={(e) => handleSaveRuleChange(e.target.checked)}
+                          />
+                        }
+                        label={
+                          <Typography variant="caption" color="text.secondary">
+                            Save as rule (catches future imports)
+                          </Typography>
+                        }
+                        sx={{ m: 0 }}
+                      />
+                    </Stack>
+                    {saveRule && (
+                      <Box sx={{ mt: 0.5, mb: 1 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Rule Pattern"
+                          value={rulePattern}
+                          onChange={(e) => handlePatternChange(e.target.value)}
+                          placeholder="e.g. starbucks"
+                          helperText="Future imports matching this keyword will be auto-categorized."
+                          FormHelperTextProps={{
+                            sx: { mx: 1, my: 0.5 }
+                          }}
+                        />
+                      </Box>
+                    )}
+                    <SortCategoryGrid
+                      categories={categories}
+                      suggested={activeSuggestion}
+                      selected={selections[currentCard.merchantKey]?.category || null}
+                      onPick={onPick}
+                      spendOnly={false}
+                      isAiSuggested={aiSuggestEnabled && (aiSuggestions[currentCard.merchantKey]?.category !== undefined)}
                     />
-                  )}
+                  </Stack>
+                </Paper>
+
+                {/* Footer hint */}
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  justifyContent="center"
+                  sx={{ opacity: 0.7, py: 1 }}
+                  flexWrap="wrap"
+                >
+                  <KeyHint k="Enter" desc="accept suggested" />
+                  <KeyHint k="1–9" desc="grid pick" />
+                  <KeyHint k="← / →" desc="navigate cards" />
+                  <KeyHint k="?" desc="help" />
                 </Stack>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={saveRule}
-                      onChange={(e) => handleSaveRuleChange(e.target.checked)}
-                    />
-                  }
-                  label={
-                    <Typography variant="caption" color="text.secondary">
-                      Save as rule (catches future imports)
-                    </Typography>
-                  }
-                  sx={{ m: 0 }}
-                />
               </Stack>
-              {saveRule && (
-                <Box sx={{ mt: 0.5, mb: 1 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Rule Pattern"
-                    value={rulePattern}
-                    onChange={(e) => handlePatternChange(e.target.value)}
-                    placeholder="e.g. starbucks"
-                    helperText="Future imports matching this keyword will be auto-categorized."
-                    FormHelperTextProps={{
-                      sx: { mx: 1, my: 0.5 }
-                    }}
-                  />
-                </Box>
-              )}
-              <SortCategoryGrid
-                categories={categories}
-                suggested={activeSuggestion}
-                selected={selections[currentCard.merchantKey]?.category || null}
-                onPick={onPick}
-                spendOnly={false}
-                isAiSuggested={aiSuggestEnabled && (aiSuggestions[currentCard.merchantKey]?.category !== undefined)}
-              />
-            </Stack>
-          </Paper>
+            </Box>
+          </Panel>
 
-          {/* Footer hint */}
-          <Stack
-            direction="row"
-            spacing={1.5}
-            justifyContent="center"
-            sx={{ opacity: 0.7 }}
-            flexWrap="wrap"
+          {/* Separator / Drag Handle */}
+          <PanelResizeHandle
+            style={{
+              width: 12,
+              position: 'relative',
+              cursor: 'col-resize',
+            }}
           >
-            <KeyHint k="Enter" desc="accept suggested" />
-            <KeyHint k="1–9" desc="grid pick" />
-            <KeyHint k="← / →" desc="navigate cards" />
-            <KeyHint k="?" desc="help" />
-          </Stack>
-        </>
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 'calc(50% - 1px)',
+                width: 2,
+                bgcolor: 'divider',
+                borderRadius: 1,
+                transition: 'background-color 120ms ease, width 120ms ease, left 120ms ease',
+                '&:hover, &[data-resize-handle-active]': {
+                  bgcolor: 'primary.main',
+                  width: 4,
+                  left: 'calc(50% - 2px)',
+                },
+              }}
+            />
+          </PanelResizeHandle>
+
+          {/* Right Panel: 3D Stack Viewport */}
+          <Panel id="sort-preview-panel" defaultSize={55} minSize={35} style={{ display: 'flex', flexDirection: 'column' }}>
+            <Box
+              sx={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                overflow: 'auto',
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? '#121212' : '#f5f5f5',
+                p: 3,
+                width: '100%',
+                height: '100%',
+              }}
+            >
+              {/* 3D Stack of Cards */}
+              <Box sx={{ position: 'relative', width: '100%', maxWidth: 680, minHeight: 560, my: 'auto' }}>
+                {(() => {
+                  const windowStart = Math.max(0, currentIndex - 2);
+                  const windowEnd = Math.min(visibleQueue.length - 1, currentIndex + 3);
+                  
+                  const visibleCards = [];
+                  for (let i = windowStart; i <= windowEnd; i++) {
+                    visibleCards.push({
+                      card: visibleQueue[i],
+                      stackIndex: i - currentIndex
+                    });
+                  }
+
+                  const sortedCards = [...visibleCards].sort((a, b) => b.stackIndex - a.stackIndex);
+
+                  return sortedCards.map(({ card, stackIndex }) => {
+                    const cardSuggestion = aiSuggestEnabled
+                      ? (aiSuggestions[card.merchantKey]?.category || null)
+                      : card.suggestedCategory;
+
+                    const selection = selections[card.merchantKey];
+                    const chosenColor = selection ? lookupCategoryColor(selection.category) : undefined;
+                    const zipDirection = selection ? 'right' : 'left';
+
+                    return (
+                      <SortCard
+                        key={card.merchantKey}
+                        card={card}
+                        suggestedColor={
+                          cardSuggestion
+                            ? lookupCategoryColor(cardSuggestion)
+                            : undefined
+                        }
+                        chosenColor={chosenColor}
+                        suggestedCategoryOverride={aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined}
+                        aiSuggesting={aiSuggesting[card.merchantKey] || false}
+                        aiError={aiErrors[card.merchantKey] || null}
+                        stackIndex={stackIndex}
+                        zipDirection={zipDirection}
+                      />
+                    );
+                  });
+                })()}
+              </Box>
+            </Box>
+          </Panel>
+        </PanelGroup>
       ) : (
-        <SortEmptyState />
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <SortEmptyState />
+        </Box>
       )}
 
       {/* Help dialog */}
