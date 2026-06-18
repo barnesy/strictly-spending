@@ -497,7 +497,7 @@ export default function AnimationSettings() {
 
         {/* Live Preview Panel */}
         <Grid item xs={12} md={7}>
-          <Box sx={{ position: 'sticky', top: 24 }}>
+          <Box sx={{ position: 'sticky', top: 24, width: '100%' }}>
             <Paper
               sx={{
                 p: 3,
