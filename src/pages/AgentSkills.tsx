@@ -194,15 +194,11 @@ export const AgentSkills: React.FC = () => {
       const updatedSkills: AgentSkill[] = [];
 
       for (const skill of currentSkills) {
-        if (skill.id === 'builtin:runway') {
+        if (skill.isBuiltIn) {
           hasChanges = true;
           continue;
         }
-        if (!skill.isBuiltIn) {
-          updatedSkills.push(skill);
-        } else {
-          hasChanges = true;
-        }
+        updatedSkills.push(skill);
       }
 
       const runwaySkillExists = updatedSkills.some(s => s.id === 'builtin:runway');
@@ -229,6 +225,39 @@ export const AgentSkills: React.FC = () => {
           ]
         });
         hasChanges = true;
+      }
+
+      const categorizationSkillExists = updatedSkills.some(s => s.id === 'builtin:categorization');
+      if (!categorizationSkillExists) {
+        updatedSkills.push({
+          id: 'builtin:categorization',
+          name: 'Manual Transaction Categorization',
+          description: 'Uses local AI to auto-categorize uncategorized transactions chunk-by-chunk.',
+          systemPromptExtension: `- When asked to auto-categorize, sort, organize, classify, or run AI review/categorization on remaining, new, or uncategorized transactions (e.g. phrases like "auto-categorize", "auto categorize", "AI categorize", "sort transactions using AI", "classify remaining transactions", "run categorization"):
+  1. Stage 1: You MUST set 'agent_action.action' to 'categorize_transactions'. Do NOT explain results, suggest rules, or do math in the body field during Stage 1.
+  2. Stage 2: Once the database updates are completed and the system returns the count of processed transactions, summarize the categorization results clearly in the body. Cite the exact count of categorized transactions.`,
+          enabled: true,
+          isBuiltIn: false,
+          testCases: [
+            {
+              prompt: "AI categorize remaining transactions",
+              criteria: "Must call the categorize_transactions action in Stage 1."
+            },
+            {
+              prompt: "please auto-categorize all uncategorized items",
+              criteria: "Must call categorize_transactions to initiate the AI review."
+            }
+          ]
+        });
+        hasChanges = true;
+      } else {
+        const existingCat = updatedSkills.find(s => s.id === 'builtin:categorization');
+        if (existingCat && existingCat.systemPromptExtension.includes('or AI classify remaining or uncategorized transactions:')) {
+          existingCat.systemPromptExtension = `- When asked to auto-categorize, sort, organize, classify, or run AI review/categorization on remaining, new, or uncategorized transactions (e.g. phrases like "auto-categorize", "auto categorize", "AI categorize", "sort transactions using AI", "classify remaining transactions", "run categorization"):
+  1. Stage 1: You MUST set 'agent_action.action' to 'categorize_transactions'. Do NOT explain results, suggest rules, or do math in the body field during Stage 1.
+  2. Stage 2: Once the database updates are completed and the system returns the count of processed transactions, summarize the categorization results clearly in the body. Cite the exact count of categorized transactions.`;
+          hasChanges = true;
+        }
       }
 
       if (hasChanges || updatedSkills.length !== currentSkills.length) {

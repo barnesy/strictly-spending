@@ -87,10 +87,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
 }) => {
   return (
     <Stack spacing={2} sx={{ height: 'calc(100vh - 280px)', minHeight: '520px' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="body2" color="text.secondary">
-          This prompt governs the offline chatbot model when matching natural language commands to page filters and reasoning over your financial data.
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
         <Stack direction="row" spacing={1.5}>
           <Button
             variant="outlined"
@@ -98,7 +95,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
             startIcon={<RefreshIcon />}
             onClick={handleResetSystemPrompt}
             size="small"
-            sx={{ textTransform: 'none' }}
+            sx={{ textTransform: 'none', minWidth: 160 }}
           >
             Reset to Default
           </Button>
@@ -107,7 +104,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
             startIcon={<SaveIcon />}
             onClick={handleSaveSystemPrompt}
             size="small"
-            sx={{ textTransform: 'none', px: 3 }}
+            sx={{ textTransform: 'none', minWidth: 160 }}
           >
             Save Prompt
           </Button>
