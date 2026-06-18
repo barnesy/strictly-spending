@@ -637,7 +637,7 @@ export default function Sort() {
       {currentCard ? (
         <>
           {/* 3D Stack of Cards */}
-          <Box sx={{ position: 'relative', width: '100%', pb: 5 }}>
+          <Box sx={{ position: 'relative', width: '100%', maxWidth: 600, mx: 'auto', pb: 5 }}>
             {(() => {
               const startIndex = Math.max(0, currentIndex - 1);
               const endIndex = currentIndex + 3;

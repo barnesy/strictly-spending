@@ -534,7 +534,7 @@ export default function AnimationSettings() {
                   ref={previewCardRef}
                   sx={(theme) => ({
                     width: '100%',
-                    maxWidth: 420,
+                    maxWidth: 600,
                     minHeight: 460,
                     borderRadius: 4,
                     borderLeft: '5px solid #1976d2',
