@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Box,
   Stack,
@@ -19,55 +20,61 @@ import {
   DialogActions,
   Alert,
   Chip,
+  TablePagination,
 } from '@mui/material';
+import PageLoader from '../components/PageLoader';
+
+import AutoCleanupDialog from '../components/AutoCleanupDialog';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { db } from '../db';
 import type { CategoryRule } from '../types';
-import { recategorizeAll, normalizeForMatch } from '../categorize';
-import { mineRuleSuggestions } from '../ruleMiner';
-import { useMemo } from 'react';
+import { normalizeForMatch } from '../categorize';
 
 export default function Rules() {
-  const [rules, setRules] = useState<CategoryRule[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const allRules = useLiveQuery(() => db.rules.orderBy('priority').reverse().toArray(), []);
+  const allTxns = useLiveQuery(() => db.transactions.toArray(), []);
+  const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
 
+  const isLoading = allRules === undefined || allTxns === undefined || categories === undefined;
+
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [deleteRuleId, setDeleteRuleId] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
 
-  const loadData = async () => {
-    const r = await db.rules.orderBy('priority').reverse().toArray();
-    const c = await db.categories.toArray();
-    const txns = await db.transactions.toArray();
-    setRules(r);
-    setCategories(c);
-    setAllTransactions(txns);
-  };
+  // Derive filtered and paginated data in memory (blazing fast)
+  const filteredRules = useMemo(() => {
+    if (!allRules) return [];
+    return allRules.filter(r => {
+      if (!searchQuery && categoryFilter === 'all') return true;
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = !searchQuery || r.pattern.toLowerCase().includes(searchLower);
+      const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter;
+      return matchesSearch && matchesCategory;
+    });
+  }, [allRules, searchQuery, categoryFilter]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const totalRules = filteredRules.length;
 
-  useEffect(() => {
-    let active = true;
-    async function loadSuggestions() {
-      const res = await mineRuleSuggestions();
-      if (active) {
-        setSuggestions(res);
-      }
-    }
-    loadSuggestions();
-    return () => {
-      active = false;
-    };
-  }, [rules]);
+  const paginatedRules = useMemo(() => {
+    const start = page * rowsPerPage;
+    return filteredRules.slice(start, start + rowsPerPage);
+  }, [filteredRules, page, rowsPerPage]);
 
   const [editing, setEditing] = useState<CategoryRule | 'new' | null>(null);
-  const [recategorizing, setRecategorizing] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const onSave = async (rule: Omit<CategoryRule, 'id' | 'createdAt'> & { id?: number }) => {
@@ -86,7 +93,6 @@ export default function Rules() {
       });
     }
     setEditing(null);
-    await loadData();
   };
 
   const handleDeleteClick = (id: number) => {
@@ -97,54 +103,49 @@ export default function Rules() {
     if (deleteRuleId !== null) {
       await db.rules.delete(deleteRuleId);
       setDeleteRuleId(null);
-      await loadData();
     }
   };
 
-  const onRecategorize = async () => {
-    setRecategorizing(true);
-    const { updated } = await recategorizeAll();
-    setRecategorizing(false);
-    setFeedback(`Recategorized ${updated} transactions.`);
-  };
+  useEffect(() => {
+    setPage(0);
+  }, [searchQuery, categoryFilter]);
 
   const matchCounts = useMemo(() => {
+    if (!allTxns || !paginatedRules.length) return {};
     const counts: Record<number, number> = {};
-    for (const r of rules) {
-      if (!r.id || !r.pattern) continue;
-      const normalizedPattern = normalizeForMatch(r.pattern);
-      if (!normalizedPattern) {
-        counts[r.id] = 0;
-        continue;
-      }
-      counts[r.id] = allTransactions.filter(t => {
+    paginatedRules.forEach(r => { if (r.id) counts[r.id] = 0; });
+    
+    const activeRules = paginatedRules
+      .filter(r => r.id && r.pattern)
+      .map(r => ({ id: r.id!, pattern: normalizeForMatch(r.pattern) }))
+      .filter(r => r.pattern);
+
+    if (activeRules.length > 0) {
+      // Loop over transactions in memory! (Blazing fast compared to db.transactions.each)
+      for (const t of allTxns) {
         const desc = normalizeForMatch(t.description);
         const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey) : '';
-        return desc.includes(normalizedPattern) || (mkey && mkey.includes(normalizedPattern));
-      }).length;
+        for (const r of activeRules) {
+          if (desc.includes(r.pattern) || (mkey && mkey.includes(r.pattern))) {
+            counts[r.id]++;
+          }
+        }
+      }
     }
     return counts;
-  }, [rules, allTransactions]);
-
-  const filteredRules = useMemo(() => {
-    return rules.filter(r => {
-      const matchesSearch = r.pattern.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter;
-      return matchesSearch && matchesCategory;
-    });
-  }, [rules, searchQuery, categoryFilter]);
+  }, [allTxns, paginatedRules]);
 
   return (
-    <Stack spacing={3}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
+    <PageLoader isLoading={isLoading}>
+      <Stack spacing={3}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="h5">Categorization Rules</Typography>
         <Stack direction="row" spacing={1}>
           <Button
             variant="outlined"
-            onClick={onRecategorize}
-            disabled={recategorizing}
+            onClick={() => setCleanupOpen(true)}
           >
-            Re-run on all transactions
+            Auto Cleanup
           </Button>
           <Button
             variant="contained"
@@ -164,8 +165,8 @@ export default function Rules() {
           size="small"
           label="Search Patterns"
           variant="outlined"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           sx={{ flexGrow: 1, minWidth: 200 }}
         />
         <TextField
@@ -185,66 +186,10 @@ export default function Rules() {
         </TextField>
       </Paper>
 
-      {suggestions && suggestions.length > 0 && (
-        <Stack spacing={1.5} sx={{ mb: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-            Recommended Rules (Mined from manual overrides)
-          </Typography>
-          <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', pb: 1.5, '&::-webkit-scrollbar': { height: 6 } }}>
-            {suggestions.map((s, idx) => (
-              <Paper
-                key={idx}
-                elevation={0}
-                sx={{
-                  p: 2,
-                  minWidth: 320,
-                  maxWidth: 320,
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  borderRadius: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 1.5,
-                  bgcolor: 'rgba(25, 118, 210, 0.03)',
-                  flexShrink: 0,
-                }}
-              >
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                    Create rule for "{s.pattern}"
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                    Matches: <code>{s.sampleDescription}</code> ({s.overridesCount} overrides)
-                  </Typography>
-                </Box>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Chip
-                    size="small"
-                    label={s.category}
-                    sx={{
-                      bgcolor:
-                        (categories?.find((c) => c.name === s.category)
-                          ?.color || '#bdbdbd') + '22',
-                      color:
-                        categories?.find((c) => c.name === s.category)?.color ||
-                        '#666',
-                      fontWeight: 500,
-                    }}
-                  />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => onSave({ pattern: s.pattern, category: s.category, priority: 100 })}
-                  >
-                    Add Rule
-                  </Button>
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
-        </Stack>
-      )}
 
-      <Paper>
+
+      <Box sx={{ position: 'relative' }}>
+        <Paper>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -256,7 +201,7 @@ export default function Rules() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredRules?.map((r) => (
+            {paginatedRules?.map((r) => (
               <TableRow key={r.id} hover>
                 <TableCell>
                   <code style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>
@@ -299,7 +244,7 @@ export default function Rules() {
                 </TableCell>
               </TableRow>
             ))}
-            {filteredRules?.length === 0 && (
+            {totalRules === 0 && (
               <TableRow>
                 <TableCell colSpan={5}>
                   <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
@@ -310,13 +255,27 @@ export default function Rules() {
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          component="div"
+          count={totalRules}
+          page={page}
+          onPageChange={(_, p) => setPage(p)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(Number(e.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+        />
       </Paper>
+
+      </Box>
 
       {editing !== null && (
         <RuleDialog
           rule={editing === 'new' ? null : editing}
           categories={categories?.map((c) => c.name) || []}
-          allTransactions={allTransactions}
+          allTxns={allTxns || []}
           onClose={() => setEditing(null)}
           onSave={onSave}
         />
@@ -337,39 +296,58 @@ export default function Rules() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Stack>
+      <AutoCleanupDialog 
+        open={cleanupOpen} 
+        categories={categories}
+        onClose={() => setCleanupOpen(false)} 
+        onComplete={() => setCleanupOpen(false)} 
+      />
+      </Stack>
+    </PageLoader>
   );
 }
 
 function RuleDialog({
   rule,
   categories,
-  allTransactions,
+  allTxns,
   onClose,
   onSave,
 }: {
   rule: CategoryRule | null;
   categories: string[];
-  allTransactions: any[];
+  allTxns: any[];
   onClose: () => void;
   onSave: (r: Omit<CategoryRule, 'id' | 'createdAt'> & { id?: number }) => void;
 }) {
   const [pattern, setPattern] = useState(rule?.pattern || '');
   const [category, setCategory] = useState(rule?.category || categories[0] || '');
   const [priority, setPriority] = useState(rule?.priority || 100);
+  const [activeMatches, setActiveMatches] = useState<any[]>([]);
 
-  const activeMatches = useMemo(() => {
+  useEffect(() => {
     const trimmed = pattern.trim();
-    if (!trimmed) return [];
+    if (!trimmed) {
+      setActiveMatches([]);
+      return;
+    }
     const norm = normalizeForMatch(trimmed);
-    if (!norm) return [];
+    if (!norm) {
+      setActiveMatches([]);
+      return;
+    }
 
-    return allTransactions.filter(t => {
-      const desc = normalizeForMatch(t.description);
-      const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey) : '';
-      return desc.includes(norm) || (mkey && mkey.includes(norm));
-    });
-  }, [pattern, allTransactions]);
+    const timer = setTimeout(() => {
+      const matches = allTxns.filter(t => {
+        const desc = normalizeForMatch(t.description);
+        const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey) : '';
+        return desc.includes(norm) || (mkey && mkey.includes(norm));
+      });
+      setActiveMatches(matches);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [pattern, allTxns]);
 
   const affectedCount = useMemo(() => {
     return activeMatches.filter(t => t.category !== category).length;

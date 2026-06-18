@@ -29,6 +29,7 @@ import {
   Alert,
   Collapse,
 } from '@mui/material';
+import PageLoader from '../components/PageLoader';
 import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import StorefrontIcon from '@mui/icons-material/Storefront';
@@ -284,21 +285,21 @@ export default function Dashboard() {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
-  if (!accounts || !categories || !allTxns || dbTxnCount === undefined || dbAcctCount === undefined) {
-    return <Typography>Loading…</Typography>;
-  }
+  const isLoading = !accounts || !categories || !allTxns || dbTxnCount === undefined || dbAcctCount === undefined;
 
   if (dbTxnCount === 0) {
     return (
-      <Stack spacing={3} alignItems="flex-start" sx={{ width: '100%' }}>
-        <Typography variant="h5">Dashboard</Typography>
-        <Alert severity="info" sx={{ width: '100%' }}>
-          No transactions yet. Import a CSV to get started.
-        </Alert>
-        <Button component={RouterLink} to="/import" variant="contained" size="large">
-          Import CSVs
-        </Button>
-      </Stack>
+      <PageLoader isLoading={isLoading}>
+        <Stack spacing={3} alignItems="flex-start" sx={{ width: '100%' }}>
+          <Typography variant="h5">Dashboard</Typography>
+          <Alert severity="info" sx={{ width: '100%' }}>
+            No transactions yet. Import a CSV to get started.
+          </Alert>
+          <Button component={RouterLink} to="/import" variant="contained" size="large">
+            Import CSVs
+          </Button>
+        </Stack>
+      </PageLoader>
     );
   }
 
@@ -469,7 +470,7 @@ export default function Dashboard() {
 
       {/* Content */}
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', ...subtleScrollSx }}>
-        {allTxns.length === 0 || visibleTxns.length === 0 ? (
+        {(allTxns?.length || 0) === 0 || visibleTxns.length === 0 ? (
           <Box
             sx={{
               display: 'flex',
@@ -506,8 +507,8 @@ export default function Dashboard() {
             <SpendChart
               monthList={monthList}
               transactions={visibleTxns}
-              accounts={accounts}
-              categories={categories}
+              accounts={accounts || []}
+              categories={categories || []}
               groupBy={groupBy}
               recurrenceMap={recurrenceMap}
               onMonthClick={(monthKey) => drillToMonth(monthKey)}
@@ -523,8 +524,8 @@ export default function Dashboard() {
 
   const filterPanel = (
     <FilterPanel
-      accounts={accounts}
-      categories={categories}
+      accounts={accounts || []}
+      categories={categories || []}
       allTxns={forecastTxns || []}
       visibleTxns={visibleTxns}
       recurrenceMap={recurrenceMap}
@@ -539,8 +540,9 @@ export default function Dashboard() {
   );
 
   return (
-    <Box className={isTransitioning ? 'transitioning-panels' : ''} sx={{ height: isDesktop ? '100%' : 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <DemoModeBanner />
+    <PageLoader isLoading={isLoading}>
+      <Box className={isTransitioning ? 'transitioning-panels' : ''} sx={{ height: isDesktop ? '100%' : 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <DemoModeBanner />
       <UncategorizedBanner />
 
       {/* Combined Unified Toolbar */}
@@ -672,7 +674,8 @@ export default function Dashboard() {
           onClose={() => setEditTxn(null)}
         />
       )}
-    </Box>
+      </Box>
+    </PageLoader>
   );
 }
 

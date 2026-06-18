@@ -8,11 +8,12 @@ export interface RuleSuggestion {
 }
 
 export async function mineRuleSuggestions(): Promise<RuleSuggestion[]> {
-  // 1. Fetch all rules and transactions with overrides
+  // 1. Fetch all rules and overridden transactions
   const rules = await db.rules.toArray();
-  const txns = await db.transactions.toArray();
-  
-  const overriddenTxns = txns.filter(t => t.userOverridden);
+  const overriddenTxns = await db.transactions
+    .filter(t => !!t.userOverridden && t.category !== 'Uncategorized')
+    .toArray();
+    
   if (overriddenTxns.length === 0) return [];
   
   // 2. Count overrides by merchantKey + category

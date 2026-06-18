@@ -11,6 +11,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import PageLoader from '../components/PageLoader';
 import {
   Box,
   Stack,
@@ -437,14 +438,17 @@ export default function Sort() {
   }, [onPick, isInteractive, helpOpen, activeSuggestion, visibleQueue.length]);
 
   if (!uncategorizedAll || !relevantTxnsAll || !categories || !rules) {
-    return null;
+    return <PageLoader isLoading={true}>{false}</PageLoader>;
   }
 
   const selectionsCount = Object.keys(selections).length;
   const remaining = visibleQueue.length;
 
+  const isLoading = uncategorizedAll === undefined || categories === undefined || rules === undefined;
+
   return (
-    <Stack spacing={2} sx={{ width: '100%', height: 'calc(100vh - 120px)', pb: 2 }}>
+    <PageLoader isLoading={isLoading}>
+      <Stack spacing={2} sx={{ width: '100%', height: 'calc(100vh - 120px)', pb: 2 }}>
       {/* Header row */}
       <Stack
         direction="row"
@@ -834,7 +838,8 @@ export default function Sort() {
           </Alert>
         </DialogContent>
       </Dialog>
-    </Stack>
+      </Stack>
+    </PageLoader>
   );
 }
 

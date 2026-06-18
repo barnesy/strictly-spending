@@ -50,7 +50,7 @@ export default function SortCard({
   stackIndex = 0,
   zipDirection = 'right',
 }: Props) {
-  const { merchantKey, txns, totalAbs, sampleTxns, recurrence, suggestedCategory } = card;
+  const { merchantKey, txns, totalAbs, recurrence, suggestedCategory } = card;
 
   const [expanded, setExpanded] = useState(false);
 
@@ -62,7 +62,7 @@ export default function SortCard({
     return [...txns].sort((a, b) => b.date.localeCompare(a.date));
   }, [txns]);
 
-  const displayedTxns = expanded ? sortedTxns : sampleTxns;
+  const displayedTxns = expanded ? sortedTxns : sortedTxns.slice(0, 6);
 
   const cadence =
     recurrence && isRecurring(recurrence.kind)
@@ -261,7 +261,7 @@ export default function SortCard({
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
                     {t.description.slice(0, 60)}
                   </TableCell>
-                  <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                  <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, whiteSpace: 'nowrap' }}>
                     {usdCents.format(t.amount)}
                   </TableCell>
                 </TableRow>
@@ -269,7 +269,7 @@ export default function SortCard({
             </TableBody>
           </Table>
         </Box>
-        {txns.length > 10 && (
+        {txns.length > 6 && (
           <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}>
             <Button
               size="small"
@@ -280,7 +280,7 @@ export default function SortCard({
               }}
               sx={{ textTransform: 'none', fontWeight: 600, py: 0 }}
             >
-              {expanded ? 'Show less' : `Show ${txns.length - 10} more...`}
+              {expanded ? 'Show less' : `Show ${txns.length - 6} more...`}
             </Button>
           </Box>
         )}

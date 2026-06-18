@@ -47,7 +47,7 @@ export default function SortCategoryGrid({
   spendOnly = false,
   isAiSuggested = false,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState(PALETTE[0]);

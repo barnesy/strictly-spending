@@ -13,7 +13,7 @@ import {
 import { useFilters, resolveDateRange } from '../store';
 import type { Account, Category, Transaction } from '../types';
 import { usd, monthKey, monthsBetween } from '../lib';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { type RecurrenceInfo } from '../recurrence';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -41,6 +41,25 @@ export default function FilterPanel({
     .filter((t) => t.amount > 0)
     .reduce((s, t) => s + t.amount, 0);
   const netFlow = totalIncome - totalSpend;
+
+  const [searchInput, setSearchInput] = useState(filters.searchQuery);
+
+  useEffect(() => {
+    if (filters.searchQuery !== searchInput) {
+      setSearchInput(filters.searchQuery);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== filters.searchQuery) {
+        filters.setSearchQuery(searchInput);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
 
   const budgets = useLiveQuery(() => db.budgets.toArray(), []);
   const excludedBudgetCategories = useBudgetStore((s) => s.excludedBudgetCategories);
@@ -286,8 +305,8 @@ export default function FilterPanel({
             fullWidth
             size="small"
             placeholder="Search merchants..."
-            value={filters.searchQuery}
-            onChange={(e) => filters.setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
         </Box>
         
