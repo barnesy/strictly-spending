@@ -19,25 +19,75 @@ export const ACCOUNT_COLORS = [
   '#455a64',
 ];
 
-export function getAppTheme(mode: 'light' | 'dark', primaryColor: string, secondaryColor: string) {
+export interface ThemeConfig {
+  mode: 'light' | 'dark';
+  primaryColor: string;
+  secondaryColor: string;
+  backgroundColor?: string;
+  paperColor?: string;
+  textColor?: string;
+  borderRadius?: number;
+  fontFamily?: string;
+}
+
+// Function to compute luminance and decide on text color if not provided
+function getContrast(hex: string): string {
+  // Convert hex to RGB
+  let r = 0, g = 0, b = 0;
+  if (hex.length === 4) {
+    r = parseInt(hex[1] + hex[1], 16);
+    g = parseInt(hex[2] + hex[2], 16);
+    b = parseInt(hex[3] + hex[3], 16);
+  } else if (hex.length === 7) {
+    r = parseInt(hex.substring(1, 3), 16);
+    g = parseInt(hex.substring(3, 5), 16);
+    b = parseInt(hex.substring(5, 7), 16);
+  }
+  // Compute luminance
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  return (yiq >= 128) ? 'rgba(0, 0, 0, 0.87)' : '#ffffff';
+}
+
+export function getAppTheme(config: ThemeConfig) {
+  const {
+    mode,
+    primaryColor,
+    secondaryColor,
+    backgroundColor,
+    paperColor,
+    textColor,
+    borderRadius = CONTROL_BORDER_RADIUS,
+    fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif'
+  } = config;
+
+  const bgDefault = backgroundColor || (mode === 'dark' ? '#0f172a' : '#f5f7fa');
+  const bgPaper = paperColor || (mode === 'dark' ? '#1e293b' : '#ffffff');
+  
+  const isCustomBg = !!backgroundColor;
+  const computedTextPrimary = isCustomBg ? getContrast(bgPaper) : (mode === 'dark' ? '#f8fafc' : '#1e293b');
+  const textPrimary = textColor || computedTextPrimary;
+  
+  const isLightText = textPrimary === '#ffffff' || textPrimary.toLowerCase().includes('255, 255, 255');
+  const textSecondary = textColor ? textColor + 'b3' : (isLightText ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)');
+  const dividerColor = textColor ? textColor + '1a' : (isLightText ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)');
+
   return createTheme({
     palette: {
       mode,
-      primary: { main: primaryColor },
-      secondary: { main: secondaryColor },
+      primary: { main: primaryColor, contrastText: getContrast(primaryColor) },
+      secondary: { main: secondaryColor, contrastText: getContrast(secondaryColor) },
       background: {
-        default: mode === 'dark' ? '#0f172a' : '#f5f7fa',
-        paper: mode === 'dark' ? '#1e293b' : '#ffffff',
+        default: bgDefault,
+        paper: bgPaper,
       },
       text: {
-        primary: mode === 'dark' ? '#f8fafc' : '#1e293b',
-        secondary: mode === 'dark' ? '#94a3b8' : '#64748b',
+        primary: textPrimary,
+        secondary: textSecondary,
       },
-      divider: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+      divider: dividerColor,
     },
     typography: {
-      fontFamily:
-        '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
+      fontFamily,
       h5: { fontWeight: 600 },
       h6: { fontWeight: 600 },
     },
@@ -57,6 +107,9 @@ export function getAppTheme(mode: 'light' | 'dark', primaryColor: string, second
         easeIn: 'cubic-bezier(0.55, 0, 1, 0.45)',
         sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
       },
+    },
+    shape: {
+      borderRadius,
     },
     components: {
       MuiCssBaseline: {
@@ -96,8 +149,7 @@ export function getAppTheme(mode: 'light' | 'dark', primaryColor: string, second
         defaultProps: { elevation: 0 },
         styleOverrides: {
           root: {
-            border: mode === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.08)',
-            borderRadius: 8,
+            border: `1px solid ${dividerColor}`,
           },
         },
       },
@@ -106,7 +158,6 @@ export function getAppTheme(mode: 'light' | 'dark', primaryColor: string, second
         styleOverrides: {
           root: {
             height: CONTROL_HEIGHT,
-            borderRadius: CONTROL_BORDER_RADIUS,
           },
         },
       },
@@ -118,7 +169,6 @@ export function getAppTheme(mode: 'light' | 'dark', primaryColor: string, second
             paddingRight: 14,
             fontWeight: 500,
             height: CONTROL_HEIGHT,
-            borderRadius: CONTROL_BORDER_RADIUS,
           },
         },
       },
@@ -126,7 +176,6 @@ export function getAppTheme(mode: 'light' | 'dark', primaryColor: string, second
         styleOverrides: {
           root: ({ ownerState }) => ({
             height: ownerState.multiline ? 'auto' : CONTROL_HEIGHT,
-            borderRadius: CONTROL_BORDER_RADIUS,
           }),
         },
       },

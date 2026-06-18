@@ -33,6 +33,7 @@ import { categoryTrailingAvg } from '../budgets';
 import { useBudgetStore } from '../budgetStore';
 import { useFilters } from '../store';
 import BulkRecategorizeDialog from '../components/BulkRecategorizeDialog';
+import PageLoader from '../components/PageLoader';
 import type { Budget as BudgetType, Category } from '../types';
 
 export default function Budget() {
@@ -108,18 +109,22 @@ export default function Budget() {
     }
   }, [budgets, categories, trailingAvgByCategory]);
 
-  if (!allTxns || !categories || !overrides || !budgets) {
-    return <Typography>Loading…</Typography>;
+  const isLoading = !allTxns || !categories || !overrides || !budgets;
+
+  if (isLoading) {
+    return <PageLoader isLoading={true}><Box /></PageLoader>;
   }
 
-  if (allTxns.length === 0) {
+  if (allTxns && allTxns.length === 0) {
     return (
-      <Stack spacing={2}>
-        <Typography variant="h5">Budget</Typography>
-        <Alert severity="info">
-          No transactions yet. Import a CSV from the Import tab first.
-        </Alert>
-      </Stack>
+      <PageLoader isLoading={isLoading}>
+        <Stack spacing={2}>
+          <Typography variant="h5">Budget</Typography>
+          <Alert severity="info">
+            No transactions yet. Import a CSV from the Import tab first.
+          </Alert>
+        </Stack>
+      </PageLoader>
     );
   }
 
@@ -147,99 +152,101 @@ export default function Budget() {
     excludedMerchants.size + excludedBudgetCategories.size;
 
   return (
-    <Stack spacing={3}>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-      >
-        <Typography variant="h5">Budget next month</Typography>
-        {totalExclusions > 0 && (
-          <Button onClick={reset} size="small">
-            Reset toggles
-          </Button>
-        )}
-      </Stack>
-
-      <Paper sx={{ p: 3 }}>
+    <PageLoader isLoading={isLoading}>
+      <Stack spacing={3}>
         <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={4}
-          alignItems="baseline"
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
         >
-          <Box>
-            <Typography variant="overline" color="text.secondary">
-              Projected next month
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 700 }}>
-              {usd.format(projected)}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Recurring {usd.format(recurringProjected)} + Budgets{' '}
-              {usd.format(budgetProjected)} · Last month actual:{' '}
-              {usd.format(lastMonth)}
-            </Typography>
-          </Box>
-          {savings > 0 && (
+          <Typography variant="h5">Budget next month</Typography>
+          {totalExclusions > 0 && (
+            <Button onClick={reset} size="small">
+              Reset toggles
+            </Button>
+          )}
+        </Stack>
+
+        <Paper sx={{ p: 3 }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={4}
+            alignItems="baseline"
+          >
             <Box>
-              <Typography variant="overline" color="success.main">
-                Cuts save
+              <Typography variant="overline" color="text.secondary">
+                Projected next month
               </Typography>
-              <Typography
-                variant="h4"
-                sx={{ fontWeight: 700, color: 'success.main' }}
-              >
-                {usd.format(savings)}
-                <Typography
-                  component="span"
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ ml: 0.5 }}
-                >
-                  /mo
-                </Typography>
+              <Typography variant="h3" sx={{ fontWeight: 700 }}>
+                {usd.format(projected)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                ≈ {usd.format(savings * 12)} / year
+                Recurring {usd.format(recurringProjected)} + Budgets{' '}
+                {usd.format(budgetProjected)} · Last month actual:{' '}
+                {usd.format(lastMonth)}
               </Typography>
             </Box>
-          )}
-          <Box sx={{ ml: { md: 'auto' }, textAlign: { md: 'right' } }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              component="div"
-            >
-              {recurring.length} recurring merchant
-              {recurring.length === 1 ? '' : 's'} · {budgets.length} budget
-              categor{budgets.length === 1 ? 'y' : 'ies'}
-            </Typography>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              component="div"
-            >
-              {totalExclusions} excluded
-            </Typography>
-          </Box>
-        </Stack>
-      </Paper>
+            {savings > 0 && (
+              <Box>
+                <Typography variant="overline" color="success.main">
+                  Cuts save
+                </Typography>
+                <Typography
+                  variant="h4"
+                  sx={{ fontWeight: 700, color: 'success.main' }}
+                >
+                  {usd.format(savings)}
+                  <Typography
+                    component="span"
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ ml: 0.5 }}
+                  >
+                    /mo
+                  </Typography>
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  ≈ {usd.format(savings * 12)} / year
+                </Typography>
+              </Box>
+            )}
+            <Box sx={{ ml: { md: 'auto' }, textAlign: { md: 'right' } }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                component="div"
+              >
+                {recurring.length} recurring merchant
+                {recurring.length === 1 ? '' : 's'} · {budgets.length} budget
+                categor{budgets.length === 1 ? 'y' : 'ies'}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                component="div"
+              >
+                {totalExclusions} excluded
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
 
-      <RecurringCard
-        items={recurring}
-        categories={categories}
-        excluded={excludedMerchants}
-        onToggle={toggleMerchant}
-        onToggleGroup={setMerchantsExcluded}
-      />
-      <BudgetCard
-        budgets={budgets}
-        categories={categories}
-        trailingAvgByCategory={trailingAvgByCategory}
-        excluded={excludedBudgetCategories}
-        onToggle={toggleBudgetCategory}
-      />
-    </Stack>
+        <RecurringCard
+          items={recurring}
+          categories={categories}
+          excluded={excludedMerchants}
+          onToggle={toggleMerchant}
+          onToggleGroup={setMerchantsExcluded}
+        />
+        <BudgetCard
+          budgets={budgets}
+          categories={categories}
+          trailingAvgByCategory={trailingAvgByCategory}
+          excluded={excludedBudgetCategories}
+          onToggle={toggleBudgetCategory}
+        />
+      </Stack>
+    </PageLoader>
   );
 }
 

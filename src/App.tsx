@@ -1,4 +1,4 @@
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer } from '@mui/material';
@@ -24,6 +24,7 @@ import Import from './pages/Import';
 import Rules from './pages/Rules';
 import Categories from './pages/Categories';
 import Settings from './pages/Settings';
+import ThemeManager from './pages/ThemeManager';
 import LocalModel from './pages/LocalModel';
 import { AgentSkills } from './pages/AgentSkills';
 import Sort from './pages/Sort';
@@ -49,17 +50,27 @@ const MANAGE_NAV = [
   { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
   { to: '/animation-playground', label: 'Animation Playground', icon: <TuneIcon fontSize="small" /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
+  { to: '/theme', label: 'Theme', icon: <SettingsIcon fontSize="small" /> },
 ];
 
 export default function App() {
   const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
-  const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string } | undefined;
+  const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string; backgroundColor?: string; paperColor?: string; textColor?: string; borderRadius?: number; fontFamily?: string } | undefined;
 
   const dynamicTheme = useMemo(() => {
     const mode = themeConfig?.mode || 'light';
-    const primary = themeConfig?.primaryColor || '#1976d2';
-    const secondary = themeConfig?.secondaryColor || '#5c6bc0';
-    return getAppTheme(mode, primary, secondary);
+    const primaryColor = themeConfig?.primaryColor || '#1976d2';
+    const secondaryColor = themeConfig?.secondaryColor || '#5c6bc0';
+    return getAppTheme({
+      mode,
+      primaryColor,
+      secondaryColor,
+      backgroundColor: themeConfig?.backgroundColor,
+      paperColor: themeConfig?.paperColor,
+      textColor: themeConfig?.textColor,
+      borderRadius: themeConfig?.borderRadius,
+      fontFamily: themeConfig?.fontFamily,
+    });
   }, [themeConfig]);
 
   const location = useLocation();
@@ -87,7 +98,7 @@ export default function App() {
     setManageAnchorEl(null);
   };
 
-  const isManageActive = ['/import', '/settings', '/local-model', '/agent-skills', '/animation-playground'].includes(location.pathname);
+  const isManageActive = ['/import', '/settings', '/theme', '/local-model', '/agent-skills', '/animation-playground'].includes(location.pathname);
 
   // Persist the open state of the side-car across page navigations and reloads.
   const initialChatOpen = useMemo(() => {
@@ -337,9 +348,11 @@ export default function App() {
               <Route path="/rules" element={<Rules />} />
               <Route path="/categories" element={<Categories />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/theme" element={<ThemeManager />} />
               <Route path="/local-model" element={<LocalModel />} />
               <Route path="/agent-skills" element={<AgentSkills />} />
               <Route path="/animation-playground" element={<AnimationSettings />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </PageTransition>
         </Container>

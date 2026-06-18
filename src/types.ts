@@ -66,10 +66,31 @@ export interface ImportBatch {
  * Generic key/value store for app settings (watch folder handle, prefs, etc.)
  * Values are arbitrary structured-clonable types.
  */
-export interface AppSetting<T = unknown> {
-  key: string;
-  value: T;
-}
+export type AppSetting =
+  | { key: 'watchFolder'; value: WatchFolderConfig }
+  | { key: 'license'; value: { active: boolean; key: string; activatedAt?: string } }
+  | { key: 'chatCollapse'; value: boolean }
+  | { key: 'app:agentSkills'; value: AgentSkill[] }
+  | { key: 'app:baselineTestCases'; value: SkillTestCase[] }
+  | { key: 'app:systemPrompt'; value: string }
+  | { key: 'app:systemPromptVersion'; value: number }
+  | { key: 'app:aiGuessScore'; value: { correctCount: number; totalCount: number } }
+  | { key: 'app:workspaces'; value: WorkspaceConfig[] }
+  | { key: 'app:pendingCategorizationReport'; value: ProposedCategorizationReport }
+  | {
+      key: 'themeConfig';
+      value: {
+        mode: 'light' | 'dark';
+        primaryColor: string;
+        secondaryColor: string;
+        backgroundColor?: string;
+        paperColor?: string;
+        textColor?: string;
+        borderRadius?: number;
+        fontFamily?: string;
+        paletteName?: string;
+      };
+    };
 
 export type PostImportAction = 'leave' | 'move' | 'delete';
 
