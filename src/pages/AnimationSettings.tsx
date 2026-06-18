@@ -524,8 +524,8 @@ export default function AnimationSettings() {
                 <Card
                   ref={previewCardRef}
                   sx={(theme) => ({
-                    width: 280,
-                    minHeight: 320,
+                    width: 340,
+                    minHeight: 420,
                     borderRadius: 4,
                     borderLeft: '5px solid #1976d2',
                     boxShadow: theme.palette.mode === 'dark'
@@ -571,24 +571,22 @@ export default function AnimationSettings() {
               </Box>
 
               {/* Action buttons */}
-              <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+              <Stack direction="row" spacing={1.5} sx={{ mt: 3, width: '100%' }}>
                 <Button
-                  fullWidth
                   variant="contained"
                   color="primary"
                   startIcon={<PlayArrowIcon />}
                   onClick={() => triggerPreview('right')}
-                  sx={{ textTransform: 'none', borderRadius: 2 }}
+                  sx={{ flex: 1, textTransform: 'none', borderRadius: 2, whiteSpace: 'nowrap', px: 1.5 }}
                 >
                   Flip Right
                 </Button>
                 <Button
-                  fullWidth
                   variant="contained"
                   color="secondary"
                   startIcon={<PlayArrowIcon />}
                   onClick={() => triggerPreview('left')}
-                  sx={{ textTransform: 'none', borderRadius: 2 }}
+                  sx={{ flex: 1, textTransform: 'none', borderRadius: 2, whiteSpace: 'nowrap', px: 1.5 }}
                 >
                   Flip Left
                 </Button>
@@ -596,7 +594,7 @@ export default function AnimationSettings() {
                   variant="outlined"
                   color="inherit"
                   onClick={() => setPreviewState('idle')}
-                  sx={{ textTransform: 'none', borderRadius: 2 }}
+                  sx={{ flex: 1, textTransform: 'none', borderRadius: 2, whiteSpace: 'nowrap', px: 1.5 }}
                 >
                   Reset
                 </Button>

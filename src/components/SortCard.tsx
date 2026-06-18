@@ -117,7 +117,7 @@ export default function SortCard({
         top: stackIndex === 0 ? 'auto' : 0,
         left: stackIndex === 0 ? 'auto' : 0,
         width: '100%',
-        minHeight: 480,
+        minHeight: 540,
         zIndex: leaving ? 11 : stackIndex <= -1 ? 7 : 10 - stackIndex,
         pointerEvents: stackIndex === 0 ? 'auto' : 'none',
         overflow: 'hidden',

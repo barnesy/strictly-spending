@@ -449,7 +449,7 @@ export default function Sort() {
   const remaining = visibleQueue.length;
 
   return (
-    <Stack spacing={2} sx={{ maxWidth: 820, mx: 'auto' }}>
+    <Stack spacing={2} sx={{ maxWidth: 960, mx: 'auto' }}>
       {/* Header row */}
       <Stack
         direction="row"
