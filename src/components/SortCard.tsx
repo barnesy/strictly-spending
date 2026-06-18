@@ -15,6 +15,7 @@ import RepeatIcon from '@mui/icons-material/Repeat';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { usdCents } from '../lib';
 import { recurrenceLabel, isRecurring } from '../recurrence';
+import { useAnimationStore } from '../animationStore';
 import type { SortCard as SortCardData } from '../sort';
 
 interface Props {
@@ -52,6 +53,7 @@ export default function SortCard({
 }: Props) {
   const { merchantKey, txns, totalAbs, sampleTxns, recurrence, suggestedCategory } = card;
 
+  const config = useAnimationStore();
   const [expanded, setExpanded] = useState(false);
 
   const prevStackIndexRef = useRef<number | undefined>(undefined);
@@ -77,22 +79,22 @@ export default function SortCard({
         borderRadius: 4,
         borderLeft: suggestedColor ? `5px solid ${suggestedColor}` : '5px solid transparent',
         transition: leaving || stackIndex <= -1
-          ? 'transform 900ms cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 150ms ease 900ms, background-color 200ms ease, box-shadow 450ms ease'
+          ? `transform ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}), opacity 150ms ease ${config.duration}ms, background-color 200ms ease, box-shadow 450ms ease`
           : stackIndex === 0
-          ? 'transform 900ms cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 100ms ease-out, background-color 200ms ease, box-shadow 450ms ease'
-          : 'transform 900ms cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 300ms ease-out, background-color 200ms ease, box-shadow 450ms ease',
+          ? `transform ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}), opacity 100ms ease-out, background-color 200ms ease, box-shadow 450ms ease`
+          : `transform ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}), opacity 300ms ease-out, background-color 200ms ease, box-shadow 450ms ease`,
         transform: leaving
-          ? 'perspective(1200px) translate3d(140px, 60px, -180px) rotateX(180deg) rotateY(180deg) rotateZ(0deg) scale(0.6)'
+          ? `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
           : stackIndex === 0
-          ? 'perspective(1200px) translate3d(0, 0, 0) rotateX(5deg) rotateY(-5deg) rotateZ(0deg) scale(1)'
+          ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
           : stackIndex === 1
           ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
           : stackIndex === 2
           ? 'perspective(1200px) translate3d(0, 32px, -90px) rotateX(9deg) rotateY(-9deg) rotateZ(-3deg) scale(0.92)'
           : stackIndex <= -1
           ? zipDirection === 'right'
-            ? 'perspective(1200px) translate3d(140px, 60px, -180px) rotateX(180deg) rotateY(180deg) rotateZ(0deg) scale(0.6)'
-            : 'perspective(1200px) translate3d(80px, 60px, -180px) rotateX(180deg) rotateY(-180deg) rotateZ(0deg) scale(0.6)'
+            ? `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
+            : `perspective(1200px) translate3d(${config.finalXLeft}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(-${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
           : 'perspective(1200px) translate3d(0, 48px, -135px) rotateX(11deg) rotateY(-11deg) rotateZ(-4.5deg) scale(0.88)',
         opacity: leaving
           ? 0
@@ -121,93 +123,17 @@ export default function SortCard({
         overflow: 'hidden',
         animation: leaving
           ? zipDirection === 'right'
-            ? 'exitFlipRight 900ms cubic-bezier(0.25, 1, 0.5, 1) forwards'
-            : 'exitFlipLeft 900ms cubic-bezier(0.25, 1, 0.5, 1) forwards'
+            ? `exitFlipRight ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
+            : `exitFlipLeft ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
           : stackIndex === 0 && prevStackIndexRef.current === -1
           ? zipDirection === 'right'
-            ? 'entryFlipRight 900ms cubic-bezier(0.25, 1, 0.5, 1) forwards'
-            : 'entryFlipLeft 900ms cubic-bezier(0.25, 1, 0.5, 1) forwards'
+            ? `entryFlipRight ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
+            : `entryFlipLeft ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
           : stackIndex <= -1 && prevStackIndexRef.current === 0
           ? zipDirection === 'right'
-            ? 'exitFlipRight 900ms cubic-bezier(0.25, 1, 0.5, 1) forwards'
-            : 'exitFlipLeft 900ms cubic-bezier(0.25, 1, 0.5, 1) forwards'
+            ? `exitFlipRight ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
+            : `exitFlipLeft ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
           : 'none',
-        '@keyframes exitFlipRight': {
-          '0%': {
-            transform: 'perspective(1200px) translate3d(0, 0, 0) rotateX(5deg) rotateY(-5deg) rotateZ(0deg) scale(1)',
-            zIndex: 10,
-          },
-          '20%': {
-            transform: 'perspective(1200px) translate3d(280px, -20px, -60px) rotateX(90deg) rotateY(90deg) rotateZ(0deg) scale(0.9)',
-          },
-          '49%': {
-            zIndex: 10,
-          },
-          '50%': {
-            zIndex: 7,
-          },
-          '100%': {
-            transform: 'perspective(1200px) translate3d(140px, 60px, -180px) rotateX(180deg) rotateY(180deg) rotateZ(0deg) scale(0.6)',
-            zIndex: 7,
-          },
-        },
-        '@keyframes exitFlipLeft': {
-          '0%': {
-            transform: 'perspective(1200px) translate3d(0, 0, 0) rotateX(5deg) rotateY(-5deg) rotateZ(0deg) scale(1)',
-            zIndex: 10,
-          },
-          '20%': {
-            transform: 'perspective(1200px) translate3d(-200px, -20px, -60px) rotateX(90deg) rotateY(-90deg) rotateZ(0deg) scale(0.9)',
-          },
-          '49%': {
-            zIndex: 10,
-          },
-          '50%': {
-            zIndex: 7,
-          },
-          '100%': {
-            transform: 'perspective(1200px) translate3d(80px, 60px, -180px) rotateX(180deg) rotateY(-180deg) rotateZ(0deg) scale(0.6)',
-            zIndex: 7,
-          },
-        },
-        '@keyframes entryFlipRight': {
-          '0%': {
-            transform: 'perspective(1200px) translate3d(140px, 60px, -180px) rotateX(180deg) rotateY(180deg) rotateZ(0deg) scale(0.6)',
-            zIndex: 7,
-          },
-          '49%': {
-            zIndex: 7,
-          },
-          '50%': {
-            zIndex: 10,
-          },
-          '80%': {
-            transform: 'perspective(1200px) translate3d(280px, -20px, -60px) rotateX(90deg) rotateY(90deg) rotateZ(0deg) scale(0.9)',
-          },
-          '100%': {
-            transform: 'perspective(1200px) translate3d(0, 0, 0) rotateX(5deg) rotateY(-5deg) rotateZ(0deg) scale(1)',
-            zIndex: 10,
-          },
-        },
-        '@keyframes entryFlipLeft': {
-          '0%': {
-            transform: 'perspective(1200px) translate3d(80px, 60px, -180px) rotateX(180deg) rotateY(-180deg) rotateZ(0deg) scale(0.6)',
-            zIndex: 7,
-          },
-          '49%': {
-            zIndex: 7,
-          },
-          '50%': {
-            zIndex: 10,
-          },
-          '80%': {
-            transform: 'perspective(1200px) translate3d(-200px, -20px, -60px) rotateX(90deg) rotateY(-90deg) rotateZ(0deg) scale(0.9)',
-          },
-          '100%': {
-            transform: 'perspective(1200px) translate3d(0, 0, 0) rotateX(5deg) rotateY(-5deg) rotateZ(0deg) scale(1)',
-            zIndex: 10,
-          },
-        },
       })}
     >
       {/* Header */}

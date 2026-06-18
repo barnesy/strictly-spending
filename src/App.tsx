@@ -10,6 +10,7 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import {
   Group as PanelGroup,
   Panel,
@@ -26,6 +27,8 @@ import Settings from './pages/Settings';
 import LocalModel from './pages/LocalModel';
 import { AgentSkills } from './pages/AgentSkills';
 import Sort from './pages/Sort';
+import AnimationSettings from './pages/AnimationSettings';
+import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
 import { db } from './db';
 import { useFilters } from './store';
@@ -154,6 +157,7 @@ const MANAGE_NAV = [
   { to: '/import', label: 'Import', icon: <FileUploadIcon fontSize="small" /> },
   { to: '/local-model', label: 'Local Model', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>AI</Box> },
   { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
+  { to: '/animation-playground', label: 'Animation Playground', icon: <AutoAwesomeIcon fontSize="small" /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
 ];
 
@@ -193,7 +197,7 @@ export default function App() {
     setManageAnchorEl(null);
   };
 
-  const isManageActive = ['/import', '/settings', '/local-model', '/agent-skills'].includes(location.pathname);
+  const isManageActive = ['/import', '/settings', '/local-model', '/agent-skills', '/animation-playground'].includes(location.pathname);
 
   // Persist the open state of the side-car across page navigations and reloads.
   const initialChatOpen = useMemo(() => {
@@ -445,6 +449,7 @@ export default function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/local-model" element={<LocalModel />} />
               <Route path="/agent-skills" element={<AgentSkills />} />
+              <Route path="/animation-playground" element={<AnimationSettings />} />
             </Routes>
           </PageTransition>
         </Container>
@@ -455,6 +460,7 @@ export default function App() {
   return (
     <ThemeProvider theme={dynamicTheme}>
       <CssBaseline />
+      <DynamicAnimationStyles />
       <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
         {isDesktop ? (
           <PanelGroup
