@@ -173,6 +173,28 @@ export function getAppTheme(config: ThemeConfig) {
           },
         },
       },
+      MuiTextField: {
+        defaultProps: {
+          variant: 'standard',
+        },
+      },
+      MuiSelect: {
+        defaultProps: {
+          variant: 'standard',
+        },
+      },
+      MuiFormControl: {
+        defaultProps: {
+          variant: 'standard',
+        },
+      },
+      MuiInput: {
+        styleOverrides: {
+          root: ({ ownerState }) => ({
+            height: ownerState.multiline ? 'auto' : CONTROL_HEIGHT,
+          }),
+        },
+      },
       MuiOutlinedInput: {
         styleOverrides: {
           root: ({ ownerState }) => ({
