@@ -166,7 +166,7 @@ export default function ThemeManager() {
                       textTransform: 'none',
                       px: 2,
                       py: 1,
-                      borderRadius: localRadius,
+                      borderRadius: `${localRadius}px`,
                       borderColor: isActive ? 'primary.main' : 'divider',
                       display: 'flex',
                       alignItems: 'center',
@@ -248,7 +248,7 @@ export default function ThemeManager() {
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
               Live Preview
             </Typography>
-            <Paper variant="outlined" sx={{ p: 3, borderRadius: localRadius }}>
+            <Paper variant="outlined" sx={{ p: 3, borderRadius: `${localRadius}px` }}>
               <Stack spacing={2}>
                 <Typography variant="h6">Preview Header</Typography>
                 <Typography variant="body2" color="text.secondary">

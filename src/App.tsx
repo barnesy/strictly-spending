@@ -246,7 +246,6 @@ export default function App() {
                     borderColor: 'divider',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
                     minWidth: 180,
-                    borderRadius: 2,
                     mt: 0.5,
                   }
                 }}
