@@ -47,7 +47,7 @@ export default function Budget() {
     () =>
       allTxnsAll && demoMode
         ? allTxnsAll.filter((t) => t.source === 'demo')
-        : allTxnsAll,
+        : allTxnsAll?.filter((t) => t.source !== 'demo'),
     [allTxnsAll, demoMode]
   );
   const categories = useLiveQuery(
@@ -529,6 +529,58 @@ function RecurringCard({
   );
 }
 
+// ----- Budget amount editor with local state (new) -----
+
+function BudgetAmountInput({
+  category,
+  initialAmount,
+  disabled,
+}: {
+  category: string;
+  initialAmount: number;
+  disabled?: boolean;
+}) {
+  const [value, setValue] = useState(() => initialAmount.toFixed(2));
+
+  useEffect(() => {
+    setValue(initialAmount.toFixed(2));
+  }, [initialAmount]);
+
+  const saveToDb = (val: string) => {
+    const cleaned = val.replace(/[^0-9.]/g, '');
+    const amount = Number(cleaned) || 0;
+    db.budgets.put({ category, monthlyAmount: amount, userSet: true });
+    setValue(amount.toFixed(2));
+  };
+
+  return (
+    <TextField
+      size="small"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => saveToDb(value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          saveToDb(value);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      slotProps={{
+        input: {
+          startAdornment: (
+            <InputAdornment position="start">$</InputAdornment>
+          ),
+          endAdornment: (
+            <InputAdornment position="end">/mo</InputAdornment>
+          ),
+          inputMode: 'decimal',
+        },
+      }}
+      disabled={disabled}
+    />
+  );
+}
+
 // ----- Budget card (new) -----
 
 function BudgetCard({
@@ -555,12 +607,6 @@ function BudgetCard({
     () => budgets.slice().sort((a, b) => b.monthlyAmount - a.monthlyAmount),
     [budgets]
   );
-
-  const onChangeAmount = (category: string, value: string) => {
-    const cleaned = value.replace(/[^0-9.]/g, '');
-    const amount = Number(cleaned) || 0;
-    db.budgets.put({ category, monthlyAmount: amount, userSet: true });
-  };
 
   const onResetRow = (category: string) => {
     const avg = trailingAvgByCategory.get(category) || 0;
@@ -676,21 +722,9 @@ function BudgetCard({
                      </Stack>
                    </TableCell>
                   <TableCell sx={{ width: 200 }}>
-                    <TextField
-                      size="small"
-                      value={b.monthlyAmount.toFixed(2)}
-                      onChange={(e) => onChangeAmount(b.category, e.target.value)}
-                      slotProps={{
-                        input: {
-                          startAdornment: (
-                            <InputAdornment position="start">$</InputAdornment>
-                          ),
-                          endAdornment: (
-                            <InputAdornment position="end">/mo</InputAdornment>
-                          ),
-                          inputMode: 'decimal',
-                        },
-                      }}
+                    <BudgetAmountInput
+                      category={b.category}
+                      initialAmount={b.monthlyAmount}
                       disabled={isExcluded}
                     />
                   </TableCell>

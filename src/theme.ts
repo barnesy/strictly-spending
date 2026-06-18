@@ -1,5 +1,8 @@
 import { createTheme } from '@mui/material/styles';
 
+export const CONTROL_HEIGHT = 38;
+export const CONTROL_BORDER_RADIUS = 8;
+
 export const ANIMATION_TIMING = {
   duration: 220, // milliseconds
   easing: 'cubic-bezier(0.25, 1, 0.5, 1)', // easeOutQuint
@@ -100,6 +103,12 @@ export function getAppTheme(mode: 'light' | 'dark', primaryColor: string, second
       },
       MuiButton: {
         defaultProps: { disableElevation: true },
+        styleOverrides: {
+          root: {
+            height: CONTROL_HEIGHT,
+            borderRadius: CONTROL_BORDER_RADIUS,
+          },
+        },
       },
       MuiToggleButton: {
         styleOverrides: {
@@ -108,7 +117,17 @@ export function getAppTheme(mode: 'light' | 'dark', primaryColor: string, second
             paddingLeft: 14,
             paddingRight: 14,
             fontWeight: 500,
+            height: CONTROL_HEIGHT,
+            borderRadius: CONTROL_BORDER_RADIUS,
           },
+        },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: ({ ownerState }) => ({
+            height: ownerState.multiline ? 'auto' : CONTROL_HEIGHT,
+            borderRadius: CONTROL_BORDER_RADIUS,
+          }),
         },
       },
     },

@@ -1,21 +1,20 @@
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useState, useEffect, useMemo } from 'react';
-import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline } from '@mui/material';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { getAppTheme } from './theme';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
-import RuleIcon from '@mui/icons-material/Rule';
-import CategoryIcon from '@mui/icons-material/Category';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PsychologyIcon from '@mui/icons-material/Psychology';
-import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import {
   Group as PanelGroup,
   Panel,
   Separator as PanelResizeHandle,
+  type PanelImperativeHandle,
 } from 'react-resizable-panels';
 
 import Dashboard from './pages/Dashboard';
@@ -27,10 +26,7 @@ import Settings from './pages/Settings';
 import LocalModel from './pages/LocalModel';
 import { AgentSkills } from './pages/AgentSkills';
 import Sort from './pages/Sort';
-import ArtifactsLibrary from './pages/ArtifactsLibrary';
 import CopilotChat from './components/CopilotChat';
-import ArtifactViewer from './components/ArtifactViewer';
-import { useChatStore } from './chatStore';
 import { db } from './db';
 import { useFilters } from './store';
 import { PageTransition } from './components/PageTransition';
@@ -150,13 +146,12 @@ const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/budget', label: 'Budget' },
   { to: '/sort', label: 'Sort', badge: 'uncategorized' as const },
+  { to: '/categories', label: 'Categories' },
+  { to: '/rules', label: 'Rules' },
 ];
 
 const MANAGE_NAV = [
   { to: '/import', label: 'Import', icon: <FileUploadIcon fontSize="small" /> },
-  { to: '/rules', label: 'Rules', icon: <RuleIcon fontSize="small" /> },
-  { to: '/categories', label: 'Categories', icon: <CategoryIcon fontSize="small" /> },
-  { to: '/artifacts', label: 'Artifacts Library', icon: <LibraryBooksIcon fontSize="small" /> },
   { to: '/local-model', label: 'Local Model', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>AI</Box> },
   { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
@@ -177,7 +172,18 @@ export default function App() {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const isLayoutPage = (location.pathname === '/' || location.pathname === '/transactions') && isDesktop;
-  const activeArtifact = useChatStore((s) => s.activeArtifact);
+  const hasActiveFilters = useFilters((s) => {
+    return (
+      s.preset !== 'ytd' ||
+      s.disabledCategories.length > 0 ||
+      !s.spendOnly ||
+      s.recurrenceFilter !== 'all' ||
+      s.searchQuery !== '' ||
+      s.minPrice !== undefined ||
+      s.maxPrice !== undefined ||
+      s.drill !== null
+    );
+  });
   const [manageAnchorEl, setManageAnchorEl] = useState<null | HTMLElement>(null);
   const isManageOpen = Boolean(manageAnchorEl);
   const handleManageClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -187,17 +193,41 @@ export default function App() {
     setManageAnchorEl(null);
   };
 
-  const isManageActive = ['/import', '/rules', '/categories', '/settings', '/local-model', '/agent-skills', '/artifacts'].includes(location.pathname);
+  const isManageActive = ['/import', '/settings', '/local-model', '/agent-skills'].includes(location.pathname);
 
   // Persist the open state of the side-car across page navigations and reloads.
-  const [isChatOpen, setIsChatOpen] = useState<boolean>(() => {
+  const initialChatOpen = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('app:copilotOpen') === 'true';
-  });
+  }, []);
+
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(initialChatOpen);
+  const chatPanelRef = useRef<PanelImperativeHandle>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('app:copilotOpen', String(isChatOpen));
   }, [isChatOpen]);
+
+  useEffect(() => {
+    const handleOpenChat = () => setIsChatOpen(true);
+    window.addEventListener('app:open-chat', handleOpenChat);
+    return () => window.removeEventListener('app:open-chat', handleOpenChat);
+  }, []);
+
+  useEffect(() => {
+    const chatPanel = chatPanelRef.current;
+    if (chatPanel) {
+      setIsTransitioning(true);
+      if (isChatOpen) {
+        chatPanel.resize("360px");
+      } else {
+        chatPanel.collapse();
+      }
+      const timer = setTimeout(() => setIsTransitioning(false), 250);
+      return () => clearTimeout(timer);
+    }
+  }, [isChatOpen, isDesktop]);
 
   const demoMode = useFilters((s) => s.demoMode);
   // Find database date boundaries using the indexed 'date' field
@@ -207,9 +237,9 @@ export default function App() {
       if (demoTxns.length === 0) return { earliest: undefined, latest: undefined };
       return { earliest: demoTxns[0].date, latest: demoTxns[demoTxns.length - 1].date };
     } else {
-      const earliestRecord = await db.transactions.orderBy('date').first();
-      const latestRecord = await db.transactions.orderBy('date').reverse().first();
-      return { earliest: earliestRecord?.date, latest: latestRecord?.date };
+      const realTxns = await db.transactions.where('source').notEqual('demo').sortBy('date');
+      if (realTxns.length === 0) return { earliest: undefined, latest: undefined };
+      return { earliest: realTxns[0].date, latest: realTxns[realTxns.length - 1].date };
     }
   }, [demoMode]);
 
@@ -227,7 +257,8 @@ export default function App() {
       const demoTxns = await db.transactions.where('source').equals('demo').toArray();
       return demoTxns.filter((t) => t.category === 'Uncategorized').length;
     } else {
-      return await db.transactions.where('category').equals('Uncategorized').count();
+      const realTxns = await db.transactions.where('source').notEqual('demo').toArray();
+      return realTxns.filter((t) => t.category === 'Uncategorized').length;
     }
   }, [demoMode]) ?? 0;
 
@@ -344,6 +375,23 @@ export default function App() {
               </Menu>
             )}
           </Box>
+          {hasActiveFilters && (
+            <Button
+              onClick={() => useFilters.getState().reset()}
+              variant="outlined"
+              color="primary"
+              size="small"
+              startIcon={<RestartAltIcon />}
+              sx={{
+                textTransform: 'none',
+                borderRadius: 2,
+                fontWeight: 600,
+                mr: 1.5,
+              }}
+            >
+              Reset Filters
+            </Button>
+          )}
           <Button
             onClick={() => setIsChatOpen((prev) => !prev)}
             variant={isChatOpen ? 'contained' : 'outlined'}
@@ -377,11 +425,11 @@ export default function App() {
             px: 3,
             ...(isLayoutPage
               ? {
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: 0,
-                }
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+              }
               : {}),
           }}
         >
@@ -397,7 +445,6 @@ export default function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/local-model" element={<LocalModel />} />
               <Route path="/agent-skills" element={<AgentSkills />} />
-              <Route path="/artifacts" element={<ArtifactsLibrary />} />
             </Routes>
           </PageTransition>
         </Container>
@@ -409,95 +456,92 @@ export default function App() {
     <ThemeProvider theme={dynamicTheme}>
       <CssBaseline />
       <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
-        <PanelGroup orientation="horizontal">
-          <Panel id="main-content" minSize={30}>
-            {renderMainWindow()}
-          </Panel>
+        {isDesktop ? (
+          <PanelGroup
+            orientation="horizontal"
+            className={isTransitioning ? 'transitioning-panels' : ''}
+            style={{ flex: 1, minHeight: 0 }}
+          >
+            <Panel id="main-content" minSize="360px" groupResizeBehavior="preserve-relative-size">
+              {renderMainWindow()}
+            </Panel>
 
-          {activeArtifact && (
-            <>
-              <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    inset: 0,
-                    margin: '0 auto',
-                    width: 2,
-                    bgcolor: 'divider',
-                    borderRadius: 1,
-                    transition: 'background-color 120ms ease',
-                    '[data-resize-handle-active] &, &:hover': {
-                      bgcolor: 'primary.main',
-                      width: 3,
-                    },
-                  }}
-                />
-              </PanelResizeHandle>
-
-              <Panel
-                id="artifact-viewer"
-                minSize={20}
-                defaultSize={35}
-                collapsible={true}
-                onResize={(size) => {
-                  if (size.asPercentage === 0) {
-                    useChatStore.getState().setActiveArtifact(null);
-                  }
+            <PanelResizeHandle
+              disabled={!isChatOpen}
+              style={{
+                width: 8,
+                position: 'relative',
+                display: isChatOpen ? 'block' : 'none'
+              }}
+            >
+              <Box
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  margin: '0 auto',
+                  width: 2,
+                  bgcolor: 'divider',
+                  borderRadius: 1,
+                  transition: 'background-color 120ms ease',
+                  '[data-resize-handle-active] &, &:hover': {
+                    bgcolor: 'primary.main',
+                    width: 3,
+                  },
                 }}
-              >
-                <Slide direction="left" in={true} mountOnEnter unmountOnExit>
-                  <Box sx={{ height: '100%', borderRight: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
-                    <ArtifactViewer />
-                  </Box>
-                </Slide>
-              </Panel>
-            </>
-          )}
+              />
+            </PanelResizeHandle>
 
-          {isChatOpen && (
-            <>
-              <PanelResizeHandle style={{ width: 8, position: 'relative' }}>
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    inset: 0,
-                    margin: '0 auto',
-                    width: 2,
-                    bgcolor: 'divider',
-                    borderRadius: 1,
-                    transition: 'background-color 120ms ease',
-                    '[data-resize-handle-active] &, &:hover': {
-                      bgcolor: 'primary.main',
-                      width: 3,
-                    },
-                  }}
+            <Panel
+              panelRef={chatPanelRef}
+              id="copilot-chat"
+              minSize="360px"
+              defaultSize={isChatOpen ? "360px" : "0px"}
+              collapsible={true}
+              groupResizeBehavior="preserve-pixel-size"
+              onResize={(size, _, prevSize) => {
+                if (size.inPixels === 0 && prevSize && prevSize.inPixels > 0) {
+                  setIsChatOpen(false);
+                }
+              }}
+            >
+              <Slide direction="left" in={isChatOpen} mountOnEnter unmountOnExit>
+                <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 360 }}>
+                  <CopilotChat
+                    onClose={() => setIsChatOpen(false)}
+                    showCloseButton={true}
+                    isEmbedded={true}
+                  />
+                </Box>
+              </Slide>
+            </Panel>
+          </PanelGroup>
+        ) : (
+          <>
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              {renderMainWindow()}
+            </Box>
+            <Drawer
+              anchor="right"
+              open={isChatOpen}
+              onClose={() => setIsChatOpen(false)}
+              PaperProps={{
+                sx: {
+                  width: { xs: '100%', sm: 400 },
+                  border: 'none',
+                  boxShadow: 'none',
+                }
+              }}
+            >
+              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <CopilotChat
+                  onClose={() => setIsChatOpen(false)}
+                  showCloseButton={true}
+                  isEmbedded={true}
                 />
-              </PanelResizeHandle>
-
-              <Panel
-                id="copilot-chat"
-                minSize={15}
-                defaultSize={activeArtifact ? 25 : 30}
-                collapsible={true}
-                onResize={(size) => {
-                  if (size.asPercentage === 0) {
-                    setIsChatOpen(false);
-                  }
-                }}
-              >
-                <Slide direction="left" in={true} mountOnEnter unmountOnExit>
-                  <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 350 }}>
-                    <CopilotChat
-                      onClose={() => setIsChatOpen(false)}
-                      showCloseButton={true}
-                      isEmbedded={true}
-                    />
-                  </Box>
-                </Slide>
-              </Panel>
-            </>
-          )}
-        </PanelGroup>
+              </Box>
+            </Drawer>
+          </>
+        )}
       </Box>
     </ThemeProvider>
   );

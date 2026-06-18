@@ -144,7 +144,7 @@ export interface CategorizeContext {
   rules: CategoryRule[];
 }
 
-function normalizeForMatch(s: string): string {
+export function normalizeForMatch(s: string): string {
   return s
     .toLowerCase()
     // Strip BOA ACH label prefixes ("DES:", "ID:", "INDN:", "CO ID:", "REF:") but

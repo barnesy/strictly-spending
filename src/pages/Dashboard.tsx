@@ -99,8 +99,8 @@ export default function Dashboard() {
   const preset = useFilters((s) => s.preset);
   const customStart = useFilters((s) => s.customStart);
   const customEnd = useFilters((s) => s.customEnd);
-  const earliestTransactionDate = useFilters((s) => s.preset === 'allTime' ? s.earliestTransactionDate : undefined);
-  const latestTransactionDate = useFilters((s) => s.preset === 'allTime' ? s.latestTransactionDate : undefined);
+  const earliestTransactionDate = useFilters((s) => s.earliestTransactionDate);
+  const latestTransactionDate = useFilters((s) => s.latestTransactionDate);
 
   const enabledAccountIds = useFilters((s) => s.enabledAccountIds);
   const disabledCategories = useFilters((s) => s.disabledCategories);
@@ -151,14 +151,14 @@ export default function Dashboard() {
     () =>
       accountsAll && demoMode
         ? accountsAll.filter((a) => a.source === 'demo')
-        : accountsAll,
+        : accountsAll?.filter((a) => a.source !== 'demo'),
     [accountsAll, demoMode]
   );
   const allTxns = useMemo(
     () =>
       allTxnsAll && demoMode
         ? allTxnsAll.filter((t) => t.source === 'demo')
-        : allTxnsAll,
+        : allTxnsAll?.filter((t) => t.source !== 'demo'),
     [allTxnsAll, demoMode]
   );
   const recurrenceMap = useMemo(
