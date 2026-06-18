@@ -520,7 +520,6 @@ export default function Sort() {
         <Paper
           sx={{
             p: 2,
-            borderRadius: 3,
             border: '1px solid',
             borderColor: 'success.main',
             background: (theme) =>
@@ -564,7 +563,6 @@ export default function Sort() {
             elevation={0}
             sx={{
               p: 1.5,
-              borderRadius: 3,
               border: '1px solid',
               borderColor: 'divider',
               display: 'flex',
@@ -639,7 +637,7 @@ export default function Sort() {
           <Panel id="sort-controls-panel" defaultSize={45} minSize={30} style={{ display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
               <Stack spacing={2}>
-                <Paper sx={{ p: 3, borderRadius: 3 }}>
+                <Paper sx={{ p: 3 }}>
                   <Stack spacing={1.5}>
                     <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
                       <Stack direction="row" spacing={1} alignItems="center">
@@ -759,11 +757,8 @@ export default function Sort() {
                 justifyContent: 'center',
                 position: 'relative',
                 overflow: 'auto',
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: 'divider',
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? '#121212' : '#f5f5f5',
                 p: 3,
+                ml: 2,
                 width: '100%',
                 height: '100%',
               }}
