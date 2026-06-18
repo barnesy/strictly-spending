@@ -891,4 +891,53 @@ describe('runSkillTestCase', () => {
   });
 });
 
+describe('safeFetch Error Handling', () => {
+  it('correctly maps WebKit network exception to clean offline message', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockRejectedValue(new DOMException('The string did not match the expected pattern.'));
+
+    try {
+      await localAI.init();
+      expect(true).toBe(false); // should not reach here
+    } catch (err: any) {
+      expect(err.message).toBe('Ollama server is offline or connection was blocked. Please check that Ollama is running.');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('correctly passes through abort errors without translating them', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockRejectedValue(new DOMException('The user aborted a request.', 'AbortError'));
+
+    try {
+      await localAI.init();
+      expect(true).toBe(false); // should not reach here
+    } catch (err: any) {
+      expect(err.name).toBe('AbortError');
+      expect(err.message).toContain('The user aborted a request');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('handles invalid non-JSON responses from Ollama by raising an error', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => 'Not a JSON response'
+    });
+
+    try {
+      await localAI.init();
+      expect(true).toBe(false);
+    } catch (err: any) {
+      expect(err.message).toBe('Failed to parse Ollama tags response as JSON.');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+
 

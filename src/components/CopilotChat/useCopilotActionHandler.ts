@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useFilters, resolveDateRange } from '../../store';
 import { useChatStore, formatModelName } from '../../chatStore';
@@ -10,11 +10,13 @@ import { executeCopilotCommand, matchCategories, matchAccounts, getMonthsInRange
 import { buildRecurrenceMap } from '../../recurrence';
 import { buildForecast } from '../../forecast';
 import { useBudgetStore } from '../../budgetStore';
+import type { ProposedCategorizationItem } from '../../types';
 
 export function useCopilotActionHandler() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const {
     preset,
@@ -66,6 +68,10 @@ export function useCopilotActionHandler() {
 
   const sendPromptText = async (textToSubmit: string) => {
     if (!textToSubmit.trim() || loading) return;
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const { signal } = controller;
 
     const userMsg: ChatMessage = { role: 'user', content: textToSubmit.trim() };
     addMessage(userMsg);
@@ -148,6 +154,9 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
       const executedActions = new Set<string>();
 
       while (loops < maxLoops) {
+        if (signal.aborted) {
+          throw new DOMException('aborted', 'AbortError');
+        }
         loops++;
         const isLastLoop = loops === maxLoops;
 
@@ -193,7 +202,8 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             } else {
               appendStreamingToken(token);
             }
-          }
+          },
+          signal
         );
 
         const parsedJson = parseAIResponse(currentResponse);
@@ -379,8 +389,8 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             start = range.start.toISOString().slice(0, 10);
             end = range.end.toISOString().slice(0, 10);
           } else {
-            start = start || '2000-01-01';
-            end = end || new Date().toISOString().slice(0, 10);
+            start = start || currentFilters.earliestTransactionDate || '2000-01-01';
+            end = end || currentFilters.latestTransactionDate || new Date().toISOString().slice(0, 10);
           }
           
           let queryCats = actionObj.categories || actionObj.category || [];
@@ -631,8 +641,8 @@ If these results are sufficient to answer the user's question, explain them to t
             start = range.start.toISOString().slice(0, 10);
             end = range.end.toISOString().slice(0, 10);
           } else {
-            start = start || '2000-01-01';
-            end = end || new Date().toISOString().slice(0, 10);
+            start = start || currentFilters.earliestTransactionDate || '2000-01-01';
+            end = end || currentFilters.latestTransactionDate || new Date().toISOString().slice(0, 10);
           }
           let queryCats = actionObj.categories || [];
           if (!Array.isArray(queryCats)) queryCats = [queryCats];
@@ -690,6 +700,150 @@ If these results are sufficient to answer the user's question, explain them to t
           };
 
           currentSteps.push(`Tool Call: spending_anomalies (categories: ${resolvedCats.join(', ')})`);
+
+        } else if (action === 'categorize_transactions') {
+          const licenseSetting = await db.settings.get('license');
+          const license = licenseSetting?.value as { active: boolean } | undefined;
+          if (!license?.active) {
+            feedbackError = "Error: A license key is required to use AI features. Please activate your license on the Local Model page first.";
+          } else {
+            const currentFilters = useFilters.getState();
+            const uncategorizedAll = await db.transactions.where('category').equals('Uncategorized').toArray();
+            const uncategorized = currentFilters.demoMode
+              ? uncategorizedAll.filter((t) => t.source === 'demo')
+              : uncategorizedAll.filter((t) => t.source !== 'demo');
+
+            const totalCount = uncategorized.length;
+            if (totalCount === 0) {
+              systemResultsMsg = {
+                role: 'system',
+                content: `Categorization Results:
+- Total Uncategorized Transactions Processed: 0
+- Status: No uncategorized transactions to classify.
+
+Explain to the user that there are no uncategorized transactions to classify in the current view.`
+              };
+              actionResult = {
+                action: 'categorize_transactions',
+                processedCount: 0,
+              };
+              currentSteps.push('Tool Call: categorize_transactions (0 transactions)');
+            } else {
+              const allCats = await db.categories.toArray();
+              const catNames = allCats.map((c) => c.name);
+              const chunkSize = 12;
+              const chunksCount = Math.ceil(totalCount / chunkSize);
+
+              currentSteps.push(`Starting AI classification for ${totalCount} transactions...`);
+              updateStreamingMetadata(currentSteps);
+
+              const proposedItems: ProposedCategorizationItem[] = [];
+              const reportId = `report-${Date.now()}`;
+              let aborted = false;
+
+              try {
+                for (let c = 0; c < chunksCount; c++) {
+                  if (signal.aborted) {
+                    aborted = true;
+                    break;
+                  }
+
+                  const startIdx = c * chunkSize;
+                  const endIdx = Math.min(startIdx + chunkSize, totalCount);
+                  const chunk = uncategorized.slice(startIdx, endIdx);
+
+                  const chunkMsg = `Classifying chunk ${c + 1}/${chunksCount} (transactions ${startIdx + 1} to ${endIdx})...`;
+                  currentSteps.push(chunkMsg);
+                  startStreamingMessage(currentSteps, 'tool_select');
+
+                  const toReview = chunk.map((t) => ({
+                    desc: t.description,
+                    ruleCategory: t.category,
+                  }));
+
+                  const aiResults = await localAI.reviewTransactions(toReview, catNames, signal);
+
+                  if (signal.aborted) {
+                    aborted = true;
+                    break;
+                  }
+
+                  for (let i = 0; i < chunk.length; i++) {
+                    const cat = aiResults[i];
+                    if (cat && catNames.includes(cat)) {
+                      proposedItems.push({
+                        transactionId: chunk[i].id!,
+                        description: chunk[i].description,
+                        amount: chunk[i].amount,
+                        date: chunk[i].date,
+                        originalCategory: chunk[i].category,
+                        proposedCategory: cat,
+                        approved: true,
+                      });
+                    }
+                  }
+
+                  // Save partial report to database settings
+                  await db.settings.put({
+                    key: 'app:pendingCategorizationReport',
+                    value: {
+                      id: reportId,
+                      createdAt: new Date().toISOString(),
+                      items: proposedItems
+                    }
+                  });
+                }
+              } catch (chunkErr: any) {
+                if (chunkErr.name === 'AbortError' || chunkErr.message?.includes('aborted')) {
+                  aborted = true;
+                } else {
+                  console.error('AI chunk categorization failed:', chunkErr);
+                  throw chunkErr;
+                }
+              }
+
+              if (aborted) {
+                currentSteps.push('Categorization stopped by user.');
+              }
+
+              if (proposedItems.length > 0) {
+                systemResultsMsg = {
+                  role: 'system',
+                  content: `Categorization Proposed Report Generated:
+- Total Transactions Analyzed: ${proposedItems.length}
+- Status: ${aborted ? 'Interrupted (Partial Report)' : 'Complete'}
+- Report ID: ${reportId}
+
+Inform the user that you have generated a categorization proposal report for **${proposedItems.length}.00** transactions. Bold all numbers and format to exactly the second decimal place (.00) (e.g. **12.00** transactions). Explain that they can review, edit, and approve these changes before they are applied.`
+                };
+
+                actionResult = {
+                  action: 'categorize_transactions',
+                  processedCount: proposedItems.length,
+                  reportId: reportId,
+                  interrupted: aborted
+                };
+
+                currentSteps.push(`Tool Call: categorize_transactions (${proposedItems.length} transaction suggestions generated${aborted ? ' - partial' : ''})`);
+              } else {
+                systemResultsMsg = {
+                  role: 'system',
+                  content: `Categorization Results:
+- Total Uncategorized Transactions Processed: 0
+- Status: No categorization suggestions generated.
+
+Inform the user that no suggestions could be generated.`
+                };
+
+                actionResult = {
+                  action: 'categorize_transactions',
+                  processedCount: 0,
+                };
+
+                currentSteps.push(`Tool Call: categorize_transactions (0 suggestions generated)`);
+              }
+            }
+          }
 
         } else if (action === 'audit_accessibility') {
           const accessibilityReport = generateAccessibilityReport(location.pathname);
@@ -848,18 +1002,39 @@ Please summarize this accessibility report for the developer in the 'body' field
         }
       }
     } catch (err: any) {
-      currentSteps.push(`Error: ${err.message}`);
-      await finalizeStreamingMessage(
-        `Error: ${err.message}`,
-        null,
-        currentSteps,
-        { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-        'explanation'
-      );
+      const isAbort = err.name === 'AbortError' || err.message?.includes('aborted');
+      if (isAbort) {
+        currentSteps.push('Stopped by user.');
+        await finalizeStreamingMessage(
+          'Stopped by user.',
+          null,
+          currentSteps,
+          undefined,
+          'explanation'
+        );
+      } else {
+        currentSteps.push(`Error: ${err.message}`);
+        await finalizeStreamingMessage(
+          `Error: ${err.message}`,
+          null,
+          currentSteps,
+          { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
+          'explanation'
+        );
+      }
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
-  return { sendPromptText, loading };
+  const stopPromptExecution = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+  };
+
+  return { sendPromptText, stopPromptExecution, loading };
 }

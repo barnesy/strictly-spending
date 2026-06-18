@@ -17,7 +17,7 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
           p: 2.5,
           borderRadius: 2,
           border: '1px solid',
-          borderColor: 'success.100',
+          borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.3)' : 'success.100',
           bgcolor: 'rgba(46, 125, 50, 0.02)',
           textAlign: 'center',
           display: 'flex',
@@ -27,7 +27,7 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
         }}
       >
         <CheckCircleIcon color="success" sx={{ fontSize: 32 }} />
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'success.dark' }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: (theme) => theme.palette.mode === 'dark' ? 'success.light' : 'success.dark' }}>
           No Anomalies Found!
         </Typography>
         <Typography variant="body2" color="text.secondary">
@@ -53,7 +53,7 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
                   p: 1.2,
                   borderRadius: 2,
                   border: '1px solid',
-                  borderColor: 'error.100',
+                  borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(239, 83, 80, 0.3)' : 'error.100',
                   bgcolor: 'rgba(239, 83, 80, 0.02)',
                 }}
               >
@@ -61,7 +61,7 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
                   <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                     {spike.category}
                   </Typography>
-                  <Typography variant="body2" color="error.dark" sx={{ fontWeight: 700 }}>
+                  <Typography variant="body2" sx={{ color: (theme) => theme.palette.mode === 'dark' ? 'error.light' : 'error.dark', fontWeight: 700 }}>
                     +{Math.round(spike.percentageChange)}% Spike
                   </Typography>
                 </Stack>
@@ -88,7 +88,7 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
                   p: 1.2,
                   borderRadius: 2,
                   border: '1px solid',
-                  borderColor: 'warning.100',
+                  borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(237, 108, 2, 0.3)' : 'warning.100',
                   bgcolor: 'rgba(237, 108, 2, 0.02)',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -104,7 +104,7 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="body2" color="warning.dark" sx={{ fontWeight: 700 }}>
+                  <Typography variant="body2" sx={{ color: (theme) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark', fontWeight: 700 }}>
                     {formatCurrency(outlier.amount)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>

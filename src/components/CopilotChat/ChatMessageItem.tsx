@@ -22,7 +22,9 @@ import { db } from '../../db';
 import { useChatStore } from '../../chatStore';
 import SimpleMarkdown from '../SimpleMarkdown';
 import CopilotQueryResult from '../CopilotQueryResult';
-import { GenUXConfirmation, GenUXForm } from './GenUXComponents';
+import { GenUXConfirmation, GenUXForm, ProposedCategorizationReportUX } from './GenUXComponents';
+
+
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -90,6 +92,28 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
   const [showInspector, setShowInspector] = useState(false);
   const [isLogsExpanded, setIsLogsExpanded] = useState<boolean | null>(null);
   const logsExpanded = isLogsExpanded !== null ? isLogsExpanded : !!message.isStreaming;
+
+  const updateMessageResult = async (targetMsg: ChatMessage, newResult: any) => {
+    const currentMessages = useChatStore.getState().messages;
+    const index = currentMessages.findIndex((m) => m === targetMsg);
+    if (index >= 0) {
+      const updatedMessages = [...currentMessages];
+      updatedMessages[index] = {
+        ...updatedMessages[index],
+        actionResult: newResult,
+      };
+      useChatStore.getState().setMessages(updatedMessages);
+
+      const threadId = useChatStore.getState().activeThreadId;
+      if (threadId) {
+        const dbMsgs = await db.messages.where('threadId').equals(threadId).sortBy('id');
+        const dbMsg = dbMsgs.find(m => m.role === targetMsg.role && m.content === targetMsg.content);
+        if (dbMsg && dbMsg.id) {
+          await db.messages.update(dbMsg.id, { actionResult: newResult });
+        }
+      }
+    }
+  };
   
   const showResult =
     message.actionResult &&
@@ -197,7 +221,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
           sx={{
             p: 1.5,
             maxWidth: '85%',
-            bgcolor: isUser ? 'primary.main' : 'grey.100',
+            bgcolor: isUser ? 'primary.main' : (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'grey.100',
             color: isUser ? 'primary.contrastText' : 'text.primary',
             borderRadius: 2,
             width: !isUser && displayContent.includes('|') ? '85%' : 'auto',
@@ -334,6 +358,17 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         </Box>
       )}
 
+
+      {message.actionResult?.action === 'categorize_transactions' && (
+        <ProposedCategorizationReportUX
+          message={message}
+          onUpdateMessageResult={async (newResult) => {
+            await updateMessageResult(message, newResult);
+          }}
+          disabled={loading}
+        />
+      )}
+
       {isArtifact && message.actionResult && (
         <Box sx={{ width: '85%', mt: 0.5 }}>
           <Paper
@@ -423,7 +458,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               sx={{
                 p: 1.5,
                 mt: 1,
-                bgcolor: 'grey.50',
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50',
                 borderColor: 'divider',
                 borderRadius: 2,
                 display: 'flex',
@@ -441,19 +476,19 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                   const isPending = message.isStreaming && isLast;
 
                   let dotColor = 'text.secondary';
-                  let textColor = 'text.primary';
+                  let textColor: any = 'text.primary';
                   let fontWeight = 400;
 
                   if (isToolCall) {
                     dotColor = 'info.main';
-                    textColor = 'info.dark';
+                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'info.light' : 'info.dark';
                     fontWeight = 500;
                   } else if (isError) {
                     dotColor = 'error.main';
                     textColor = 'error.main';
                   } else if (isCorrection) {
                     dotColor = 'warning.main';
-                    textColor = 'warning.dark';
+                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark';
                   } else if (isLast && !message.isStreaming) {
                     dotColor = 'success.main';
                   }
@@ -616,7 +651,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               sx={{
                 p: 1,
                 mt: 0.5,
-                bgcolor: 'grey.50',
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50',
                 borderColor: 'divider',
                 borderRadius: 1,
                 overflowX: 'auto',

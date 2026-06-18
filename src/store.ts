@@ -161,7 +161,12 @@ export const useFilters = create<FiltersStore>()(
         set({ earliestTransactionDate: earliest, latestTransactionDate: latest }),
       setMinPrice: (price) => set({ minPrice: price }),
       setMaxPrice: (price) => set({ maxPrice: price }),
-      reset: () => set(initialState),
+      reset: () =>
+        set((s) => ({
+          ...initialState,
+          earliestTransactionDate: s.earliestTransactionDate,
+          latestTransactionDate: s.latestTransactionDate,
+        })),
     }),
     { name: 'spending-viz:filters' }
   )

@@ -44,6 +44,7 @@ You are a local financial AI agent. You help the user manage their money based o
 
 <allowed_actions>
 - query_data: Use this to fetch transactions, spending, category totals, budgets, or answer any questions about the user's spending data.
+- categorize_transactions: Use this to auto-categorize uncategorized transactions using the local AI model.
 - subscription_alerts: Use this to scan recurring payments for duplicates, price spikes, or overlapping subscriptions.
 - spending_anomalies: Use this to scan for outliers or category spending spikes. Do NOT use this to query spending totals or compare spending across periods (use 'query_data' for totals).
 - project_runway: Use this to check cash reserves, monthly outflow, and calculate months of runway.
@@ -79,6 +80,8 @@ export const fewShots: ChatMessage[] = [
   { role: 'assistant', content: JSON.stringify({ title: 'Settings', body: 'Navigating to settings.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Go to dashboard', 'Go to budget'], agent_action: { action: 'navigate', page: '/settings', explanation: 'Navigating to settings.' } }) },
   { role: 'user', content: 'What is this app?' },
   { role: 'assistant', content: JSON.stringify({ title: 'Local AI', body: 'I am the offline Local AI assistant. I can filter categories, search merchants, query data, or navigate pages. I only use your private local data.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show me my budget', 'Reset filters'], agent_action: { action: 'none' } }) },
+  { role: 'user', content: 'AI categorize remaining transactions' },
+  { role: 'assistant', content: JSON.stringify({ title: 'AI Categorization', body: 'Starting local AI categorization for all remaining uncategorized transactions.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Go to sort'], agent_action: { action: 'categorize_transactions', explanation: 'Running manual local AI categorization on uncategorized transactions.' } }) },
   { role: 'user', content: 'How much runway do I have?' },
   { role: 'assistant', content: JSON.stringify({ title: 'Calculating Runway', body: 'Calculating projected budget runway based on current cash reserves.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Go to budget', 'Go to dashboard'], agent_action: { action: 'project_runway', explanation: 'Calculating financial runway projection.' } }) },
   { role: 'user', content: 'Compare my shopping spending last month versus the month before.' },
@@ -113,7 +116,7 @@ export const COPILOT_RESPONSE_SCHEMA = {
         action: { 
           type: "string", 
           enum: [
-            "filter", "navigate", "query_data", "subscription_alerts", 
+            "filter", "navigate", "query_data", "categorize_transactions", "subscription_alerts", 
             "spending_anomalies", "create_artifact", "update_artifact", 
             "audit_accessibility", "dom_update", "project_runway", "none"
           ],
@@ -160,14 +163,45 @@ const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in windo
 let cachedTauriFetch: any = null;
 
 async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  if (isTauri) {
-    if (!cachedTauriFetch) {
-      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-      cachedTauriFetch = tauriFetch;
+  console.log('[safeFetch] Request started:', input);
+  try {
+    if (isTauri) {
+      console.log('[safeFetch] isTauri=true. Importing @tauri-apps/plugin-http...');
+      if (!cachedTauriFetch) {
+        const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+        cachedTauriFetch = tauriFetch;
+        console.log('[safeFetch] Import successful.');
+      }
+      const { signal, ...tauriInit } = init || {};
+      if (signal?.aborted) {
+        console.log('[safeFetch] Request aborted before sending.');
+        throw new DOMException('The user aborted a request.', 'AbortError');
+      }
+      console.log('[safeFetch] Calling cachedTauriFetch with init:', tauriInit);
+      const res = await cachedTauriFetch(input as any, tauriInit as any) as unknown as Response;
+      console.log('[safeFetch] Response received. Status:', res.status);
+      return res;
     }
-    return cachedTauriFetch(input as any, init as any) as unknown as Response;
+    console.log('[safeFetch] isTauri=false. Calling browser native fetch...');
+    const res = await fetch(input, init);
+    console.log('[safeFetch] Browser native fetch success. Status:', res.status);
+    return res;
+  } catch (error: any) {
+    console.error('[safeFetch] Error caught:', error);
+    if (error?.name === 'AbortError' || error?.message?.toLowerCase().includes('abort')) {
+      throw error;
+    }
+    const errorMsg = error?.message || String(error);
+    if (
+      errorMsg.includes('The string did not match the expected pattern') ||
+      errorMsg.includes('Failed to fetch') ||
+      errorMsg.includes('NetworkError') ||
+      errorMsg.includes('Connection refused')
+    ) {
+      throw new Error('Ollama server is offline or connection was blocked. Please check that Ollama is running.');
+    }
+    throw error;
   }
-  return fetch(input, init);
 }
 
 export async function getSystemPrompt(stateContext: string, overrideSystemPrompt?: string): Promise<string> {
@@ -225,11 +259,29 @@ export interface AIProvider {
     stateContext: string,
     overrideSystemPrompt?: string,
     responseSchema?: any,
-    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void
+    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void,
+    signal?: AbortSignal
   ): Promise<string>;
-  reviewTransactions(transactions: { desc: string; ruleCategory: string }[], availableCategories: string[]): Promise<string[]>;
+  reviewTransactions(transactions: { desc: string; ruleCategory: string }[], availableCategories: string[], signal?: AbortSignal): Promise<string[]>;
+  reviewTransactionsWithRules(transactions: { desc: string; ruleCategory: string }[], availableCategories: string[], signal?: AbortSignal): Promise<{ category: string; pattern: string }[]>;
   pullModel?(progressCallback?: (progress: number, status: string) => void): Promise<void>;
   abortPull?(): void;
+}
+
+export function handleOllamaError(error: any): any {
+  if (error?.name === 'AbortError' || error?.message?.toLowerCase().includes('abort')) {
+    return error;
+  }
+  const errorMsg = error?.message || String(error);
+  if (
+    errorMsg.includes('The string did not match the expected pattern') ||
+    errorMsg.includes('Failed to fetch') ||
+    errorMsg.includes('NetworkError') ||
+    errorMsg.includes('Connection refused')
+  ) {
+    return new Error('Ollama server is offline or connection was blocked. Please check that Ollama is running.');
+  }
+  return error;
 }
 
 export class OllamaProvider implements AIProvider {
@@ -247,7 +299,14 @@ export class OllamaProvider implements AIProvider {
         throw new Error('Ollama server is not running.');
       }
       
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error('Failed to parse Ollama tags response as JSON.');
+      }
+
       const hasModel = data.models?.some((m: any) => {
         const installed = m.name;
         if (installed === this.modelName) return true;
@@ -276,7 +335,7 @@ export class OllamaProvider implements AIProvider {
       progressCallback?.("AI ready!", 100);
     } catch (e: any) {
       this.isLoaded = false;
-      throw e;
+      throw handleOllamaError(e);
     }
   }
 
@@ -337,7 +396,7 @@ export class OllamaProvider implements AIProvider {
         console.log('Model download aborted.');
         return;
       }
-      throw e;
+      throw handleOllamaError(e);
     } finally {
       this.pullAbortController = null;
     }
@@ -355,68 +414,92 @@ export class OllamaProvider implements AIProvider {
     stateContext: string,
     overrideSystemPrompt?: string,
     responseSchema?: any,
-    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void
+    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void,
+    signal?: AbortSignal
   ): Promise<string> {
     if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
 
-    const extendedSystemPrompt = await getSystemPrompt(stateContext, overrideSystemPrompt);
-    const cleanedMessages = cleanChatHistory(messages);
-    
-    const fullMessages = overrideSystemPrompt
-      ? [
-          { role: 'system' as const, content: extendedSystemPrompt },
-          ...cleanedMessages
-        ]
-      : [
-          { role: 'system' as const, content: extendedSystemPrompt },
-          ...fewShots,
-          ...cleanedMessages
-        ];
+    try {
+      const extendedSystemPrompt = await getSystemPrompt(stateContext, overrideSystemPrompt);
+      const cleanedMessages = cleanChatHistory(messages);
+      
+      const fullMessages = overrideSystemPrompt
+        ? [
+            { role: 'system' as const, content: extendedSystemPrompt },
+            ...cleanedMessages
+          ]
+        : [
+            { role: 'system' as const, content: extendedSystemPrompt },
+            ...fewShots,
+            ...cleanedMessages
+          ];
 
-    const schema = responseSchema !== undefined ? responseSchema : COPILOT_RESPONSE_SCHEMA;
-    const body: any = {
-      model: this.modelName,
-      messages: fullMessages,
-      stream: !!onChunk,
-      options: { temperature: 0.2, num_predict: 1024 }
-    };
+      const schema = responseSchema !== undefined ? responseSchema : COPILOT_RESPONSE_SCHEMA;
+      const body: any = {
+        model: this.modelName,
+        messages: fullMessages,
+        stream: !!onChunk,
+        options: { temperature: 0.2, num_predict: 1024 }
+      };
 
-    if (schema) {
-      body.format = schema;
-    }
-
-    const response = await safeFetch('http://localhost:11434/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-
-    if (!response.ok) throw new Error(`Ollama chat error: ${response.statusText}`);
-
-    if (onChunk) {
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable.');
+      if (schema) {
+        body.format = schema;
       }
 
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-      let accumulatedContent = '';
+      const response = await safeFetch('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal
+      });
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      if (!response.ok) throw new Error(`Ollama chat error: ${response.statusText}`);
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        
-        buffer = lines.pop() || '';
+      if (onChunk) {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('Response body is not readable.');
+        }
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let accumulatedContent = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              const parsedChunk = JSON.parse(trimmed);
+              const content = parsedChunk.message?.content || '';
+              if (content) {
+                accumulatedContent += content;
+                onChunk(content);
+              }
+              if (parsedChunk.done) {
+                const pCount = parsedChunk.prompt_eval_count;
+                const eCount = parsedChunk.eval_count;
+                if (pCount !== undefined || eCount !== undefined) {
+                  onChunk('', { promptTokens: pCount || 0, completionTokens: eCount || 0 });
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to parse streaming line:', trimmed, e);
+            }
+          }
+        }
+
+        if (buffer.trim()) {
           try {
-            const parsedChunk = JSON.parse(trimmed);
+            const parsedChunk = JSON.parse(buffer.trim());
             const content = parsedChunk.message?.content || '';
             if (content) {
               accumulatedContent += content;
@@ -430,45 +513,35 @@ export class OllamaProvider implements AIProvider {
               }
             }
           } catch (e) {
-            console.warn('Failed to parse streaming line:', trimmed, e);
+            // ignore
           }
         }
-      }
 
-      if (buffer.trim()) {
+        return accumulatedContent;
+      } else {
+        const text = await response.text();
+        let data;
         try {
-          const parsedChunk = JSON.parse(buffer.trim());
-          const content = parsedChunk.message?.content || '';
-          if (content) {
-            accumulatedContent += content;
-            onChunk(content);
-          }
-          if (parsedChunk.done) {
-            const pCount = parsedChunk.prompt_eval_count;
-            const eCount = parsedChunk.eval_count;
-            if (pCount !== undefined || eCount !== undefined) {
-              onChunk('', { promptTokens: pCount || 0, completionTokens: eCount || 0 });
-            }
-          }
-        } catch (e) {
-          // ignore
+          data = JSON.parse(text);
+        } catch (parseErr) {
+          throw new Error('Failed to parse Ollama chat response as JSON.');
         }
+        return data.message?.content || '';
       }
-
-      return accumulatedContent;
-    } else {
-      const data = await response.json();
-      return data.message?.content || '';
+    } catch (e: any) {
+      throw handleOllamaError(e);
     }
   }
 
   async reviewTransactions(
     transactions: { desc: string; ruleCategory: string }[],
-    availableCategories: string[]
+    availableCategories: string[],
+    signal?: AbortSignal
   ): Promise<string[]> {
     if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
 
-    const prompt = `You are a financial categorization auditor running locally. 
+    try {
+      const prompt = `You are a financial categorization auditor running locally. 
 Review the following transaction descriptions and the category assigned to them by a simple rule engine.
 Respond with a JSON object containing a "results" array of strings, where each string is the BEST category for the transaction at the exact same index. 
 You MUST choose from the following Available Categories EXACTLY (do not invent new ones):
@@ -483,29 +556,157 @@ Example valid JSON output:
 }
 `;
 
-    const response = await safeFetch('http://localhost:11434/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.modelName,
-        messages: [{ role: 'user', content: prompt }],
-        format: 'json',
-        options: { temperature: 0.1 }
-      })
-    });
+      const response = await safeFetch('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.modelName,
+          messages: [{ role: 'user', content: prompt }],
+          format: 'json',
+          stream: false,
+          options: { temperature: 0.1 }
+        }),
+        signal
+      });
 
-    if (!response.ok) throw new Error(`Ollama error: ${response.statusText}`);
-    const data = await response.json();
-    const content = data.message?.content || '{"results":[]}';
+      if (!response.ok) throw new Error(`Ollama error: ${response.statusText}`);
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.error('Ollama raw response was:', text);
+        throw new Error('Failed to parse Ollama classification response as JSON.');
+      }
+      const content = data.message?.content || '{"results":[]}';
+
+      let parsed = null;
+      try {
+        parsed = parseAIResponse(content);
+      } catch (err) {
+        console.error('Failed to parse AI classification response content:', content, err);
+      }
+
+      if (parsed && Array.isArray(parsed.results) && parsed.results.length === transactions.length) {
+        return parsed.results.map((res: any, idx: number) => {
+          const val = String(res).trim();
+          if (val && val !== 'Uncategorized' && availableCategories.includes(val)) {
+            return val;
+          }
+          const fallback = transactions[idx].ruleCategory;
+          return (fallback && fallback !== 'Uncategorized' && availableCategories.includes(fallback)) ? fallback : '';
+        });
+      }
+      return transactions.map(t => {
+        const fallback = t.ruleCategory;
+        return (fallback && fallback !== 'Uncategorized' && availableCategories.includes(fallback)) ? fallback : '';
+      });
+    } catch (e: any) {
+      throw handleOllamaError(e);
+    }
+  }
+
+  async reviewTransactionsWithRules(
+    transactions: { desc: string; ruleCategory: string }[],
+    availableCategories: string[],
+    signal?: AbortSignal
+  ): Promise<{ category: string; pattern: string }[]> {
+    if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
 
     try {
-      const parsed = parseAIResponse(content);
-      if (parsed && Array.isArray(parsed.results) && parsed.results.length === transactions.length) {
-        return parsed.results;
+      const prompt = `You are a financial categorization auditor running locally.
+Review the following transaction descriptions and suggest:
+1. The BEST category from the available list.
+2. A simplified keyword/pattern that can be used as a matching rule for future transactions of this merchant.
+   - The keyword MUST be simplified to the most important, distinctive part (e.g. "starbucks" instead of "SQ * STARBUCKS #12", "netflix" instead of "NETFLIX.COM V1234", "uber" instead of "UBER *TRIP 123456").
+   - Strip any random numbers, IDs, dates, credit card prefixes, transaction prefixes (like "SQ *", "TST*", "PAYPAL *", "SP *"), location suffixes, or phone numbers.
+   - It should be lowercase.
+   - It must still get picked up by the sorting next time (not too generic, e.g. don't use "inc" or "corp", but use the merchant name).
+
+You MUST choose categories from the following Available Categories EXACTLY (do not invent new ones):
+${availableCategories.map(c => `- ${c}`).join('\n')}
+
+Transactions:
+${transactions.map((t, i) => `${i+1}. Desc: "${t.desc}" | Rule Guessed: "${t.ruleCategory}"`).join('\n')}
+
+Respond with a JSON object containing a "results" array of objects, where each object has:
+- "category": the suggested category
+- "pattern": the simplified keyword pattern
+
+Example valid JSON output:
+{
+  "results": [
+    { "category": "Restaurants & Coffee", "pattern": "starbucks" }
+  ]
+}
+`;
+
+      const response = await safeFetch('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.modelName,
+          messages: [{ role: 'user', content: prompt }],
+          format: 'json',
+          stream: false,
+          options: { temperature: 0.1 }
+        }),
+        signal
+      });
+
+      if (!response.ok) throw new Error(`Ollama error: ${response.statusText}`);
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.error('Ollama raw response was:', text);
+        throw new Error('Failed to parse Ollama classification response as JSON.');
       }
-      return transactions.map(t => t.ruleCategory);
-    } catch {
-      return transactions.map(t => t.ruleCategory);
+      const content = data.message?.content || '{"results":[]}';
+
+      let parsed = null;
+      try {
+        parsed = parseAIResponse(content);
+      } catch (err) {
+        console.error('Failed to parse AI classification response content:', content, err);
+      }
+
+      const resultsList: { category: string; pattern: string }[] = [];
+
+      if (parsed && Array.isArray(parsed.results) && parsed.results.length === transactions.length) {
+        for (let idx = 0; idx < transactions.length; idx++) {
+          const item = parsed.results[idx];
+          const cat = item && typeof item === 'object' && item.category ? String(item.category).trim() : '';
+          const pat = item && typeof item === 'object' && item.pattern ? String(item.pattern).trim().toLowerCase() : '';
+          
+          let finalCat = '';
+          if (cat && cat !== 'Uncategorized' && availableCategories.includes(cat)) {
+            finalCat = cat;
+          } else {
+            const fallback = transactions[idx].ruleCategory;
+            finalCat = (fallback && fallback !== 'Uncategorized' && availableCategories.includes(fallback)) ? fallback : '';
+          }
+
+          resultsList.push({
+            category: finalCat,
+            pattern: pat || transactions[idx].desc.toLowerCase(),
+          });
+        }
+      } else {
+        // Fallback
+        for (let idx = 0; idx < transactions.length; idx++) {
+          const fallback = transactions[idx].ruleCategory;
+          resultsList.push({
+            category: (fallback && fallback !== 'Uncategorized' && availableCategories.includes(fallback)) ? fallback : '',
+            pattern: transactions[idx].desc.toLowerCase(),
+          });
+        }
+      }
+
+      return resultsList;
+    } catch (e: any) {
+      throw handleOllamaError(e);
     }
   }
 }
@@ -573,15 +774,25 @@ export class LocalAI implements AIProvider {
     stateContext: string,
     overrideSystemPrompt?: string,
     responseSchema?: any,
-    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void
+    onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void,
+    signal?: AbortSignal
   ): Promise<string> {
     this.syncActiveProvider();
-    return this.activeProvider.chatCopilot(messages, stateContext, overrideSystemPrompt, responseSchema, onChunk);
+    return this.activeProvider.chatCopilot(messages, stateContext, overrideSystemPrompt, responseSchema, onChunk, signal);
   }
 
-  async reviewTransactions(transactions: any[], availableCategories: string[]): Promise<string[]> {
+  async reviewTransactions(transactions: any[], availableCategories: string[], signal?: AbortSignal): Promise<string[]> {
     this.syncActiveProvider();
-    return this.activeProvider.reviewTransactions(transactions, availableCategories);
+    return this.activeProvider.reviewTransactions(transactions, availableCategories, signal);
+  }
+
+  async reviewTransactionsWithRules(
+    transactions: any[],
+    availableCategories: string[],
+    signal?: AbortSignal
+  ): Promise<{ category: string; pattern: string }[]> {
+    this.syncActiveProvider();
+    return this.activeProvider.reviewTransactionsWithRules(transactions, availableCategories, signal);
   }
 
   async pullModel(progressCallback?: (progress: number, status: string) => void): Promise<void> {

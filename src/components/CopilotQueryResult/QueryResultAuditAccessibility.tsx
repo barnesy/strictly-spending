@@ -77,7 +77,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
       {/* Critical Issues & Remediations */}
       {(accessibilityReport.issues?.length || 0) > 0 ? (
         <Box>
-          <Typography variant="caption" color="error.dark" sx={{ fontWeight: 700, display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === 'dark' ? 'error.light' : 'error.dark', fontWeight: 700, display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Identified Violations & Fixes ({accessibilityReport.issues?.length || 0})
           </Typography>
           <Stack spacing={1} sx={{ maxHeight: 220, overflowY: 'auto', pr: 0.5 }}>
@@ -88,7 +88,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
                   p: 1.2,
                   borderRadius: 2,
                   border: '1px solid',
-                  borderColor: iss.severity === 'error' ? 'error.100' : 'warning.100',
+                  borderColor: (theme) => theme.palette.mode === 'dark' ? (iss.severity === 'error' ? 'rgba(239, 83, 80, 0.3)' : 'rgba(237, 108, 2, 0.3)') : (iss.severity === 'error' ? 'error.100' : 'warning.100'),
                   bgcolor: iss.severity === 'error' ? 'rgba(239, 83, 80, 0.015)' : 'rgba(237, 108, 2, 0.015)',
                 }}
               >
@@ -105,7 +105,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontFamily: 'monospace' }}>
                       Element: {iss.element}
                     </Typography>
-                    <Typography variant="caption" color="text.primary" sx={{ display: 'block', fontStyle: 'italic', bgcolor: 'grey.50', p: 0.5, borderRadius: 0.5, fontSize: 9.5 }}>
+                    <Typography variant="caption" color="text.primary" sx={{ display: 'block', fontStyle: 'italic', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50', p: 0.5, borderRadius: 0.5, fontSize: 9.5 }}>
                       Fix: {iss.suggestion}
                     </Typography>
                   </Box>
@@ -120,7 +120,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
             p: 2.5,
             borderRadius: 2.5,
             border: '1px solid',
-            borderColor: 'success.100',
+            borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.3)' : 'success.100',
             bgcolor: 'rgba(46, 125, 50, 0.02)',
             textAlign: 'center',
             display: 'flex',
@@ -130,7 +130,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
           }}
         >
           <CheckCircleIcon color="success" sx={{ fontSize: 32 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'success.dark' }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === 'dark' ? 'success.light' : 'success.dark' }}>
             Perfect Accessibility!
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>

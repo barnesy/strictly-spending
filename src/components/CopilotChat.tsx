@@ -22,6 +22,8 @@ import { executeCopilotCommand } from '../copilotMatcher';
 import { useCopilotActionHandler } from './CopilotChat/useCopilotActionHandler';
 import { ChatInput } from './CopilotChat/ChatInput';
 import { ChatMessageItem } from './CopilotChat/ChatMessageItem';
+import { CONTROL_HEIGHT } from '../theme';
+
 
 interface CopilotChatProps {
   onClose?: () => void;
@@ -73,7 +75,17 @@ export default function CopilotChat({
   const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
   const accounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
 
-  const { sendPromptText, loading } = useCopilotActionHandler();
+  const { sendPromptText, stopPromptExecution, loading } = useCopilotActionHandler();
+
+  useEffect(() => {
+    const handleRunAiCategorization = () => {
+      if (!loading) {
+        sendPromptText("Please auto-categorize all uncategorized items");
+      }
+    };
+    window.addEventListener('app:run-ai-categorization', handleRunAiCategorization);
+    return () => window.removeEventListener('app:run-ai-categorization', handleRunAiCategorization);
+  }, [sendPromptText, loading]);
 
   const visibleMessages = useMemo(() => {
     return messages.filter((m) => {
@@ -196,7 +208,7 @@ export default function CopilotChat({
                 native: true,
               }
             }}
-            sx={{ flex: 1, mr: 1, '& .MuiOutlinedInput-root': { height: 32 } }}
+            sx={{ flex: 1, mr: 1 }}
           >
             {threads.map((t) => (
               <option key={t.id} value={t.id}>
@@ -209,7 +221,7 @@ export default function CopilotChat({
               variant="outlined"
               size="small"
               onClick={() => createThread()}
-              sx={{ minWidth: 32, height: 32, p: 0 }}
+              sx={{ minWidth: CONTROL_HEIGHT, width: CONTROL_HEIGHT, p: 0 }}
               title="Start a new chat thread"
             >
               +
@@ -323,7 +335,12 @@ export default function CopilotChat({
           </Box>
 
           {/* Text Input */}
-          <ChatInput onSend={sendPromptText} disabled={loading} />
+          <ChatInput
+            onSend={sendPromptText}
+            disabled={loading}
+            onStop={stopPromptExecution}
+            loading={loading}
+          />
         </>
       )}
     </Box>

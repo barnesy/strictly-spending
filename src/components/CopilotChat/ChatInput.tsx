@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { Box, Stack, TextField, IconButton } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
+import StopIcon from '@mui/icons-material/Stop';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
   disabled: boolean;
+  onStop?: () => void;
+  loading?: boolean;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, onStop, loading }: ChatInputProps) {
   const [input, setInput] = useState('');
 
   const handleSend = () => {
@@ -30,7 +33,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         <TextField
           fullWidth
           size="small"
-          placeholder="E.g. Show me food spending..."
+          placeholder={loading ? "Thinking..." : "E.g. Show me food spending..."}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -40,14 +43,24 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           }}
           disabled={disabled}
         />
-        <IconButton
-          color="primary"
-          onClick={handleSend}
-          disabled={!input.trim() || disabled}
-          aria-label="Send message"
-        >
-          <SendIcon />
-        </IconButton>
+        {loading && onStop ? (
+          <IconButton
+            color="error"
+            onClick={onStop}
+            aria-label="Stop execution"
+          >
+            <StopIcon />
+          </IconButton>
+        ) : (
+          <IconButton
+            color="primary"
+            onClick={handleSend}
+            disabled={!input.trim() || disabled}
+            aria-label="Send message"
+          >
+            <SendIcon />
+          </IconButton>
+        )}
       </Stack>
     </Box>
   );

@@ -208,3 +208,20 @@ export interface CsvMapping {
   institution: string;
 }
 
+export interface ProposedCategorizationItem {
+  transactionId: number;
+  description: string;
+  amount: number;
+  date: string;
+  originalCategory: string;
+  proposedCategory: string;
+  approved: boolean;
+}
+
+export interface ProposedCategorizationReport {
+  id: string;
+  createdAt: string;
+  items: ProposedCategorizationItem[];
+}
+
+

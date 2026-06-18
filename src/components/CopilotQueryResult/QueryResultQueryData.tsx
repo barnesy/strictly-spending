@@ -290,23 +290,24 @@ export function QueryResultQueryData({
               borderColor: 'divider',
               '&:hover': {
                 borderColor: 'text.primary',
-                bgcolor: 'grey.50',
+                bgcolor: 'action.hover',
               },
             }}
           >
             {showReceipt ? 'Hide Receipt Details' : `Show Receipt Details (${(spendCount || 0) + (incomeCount || 0)})`}
           </Button>
-
+ 
           {showReceipt && (
             <Box
               sx={{
                 mt: 1.5,
                 p: 2,
                 borderRadius: 2,
-                bgcolor: '#FAF8F5',
-                border: '1px dashed #ccc',
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? '#182232' : '#FAF8F5',
+                border: '1px dashed',
+                borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : '#ccc',
                 fontFamily: 'Courier New, Courier, monospace',
-                color: '#333',
+                color: (theme) => theme.palette.mode === 'dark' ? '#eceef2' : '#333',
                 fontSize: '12px',
                 lineHeight: 1.4,
               }}
@@ -315,8 +316,8 @@ export function QueryResultQueryData({
               <Box sx={{ textAlign: 'center', mb: 1, fontWeight: 'bold' }}>
                 *** TRANSACTION RECEIPT ***
               </Box>
-              <Box sx={{ borderTop: '1px dashed #ccc', my: 1 }} />
-
+              <Box sx={{ borderTop: '1px dashed', borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : '#ccc', my: 1 }} />
+ 
               {/* Scrollable list of items */}
               <Box sx={{ maxHeight: '180px', overflowY: 'auto', pr: 0.5 }}>
                 {loadingReceipt ? (
@@ -335,13 +336,13 @@ export function QueryResultQueryData({
                   } else {
                     displayAmt = ` ${formatCurrency(Math.abs(t.amount))}`; // normal spent
                   }
-
+ 
                   const dateStr = t.date.slice(5); // MM-DD format
                   const desc = t.description || '';
                   const cleanDesc = desc.length > 18
                     ? desc.slice(0, 15) + '...'
                     : desc.padEnd(18);
-
+ 
                   return (
                     <Box
                       key={idx}
@@ -358,7 +359,7 @@ export function QueryResultQueryData({
                         mx: -1,
                         transition: 'background-color 150ms ease, transform 100ms ease',
                         '&:hover': {
-                          bgcolor: 'rgba(0, 0, 0, 0.04)',
+                          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
                           transform: 'scale(1.01)',
                         },
                         '&:active': {
@@ -381,16 +382,16 @@ export function QueryResultQueryData({
                   );
                 }))}
               </Box>
-
-              <Box sx={{ borderTop: '1px dashed #ccc', my: 1 }} />
-
+ 
+              <Box sx={{ borderTop: '1px dashed', borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : '#ccc', my: 1 }} />
+ 
               {/* Calculations Block */}
               {(() => {
                 // Calculate subtotals
                 let expenseSubtotal = 0;
                 let refundSubtotal = 0;
                 let incomeSubtotal = 0;
-
+ 
                 for (const t of receiptTxns) {
                   const isIncome = t.category.toLowerCase() === 'income';
                   const isRefund = t.amount > 0 && t.category.toLowerCase() !== 'income';
@@ -403,7 +404,7 @@ export function QueryResultQueryData({
                     expenseSubtotal += Math.abs(t.amount);
                   }
                 }
-
+ 
                 return (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                     {expenseSubtotal > 0 && (
@@ -424,7 +425,7 @@ export function QueryResultQueryData({
                         <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>{formatCurrency(incomeSubtotal)}</Typography>
                       </Box>
                     )}
-                    <Box sx={{ borderTop: '2px double #ccc', my: 0.5 }} />
+                    <Box sx={{ borderTop: '2px double', borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.25)' : '#ccc', my: 0.5 }} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                       <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 'bold' }}>
                         {incomeSubtotal > 0 && expenseSubtotal === 0 ? 'NET RECEIVED' : 'NET TOTAL SPENT'}
@@ -436,7 +437,7 @@ export function QueryResultQueryData({
                   </Box>
                 );
               })()}
-              <Box sx={{ borderTop: '1px dashed #ccc', my: 1 }} />
+              <Box sx={{ borderTop: '1px dashed', borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : '#ccc', my: 1 }} />
               <Box sx={{ textAlign: 'center', fontSize: '10px', color: 'text.secondary' }}>
                 THANK YOU FOR SPENDING RESPONSIBLY
               </Box>

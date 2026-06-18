@@ -4,6 +4,7 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import { db } from '../db';
 import RecategorizeDialog from './RecategorizeDialog';
+import { useFilters } from '../store';
 
 import type { SubscriptionAlerts, SpendingAnomalies } from '../copilotAnalytics';
 import type { AccessibilityReport } from '../accessibilityAuditor';
@@ -78,6 +79,9 @@ export default function CopilotQueryResult({
   const [receiptTxns, setReceiptTxns] = useState<any[]>([]);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
 
+  const storeEarliest = useFilters((s) => s.earliestTransactionDate);
+  const storeLatest = useFilters((s) => s.latestTransactionDate);
+
   const {
     totalSpend = 0,
     totalIncome = 0,
@@ -93,8 +97,8 @@ export default function CopilotQueryResult({
   useEffect(() => {
     if (showReceipt && action === 'query_data') {
       setLoadingReceipt(true);
-      const startStr = customStart || '2000-01-01';
-      const endStr = customEnd || new Date().toISOString().slice(0, 10);
+      const startStr = customStart || storeEarliest || '2000-01-01';
+      const endStr = customEnd || storeLatest || new Date().toISOString().slice(0, 10);
       
       db.transactions.where('date').between(startStr, endStr, true, true).toArray().then(txns => {
         const filtered = txns.filter(t => {
@@ -116,7 +120,7 @@ export default function CopilotQueryResult({
         setLoadingReceipt(false);
       });
     }
-  }, [showReceipt, customStart, customEnd, accounts.join(','), search, minPrice, maxPrice, categories.join(','), metrics?.resolvedCategoryNames?.join(','), action]);
+  }, [showReceipt, customStart, customEnd, accounts.join(','), search, minPrice, maxPrice, categories.join(','), metrics?.resolvedCategoryNames?.join(','), action, storeEarliest, storeLatest]);
 
   const categoriesToDisplay =
     action === 'subscription_alerts'
@@ -171,9 +175,9 @@ export default function CopilotQueryResult({
                   fontSize: '11px',
                   fontWeight: 600,
                   height: '22px',
-                  borderColor: cat === 'Income' ? 'success.light' : 'divider',
-                  bgcolor: cat === 'Income' ? 'success.50' : 'transparent',
-                  color: cat === 'Income' ? 'success.dark' : 'text.primary',
+                  borderColor: cat === 'Income' ? (theme) => theme.palette.mode === 'dark' ? 'success.main' : 'success.light' : 'divider',
+                  bgcolor: cat === 'Income' ? (theme) => theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.2)' : 'success.50' : 'transparent',
+                  color: cat === 'Income' ? (theme) => theme.palette.mode === 'dark' ? 'success.light' : 'success.dark' : 'text.primary',
                 }}
               />
             ))}
