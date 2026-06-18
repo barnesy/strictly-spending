@@ -167,7 +167,7 @@ JOHN DOE,05/22/2026,05/23/2026,Netflix Card,Subscriptions,Sale,-15.00,`;
 
     it('invokes local AI categorization if license is active', async () => {
       licenseSetting = { value: { active: true } };
-      const preview = await buildPreview('Chase_Chase1234_stmt.CSV', chaseCsvSample);
+      const preview = await buildPreview('Chase_Chase1234_stmt.CSV', chaseCsvSample, undefined, true);
       expect(localAI.reviewTransactions).toHaveBeenCalled();
       expect(preview.rows[0].aiCategory).toBe('Groceries');
       expect(preview.rows[1].aiCategory).toBe('Groceries');

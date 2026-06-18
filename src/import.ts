@@ -51,7 +51,8 @@ function dedupKey(
 export async function buildPreview(
   filename: string,
   rawText: string,
-  contentHash?: string
+  contentHash?: string,
+  runAiAudit = false
 ): Promise<ImportPreview> {
   let source = detectSource(rawText);
   let parseResult;
@@ -151,7 +152,7 @@ export async function buildPreview(
   // Local AI Cross-Reference
   const licenseSetting = await db.settings.get('license');
   const license = licenseSetting?.value as { active: boolean } | undefined;
-  if (license?.active && localAI.isLoaded && rows.length > 0) {
+  if (runAiAudit && license?.active && localAI.isLoaded && rows.length > 0) {
     try {
       const allCats = await db.categories.toArray();
       const catNames = allCats.map(c => c.name);

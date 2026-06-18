@@ -87,6 +87,8 @@ export default function Import() {
   const [scanning, setScanning] = useState(false);
   const [lastScanAt, setLastScanAt] = useState<string | null>(null);
 
+
+
   const onScanWatchFolder = useCallback(async () => {
     if (!watchConfig?.handle) return;
     setScanning(true);
@@ -145,12 +147,17 @@ export default function Import() {
     setIsProcessing(true);
     setCommittedSummary(null);
     const results: ImportPreview[] = [];
-    for (const pf of pendingFiles) {
-      const p = await buildPreview(pf.name, pf.text, pf.contentHash);
-      results.push(p);
+    try {
+      for (const pf of pendingFiles) {
+        const p = await buildPreview(pf.name, pf.text, pf.contentHash);
+        results.push(p);
+      }
+      setPreviews(results);
+    } catch (e) {
+      console.error("Failed to parse watch folder files:", e);
+    } finally {
+      setIsProcessing(false);
     }
-    setPreviews(results);
-    setIsProcessing(false);
   };
 
   const onExport = async () => {
@@ -205,36 +212,46 @@ export default function Import() {
     setIsProcessing(true);
     setCommittedSummary(null);
     const results: ImportPreview[] = [];
-    for (const file of Array.from(files)) {
-      const text = await file.text();
-      // Compute the contentHash so manually-imported files participate in
-      // future watch-folder dedup.
-      const contentHash = await sha256(text);
-      const p = await buildPreview(file.name, text, contentHash);
-      results.push(p);
+    try {
+      for (const file of Array.from(files)) {
+        const text = await file.text();
+        // Compute the contentHash so manually-imported files participate in
+        // future watch-folder dedup.
+        const contentHash = await sha256(text);
+        const p = await buildPreview(file.name, text, contentHash);
+        results.push(p);
+      }
+      setPreviews(results);
+    } catch (e) {
+      console.error("Failed to parse files:", e);
+    } finally {
+      setIsProcessing(false);
     }
-    setPreviews(results);
-    setIsProcessing(false);
   }, []);
 
   const handleTauriFiles = useCallback(async (paths: string[]) => {
     setIsProcessing(true);
     setCommittedSummary(null);
     const results: ImportPreview[] = [];
-    for (const path of paths) {
-      if (!path.toLowerCase().endsWith('.csv')) continue;
-      try {
-        const text = await readTextFile(path);
-        const name = path.split(/[/\\]/).pop() || 'Unknown.csv';
-        const contentHash = await sha256(text);
-        const p = await buildPreview(name, text, contentHash);
-        results.push(p);
-      } catch (e) {
-        console.error("Failed to read dropped file:", path, e);
+    try {
+      for (const path of paths) {
+        if (!path.toLowerCase().endsWith('.csv')) continue;
+        try {
+          const text = await readTextFile(path);
+          const name = path.split(/[/\\]/).pop() || 'Unknown.csv';
+          const contentHash = await sha256(text);
+          const p = await buildPreview(name, text, contentHash);
+          results.push(p);
+        } catch (e) {
+          console.error("Failed to read dropped file:", path, e);
+        }
       }
+      setPreviews(results);
+    } catch (e) {
+      console.error("Failed to parse Tauri files:", e);
+    } finally {
+      setIsProcessing(false);
     }
-    setPreviews(results);
-    setIsProcessing(false);
   }, []);
 
   useEffect(() => {
@@ -284,54 +301,59 @@ export default function Import() {
 
   const onCommit = async () => {
     setIsProcessing(true);
-    let imported = 0;
-    let dups = 0;
-    let archived = 0;
-    let newUncategorized = 0;
-    for (const p of previews) {
-      if (p.error) continue;
-      const res = await commitPreview(p);
-      imported += res.imported;
-      dups += res.skippedDuplicates;
-      // Count how many freshly-imported (non-duplicate) rows landed in
-      // Uncategorized — drives the "Sort them now →" prompt below.
-      newUncategorized += p.rows.filter(
-        (r) => !r.duplicate && r.category === 'Uncategorized'
-      ).length;
-      // If this preview corresponds to a watch-folder file, run the
-      // configured post-import action (leave / move / delete).
-      const pf = pendingFiles.find((x) => x.name === p.filename);
-      if (
-        pf &&
-        watchConfig?.handle &&
-        watchConfig.postImportAction !== 'leave'
-      ) {
-        try {
-          await postImport(
-            watchConfig.handle,
-            pf.parentHandle,
-            pf.fileHandle,
-            watchConfig.postImportAction
-          );
-          archived++;
-        } catch {
-          /* best-effort archive */
+    try {
+      let imported = 0;
+      let dups = 0;
+      let archived = 0;
+      let newUncategorized = 0;
+      for (const p of previews) {
+        if (p.error) continue;
+        const res = await commitPreview(p);
+        imported += res.imported;
+        dups += res.skippedDuplicates;
+        // Count how many freshly-imported (non-duplicate) rows landed in
+        // Uncategorized — drives the "Sort them now →" prompt below.
+        newUncategorized += p.rows.filter(
+          (r) => !r.duplicate && r.category === 'Uncategorized'
+        ).length;
+        // If this preview corresponds to a watch-folder file, run the
+        // configured post-import action (leave / move / delete).
+        const pf = pendingFiles.find((x) => x.name === p.filename);
+        if (
+          pf &&
+          watchConfig?.handle &&
+          watchConfig.postImportAction !== 'leave'
+        ) {
+          try {
+            await postImport(
+              watchConfig.handle,
+              pf.parentHandle,
+              pf.fileHandle,
+              watchConfig.postImportAction
+            );
+            archived++;
+          } catch {
+            /* best-effort archive */
+          }
         }
       }
+      const archiveMsg =
+        archived > 0
+          ? watchConfig?.postImportAction === 'delete'
+            ? `, deleted ${archived} source file${archived === 1 ? '' : 's'}`
+            : `, moved ${archived} file${archived === 1 ? '' : 's'} to .imported/`
+          : '';
+      setCommittedSummary(
+        `Imported ${imported} new transaction${imported === 1 ? '' : 's'}, skipped ${dups} duplicate${dups === 1 ? '' : 's'}${archiveMsg}.`
+      );
+      setNewUncategorizedCount(newUncategorized);
+      setPreviews([]);
+      setPendingFiles([]);
+    } catch (e) {
+      console.error("Failed to commit import previews:", e);
+    } finally {
+      setIsProcessing(false);
     }
-    const archiveMsg =
-      archived > 0
-        ? watchConfig?.postImportAction === 'delete'
-          ? `, deleted ${archived} source file${archived === 1 ? '' : 's'}`
-          : `, moved ${archived} file${archived === 1 ? '' : 's'} to .imported/`
-        : '';
-    setCommittedSummary(
-      `Imported ${imported} new transaction${imported === 1 ? '' : 's'}, skipped ${dups} duplicate${dups === 1 ? '' : 's'}${archiveMsg}.`
-    );
-    setNewUncategorizedCount(newUncategorized);
-    setPreviews([]);
-    setPendingFiles([]);
-    setIsProcessing(false);
     // Re-scan to clear out the now-imported files
     if (watchConfig?.handle) onScanWatchFolder();
   };
