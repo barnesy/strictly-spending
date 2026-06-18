@@ -44,7 +44,7 @@ export default function AnimationSettings() {
   const bezierString = `cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2})`;
 
   return (
-    <Stack spacing={3} sx={{ maxWidth: 1200, mx: 'auto', pb: 5 }}>
+    <Stack spacing={3} sx={{ width: '100%', pb: 5 }}>
       {/* Header */}
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Box>
@@ -533,8 +533,9 @@ export default function AnimationSettings() {
                 <Card
                   ref={previewCardRef}
                   sx={(theme) => ({
-                    width: 340,
-                    minHeight: 420,
+                    width: '100%',
+                    maxWidth: 420,
+                    minHeight: 460,
                     borderRadius: 4,
                     borderLeft: '5px solid #1976d2',
                     boxShadow: theme.palette.mode === 'dark'
