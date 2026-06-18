@@ -17,7 +17,16 @@ import { useAnimationStore } from '../animationStore';
 
 export default function AnimationSettings() {
   const config = useAnimationStore();
-  const [previewState, setPreviewState] = useState<'idle' | 'exitRight' | 'exitLeft'>('idle');
+  const [previewState, setPreviewState] = useState<
+    | 'idle'
+    | 'exitRight'
+    | 'exitLeft'
+    | 'inspectStart'
+    | 'inspectMidRight'
+    | 'inspectMidLeft'
+    | 'inspectEndRight'
+    | 'inspectEndLeft'
+  >('idle');
   const previewCardRef = useRef<HTMLDivElement>(null);
 
   const triggerPreview = (direction: 'right' | 'left') => {
@@ -535,9 +544,24 @@ export default function AnimationSettings() {
                     display: 'flex',
                     flexDirection: 'column',
                     p: 2,
-                    transform: previewState === 'idle'
-                      ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
-                      : 'none',
+                    zIndex:
+                      previewState === 'inspectMidRight' || previewState === 'inspectMidLeft'
+                        ? config.midStepPct < config.zSplitPct ? 10 : 7
+                        : previewState === 'inspectEndRight' || previewState === 'inspectEndLeft'
+                        ? 7
+                        : 10,
+                    transform:
+                      previewState === 'inspectStart' || previewState === 'idle'
+                        ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
+                        : previewState === 'inspectMidRight'
+                        ? `perspective(1200px) translate3d(${config.exitXRight}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`
+                        : previewState === 'inspectMidLeft'
+                        ? `perspective(1200px) translate3d(${config.exitXLeft}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(-${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`
+                        : previewState === 'inspectEndRight'
+                        ? `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
+                        : previewState === 'inspectEndLeft'
+                        ? `perspective(1200px) translate3d(${config.finalXLeft}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(-${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
+                        : 'none',
                     animation:
                       previewState === 'exitRight'
                         ? `exitFlipRight ${config.duration}ms ${bezierString} forwards`
@@ -563,11 +587,77 @@ export default function AnimationSettings() {
                         Animation Status:
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'uppercase', color: 'primary.main' }}>
-                        {previewState === 'idle' ? 'Ready to Flip' : `Flipping ${previewState === 'exitRight' ? 'Right' : 'Left'}`}
+                        {previewState === 'idle'
+                          ? 'Ready to Flip'
+                          : previewState === 'inspectStart'
+                          ? 'Start (0%)'
+                          : previewState === 'inspectMidRight'
+                          ? 'Midpoint (Right)'
+                          : previewState === 'inspectMidLeft'
+                          ? 'Midpoint (Left)'
+                          : previewState === 'inspectEndRight'
+                          ? 'Landing (Right)'
+                          : previewState === 'inspectEndLeft'
+                          ? 'Landing (Left)'
+                          : `Flipping ${previewState === 'exitRight' ? 'Right' : 'Left'}`}
                       </Typography>
                     </Box>
                   </CardContent>
                 </Card>
+              </Box>
+
+              {/* Step Mode / Inspection controls */}
+              <Box sx={{ mt: 2, borderTop: '1px solid', borderColor: 'divider', pt: 2 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 1, textTransform: 'uppercase', textAlign: 'center', letterSpacing: '0.05em' }}>
+                  Inspection Freeze / Step Mode
+                </Typography>
+                <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap" gap={1}>
+                  <Button
+                    size="small"
+                    variant={previewState === 'inspectStart' ? 'contained' : 'outlined'}
+                    color="info"
+                    onClick={() => setPreviewState('inspectStart')}
+                    sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
+                  >
+                    Start (0%)
+                  </Button>
+                  <Button
+                    size="small"
+                    variant={previewState === 'inspectMidRight' ? 'contained' : 'outlined'}
+                    color="secondary"
+                    onClick={() => setPreviewState('inspectMidRight')}
+                    sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
+                  >
+                    Mid Right
+                  </Button>
+                  <Button
+                    size="small"
+                    variant={previewState === 'inspectMidLeft' ? 'contained' : 'outlined'}
+                    color="secondary"
+                    onClick={() => setPreviewState('inspectMidLeft')}
+                    sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
+                  >
+                    Mid Left
+                  </Button>
+                  <Button
+                    size="small"
+                    variant={previewState === 'inspectEndRight' ? 'contained' : 'outlined'}
+                    color="success"
+                    onClick={() => setPreviewState('inspectEndRight')}
+                    sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
+                  >
+                    End Right
+                  </Button>
+                  <Button
+                    size="small"
+                    variant={previewState === 'inspectEndLeft' ? 'contained' : 'outlined'}
+                    color="success"
+                    onClick={() => setPreviewState('inspectEndLeft')}
+                    sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
+                  >
+                    End Left
+                  </Button>
+                </Stack>
               </Box>
 
               {/* Action buttons */}
