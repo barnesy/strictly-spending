@@ -499,16 +499,16 @@ export default function Sort() {
                   setSelections({});
                 }
               }}
-              sx={{ textTransform: 'none', color: 'error.main' }}
+              sx={{ color: 'error.main' }}
             >
-              Reset Selections
+              Reset selections
             </Button>
           )}
           <Button
             size="small"
             startIcon={<HelpOutlineIcon />}
             onClick={() => setHelpOpen(true)}
-            sx={{ textTransform: 'none', color: 'text.secondary' }}
+            sx={{ color: 'text.secondary' }}
           >
             Shortcuts
           </Button>
@@ -541,9 +541,9 @@ export default function Sort() {
               variant="contained"
               color="success"
               onClick={handleApplySelections}
-              sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 700 }}
+              sx={{ fontWeight: 700 }}
             >
-              Apply {selectionsCount} Selection(s)
+              Apply {selectionsCount} selection(s)
             </Button>
           </Stack>
         </Paper>
@@ -590,8 +590,6 @@ export default function Sort() {
                   onClick={() => setCurrentIndex(idx)}
                   sx={{
                     flexShrink: 0,
-                    textTransform: 'none',
-                    borderRadius: 2,
                     px: 2,
                     py: 1,
                     borderWidth: isActive ? 2 : 1,

@@ -158,6 +158,7 @@ export function getAppTheme(config: ThemeConfig) {
         styleOverrides: {
           root: {
             height: CONTROL_HEIGHT,
+            textTransform: 'none',
           },
         },
       },
