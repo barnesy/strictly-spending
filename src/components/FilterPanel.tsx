@@ -9,7 +9,10 @@ import {
   ToggleButton,
   TextField,
   Button,
+  IconButton,
+  InputAdornment,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { useFilters, resolveDateRange } from '../store';
 import type { Account, Category, Transaction } from '../types';
 import { usd, monthKey, monthsBetween } from '../lib';
@@ -240,7 +243,7 @@ export default function FilterPanel({
           }
           label={
             <Typography variant="body2">
-              Spend only (exclude transfers & income)
+              Spend only
             </Typography>
           }
         />
@@ -255,7 +258,7 @@ export default function FilterPanel({
           }
           label={
             <Typography variant="body2">
-              Project runway (run down cash balance)
+              Project runway
             </Typography>
           }
         />
@@ -307,6 +310,17 @@ export default function FilterPanel({
             placeholder="Search merchants..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
+            slotProps={{
+              input: {
+                endAdornment: searchInput ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchInput('')}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              },
+            }}
           />
         </Box>
         
@@ -326,7 +340,16 @@ export default function FilterPanel({
                 filters.setMinPrice(val);
               }}
               slotProps={{
-                htmlInput: { min: 0 }
+                htmlInput: { min: 0 },
+                input: {
+                  endAdornment: filters.minPrice !== undefined ? (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => filters.setMinPrice(undefined)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                },
               }}
               sx={{ flex: 1 }}
             />
@@ -341,7 +364,16 @@ export default function FilterPanel({
                 filters.setMaxPrice(val);
               }}
               slotProps={{
-                htmlInput: { min: 0 }
+                htmlInput: { min: 0 },
+                input: {
+                  endAdornment: filters.maxPrice !== undefined ? (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => filters.setMaxPrice(undefined)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                },
               }}
               sx={{ flex: 1 }}
             />
@@ -377,6 +409,7 @@ export default function FilterPanel({
             return (
               <FormControlLabel
                 key={a.id}
+                sx={{ ml: 0, width: '100%', '& .MuiFormControlLabel-label': { width: '100%', minWidth: 0, overflow: 'hidden' } }}
                 control={
                   <Checkbox
                     size="small"
@@ -385,9 +418,11 @@ export default function FilterPanel({
                   />
                 }
                 label={
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2">{a.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                      {a.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
                       {usd.format(total)}
                     </Typography>
                   </Stack>
@@ -429,6 +464,7 @@ export default function FilterPanel({
             .map((c) => (
               <FormControlLabel
                 key={c.id}
+                sx={{ ml: 0, width: '100%', '& .MuiFormControlLabel-label': { width: '100%', minWidth: 0, overflow: 'hidden' } }}
                 control={
                   <Checkbox
                     size="small"
@@ -437,16 +473,17 @@ export default function FilterPanel({
                   />
                 }
                 label={
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
                     <Box
                       sx={{
                         width: 10,
                         height: 10,
                         borderRadius: '50%',
                         bgcolor: c.color,
+                        flexShrink: 0,
                       }}
                     />
-                    <Typography variant="body2">{c.name}</Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{c.name}</Typography>
                   </Stack>
                 }
               />

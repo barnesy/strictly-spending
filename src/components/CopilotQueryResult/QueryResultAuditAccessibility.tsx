@@ -86,7 +86,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
                 key={idx}
                 sx={{
                   p: 1.2,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   border: '1px solid',
                   borderColor: (theme) => theme.palette.mode === 'dark' ? (iss.severity === 'error' ? 'rgba(239, 83, 80, 0.3)' : 'rgba(237, 108, 2, 0.3)') : (iss.severity === 'error' ? 'error.100' : 'warning.100'),
                   bgcolor: iss.severity === 'error' ? 'rgba(239, 83, 80, 0.015)' : 'rgba(237, 108, 2, 0.015)',
@@ -105,7 +105,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontFamily: 'monospace' }}>
                       Element: {iss.element}
                     </Typography>
-                    <Typography variant="caption" color="text.primary" sx={{ display: 'block', fontStyle: 'italic', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50', p: 0.5, borderRadius: 0.5, fontSize: 9.5 }}>
+                    <Typography variant="caption" color="text.primary" sx={{ display: 'block', fontStyle: 'italic', bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50', p: 0.5, borderRadius: 1, fontSize: 9.5 }}>
                       Fix: {iss.suggestion}
                     </Typography>
                   </Box>
@@ -118,7 +118,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
         <Box
           sx={{
             p: 2.5,
-            borderRadius: 2.5,
+            borderRadius: 1,
             border: '1px solid',
             borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.3)' : 'success.100',
             bgcolor: 'rgba(46, 125, 50, 0.02)',
@@ -141,7 +141,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
 
       {/* Structural Details Accordions */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <Accordion variant="outlined" sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', '&:before': { display: 'none' } }}>
+        <Accordion variant="outlined" sx={{ borderRadius: 1, border: '1px solid', borderColor: 'divider', '&:before': { display: 'none' } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 18 }} />} sx={{ py: 0, minHeight: 32, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
               Heading Structure ({accessibilityReport.headings?.length || 0})
@@ -172,7 +172,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
           </AccordionDetails>
         </Accordion>
 
-        <Accordion variant="outlined" sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', '&:before': { display: 'none' } }}>
+        <Accordion variant="outlined" sx={{ borderRadius: 1, border: '1px solid', borderColor: 'divider', '&:before': { display: 'none' } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 18 }} />} sx={{ py: 0, minHeight: 32, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
               Accessibility Landmarks ({accessibilityReport.landmarks?.length || 0})
@@ -195,7 +195,7 @@ export function QueryResultAuditAccessibility({ accessibilityReport }: Props) {
           </AccordionDetails>
         </Accordion>
 
-        <Accordion variant="outlined" sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', '&:before': { display: 'none' } }}>
+        <Accordion variant="outlined" sx={{ borderRadius: 1, border: '1px solid', borderColor: 'divider', '&:before': { display: 'none' } }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 18 }} />} sx={{ py: 0, minHeight: 32, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
               Interactive Controls Check ({(accessibilityReport.interactiveElements || []).filter(e => e.accessible).length} parsed)

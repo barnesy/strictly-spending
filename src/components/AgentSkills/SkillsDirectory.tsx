@@ -38,10 +38,7 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
 }) => {
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="body2" color="text.secondary">
-          Toggle active capabilities to dynamically append instructions to the LLM system prompt.
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2 }}>
         <Button
           size="small"
           variant="contained"

@@ -43,11 +43,13 @@ export interface FiltersState {
   maxPrice?: number;
   // version is used as a knob to wipe stale persisted state
   version: number;
+  seenAccountIds: number[];
 }
 
 const initialState: FiltersState = {
   preset: 'ytd',
   enabledAccountIds: [],
+  seenAccountIds: [],
   disabledCategories: [],
   spendOnly: true,
   groupBy: 'category',
@@ -67,6 +69,7 @@ export interface FiltersActions {
   setPreset: (p: DateRangePreset) => void;
   setCustomRange: (start?: string, end?: string) => void;
   setEnabledAccounts: (ids: number[]) => void;
+  setSeenAccounts: (ids: number[]) => void;
   toggleAccount: (id: number) => void;
   setDisabledCategories: (cats: string[]) => void;
   toggleCategory: (cat: string) => void;
@@ -95,6 +98,7 @@ export const useFilters = create<FiltersStore>()(
       setCustomRange: (customStart, customEnd) =>
         set({ customStart, customEnd, preset: 'custom' }),
       setEnabledAccounts: (ids) => set({ enabledAccountIds: ids }),
+      setSeenAccounts: (ids) => set({ seenAccountIds: ids }),
       toggleAccount: (id) =>
         set((s) => ({
           enabledAccountIds: s.enabledAccountIds.includes(id)

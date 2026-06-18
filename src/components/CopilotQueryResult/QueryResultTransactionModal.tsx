@@ -29,7 +29,7 @@ export function QueryResultTransactionModal({
       slotProps={{
         paper: {
           sx: {
-            borderRadius: 3,
+            borderRadius: 1,
             p: 1,
             bgcolor: 'background.paper',
             backgroundImage: 'none',
@@ -131,7 +131,7 @@ export function QueryResultTransactionModal({
           variant="outlined"
           size="small"
           onClick={() => setShowRecategorize(true)}
-          sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+          sx={{ borderRadius: 1, textTransform: 'none', fontWeight: 600 }}
         >
           Recategorize
         </Button>
@@ -139,7 +139,7 @@ export function QueryResultTransactionModal({
           variant="contained"
           size="small"
           onClick={() => setSelectedTxn(null)}
-          sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+          sx={{ borderRadius: 1, textTransform: 'none', fontWeight: 600 }}
         >
           Close
         </Button>

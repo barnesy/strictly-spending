@@ -62,7 +62,7 @@ export default function AnimationSettings() {
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ flexShrink: 0 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Animation Playground
+            Animations
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Customize the 3D card deck rolodex and magician-pass flip animation settings in real-time.
@@ -81,7 +81,7 @@ export default function AnimationSettings() {
 
       {/* Resizable Panels Group */}
       <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
-        
+
         {/* Left Panel: Sliders (Scrollable) */}
         <Panel id="sliders-panel" defaultSize={45} minSize={30} style={{ display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
@@ -596,24 +596,24 @@ export default function AnimationSettings() {
                     } else if (previewState === 'inspectStart' || previewState === 'idle') {
                       transform =
                         stackIndex === 0
-                           ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
+                          ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
                           : stackIndex === 1
-                          ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
-                          : `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`;
+                            ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
+                            : `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`;
                     } else if (previewState === 'inspectMid') {
                       transform =
                         stackIndex === 0
                           ? `perspective(1200px) translate3d(${config.exitXRight}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`
                           : stackIndex === 1
-                          ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
-                          : `perspective(1200px) translate3d(${config.exitXRight}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`;
+                            ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
+                            : `perspective(1200px) translate3d(${config.exitXRight}px, ${config.exitY}px, ${config.exitZ}px) rotateX(${config.midRotationX}deg) rotateY(${config.midRotationY}deg) rotateZ(${config.midRotationZ}deg) scale(${config.midScale})`;
                     } else if (previewState === 'inspectEnd') {
                       transform =
                         stackIndex === 0
                           ? `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`
                           : stackIndex === 1
-                          ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
-                          : `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`;
+                            ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
+                            : `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`;
                     }
 
                     // keyframe animations
@@ -655,14 +655,14 @@ export default function AnimationSettings() {
                                 {previewState === 'idle'
                                   ? 'Ready to Flip'
                                   : previewState === 'inspectStart'
-                                  ? 'Start (0%)'
-                                  : previewState === 'inspectMid'
-                                  ? 'Midpoint'
-                                  : previewState === 'inspectEnd'
-                                  ? 'Landing (100%)'
-                                  : previewState === 'exitRight'
-                                  ? 'Flipping (Sort)'
-                                  : 'Flipping (Undo)'}
+                                    ? 'Start (0%)'
+                                    : previewState === 'inspectMid'
+                                      ? 'Midpoint'
+                                      : previewState === 'inspectEnd'
+                                        ? 'Landing (100%)'
+                                        : previewState === 'exitRight'
+                                          ? 'Flipping (Sort)'
+                                          : 'Flipping (Undo)'}
                               </Typography>
                             </Box>
                           )}

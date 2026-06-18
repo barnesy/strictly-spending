@@ -782,10 +782,7 @@ export const AgentSkills: React.FC = () => {
     <Stack spacing={3}>
       <Box>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          AI Prompts & Agent Skills Management
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Configure baseline LLM prompts and custom capability skills injected directly into the model context.
+          Agent Skills
         </Typography>
       </Box>
 

@@ -141,7 +141,7 @@ export default function CopilotQueryResult({
       sx={{
         width: '100%',
         p: 2,
-        borderRadius: 3,
+        borderRadius: 1,
         border: '1px solid',
         borderColor: 'divider',
         bgcolor: 'background.paper',
@@ -186,7 +186,7 @@ export default function CopilotQueryResult({
       )}
 
       {action === 'subscription_alerts' && <QueryResultSubscriptionAlerts alerts={alerts} />}
-      {action === 'spending_anomalies' && <QueryResultSpendingAnomalies anomalies={anomalies} />}
+      {action === 'spending_anomalies' && <QueryResultSpendingAnomalies anomalies={anomalies} setSelectedTxn={setSelectedTxn} />}
       {action === 'audit_accessibility' && <QueryResultAuditAccessibility accessibilityReport={accessibilityReport} />}
       
       {action === 'query_data' && metrics && (
@@ -212,7 +212,7 @@ export default function CopilotQueryResult({
           startIcon={<FilterListIcon />}
           onClick={onApplyFilters}
           sx={{
-            borderRadius: 2,
+            borderRadius: 1,
             textTransform: 'none',
             fontWeight: 600,
             boxShadow: 'none',

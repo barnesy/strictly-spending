@@ -19,7 +19,7 @@ export function QueryResultSubscriptionAlerts({ alerts }: Props) {
       <Box
         sx={{
           p: 2.5,
-          borderRadius: 2,
+          borderRadius: 1,
           border: '1px solid',
           borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.3)' : 'success.100',
           bgcolor: 'rgba(46, 125, 50, 0.02)',
@@ -55,7 +55,7 @@ export function QueryResultSubscriptionAlerts({ alerts }: Props) {
                 key={idx}
                 sx={{
                   p: 1.2,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   border: '1px solid',
                   borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(239, 83, 80, 0.3)' : 'error.100',
                   bgcolor: 'rgba(239, 83, 80, 0.02)',
@@ -98,7 +98,7 @@ export function QueryResultSubscriptionAlerts({ alerts }: Props) {
                 key={idx}
                 sx={{
                   p: 1.2,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   border: '1px solid',
                   borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(237, 108, 2, 0.3)' : 'warning.100',
                   bgcolor: 'rgba(237, 108, 2, 0.02)',
@@ -136,7 +136,7 @@ export function QueryResultSubscriptionAlerts({ alerts }: Props) {
                 key={idx}
                 sx={{
                   p: 1.2,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   border: '1px solid',
                   borderColor: 'divider',
                   bgcolor: 'transparent',

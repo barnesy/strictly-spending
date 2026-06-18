@@ -51,7 +51,7 @@ const MANAGE_NAV = [
   { to: '/import', label: 'Import', icon: <FileUploadIcon fontSize="small" /> },
   { to: '/local-model', label: 'Local Model', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>AI</Box> },
   { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
-  { to: '/animation-playground', label: 'Animation Playground', icon: <TuneIcon fontSize="small" /> },
+  { to: '/animation-playground', label: 'Animations', icon: <TuneIcon fontSize="small" /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
   { to: '/theme', label: 'Theme', icon: <BrushIcon fontSize="small" /> },
 ];
@@ -87,18 +87,6 @@ export default function App() {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const isLayoutPage = (location.pathname === '/' || location.pathname === '/transactions') && isDesktop;
-  const hasActiveFilters = useFilters((s) => {
-    return (
-      s.preset !== 'ytd' ||
-      s.disabledCategories.length > 0 ||
-      !s.spendOnly ||
-      s.recurrenceFilter !== 'all' ||
-      s.searchQuery !== '' ||
-      s.minPrice !== undefined ||
-      s.maxPrice !== undefined ||
-      s.drill !== null
-    );
-  });
   const [manageAnchorEl, setManageAnchorEl] = useState<null | HTMLElement>(null);
   const isManageOpen = Boolean(manageAnchorEl);
   const handleManageClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -295,23 +283,6 @@ export default function App() {
               </Menu>
             )}
           </Box>
-          {hasActiveFilters && (
-            <Button
-              onClick={() => useFilters.getState().reset()}
-              variant="outlined"
-              color="primary"
-              size="small"
-              startIcon={<RestartAltIcon />}
-              sx={{
-                textTransform: 'none',
-                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
-                fontWeight: 600,
-                mr: 1,
-              }}
-            >
-              Reset Filters
-            </Button>
-          )}
           <Button
             onClick={() => setIsChatOpen((prev) => !prev)}
             variant={isChatOpen ? 'contained' : 'outlined'}
@@ -394,7 +365,7 @@ export default function App() {
             <PanelResizeHandle
               disabled={!isChatOpen}
               style={{
-                width: 8,
+                width: 24,
                 position: 'relative',
                 display: isChatOpen ? 'block' : 'none'
               }}

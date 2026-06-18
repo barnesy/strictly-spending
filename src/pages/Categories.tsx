@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useDeferredValue } from 'react';
 import {
   Stack,
   Typography,
@@ -21,15 +21,16 @@ import PageLoader from '../components/PageLoader';
 export default function Categories() {
   const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []);
   const transactions = useLiveQuery(() => db.transactions.toArray(), []);
+  const deferredTransactions = useDeferredValue(transactions);
 
-  const counts = React.useMemo(() => {
+  const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    if (!categories || !transactions) return c;
-    for (const t of transactions) {
+    if (!categories || !deferredTransactions) return c;
+    for (const t of deferredTransactions) {
       c[t.category] = (c[t.category] || 0) + 1;
     }
     return c;
-  }, [categories, transactions]);
+  }, [categories, deferredTransactions]);
 
   const handleRecurrenceChange = async (categoryId: number, value: 'recurring' | 'onetime') => {
     await db.categories.update(categoryId, { defaultRecurrence: value });

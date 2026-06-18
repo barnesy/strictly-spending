@@ -3,11 +3,14 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import type { SpendingAnomalies } from '../../copilotAnalytics';
 import { formatCurrency } from './utils';
 
+import { db } from '../../db';
+
 interface Props {
   anomalies?: SpendingAnomalies;
+  setSelectedTxn?: (txn: any) => void;
 }
 
-export function QueryResultSpendingAnomalies({ anomalies }: Props) {
+export function QueryResultSpendingAnomalies({ anomalies, setSelectedTxn }: Props) {
   if (!anomalies) return null;
 
   if ((anomalies.categorySpikes?.length || 0) === 0 && (anomalies.outliers?.length || 0) === 0) {
@@ -15,7 +18,7 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
       <Box
         sx={{
           p: 2.5,
-          borderRadius: 2,
+          borderRadius: 1,
           border: '1px solid',
           borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.3)' : 'success.100',
           bgcolor: 'rgba(46, 125, 50, 0.02)',
@@ -51,7 +54,7 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
                 key={idx}
                 sx={{
                   p: 1.2,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   border: '1px solid',
                   borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(239, 83, 80, 0.3)' : 'error.100',
                   bgcolor: 'rgba(239, 83, 80, 0.02)',
@@ -84,15 +87,30 @@ export function QueryResultSpendingAnomalies({ anomalies }: Props) {
             {anomalies.outliers.map((outlier, idx) => (
               <Box
                 key={idx}
+                onClick={async () => {
+                  if (setSelectedTxn) {
+                    const t = await db.transactions.get(outlier.id);
+                    if (t) setSelectedTxn(t);
+                  }
+                }}
                 sx={{
                   p: 1.2,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   border: '1px solid',
                   borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(237, 108, 2, 0.3)' : 'warning.100',
                   bgcolor: 'rgba(237, 108, 2, 0.02)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  cursor: setSelectedTxn ? 'pointer' : 'default',
+                  transition: 'background-color 150ms ease, transform 100ms ease',
+                  '&:hover': setSelectedTxn ? {
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                    transform: 'scale(1.01)',
+                  } : {},
+                  '&:active': setSelectedTxn ? {
+                    transform: 'scale(0.99)',
+                  } : {}
                 }}
               >
                 <Box>

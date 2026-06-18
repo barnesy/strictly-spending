@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -23,6 +23,7 @@ import { useCopilotActionHandler } from './CopilotChat/useCopilotActionHandler';
 import { ChatInput } from './CopilotChat/ChatInput';
 import { ChatMessageItem } from './CopilotChat/ChatMessageItem';
 import { CONTROL_HEIGHT } from '../theme';
+import AnimatedLogo from './AnimatedLogo';
 
 
 interface CopilotChatProps {
@@ -142,6 +143,18 @@ export default function CopilotChat({
     });
   };
 
+  const sendPromptTextRef = useRef(sendPromptText);
+  useEffect(() => { sendPromptTextRef.current = sendPromptText; }, [sendPromptText]);
+  const stableSendPromptText = useCallback((text: string) => {
+    sendPromptTextRef.current(text);
+  }, []);
+
+  const handleApplyFiltersRef = useRef(handleApplyFilters);
+  useEffect(() => { handleApplyFiltersRef.current = handleApplyFilters; }, [handleApplyFilters]);
+  const stableHandleApplyFilters = useCallback((actionResult: any) => {
+    return handleApplyFiltersRef.current(actionResult);
+  }, []);
+
 
   return (
     <Box
@@ -162,7 +175,7 @@ export default function CopilotChat({
         direction="row"
         alignItems="center"
         justifyContent="space-between"
-        sx={{ px: 2, height: 64, borderBottom: 0, flexShrink: 0 }}
+        sx={{ px: 2, height: 64, borderBottom: 0, flexShrink: 0, bgcolor: 'background.default' }}
       >
         <Stack direction="row" alignItems="center" spacing={0.75}>
           <Box component="span" sx={{ fontWeight: 900, textShadow: '0 0 0.5px currentColor', color: 'primary.main', fontSize: '0.9rem' }}>
@@ -323,13 +336,13 @@ export default function CopilotChat({
                 key={i}
                 message={m}
                 loading={loading}
-                onSendPromptText={sendPromptText}
-                onApplyFilters={handleApplyFilters}
+                onSendPromptText={stableSendPromptText}
+                onApplyFilters={stableHandleApplyFilters}
               />
             ))}
             {loading && !visibleMessages.some((m) => m.isStreaming) && (
               <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <CircularProgress size={20} sx={{ ml: 1.5, my: 1 }} />
+                <AnimatedLogo scale={0.8} spinSpeed={0.04} sx={{ ml: 1.5, my: 1 }} />
               </Box>
             )}
           </Box>

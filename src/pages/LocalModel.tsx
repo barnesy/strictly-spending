@@ -210,7 +210,7 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            AI Local Model Management
+            Local AI
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Configure, download, and test offline models. 100% private and runs locally on your machine.

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useDeferredValue } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Box,
@@ -39,17 +39,18 @@ import type { Budget as BudgetType, Category } from '../types';
 export default function Budget() {
   const demoMode = useFilters((s) => s.demoMode);
   const allTxnsAll = useLiveQuery(() => {
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - 24);
-    const cutoffISO = cutoff.toISOString().slice(0, 10);
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    const cutoffISO = d.toISOString().slice(0, 10);
     return db.transactions.where('date').aboveOrEqual(cutoffISO).toArray();
   }, []);
+  const deferredAllTxnsAll = useDeferredValue(allTxnsAll);
   const allTxns = useMemo(
     () =>
-      allTxnsAll && demoMode
-        ? allTxnsAll.filter((t) => t.source === 'demo')
-        : allTxnsAll?.filter((t) => t.source !== 'demo'),
-    [allTxnsAll, demoMode]
+      deferredAllTxnsAll && demoMode
+        ? deferredAllTxnsAll.filter((t) => t.source === 'demo')
+        : deferredAllTxnsAll?.filter((t) => t.source !== 'demo'),
+    [deferredAllTxnsAll, demoMode]
   );
   const categories = useLiveQuery(
     () => db.categories.orderBy('sortOrder').toArray(),

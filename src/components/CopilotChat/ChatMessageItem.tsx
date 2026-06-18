@@ -7,8 +7,8 @@ import {
   Stack,
   Chip,
   Collapse,
-  CircularProgress,
 } from '@mui/material';
+
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import {
@@ -23,8 +23,7 @@ import { useChatStore } from '../../chatStore';
 import SimpleMarkdown from '../SimpleMarkdown';
 import CopilotQueryResult from '../CopilotQueryResult';
 import { GenUXConfirmation, GenUXForm, ProposedCategorizationReportUX } from './GenUXComponents';
-
-
+import AnimatedLogo from '../AnimatedLogo';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -215,7 +214,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         gap: 1,
       }}
     >
-      {displayContent && (
+      {displayContent ? (
         <Paper
           elevation={0}
           sx={{
@@ -223,7 +222,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
             maxWidth: '85%',
             bgcolor: isUser ? 'primary.main' : (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'grey.100',
             color: isUser ? 'primary.contrastText' : 'text.primary',
-            borderRadius: 2,
+            borderRadius: 1,
             width: !isUser && displayContent.includes('|') ? '85%' : 'auto',
           }}
         >
@@ -239,7 +238,25 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
             <SimpleMarkdown content={displayContent} />
           )}
         </Paper>
-      )}
+      ) : (!displayContent && message.isStreaming && !isUser && !hasAgentAction) ? (
+        <Paper
+          elevation={0}
+          sx={{
+            p: 1.5,
+            maxWidth: '85%',
+            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'grey.100',
+            color: 'text.primary',
+            borderRadius: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '40px',
+            minWidth: '60px'
+          }}
+        >
+          <AnimatedLogo scale={0.8} spinSpeed={0.08} />
+        </Paper>
+      ) : null}
 
       {hasChoices && (
         <Box
@@ -270,7 +287,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 disabled={loading}
                 sx={{
                   textTransform: 'none',
-                  borderRadius: 2,
+                  borderRadius: 1,
                   fontWeight: 600,
                   py: 1,
                   px: 2,
@@ -377,7 +394,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               p: 1.5,
               bgcolor: 'background.paper',
               borderColor: 'divider',
-              borderRadius: 2,
+              borderRadius: 1,
             }}
           >
             <Stack spacing={1}>
@@ -418,15 +435,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
 
       {hasSteps && (
         <Box sx={{ width: '85%', mt: 0.5 }}>
-          {/* Loader inline if streaming */}
-          {message.isStreaming && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pl: 1, mb: 1 }}>
-              <CircularProgress size={16} thickness={5} />
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Thinking...
-              </Typography>
-            </Box>
-          )}
+
 
           {/* Collapsible Chip */}
           <Chip
@@ -460,7 +469,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 mt: 1,
                 bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50',
                 borderColor: 'divider',
-                borderRadius: 2,
+                borderRadius: 1,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 1,
@@ -503,11 +512,25 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                         fontSize: '11px',
                         color: textColor,
                         fontWeight: fontWeight,
+                        overflow: 'hidden',
+                        animation: (message.isStreaming && isLast) ? 'slideDownAndFade 300ms ease-out forwards' : 'none',
+                        '@keyframes slideDownAndFade': {
+                          '0%': {
+                            opacity: 0,
+                            maxHeight: 0,
+                            transform: 'translateY(-4px)'
+                          },
+                          '100%': {
+                            opacity: 1,
+                            maxHeight: '60px',
+                            transform: 'translateY(0)'
+                          }
+                        }
                       }}
                     >
                       {/* Step Indicator */}
                       {isPending ? (
-                        <CircularProgress size={10} thickness={6} color="primary" />
+                        <AnimatedLogo scale={0.9} spinSpeed={0.04} />
                       ) : (
                         <Box
                           sx={{

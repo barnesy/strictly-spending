@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Box,
@@ -57,6 +57,7 @@ interface MerchantGroup {
 
 export default function Merchants() {
   const allTransactions = useLiveQuery(() => db.transactions.toArray(), []);
+  const deferredAllTransactions = useDeferredValue(allTransactions);
   const allCategories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) || [];
 
   const isLoading = allTransactions === undefined;
@@ -114,11 +115,11 @@ export default function Merchants() {
 
   // Group transactions by merchantKey
   const merchantGroups = useMemo<MerchantGroup[]>(() => {
-    if (!allTransactions) return [];
+    if (!deferredAllTransactions) return [];
 
     const groups: Record<string, MerchantGroup> = {};
 
-    allTransactions.forEach((t) => {
+    deferredAllTransactions.forEach((t) => {
       const key = t.merchantKey || 'Unknown';
       const isSpend = t.amount < 0;
       const amt = isSpend ? Math.abs(t.amount) : 0;
@@ -160,7 +161,7 @@ export default function Merchants() {
       g.mostCommonCategory = commonCat;
       return g;
     });
-  }, [allTransactions]);
+  }, [deferredAllTransactions]);
 
   // Filtered groups
   const filteredGroups = useMemo(() => {
@@ -444,10 +445,7 @@ export default function Merchants() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Merchant Directory & Consolidation
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Group transaction histories by merchant, fix spelling errors in bulk, and consolidate duplicate records.
+            Merchants
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>

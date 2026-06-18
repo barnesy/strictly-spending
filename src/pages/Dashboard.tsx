@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect, useState, useDeferredValue } from 'react';
 import {
   Group as PanelGroup,
   Panel,
@@ -32,6 +32,9 @@ import {
 import PageLoader from '../components/PageLoader';
 import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import StopIcon from '@mui/icons-material/Stop';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 
@@ -108,14 +111,30 @@ export default function Dashboard() {
   const spendOnly = useFilters((s) => s.spendOnly);
   const recurrenceFilter = useFilters((s) => s.recurrenceFilter);
   const searchQuery = useFilters((s) => s.searchQuery);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const minPrice = useFilters((s) => s.minPrice);
+  const deferredMinPrice = useDeferredValue(minPrice);
   const maxPrice = useFilters((s) => s.maxPrice);
+  const deferredMaxPrice = useDeferredValue(maxPrice);
   const demoMode = useFilters((s) => s.demoMode);
-  
+
   const setEnabledAccounts = useFilters((s) => s.setEnabledAccounts);
   const setGroupBy = useFilters((s) => s.setGroupBy);
   const drillToMonth = useFilters((s) => s.drillToMonth);
   const groupBy = useFilters((s) => s.groupBy);
+
+  const hasActiveFilters = useFilters((s) => {
+    return (
+      s.preset !== 'ytd' ||
+      s.disabledCategories.length > 0 ||
+      !s.spendOnly ||
+      s.recurrenceFilter !== 'all' ||
+      s.searchQuery !== '' ||
+      s.minPrice !== undefined ||
+      s.maxPrice !== undefined ||
+      s.drill !== null
+    );
+  });
 
   const accountsAll = useLiveQuery(() => db.accounts.toArray(), []);
   const categories = useLiveQuery(
@@ -142,12 +161,16 @@ export default function Dashboard() {
     () => db.transactions.where('date').between(startISO, endISO, true, true).toArray(),
     [startISO, endISO]
   );
+  const deferredAllTxnsAll = useDeferredValue(allTxnsAll);
+
   const forecastTxnsAll = useLiveQuery(() => {
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - 24);
     const cutoffISO = cutoff.toISOString().slice(0, 10);
     return db.transactions.where('date').aboveOrEqual(cutoffISO).toArray();
   }, []);
+  const deferredForecastTxnsAll = useDeferredValue(forecastTxnsAll);
+
   const merchantOverrides = useLiveQuery(
     () => db.merchantOverrides.toArray(),
     []
@@ -163,35 +186,42 @@ export default function Dashboard() {
   );
   const allTxns = useMemo(
     () =>
-      allTxnsAll && demoMode
-        ? allTxnsAll.filter((t) => t.source === 'demo')
-        : allTxnsAll?.filter((t) => t.source !== 'demo'),
-    [allTxnsAll, demoMode]
+      deferredAllTxnsAll && demoMode
+        ? deferredAllTxnsAll.filter((t) => t.source === 'demo')
+        : deferredAllTxnsAll?.filter((t) => t.source !== 'demo'),
+    [deferredAllTxnsAll, demoMode]
   );
   const forecastTxns = useMemo(
     () =>
-      forecastTxnsAll && demoMode
-        ? forecastTxnsAll.filter((t) => t.source === 'demo')
-        : forecastTxnsAll?.filter((t) => t.source !== 'demo'),
-    [forecastTxnsAll, demoMode]
+      deferredForecastTxnsAll && demoMode
+        ? deferredForecastTxnsAll.filter((t) => t.source === 'demo')
+        : deferredForecastTxnsAll?.filter((t) => t.source !== 'demo'),
+    [deferredForecastTxnsAll, demoMode]
   );
   const recurrenceMap = useMemo(
     () => buildRecurrenceMap(forecastTxns || [], merchantOverrides || []),
     [forecastTxns, merchantOverrides]
   );
 
+  const seenAccountIds = useFilters((s) => s.seenAccountIds);
+  const setSeenAccounts = useFilters((s) => s.setSeenAccounts);
+
   // Default-enable any newly-discovered accounts safely.
   useEffect(() => {
     if (!accounts || accounts.length === 0) return;
     const accountIdSet = new Set(accounts.map((a) => a.id!));
-    const cleaned = enabledAccountIds.filter((id) => accountIdSet.has(id));
-    const known = new Set(cleaned);
-    const newOnes = accounts.filter((a) => !known.has(a.id!)).map((a) => a.id!);
-    
-    if (newOnes.length > 0 || cleaned.length !== enabledAccountIds.length) {
-      setEnabledAccounts([...cleaned, ...newOnes]);
+
+    const cleanedEnabled = enabledAccountIds.filter((id) => accountIdSet.has(id));
+    const cleanedSeen = seenAccountIds.filter((id) => accountIdSet.has(id));
+
+    const seenSet = new Set(cleanedSeen);
+    const newOnes = accounts.filter((a) => !seenSet.has(a.id!)).map((a) => a.id!);
+
+    if (newOnes.length > 0 || cleanedEnabled.length !== enabledAccountIds.length || cleanedSeen.length !== seenAccountIds.length) {
+      setEnabledAccounts([...cleanedEnabled, ...newOnes]);
+      setSeenAccounts([...cleanedSeen, ...newOnes]);
     }
-  }, [accounts, enabledAccountIds, setEnabledAccounts]);
+  }, [accounts, enabledAccountIds, setEnabledAccounts, seenAccountIds, setSeenAccounts]);
 
   // Filter transactions globally
   const visibleTxns = useMemo(() => {
@@ -213,8 +243,8 @@ export default function Dashboard() {
         if (recurrenceFilter === 'recurring' && !isRec) return false;
         if (recurrenceFilter === 'onetime' && isRec) return false;
       }
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
+      if (deferredSearchQuery) {
+        const q = deferredSearchQuery.toLowerCase();
         if (
           !t.description.toLowerCase().includes(q) &&
           !t.merchantKey.toLowerCase().includes(q)
@@ -222,13 +252,13 @@ export default function Dashboard() {
           return false;
         }
       }
-      if (minPrice !== undefined) {
+      if (deferredMinPrice !== undefined) {
         const amt = Math.abs(t.amount);
-        if (amt < minPrice) return false;
+        if (amt < deferredMinPrice) return false;
       }
-      if (maxPrice !== undefined) {
+      if (deferredMaxPrice !== undefined) {
         const amt = Math.abs(t.amount);
-        if (amt > maxPrice) return false;
+        if (amt > deferredMaxPrice) return false;
       }
       return true;
     });
@@ -242,9 +272,9 @@ export default function Dashboard() {
     endISO,
     categories,
     recurrenceMap,
-    searchQuery,
-    minPrice,
-    maxPrice,
+    deferredSearchQuery,
+    deferredMinPrice,
+    deferredMaxPrice,
   ]);
 
   const monthList = useMemo(
@@ -543,38 +573,82 @@ export default function Dashboard() {
     <PageLoader isLoading={isLoading}>
       <Box className={isTransitioning ? 'transitioning-panels' : ''} sx={{ height: isDesktop ? '100%' : 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <DemoModeBanner />
-      {/* Combined Unified Toolbar */}
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={2}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'center' }}
-        sx={{ width: '100%' }}
-      >
-        {/* Left Side: Filters button */}
+        {/* Combined Unified Toolbar */}
         <Stack
-          direction="row"
+          direction={{ xs: 'column', md: 'row' }}
           spacing={2}
-          alignItems="center"
-          justifyContent={{ xs: 'space-between', md: 'flex-start' }}
+          justifyContent="space-between"
+          alignItems={{ xs: 'stretch', md: 'center' }}
+          sx={{ width: '100%' }}
         >
-          <Stack direction="row" spacing={2} alignItems="center">
-            <ToggleButtonGroup size="small">
-              <ToggleButton
-                value="filters"
-                selected={filterVisible}
-                onClick={toggleFilters}
-                sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
-                title="Toggle Filters Panel"
-              >
-                <FilterListIcon fontSize="small" />
-                Filters
-              </ToggleButton>
-            </ToggleButtonGroup>
+          {/* Left Side: Filters button */}
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="center"
+            justifyContent={{ xs: 'space-between', md: 'flex-start' }}
+          >
+            <Stack direction="row" spacing={2} alignItems="center">
+              <ToggleButtonGroup size="small">
+                <ToggleButton
+                  value="filters"
+                  selected={filterVisible}
+                  onClick={toggleFilters}
+                  sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
+                  title="Toggle Filters Panel"
+                >
+                  <FilterListIcon fontSize="small" />
+                  Filters
+                </ToggleButton>
+              </ToggleButtonGroup>
+              {hasActiveFilters && (
+                <Button
+                  onClick={() => useFilters.getState().reset()}
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  startIcon={<RestartAltIcon />}
+                  sx={{
+                    textTransform: 'none',
+                    borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+                    fontWeight: 600,
+                  }}
+                >
+                  Reset Filters
+                </Button>
+              )}
+            </Stack>
+
+            {/* On mobile, show Merchants toggle on the far right of this first row */}
+            <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+              <ToggleButtonGroup size="small">
+                <ToggleButton
+                  value="merchants"
+                  selected={sidebarVisible}
+                  onClick={toggleSidebar}
+                  sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
+                  title="Toggle Top Merchants Panel"
+                >
+                  <StorefrontIcon fontSize="small" />
+                  Merchants
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
           </Stack>
 
-          {/* On mobile, show Merchants toggle on the far right of this first row */}
-          <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+          {/* Center: RangePicker */}
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="center"
+            justifyContent="center"
+            sx={{ flexGrow: 1 }}
+          >
+            <RangePicker />
+          </Stack>
+
+          {/* Right Side: Merchants button (desktop only) */}
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
             <ToggleButtonGroup size="small">
               <ToggleButton
                 value="merchants"
@@ -590,88 +664,60 @@ export default function Dashboard() {
           </Box>
         </Stack>
 
-        {/* Center: RangePicker */}
-        <Stack
-          direction="row"
-          spacing={2}
-          alignItems="center"
-          justifyContent="center"
-          sx={{ flexGrow: 1 }}
-        >
-          <RangePicker />
-        </Stack>
-
-        {/* Right Side: Merchants button (desktop only) */}
-        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-          <ToggleButtonGroup size="small">
-            <ToggleButton
-              value="merchants"
-              selected={sidebarVisible}
-              onClick={toggleSidebar}
-              sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600 }}
-              title="Toggle Top Merchants Panel"
-            >
-              <StorefrontIcon fontSize="small" />
-              Merchants
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-      </Stack>
-
-      {/* Resizable content panel */}
-      {!isDesktop ? (
-        <Stack spacing={2}>
-          <Collapse in={filterVisible} timeout={220} mountOnEnter unmountOnExit>
-            {filterPanel}
-          </Collapse>
-          {middleSectionContent}
-          <Collapse in={sidebarVisible} timeout={220} mountOnEnter unmountOnExit>
-            {merchantsCard}
-          </Collapse>
-        </Stack>
-      ) : (
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            position: 'relative',
-          }}
-        >
-          <PanelGroup
-            orientation="horizontal"
-            defaultLayout={defaultLayout}
-            onLayoutChanged={onLayoutChanged}
-            style={{ height: '100%' }}
+        {/* Resizable content panel */}
+        {!isDesktop ? (
+          <Stack spacing={2}>
+            <Collapse in={filterVisible} timeout={220} mountOnEnter unmountOnExit>
+              {filterPanel}
+            </Collapse>
+            {middleSectionContent}
+            <Collapse in={sidebarVisible} timeout={220} mountOnEnter unmountOnExit>
+              {merchantsCard}
+            </Collapse>
+          </Stack>
+        ) : (
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              position: 'relative',
+            }}
           >
-            {filterVisible && (
-              <Panel id="filter" defaultSize={18} minSize={15}>
-                <PanelScroll>{filterPanel}</PanelScroll>
+            <PanelGroup
+              orientation="horizontal"
+              defaultLayout={defaultLayout}
+              onLayoutChanged={onLayoutChanged}
+              style={{ height: '100%' }}
+            >
+              {filterVisible && (
+                <Panel id="filter" defaultSize={18} minSize={15}>
+                  <PanelScroll>{filterPanel}</PanelScroll>
+                </Panel>
+              )}
+              {filterVisible && <StyledResizeHandle ariaLabel="Resize filters / content" />}
+
+              <Panel id="chart" defaultSize={40} minSize={25}>
+                {middleSectionContent}
               </Panel>
-            )}
-            {filterVisible && <StyledResizeHandle ariaLabel="Resize filters / content" />}
 
-            <Panel id="chart" defaultSize={40} minSize={25}>
-              {middleSectionContent}
-            </Panel>
-
-            {sidebarVisible && <StyledResizeHandle ariaLabel="Resize content / top merchants" />}
-            {sidebarVisible && (
-              <Panel id="merchants" defaultSize={20} minSize={15}>
-                <PanelScroll>{merchantsCard}</PanelScroll>
-              </Panel>
-            )}
-          </PanelGroup>
-        </Box>
-      )}
+              {sidebarVisible && <StyledResizeHandle ariaLabel="Resize content / top merchants" />}
+              {sidebarVisible && (
+                <Panel id="merchants" defaultSize={20} minSize={15}>
+                  <PanelScroll>{merchantsCard}</PanelScroll>
+                </Panel>
+              )}
+            </PanelGroup>
+          </Box>
+        )}
 
 
 
-      {editTxn && (
-        <RecategorizeDialog
-          txn={editTxn}
-          onClose={() => setEditTxn(null)}
-        />
-      )}
+        {editTxn && (
+          <RecategorizeDialog
+            txn={editTxn}
+            onClose={() => setEditTxn(null)}
+          />
+        )}
       </Box>
     </PageLoader>
   );

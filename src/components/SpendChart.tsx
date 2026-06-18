@@ -466,6 +466,7 @@ export default function SpendChart({
         }
       >
         <BarPlot
+          borderRadius={4}
           onItemClick={
             onMonthClick && monthList.length > 1
               ? (_, data) => {

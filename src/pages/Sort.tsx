@@ -9,7 +9,7 @@
 //   - Keyboard shortcuts: Enter (suggested), 1-9 (grid), Cmd/Ctrl-Z (undo),
 //     S (skip), ? (help), Esc (close help).
 
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import PageLoader from '../components/PageLoader';
 import {
@@ -49,6 +49,8 @@ export default function Sort() {
     () => db.transactions.where('category').equals('Uncategorized').toArray(),
     []
   );
+  const deferredUncategorizedAll = useDeferredValue(uncategorizedAll);
+  
   const categories = useLiveQuery(
     () => db.categories.orderBy('sortOrder').toArray(),
     []
@@ -56,17 +58,9 @@ export default function Sort() {
   const rules = useLiveQuery(() => db.rules.toArray(), []);
   const overrides = useLiveQuery(() => db.merchantOverrides.toArray(), []);
 
-  const uncategorized = useMemo(
-    () =>
-      uncategorizedAll && demoMode
-        ? uncategorizedAll.filter((t) => t.source === 'demo')
-        : uncategorizedAll?.filter((t) => t.source !== 'demo') || [],
-    [uncategorizedAll, demoMode]
-  );
-
   const merchantKeys = useMemo(() => {
-    return Array.from(new Set(uncategorized.map((t) => t.merchantKey).filter(Boolean)));
-  }, [uncategorized]);
+    return Array.from(new Set((uncategorizedAll || []).map((t) => t.merchantKey).filter(Boolean)));
+  }, [uncategorizedAll]);
 
   const relevantTxnsAll = useLiveQuery(
     () =>
@@ -75,13 +69,22 @@ export default function Sort() {
         : Promise.resolve([]),
     [merchantKeys.join(',')]
   );
+  const deferredRelevantTxnsAll = useDeferredValue(relevantTxnsAll);
 
   const relevantTxns = useMemo(
     () =>
-      relevantTxnsAll && demoMode
-        ? relevantTxnsAll.filter((t) => t.source === 'demo')
-        : relevantTxnsAll?.filter((t) => t.source !== 'demo') || [],
-    [relevantTxnsAll, demoMode]
+      deferredRelevantTxnsAll && demoMode
+        ? deferredRelevantTxnsAll.filter((t) => t.source === 'demo')
+        : deferredRelevantTxnsAll?.filter((t) => t.source !== 'demo') || [],
+    [deferredRelevantTxnsAll, demoMode]
+  );
+
+  const uncategorized = useMemo(
+    () =>
+      deferredUncategorizedAll && demoMode
+        ? deferredUncategorizedAll.filter((t) => t.source === 'demo')
+        : deferredUncategorizedAll?.filter((t) => t.source !== 'demo') || [],
+    [deferredUncategorizedAll, demoMode]
   );
 
   const recurrenceMap = useMemo(
@@ -732,9 +735,8 @@ export default function Sort() {
                 top: 0,
                 bottom: 0,
                 left: 'calc(50% - 1px)',
-                width: 2,
+                width: 1,
                 bgcolor: 'divider',
-                borderRadius: 1,
                 transition: 'background-color 120ms ease, width 120ms ease, left 120ms ease',
                 '&:hover, &[data-resize-handle-active]': {
                   bgcolor: 'primary.main',

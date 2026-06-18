@@ -6,6 +6,7 @@ describe('resolveDateRange - allTime scoping', () => {
     const dummyState: FiltersState = {
       preset: 'allTime',
       enabledAccountIds: [],
+      seenAccountIds: [],
       disabledCategories: [],
       spendOnly: true,
       groupBy: 'category',
@@ -34,6 +35,7 @@ describe('resolveDateRange - allTime scoping', () => {
       earliestTransactionDate: '2025-02-14',
       latestTransactionDate: '2026-05-23',
       enabledAccountIds: [],
+      seenAccountIds: [],
       disabledCategories: [],
       spendOnly: true,
       groupBy: 'category',

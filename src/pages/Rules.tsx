@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Box,
@@ -39,6 +39,7 @@ export default function Rules() {
 
   const allRules = useLiveQuery(() => db.rules.orderBy('priority').reverse().toArray(), []);
   const allTxns = useLiveQuery(() => db.transactions.toArray(), []);
+  const deferredAllTxns = useDeferredValue(allTxns);
   const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
 
   const isLoading = allRules === undefined || allTxns === undefined || categories === undefined;
@@ -115,35 +116,29 @@ export default function Rules() {
   }, [searchQuery, categoryFilter]);
 
   const matchCounts = useMemo(() => {
-    if (!allTxns || !paginatedRules.length) return {};
-    const counts: Record<number, number> = {};
-    paginatedRules.forEach(r => { if (r.id) counts[r.id] = 0; });
-    
-    const activeRules = paginatedRules
-      .filter(r => r.id && r.pattern)
-      .map(r => ({ id: r.id!, pattern: normalizeForMatch(r.pattern) }))
-      .filter(r => r.pattern);
+    const stats: Record<number, number> = {};
+    if (!allRules) return stats;
+    for (const r of allRules) stats[r.id!] = 0;
+    if (!deferredAllTxns) return stats;
 
-    if (activeRules.length > 0) {
-      // Loop over transactions in memory! (Blazing fast compared to db.transactions.each)
-      for (const t of allTxns) {
-        const desc = normalizeForMatch(t.description);
-        const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey) : '';
-        for (const r of activeRules) {
-          if (desc.includes(r.pattern) || (mkey && mkey.includes(r.pattern))) {
-            counts[r.id]++;
-          }
+    for (const t of deferredAllTxns) {
+      const desc = normalizeForMatch(t.description);
+      const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey) : '';
+      for (const r of allRules) {
+        if (r.pattern && (desc.includes(normalizeForMatch(r.pattern)) || (mkey && mkey.includes(normalizeForMatch(r.pattern))))) {
+          stats[r.id!]++;
+          break; // First matching rule wins
         }
       }
     }
-    return counts;
-  }, [allTxns, paginatedRules]);
+    return stats;
+  }, [allRules, deferredAllTxns]);
 
   return (
     <PageLoader isLoading={isLoading}>
       <Stack spacing={3}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h5">Categorization Rules</Typography>
+        <Typography variant="h5">Rules</Typography>
         <Stack direction="row" spacing={1}>
           <Button
             variant="outlined"

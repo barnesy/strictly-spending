@@ -43,7 +43,7 @@ export function QueryResultQueryData({
             <Box
               sx={{
                 p: 1.5,
-                borderRadius: 2,
+                borderRadius: 1,
                 border: '1px solid',
                 borderColor: 'error.100',
                 bgcolor: 'rgba(239, 83, 80, 0.02)',
@@ -77,7 +77,7 @@ export function QueryResultQueryData({
             <Box
               sx={{
                 p: 1.5,
-                borderRadius: 2,
+                borderRadius: 1,
                 border: '1px solid',
                 borderColor: 'success.100',
                 bgcolor: 'rgba(46, 125, 50, 0.02)',
@@ -112,7 +112,7 @@ export function QueryResultQueryData({
         <Box
           sx={{
             p: 1.5,
-            borderRadius: 2,
+            borderRadius: 1,
             border: '1px solid',
             borderColor: isOverBudget ? 'error.100' : 'success.100',
             bgcolor: isOverBudget ? 'rgba(239, 83, 80, 0.02)' : 'rgba(46, 125, 50, 0.02)',
@@ -139,10 +139,10 @@ export function QueryResultQueryData({
             value={Math.min(100, budgetProgress)}
             sx={{
               height: 6,
-              borderRadius: 3,
+              borderRadius: 1,
               bgcolor: isOverBudget ? 'error.50' : 'success.50',
               '& .MuiLinearProgress-bar': {
-                borderRadius: 3,
+                borderRadius: 1,
                 background: isOverBudget
                   ? 'linear-gradient(90deg, #ff1744 0%, #ff5252 100%)'
                   : 'linear-gradient(90deg, #2e7d32 0%, #4caf50 100%)',
@@ -171,7 +171,7 @@ export function QueryResultQueryData({
               variant="outlined"
               sx={{
                 mt: 1.5,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 border: '1px solid rgba(0,0,0,0.06)',
                 bgcolor: 'background.paper',
                 '&:before': { display: 'none' },
@@ -283,7 +283,7 @@ export function QueryResultQueryData({
             fullWidth
             onClick={() => setShowReceipt(!showReceipt)}
             sx={{
-              borderRadius: 2,
+              borderRadius: 1,
               textTransform: 'none',
               fontWeight: 600,
               color: 'text.secondary',
@@ -302,7 +302,7 @@ export function QueryResultQueryData({
               sx={{
                 mt: 1.5,
                 p: 2,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: (theme) => theme.palette.mode === 'dark' ? '#182232' : '#FAF8F5',
                 border: '1px dashed',
                 borderColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : '#ccc',
@@ -353,7 +353,7 @@ export function QueryResultQueryData({
                         mb: 0.5,
                         whiteSpace: 'pre',
                         cursor: 'pointer',
-                        borderRadius: '4px',
+                        borderRadius: 1,
                         px: 1,
                         py: 0.25,
                         mx: -1,

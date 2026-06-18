@@ -71,7 +71,7 @@ export function getAppTheme(config: ThemeConfig) {
   
   const isLightText = textPrimary === '#ffffff' || textPrimary.toLowerCase().includes('255, 255, 255');
   const textSecondary = textColor ? textColor + 'b3' : (isLightText ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)');
-  const dividerColor = textColor ? textColor + '1a' : (isLightText ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)');
+  const dividerColor = textColor ? textColor + '1a' : (isLightText ? '#334155' : '#e2e8f0');
 
   return createTheme({
     palette: {

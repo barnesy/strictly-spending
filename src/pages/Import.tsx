@@ -290,7 +290,7 @@ export default function Import() {
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h5">Import Transactions</Typography>
+      <Typography variant="h5">Import</Typography>
 
 
 
