@@ -55,7 +55,13 @@ const MANAGE_NAV = [
 
 export default function App() {
   const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
-  const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string; backgroundColor?: string; paperColor?: string; textColor?: string; borderRadius?: number; fontFamily?: string } | undefined;
+  const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string; backgroundColor?: string; paperColor?: string; textColor?: string; borderRadius?: number; fontFamily?: string; fontSize?: number } | undefined;
+
+  const fontSize = themeConfig?.fontSize ?? 14;
+  useEffect(() => {
+    const rootSize = (fontSize / 14) * 16;
+    document.documentElement.style.fontSize = `${rootSize}px`;
+  }, [fontSize]);
 
   const dynamicTheme = useMemo(() => {
     const mode = themeConfig?.mode || 'light';
@@ -70,8 +76,9 @@ export default function App() {
       textColor: themeConfig?.textColor,
       borderRadius: themeConfig?.borderRadius,
       fontFamily: themeConfig?.fontFamily,
+      fontSize,
     });
-  }, [themeConfig]);
+  }, [themeConfig, fontSize]);
 
   const location = useLocation();
   const theme = useTheme();
