@@ -10,7 +10,7 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import TuneIcon from '@mui/icons-material/Tune';
 import {
   Group as PanelGroup,
   Panel,
@@ -157,7 +157,7 @@ const MANAGE_NAV = [
   { to: '/import', label: 'Import', icon: <FileUploadIcon fontSize="small" /> },
   { to: '/local-model', label: 'Local Model', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>AI</Box> },
   { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
-  { to: '/animation-playground', label: 'Animation Playground', icon: <AutoAwesomeIcon fontSize="small" /> },
+  { to: '/animation-playground', label: 'Animation Playground', icon: <TuneIcon fontSize="small" /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
 ];
 
