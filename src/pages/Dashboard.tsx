@@ -543,8 +543,6 @@ export default function Dashboard() {
     <PageLoader isLoading={isLoading}>
       <Box className={isTransitioning ? 'transitioning-panels' : ''} sx={{ height: isDesktop ? '100%' : 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <DemoModeBanner />
-      <UncategorizedBanner />
-
       {/* Combined Unified Toolbar */}
       <Stack
         direction={{ xs: 'column', md: 'row' }}
@@ -867,43 +865,3 @@ function DemoModeBanner() {
   );
 }
 
-const SORT_BANNER_DISMISS_KEY = 'spending-viz:sortBannerDismissed';
-const SORT_BANNER_THRESHOLD = 20;
-
-function UncategorizedBanner() {
-  const [dismissed, setDismissed] = useState(
-    () => sessionStorage.getItem(SORT_BANNER_DISMISS_KEY) === '1'
-  );
-  const count = useLiveQuery(
-    () => db.transactions.where('category').equals('Uncategorized').count(),
-    []
-  ) || 0;
-  if (dismissed) return null;
-  if (count < SORT_BANNER_THRESHOLD) return null;
-  return (
-    <Alert
-      severity="warning"
-      onClose={() => {
-        sessionStorage.setItem(SORT_BANNER_DISMISS_KEY, '1');
-        setDismissed(true);
-      }}
-      action={
-        <Button
-          component={RouterLink}
-          to="/sort"
-          size="small"
-          variant="contained"
-          color="warning"
-          sx={{ textTransform: 'none', mr: 1 }}
-        >
-          Sort {count} →
-        </Button>
-      }
-      sx={{ alignItems: 'center' }}
-    >
-      <strong>{count}</strong> uncategorized transactions are skewing your
-      Dashboard totals. Triage them in the Sort view. Usually a couple of
-      minutes.
-    </Alert>
-  );
-}
