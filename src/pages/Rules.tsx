@@ -164,7 +164,6 @@ export default function Rules() {
         <TextField
           size="small"
           label="Search Patterns"
-          variant="outlined"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           sx={{ flexGrow: 1, minWidth: 200 }}

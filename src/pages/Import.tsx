@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Link as RouterLink } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
 import { readTextFile } from '@tauri-apps/plugin-fs';
@@ -32,8 +31,6 @@ import Papa from 'papaparse';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import RestoreIcon from '@mui/icons-material/Restore';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import { buildPreview, commitPreview, type ImportPreview } from '../import';
 import { usdCents } from '../lib';
 import { db } from '../db';
@@ -47,14 +44,7 @@ import {
   BackupValidationError,
 } from '../backup';
 import { SEED_VERSION } from '../seed';
-import {
-  checkPermission,
-  requestPermission,
-  scanFolder,
-  postImport,
-  type PendingFile,
-} from '../watchFolder';
-import type { WatchFolderConfig, CsvMapping } from '../types';
+import type { CsvMapping } from '../types';
 
 const SOURCE_LABELS: Record<string, string> = {
   chase: 'Chase',
@@ -77,88 +67,6 @@ export default function Import() {
   const [restoreSummary, setRestoreSummary] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Watch folder state
-  const watchSetting = useLiveQuery(() => db.settings.get('watchFolder'), []);
-  const watchConfig = watchSetting?.value as WatchFolderConfig | undefined;
-  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
-  const [skippedCount, setSkippedCount] = useState(0);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [lastScanAt, setLastScanAt] = useState<string | null>(null);
-
-
-
-  const onScanWatchFolder = useCallback(async () => {
-    if (!watchConfig?.handle) return;
-    setScanning(true);
-    setScanError(null);
-    try {
-      let perm = await checkPermission(watchConfig.handle);
-      if (perm === 'prompt') perm = await requestPermission(watchConfig.handle);
-      if (perm !== 'granted') {
-        setScanError('Folder access not granted. Open Settings to re-grant.');
-        return;
-      }
-      const result = await scanFolder(watchConfig.handle);
-      setPendingFiles(result.pending);
-      setSkippedCount(result.skipped.length);
-      setLastScanAt(result.scannedAt);
-    } catch (e) {
-      setScanError((e as Error).message);
-    } finally {
-      setScanning(false);
-    }
-  }, [watchConfig?.handle]);
-
-  // Auto-scan when the page is shown and when config is first available.
-  useEffect(() => {
-    if (!watchConfig?.handle) return;
-    let cancelled = false;
-    (async () => {
-      const perm = await checkPermission(watchConfig.handle);
-      if (perm === 'granted' && !cancelled) {
-        await onScanWatchFolder();
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchConfig?.handle]);
-
-  // Re-scan when the tab regains focus.
-  useEffect(() => {
-    if (!watchConfig?.handle) return;
-    const onFocus = () => onScanWatchFolder();
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') onScanWatchFolder();
-    };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [watchConfig?.handle, onScanWatchFolder]);
-
-  const onPreviewWatchFolder = async () => {
-    if (pendingFiles.length === 0) return;
-    setIsProcessing(true);
-    setCommittedSummary(null);
-    const results: ImportPreview[] = [];
-    try {
-      for (const pf of pendingFiles) {
-        const p = await buildPreview(pf.name, pf.text, pf.contentHash);
-        results.push(p);
-      }
-      setPreviews(results);
-    } catch (e) {
-      console.error("Failed to parse watch folder files:", e);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const onExport = async () => {
     setExportSummary(null);
@@ -304,7 +212,6 @@ export default function Import() {
     try {
       let imported = 0;
       let dups = 0;
-      let archived = 0;
       let newUncategorized = 0;
       for (const p of previews) {
         if (p.error) continue;
@@ -316,46 +223,17 @@ export default function Import() {
         newUncategorized += p.rows.filter(
           (r) => !r.duplicate && r.category === 'Uncategorized'
         ).length;
-        // If this preview corresponds to a watch-folder file, run the
-        // configured post-import action (leave / move / delete).
-        const pf = pendingFiles.find((x) => x.name === p.filename);
-        if (
-          pf &&
-          watchConfig?.handle &&
-          watchConfig.postImportAction !== 'leave'
-        ) {
-          try {
-            await postImport(
-              watchConfig.handle,
-              pf.parentHandle,
-              pf.fileHandle,
-              watchConfig.postImportAction
-            );
-            archived++;
-          } catch {
-            /* best-effort archive */
-          }
-        }
       }
-      const archiveMsg =
-        archived > 0
-          ? watchConfig?.postImportAction === 'delete'
-            ? `, deleted ${archived} source file${archived === 1 ? '' : 's'}`
-            : `, moved ${archived} file${archived === 1 ? '' : 's'} to .imported/`
-          : '';
       setCommittedSummary(
-        `Imported ${imported} new transaction${imported === 1 ? '' : 's'}, skipped ${dups} duplicate${dups === 1 ? '' : 's'}${archiveMsg}.`
+        `Imported ${imported} new transaction${imported === 1 ? '' : 's'}, skipped ${dups} duplicate${dups === 1 ? '' : 's'}.`
       );
       setNewUncategorizedCount(newUncategorized);
       setPreviews([]);
-      setPendingFiles([]);
     } catch (e) {
       console.error("Failed to commit import previews:", e);
     } finally {
       setIsProcessing(false);
     }
-    // Re-scan to clear out the now-imported files
-    if (watchConfig?.handle) onScanWatchFolder();
   };
 
   const handleUpdateRow = (previewIdx: number, rowIdx: number, newCategory: string) => {
@@ -414,110 +292,7 @@ export default function Import() {
     <Stack spacing={3}>
       <Typography variant="h5">Import Transactions</Typography>
 
-      {/* Watch folder */}
-      {watchConfig && (
-        <Paper sx={{ p: 3 }}>
-          <Stack spacing={2}>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="flex-start"
-              flexWrap="wrap"
-              gap={1}
-            >
-              <Box>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <FolderOpenIcon fontSize="small" color="primary" />
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Watch folder: {watchConfig.name}
-                  </Typography>
-                </Stack>
-                {lastScanAt && (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ ml: 3.5, display: 'block' }}
-                  >
-                    Last scanned {new Date(lastScanAt).toLocaleString()}
-                    {skippedCount > 0 && (
-                      <> · {skippedCount} file{skippedCount === 1 ? '' : 's'} already imported (skipped)</>
-                    )}
-                  </Typography>
-                )}
-              </Box>
-              <Button
-                size="small"
-                startIcon={<RefreshIcon />}
-                onClick={onScanWatchFolder}
-                disabled={scanning}
-              >
-                {scanning ? 'Scanning…' : 'Scan now'}
-              </Button>
-            </Stack>
 
-            {scanError && <Alert severity="warning">{scanError}</Alert>}
-
-            {pendingFiles.length > 0 && previews.length === 0 && (
-              <Alert
-                severity="info"
-                action={
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={onPreviewWatchFolder}
-                    disabled={isProcessing}
-                  >
-                    Preview {pendingFiles.length} file
-                    {pendingFiles.length === 1 ? '' : 's'}
-                  </Button>
-                }
-              >
-                <strong>
-                  {pendingFiles.length} new CSV file
-                  {pendingFiles.length === 1 ? '' : 's'} ready
-                </strong>{' '}
-                in your watch folder.
-                <br />
-                <Typography variant="caption" sx={{ display: 'block' }}>
-                  {pendingFiles.map((f) => f.name).join(' · ')}
-                </Typography>
-              </Alert>
-            )}
-
-            {pendingFiles.length === 0 && lastScanAt && !scanError && (
-              <Alert severity="success">
-                No new files in the watch folder. Drop CSVs into{' '}
-                <code>{watchConfig.name}</code> and they'll appear here on the
-                next scan.
-              </Alert>
-            )}
-          </Stack>
-        </Paper>
-      )}
-
-      {!watchConfig && (
-        <Alert severity="info" sx={{ '.MuiAlert-message': { width: '100%' } }}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            spacing={2}
-            flexWrap="wrap"
-          >
-            <Typography variant="body2">
-              Want auto-detected CSV imports? Connect a watch folder in Settings.
-            </Typography>
-            <Button
-              size="small"
-              variant="outlined"
-              href="/settings"
-              startIcon={<FolderOpenIcon />}
-            >
-              Go to Settings
-            </Button>
-          </Stack>
-        </Alert>
-      )}
 
       {/* Backup & Restore */}
       <Paper sx={{ p: 3 }}>
