@@ -21,9 +21,12 @@ interface Props {
   categories: Category[];
   /** Suggested category name (for highlight ring + Enter shortcut). */
   suggested: string | null;
+  selected?: string | null;
   onPick: (categoryName: string) => void;
   /** When true, hide non-spend categories. */
   spendOnly?: boolean;
+  /** When true, indicates the suggestion is from the AI */
+  isAiSuggested?: boolean;
 }
 
 const PALETTE = [
@@ -39,8 +42,10 @@ const PALETTE = [
 export default function SortCategoryGrid({
   categories,
   suggested,
+  selected = null,
   onPick,
   spendOnly = false,
+  isAiSuggested = false,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -86,11 +91,12 @@ export default function SortCategoryGrid({
 
   const renderButton = (cat: Category, idx: number | null) => {
     const isSuggested = cat.name === suggested;
+    const isSelected = cat.name === selected;
     return (
       <Button
         key={cat.name}
         onClick={() => onPick(cat.name)}
-        variant="outlined"
+        variant={isSelected ? "contained" : "outlined"}
         sx={{
           textTransform: 'none',
           justifyContent: 'flex-start',
@@ -99,13 +105,17 @@ export default function SortCategoryGrid({
           py: 1,
           minWidth: 0,
           flex: '1 1 calc(33.333% - 8px)',
-          borderColor: isSuggested ? cat.color : 'divider',
-          borderWidth: isSuggested ? 2 : 1,
-          color: 'text.primary',
-          bgcolor: 'background.paper',
+          borderColor: isSelected ? cat.color : isSuggested ? cat.color : 'divider',
+          borderWidth: (isSelected || isSuggested) ? 2 : 1,
+          boxShadow: isSelected 
+            ? `0 0 12px ${cat.color}66`
+            : isSuggested && isAiSuggested ? `0 0 12px ${cat.color}33` : 'none',
+          color: isSelected ? '#ffffff' : 'text.primary',
+          bgcolor: isSelected ? cat.color : 'background.paper',
           '&:hover': {
-            bgcolor: cat.color + '14',
+            bgcolor: isSelected ? cat.color : cat.color + '14',
             borderColor: cat.color,
+            opacity: isSelected ? 0.9 : 1,
           },
           position: 'relative',
         }}
@@ -115,10 +125,28 @@ export default function SortCategoryGrid({
             width: 10,
             height: 10,
             borderRadius: '50%',
-            bgcolor: cat.color,
+            bgcolor: isSelected ? '#ffffff' : cat.color,
             flexShrink: 0,
           }}
         />
+        {isSuggested && isAiSuggested && (
+          <Box
+            sx={{
+              fontSize: 9,
+              fontWeight: 700,
+              color: 'primary.contrastText',
+              bgcolor: 'primary.main',
+              borderRadius: 0.75,
+              px: 0.5,
+              py: 0.125,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              flexShrink: 0,
+            }}
+          >
+            AI
+          </Box>
+        )}
         <Typography
           variant="body2"
           sx={{

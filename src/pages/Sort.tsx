@@ -15,7 +15,6 @@ import {
   Box,
   Stack,
   Typography,
-  LinearProgress,
   Button,
   Paper,
   FormControlLabel,
@@ -25,18 +24,21 @@ import {
   DialogContent,
   Alert,
   Chip,
+  Switch,
+  TextField,
 } from '@mui/material';
-import UndoIcon from '@mui/icons-material/Undo';
-import SkipNextIcon from '@mui/icons-material/SkipNext';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import CheckIcon from '@mui/icons-material/Check';
 import { db } from '../db';
+
 import { useFilters } from '../store';
 import { buildRecurrenceMap, refreshRecurrenceAll } from '../recurrence';
 import { buildSortQueue, type SortCard as SortCardData } from '../sort';
-import { useSortStore } from '../sortStore';
+
 import SortCard from '../components/SortCard';
 import SortCategoryGrid from '../components/SortCategoryGrid';
 import SortEmptyState from '../components/SortEmptyState';
+import { localAI } from '../ai';
 
 export default function Sort() {
   const demoMode = useFilters((s) => s.demoMode);
@@ -56,7 +58,7 @@ export default function Sort() {
     () =>
       uncategorizedAll && demoMode
         ? uncategorizedAll.filter((t) => t.source === 'demo')
-        : uncategorizedAll || [],
+        : uncategorizedAll?.filter((t) => t.source !== 'demo') || [],
     [uncategorizedAll, demoMode]
   );
 
@@ -76,7 +78,7 @@ export default function Sort() {
     () =>
       relevantTxnsAll && demoMode
         ? relevantTxnsAll.filter((t) => t.source === 'demo')
-        : relevantTxnsAll || [],
+        : relevantTxnsAll?.filter((t) => t.source !== 'demo') || [],
     [relevantTxnsAll, demoMode]
   );
 
@@ -99,28 +101,187 @@ export default function Sort() {
     [uncategorized, recurrenceMap, categories, rules]
   );
 
-  const skipped = useSortStore((s) => s.skipped);
-  const history = useSortStore((s) => s.history);
-  const pushDecision = useSortStore((s) => s.push);
-  const popLast = useSortStore((s) => s.popLastDecision);
-  const skipMerchant = useSortStore((s) => s.skipMerchant);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const visibleQueue = queue;
 
-  // Current card = first non-skipped. If all remaining are skipped, fall back
-  // to showing them (queue is small enough that this is fine).
-  const visibleQueue = useMemo(
-    () => queue.filter((c) => !skipped.has(c.merchantKey)),
-    [queue, skipped]
-  );
+  useEffect(() => {
+    if (visibleQueue.length > 0 && currentIndex >= visibleQueue.length) {
+      setCurrentIndex(Math.max(0, visibleQueue.length - 1));
+    }
+  }, [visibleQueue.length, currentIndex]);
+
   const currentCard: SortCardData | undefined =
-    visibleQueue[0] ?? queue[0];
+    visibleQueue[currentIndex] ?? visibleQueue[0];
 
+  const [selections, setSelections] = useState<Record<string, { category: string; saveRule: boolean; rulePattern: string }>>({});
   const [saveRule, setSaveRule] = useState(true);
+  const [rulePattern, setRulePattern] = useState('');
+
+  const [aiSuggestEnabled, setAiSuggestEnabled] = useState(() => {
+    return localStorage.getItem('app:aiSuggestEnabled') === 'true';
+  });
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { category: string; pattern: string }>>({});
+  const [aiSuggesting, setAiSuggesting] = useState<Record<string, boolean>>({});
+  const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
+  const fetchingKeysRef = useRef<Set<string>>(new Set());
+
   const [helpOpen, setHelpOpen] = useState(false);
-  // Animation: when set, the current card slides off; we clear it after
-  // the DB write so the next card mounts cleanly.
   const [leaving, setLeaving] = useState<{ color: string } | null>(null);
 
+  // Sync state when active card or suggestions or selections change
+  useEffect(() => {
+    if (!currentCard) {
+      setRulePattern('');
+      setSaveRule(true);
+      return;
+    }
+    const key = currentCard.merchantKey;
+    const sel = selections[key];
+    if (sel) {
+      setRulePattern(sel.rulePattern);
+      setSaveRule(sel.saveRule);
+    } else {
+      const aiSug = aiSuggestions[key];
+      setRulePattern(aiSug ? aiSug.pattern : key);
+      setSaveRule(true);
+    }
+  }, [currentCard?.merchantKey, selections, aiSuggestions]);
+
+  // Sync rulePattern and saveRule changes into selections state if they edit them without selecting category first
+  const handlePatternChange = (val: string) => {
+    if (!currentCard) return;
+    const key = currentCard.merchantKey;
+    setRulePattern(val);
+    if (selections[key]) {
+      setSelections(prev => ({
+        ...prev,
+        [key]: { ...prev[key], rulePattern: val }
+      }));
+    }
+  };
+
+  const handleSaveRuleChange = (val: boolean) => {
+    if (!currentCard) return;
+    const key = currentCard.merchantKey;
+    setSaveRule(val);
+    if (selections[key]) {
+      setSelections(prev => ({
+        ...prev,
+        [key]: { ...prev[key], saveRule: val }
+      }));
+    }
+  };
+
+  const scoreSetting = useLiveQuery(() => db.settings.get('app:aiGuessScore'), []);
+  const score = scoreSetting?.value as { correctCount: number; totalCount: number } | undefined;
+
+  const updateScore = useCallback(async (correct: boolean) => {
+    await db.transaction('rw', db.settings, async () => {
+      const existing = await db.settings.get('app:aiGuessScore');
+      const val = (existing?.value as { correctCount: number; totalCount: number } | undefined) || { correctCount: 0, totalCount: 0 };
+      const updated = {
+        correctCount: val.correctCount + (correct ? 1 : 0),
+        totalCount: val.totalCount + 1,
+      };
+      await db.settings.put({ key: 'app:aiGuessScore', value: updated });
+    });
+  }, []);
+
+  const handleToggleAiSuggest = (enabled: boolean) => {
+    setAiSuggestEnabled(enabled);
+    localStorage.setItem('app:aiSuggestEnabled', String(enabled));
+  };
+
+  useEffect(() => {
+    if (!aiSuggestEnabled || !currentCard) return;
+    const key = currentCard.merchantKey;
+    if (aiSuggestions[key] || fetchingKeysRef.current.has(key)) return;
+
+    const controller = new AbortController();
+    let active = true;
+
+    async function fetchSuggestion() {
+      fetchingKeysRef.current.add(key);
+      console.log('[Sort.tsx] fetchSuggestion started for merchant key:', key);
+      setAiSuggesting(prev => ({ ...prev, [key]: true }));
+      setAiErrors(prev => {
+        const updated = { ...prev };
+        delete updated[key];
+        return updated;
+      });
+
+      try {
+        if (!localAI.isLoaded) {
+          console.log('[Sort.tsx] localAI is not loaded. Initializing...');
+          await localAI.init();
+          console.log('[Sort.tsx] localAI initialization finished.');
+        }
+
+        if (!active) {
+          console.log('[Sort.tsx] fetchSuggestion aborted because component unmounted or active is false.');
+          return;
+        }
+
+        const catNames = (categories || [])
+          .map((c) => c.name)
+          .filter((name) => name !== 'Uncategorized');
+
+        const desc = currentCard.txns[0]?.description || key || '';
+        const toReview = [
+          {
+            desc,
+            ruleCategory: currentCard.suggestedCategory || 'Uncategorized',
+          },
+        ];
+
+        console.log('[Sort.tsx] Calling localAI.reviewTransactionsWithRules with desc:', desc);
+        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal);
+        console.log('[Sort.tsx] localAI.reviewTransactionsWithRules results:', results);
+
+        if (!active) return;
+        if (results && results.length > 0) {
+          const result = results[0];
+          if (result && result.category && result.category !== 'Uncategorized' && catNames.includes(result.category)) {
+            console.log('[Sort.tsx] Setting AI suggestion for key:', key, result);
+            setAiSuggestions(prev => ({ ...prev, [key]: result }));
+          } else {
+            console.log('[Sort.tsx] Suggestion category invalid or Uncategorized:', result);
+          }
+        }
+      } catch (err: any) {
+        if (active && err.name !== 'AbortError') {
+          console.error('[Sort.tsx] AI Auto-Suggest failed:', err);
+          setAiErrors(prev => ({ ...prev, [key]: err.message || String(err) }));
+        }
+      } finally {
+        fetchingKeysRef.current.delete(key);
+        if (active) {
+          console.log('[Sort.tsx] fetchSuggestion finished for merchant key:', key);
+          setAiSuggesting(prev => {
+            const updated = { ...prev };
+            delete updated[key];
+            return updated;
+          });
+        }
+      }
+    }
+
+    fetchSuggestion();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [currentCard?.merchantKey, aiSuggestEnabled, categories]);
+
   const isInteractive = !!currentCard;
+
+  const activeSuggestion = useMemo(() => {
+    if (!currentCard) return undefined;
+    const key = currentCard.merchantKey;
+    const activeAiCategory = aiSuggestions[key]?.category || null;
+    return aiSuggestEnabled ? activeAiCategory : currentCard.suggestedCategory;
+  }, [currentCard, aiSuggestions, aiSuggestEnabled]);
 
   const lookupCategoryColor = useCallback(
     (name: string): string => {
@@ -130,73 +291,89 @@ export default function Sort() {
     [categories]
   );
 
-  const commitDecision = useCallback(
-    async (card: SortCardData, categoryName: string, alsoRule: boolean) => {
-      const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
+  const handleClearSelection = () => {
+    if (!currentCard) return;
+    const key = currentCard.merchantKey;
+    setSelections(prev => {
+      const updated = { ...prev };
+      delete updated[key];
+      return updated;
+    });
+  };
 
-      await db.transaction('rw', db.transactions, db.rules, async () => {
+  const handleApplySelections = useCallback(async () => {
+    const selectionKeys = Object.keys(selections);
+    if (selectionKeys.length === 0) return;
+
+    await db.transaction('rw', db.transactions, db.rules, async () => {
+      for (const key of selectionKeys) {
+        const sel = selections[key];
+        const card = queue.find(c => c.merchantKey === key);
+        if (!card) continue;
+
+        const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
+
         await db.transactions.where('id').anyOf(txnIds).modify({
-          category: categoryName,
+          category: sel.category,
           userOverridden: true,
         });
-      });
 
-      let ruleId: number | undefined;
-      if (alsoRule && card.merchantKey) {
-        ruleId = (await db.rules.add({
-          pattern: card.merchantKey,
-          category: categoryName,
-          priority: 1000,
-          createdAt: new Date().toISOString(),
-        })) as number;
+        const patternToSave = sel.rulePattern.trim();
+        if (sel.saveRule && patternToSave) {
+          await db.rules.add({
+            pattern: patternToSave,
+            category: sel.category,
+            priority: 1000,
+            createdAt: new Date().toISOString(),
+          });
+        }
       }
+    });
 
-      pushDecision({
-        merchantKey: card.merchantKey,
-        txnIds,
-        previousCategory: 'Uncategorized',
-        newCategory: categoryName,
-        ruleId,
-        decidedAt: Date.now(),
-      });
-
-      await refreshRecurrenceAll();
-    },
-    [pushDecision]
-  );
+    setSelections({});
+    setCurrentIndex(0);
+    await refreshRecurrenceAll();
+  }, [selections, queue]);
 
   const onPick = useCallback(
     async (categoryName: string) => {
       if (!currentCard) return;
-      // Animate the card off in the destination color, then commit.
-      setLeaving({ color: lookupCategoryColor(categoryName) });
-      // Small delay so the user sees the tint before the card disappears.
-      await new Promise((r) => setTimeout(r, 180));
-      await commitDecision(currentCard, categoryName, saveRule);
-      setLeaving(null);
-    },
-    [currentCard, lookupCategoryColor, commitDecision, saveRule]
-  );
+      const key = currentCard.merchantKey;
 
-  const onUndo = useCallback(async () => {
-    const d = popLast();
-    if (!d) return;
-    await db.transaction('rw', db.transactions, db.rules, async () => {
-      await db.transactions.where('id').anyOf(d.txnIds).modify({
-        category: d.previousCategory,
-        userOverridden: false,
-      });
-      if (d.ruleId !== undefined) {
-        await db.rules.delete(d.ruleId);
+      const activeAiCategory = aiSuggestions[key]?.category || null;
+      if (aiSuggestEnabled && activeAiCategory) {
+        const isCorrect = activeAiCategory === categoryName;
+        await updateScore(isCorrect);
       }
-    });
-    await refreshRecurrenceAll();
-  }, [popLast]);
 
-  const onSkip = useCallback(() => {
-    if (!currentCard) return;
-    skipMerchant(currentCard.merchantKey);
-  }, [currentCard, skipMerchant]);
+      // Set selection
+      setSelections(prev => ({
+        ...prev,
+        [key]: {
+          category: categoryName,
+          saveRule,
+          rulePattern: rulePattern || key,
+        }
+      }));
+
+      // Animate card transition
+      setLeaving({ color: lookupCategoryColor(categoryName) });
+      await new Promise((r) => setTimeout(r, 180));
+      setLeaving(null);
+
+      // Auto-advance to the next uncategorized card
+      const nextIndex = visibleQueue.findIndex((card, idx) => idx > currentIndex && !selections[card.merchantKey]?.category);
+      if (nextIndex !== -1) {
+        setCurrentIndex(nextIndex);
+      } else {
+        const firstUnselected = visibleQueue.findIndex((card) => !selections[card.merchantKey]?.category);
+        if (firstUnselected !== -1) {
+          setCurrentIndex(firstUnselected);
+        }
+      }
+    },
+    [currentCard, currentIndex, visibleQueue, selections, rulePattern, saveRule, lookupCategoryColor, aiSuggestEnabled, aiSuggestions, updateScore]
+  );
 
   // Keyboard handler — single global listener while the page is mounted.
   // Number keys 1-9 pick the Nth visible category in the same order as the
@@ -207,11 +384,11 @@ export default function Sort() {
     // Compute the same ordering SortCategoryGrid uses, so number keys line up.
     const cats = categories || [];
     const filtered = cats.filter((c) => c.type === 'spend' && c.name !== 'Uncategorized');
-    const sug = filtered.find((c) => c.name === currentCard?.suggestedCategory);
-    const rest = filtered.filter((c) => c.name !== currentCard?.suggestedCategory);
+    const sug = filtered.find((c) => c.name === activeSuggestion);
+    const rest = filtered.filter((c) => c.name !== activeSuggestion);
     rest.sort((a, b) => a.sortOrder - b.sortOrder);
     visibleGridOrderRef.current = (sug ? [sug, ...rest] : rest).map((c) => c.name);
-  }, [categories, currentCard]);
+  }, [categories, activeSuggestion]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -231,24 +408,22 @@ export default function Sort() {
         return;
       }
 
-      // Cmd-Z / Ctrl-Z = undo
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        onUndo();
+        setCurrentIndex((prev) => Math.max(0, prev - 1));
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setCurrentIndex((prev) => Math.min(visibleQueue.length - 1, prev + 1));
         return;
       }
 
       if (!isInteractive) return;
 
-      if (e.key === 'Enter' && currentCard?.suggestedCategory) {
+      if (e.key === 'Enter' && activeSuggestion) {
         e.preventDefault();
-        onPick(currentCard.suggestedCategory);
-        return;
-      }
-
-      if (e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        onSkip();
+        onPick(activeSuggestion);
         return;
       }
 
@@ -264,17 +439,14 @@ export default function Sort() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onPick, onUndo, onSkip, isInteractive, currentCard, helpOpen]);
+  }, [onPick, isInteractive, helpOpen, activeSuggestion, visibleQueue.length]);
 
   if (!uncategorizedAll || !relevantTxnsAll || !categories || !rules) {
     return null;
   }
 
-  // Cumulative progress (decisions made / decisions needed from initial state)
+  const selectionsCount = Object.keys(selections).length;
   const remaining = visibleQueue.length;
-  const made = history.length;
-  const total = remaining + made;
-  const pct = total > 0 ? Math.round((made / total) * 100) : 100;
 
   return (
     <Stack spacing={2} sx={{ maxWidth: 820, mx: 'auto' }}>
@@ -289,28 +461,48 @@ export default function Sort() {
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             Sort
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            One decision per merchant → categorize many transactions at once.
-          </Typography>
         </Box>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button
-            size="small"
-            startIcon={<UndoIcon />}
-            onClick={onUndo}
-            disabled={history.length === 0}
-            sx={{ textTransform: 'none' }}
-          >
-            Undo {history.length > 0 && `(${history.length})`}
-          </Button>
-          {currentCard && (
+        <Stack direction="row" spacing={2} alignItems="center">
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={aiSuggestEnabled}
+                onChange={(e) => handleToggleAiSuggest(e.target.checked)}
+              />
+            }
+            label={
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                AI Auto-Suggest
+              </Typography>
+            }
+            sx={{ m: 0 }}
+          />
+          {score && score.totalCount > 0 && (
+            <Chip
+              size="small"
+              label={`AI Accuracy: ${Math.round((score.correctCount / score.totalCount) * 100)}% (${score.correctCount}/${score.totalCount})`}
+              color="secondary"
+              variant="outlined"
+              onDelete={async () => {
+                if (window.confirm('Reset AI accuracy statistics?')) {
+                  await db.settings.delete('app:aiGuessScore');
+                }
+              }}
+              sx={{ height: 26, borderRadius: 2 }}
+            />
+          )}
+          {selectionsCount > 0 && (
             <Button
               size="small"
-              startIcon={<SkipNextIcon />}
-              onClick={onSkip}
-              sx={{ textTransform: 'none' }}
+              onClick={() => {
+                if (window.confirm('Clear all your current pending selections?')) {
+                  setSelections({});
+                }
+              }}
+              sx={{ textTransform: 'none', color: 'error.main' }}
             >
-              Skip
+              Reset Selections
             </Button>
           )}
           <Button
@@ -324,65 +516,203 @@ export default function Sort() {
         </Stack>
       </Stack>
 
-      {/* Progress */}
-      <Box>
-        <Stack
-          direction="row"
-          spacing={1}
-          alignItems="baseline"
-          justifyContent="space-between"
+      {/* Global Apply Bar */}
+      {selectionsCount > 0 && (
+        <Paper
+          sx={{
+            p: 2,
+            borderRadius: 3,
+            border: '1px solid',
+            borderColor: 'success.main',
+            background: (theme) =>
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(76, 175, 80, 0.05) 100%)'
+                : 'linear-gradient(135deg, rgba(76, 175, 80, 0.08) 0%, rgba(76, 175, 80, 0.02) 100%)',
+          }}
         >
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Selections Ready to Apply
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                You have categorized **{selectionsCount}** merchant(s) in this session.
+              </Typography>
+            </Box>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleApplySelections}
+              sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 700 }}
+            >
+              Apply {selectionsCount} Selection(s)
+            </Button>
+          </Stack>
+        </Paper>
+      )}
+
+      {/* Horizontal queue tracker */}
+      {visibleQueue.length > 0 && (
+        <Box>
           <Typography
             variant="caption"
             color="text.secondary"
-            sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}
+            sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, display: 'block', mb: 0.5 }}
           >
-            {currentCard
-              ? `${remaining} merchant${remaining === 1 ? '' : 's'} left`
-              : 'Done'}
-            {skipped.size > 0 && ` · ${skipped.size} skipped`}
+            Triage Queue ({remaining} merchants remaining)
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {made} sorted
-          </Typography>
-        </Stack>
-        <LinearProgress
-          variant="determinate"
-          value={pct}
-          sx={{ mt: 0.5, height: 6, borderRadius: 3 }}
-        />
-      </Box>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 1.5,
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: 'divider',
+              display: 'flex',
+              gap: 1,
+              overflowX: 'auto',
+              bgcolor: 'background.default',
+              '&::-webkit-scrollbar': {
+                height: 6,
+              },
+              '&::-webkit-scrollbar-thumb': {
+                bgcolor: 'action.selected',
+                borderRadius: 3,
+              },
+            }}
+          >
+            {visibleQueue.map((card, idx) => {
+              const sel = selections[card.merchantKey];
+              const isActive = idx === currentIndex;
+              const isSelected = !!sel?.category;
+              return (
+                <Button
+                  key={card.merchantKey}
+                  variant={isActive ? "contained" : "outlined"}
+                  color={isSelected ? "success" : isActive ? "primary" : "inherit"}
+                  onClick={() => setCurrentIndex(idx)}
+                  sx={{
+                    flexShrink: 0,
+                    textTransform: 'none',
+                    borderRadius: 2,
+                    px: 2,
+                    py: 1,
+                    borderWidth: isActive ? 2 : 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    minWidth: 140,
+                    maxWidth: 180,
+                    bgcolor: isActive ? 'primary.main' : isSelected ? 'success.light' : 'background.paper',
+                    color: isActive ? 'primary.contrastText' : isSelected ? 'success.contrastText' : 'text.primary',
+                    borderColor: isActive ? 'primary.main' : isSelected ? 'success.main' : 'divider',
+                    '&:hover': {
+                      bgcolor: isActive ? 'primary.dark' : isSelected ? 'success.main' : 'action.hover',
+                    }
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    noWrap
+                    sx={{ fontWeight: isActive ? 700 : 600, fontSize: '0.8rem', width: '100%', textAlign: 'center' }}
+                  >
+                    {card.merchantKey}
+                  </Typography>
+                  {isSelected && (
+                    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
+                      <CheckIcon sx={{ fontSize: 12 }} />
+                      <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                        {sel.category}
+                      </Typography>
+                    </Stack>
+                  )}
+                </Button>
+              );
+            })}
+          </Paper>
+        </Box>
+      )}
 
       {/* Card or empty state */}
       {currentCard ? (
         <>
-          <SortCard
-            card={currentCard}
-            suggestedColor={
-              currentCard.suggestedCategory
-                ? lookupCategoryColor(currentCard.suggestedCategory)
-                : undefined
-            }
-            leaving={leaving}
-          />
+          {/* 3D Stack of Cards */}
+          <Box sx={{ position: 'relative', width: '100%', pb: 5 }}>
+            {(() => {
+              const startIndex = Math.max(0, currentIndex - 1);
+              const endIndex = currentIndex + 3;
+              const slice = visibleQueue.slice(startIndex, endIndex);
+
+              const cardsWithStackIndex = slice.map((card, index) => {
+                const queueIndex = startIndex + index;
+                const stackIndex = queueIndex - currentIndex;
+                return { card, stackIndex };
+              });
+
+              // Sort by stackIndex descending so that cards deeper in the stack render first,
+              // and the active (stackIndex=0) and leaving (stackIndex=-1) cards render last (on top).
+              cardsWithStackIndex.sort((a, b) => b.stackIndex - a.stackIndex);
+
+              return cardsWithStackIndex.map(({ card, stackIndex }) => {
+                const isTop = stackIndex === 0;
+                const cardSuggestion = aiSuggestEnabled
+                  ? (aiSuggestions[card.merchantKey]?.category || null)
+                  : card.suggestedCategory;
+
+                const hasSelection = !!selections[card.merchantKey]?.category;
+                const zipDirection = hasSelection ? 'right' : 'left';
+
+                return (
+                  <SortCard
+                    key={card.merchantKey}
+                    card={card}
+                    suggestedColor={
+                      cardSuggestion
+                        ? lookupCategoryColor(cardSuggestion)
+                        : undefined
+                    }
+                    leaving={isTop ? leaving : null}
+                    suggestedCategoryOverride={aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined}
+                    aiSuggesting={aiSuggesting[card.merchantKey] || false}
+                    aiError={aiErrors[card.merchantKey] || null}
+                    stackIndex={stackIndex}
+                    zipDirection={zipDirection}
+                  />
+                );
+              });
+            })()}
+          </Box>
 
           {/* Category grid */}
           <Paper sx={{ p: 2, borderRadius: 3 }}>
             <Stack spacing={1.5}>
               <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}
-                >
-                  Pick a category
-                </Typography>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}
+                  >
+                    Pick a category
+                  </Typography>
+                  {selections[currentCard.merchantKey]?.category && (
+                    <Chip
+                      size="small"
+                      label="Clear Selection"
+                      onClick={handleClearSelection}
+                      onDelete={handleClearSelection}
+                      color="warning"
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: '0.65rem', borderRadius: 1 }}
+                    />
+                  )}
+                </Stack>
                 <FormControlLabel
                   control={
                     <Checkbox
                       size="small"
                       checked={saveRule}
-                      onChange={(e) => setSaveRule(e.target.checked)}
+                      onChange={(e) => handleSaveRuleChange(e.target.checked)}
                     />
                   }
                   label={
@@ -393,11 +723,29 @@ export default function Sort() {
                   sx={{ m: 0 }}
                 />
               </Stack>
+              {saveRule && (
+                <Box sx={{ mt: 0.5, mb: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Rule Pattern"
+                    value={rulePattern}
+                    onChange={(e) => handlePatternChange(e.target.value)}
+                    placeholder="e.g. starbucks"
+                    helperText="Future imports matching this keyword will be auto-categorized."
+                    FormHelperTextProps={{
+                      sx: { mx: 1, my: 0.5 }
+                    }}
+                  />
+                </Box>
+              )}
               <SortCategoryGrid
                 categories={categories}
-                suggested={currentCard.suggestedCategory}
+                suggested={activeSuggestion}
+                selected={selections[currentCard.merchantKey]?.category || null}
                 onPick={onPick}
                 spendOnly={false}
+                isAiSuggested={aiSuggestEnabled && (aiSuggestions[currentCard.merchantKey]?.category !== undefined)}
               />
             </Stack>
           </Paper>
@@ -410,10 +758,9 @@ export default function Sort() {
             sx={{ opacity: 0.7 }}
             flexWrap="wrap"
           >
-            <KeyHint k="Enter" desc="accept" />
+            <KeyHint k="Enter" desc="accept suggested" />
             <KeyHint k="1–9" desc="grid pick" />
-            <KeyHint k="S" desc="skip" />
-            <KeyHint k="⌘Z" desc="undo" />
+            <KeyHint k="← / →" desc="navigate cards" />
             <KeyHint k="?" desc="help" />
           </Stack>
         </>
@@ -426,16 +773,14 @@ export default function Sort() {
         <DialogTitle>Keyboard shortcuts</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
-            <Row k="Enter" desc="Accept the suggested category" />
+            <Row k="Enter" desc="Accept the suggested category for current card" />
             <Row k="1 – 9" desc="Pick the Nth visible category" />
-            <Row k="S" desc="Skip this merchant (defer to end)" />
-            <Row k="⌘Z / Ctrl-Z" desc="Undo last decision" />
+            <Row k="← / →" desc="Navigate between merchants" />
             <Row k="?" desc="Open this help" />
             <Row k="Esc" desc="Close this help" />
           </Stack>
           <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
-            One decision categorizes <strong>all</strong> transactions for that
-            merchant. Save-as-rule also catches future imports automatically.
+            Make category selections for any merchants you want, then click <strong>Apply Selections</strong> to save them all at once.
           </Alert>
         </DialogContent>
       </Dialog>

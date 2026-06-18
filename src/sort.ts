@@ -67,7 +67,7 @@ export function buildSortQueue(
 
     // Newest-first samples
     const sorted = [...txns].sort((a, b) => b.date.localeCompare(a.date));
-    const sampleTxns = sorted.slice(0, 3);
+    const sampleTxns = sorted.slice(0, 10);
 
     const totalAbs = txns.reduce((s, t) => s + Math.abs(t.amount), 0);
     const netSign =
