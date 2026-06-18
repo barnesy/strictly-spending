@@ -28,6 +28,7 @@ export interface ThemeConfig {
   textColor?: string;
   borderRadius?: number;
   fontFamily?: string;
+  fontSize?: number;
 }
 
 // Function to compute luminance and decide on text color if not provided
@@ -57,7 +58,8 @@ export function getAppTheme(config: ThemeConfig) {
     paperColor,
     textColor,
     borderRadius = CONTROL_BORDER_RADIUS,
-    fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif'
+    fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
+    fontSize = 14,
   } = config;
 
   const bgDefault = backgroundColor || (mode === 'dark' ? '#0f172a' : '#f5f7fa');
@@ -88,8 +90,15 @@ export function getAppTheme(config: ThemeConfig) {
     },
     typography: {
       fontFamily,
+      fontSize,
+      h1: { fontWeight: 600 },
+      h2: { fontWeight: 600 },
+      h3: { fontWeight: 600 },
+      h4: { fontWeight: 600 },
       h5: { fontWeight: 600 },
       h6: { fontWeight: 600 },
+      subtitle1: { fontWeight: 600 },
+      subtitle2: { fontWeight: 600 },
     },
     transitions: {
       duration: {

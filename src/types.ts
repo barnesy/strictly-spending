@@ -88,6 +88,7 @@ export type AppSetting =
         textColor?: string;
         borderRadius?: number;
         fontFamily?: string;
+        fontSize?: number;
         paletteName?: string;
       };
     };

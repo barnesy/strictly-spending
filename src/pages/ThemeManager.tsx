@@ -76,7 +76,6 @@ const FONTS = [
   { name: 'Helvetica (Classic Sans)', value: '"Helvetica Neue", Helvetica, Arial, sans-serif' },
   { name: 'Georgia (Standard Serif)', value: 'Georgia, serif' },
   { name: 'EB Garamond (Premium Serif)', value: '"EB Garamond", Garamond, serif' },
-  { name: 'Playfair Display (Editorial Serif)', value: '"Playfair Display", serif' },
   { name: 'Futura (Wes Anderson Sans)', value: '"Futura", "Trebuchet MS", sans-serif' },
   { name: 'Courier Prime (Wes Anderson Typewriter)', value: '"Courier Prime", Courier, monospace' },
 ];
@@ -89,6 +88,7 @@ export default function ThemeManager() {
   const paletteName = config.paletteName || '';
   const borderRadius = config.borderRadius ?? 8;
   const fontFamily = config.fontFamily || FONTS[0].value;
+  const fontSize = config.fontSize ?? 14;
 
   const updateTheme = async (updates: any) => {
     let newMode = updates.mode || mode;
@@ -114,8 +114,17 @@ export default function ThemeManager() {
     setLocalRadius(borderRadius);
   }, [borderRadius]);
 
+  const [localFontSize, setLocalFontSize] = useState(fontSize);
+  useEffect(() => {
+    setLocalFontSize(fontSize);
+  }, [fontSize]);
+
   const handleRadiusChangeCommitted = (_event: Event | React.SyntheticEvent, value: number | number[]) => {
     updateTheme({ borderRadius: value as number });
+  };
+
+  const handleFontSizeChangeCommitted = (_event: Event | React.SyntheticEvent, value: number | number[]) => {
+    updateTheme({ fontSize: value as number });
   };
 
   return (
@@ -223,23 +232,48 @@ export default function ThemeManager() {
           <Divider />
 
           <Box>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>
               Typography
             </Typography>
-            <FormControl size="small" sx={{ width: 300 }}>
-              <InputLabel>Font Family</InputLabel>
-              <Select
-                value={fontFamily}
-                label="Font Family"
-                onChange={(e) => updateTheme({ fontFamily: e.target.value })}
-              >
-                {FONTS.map((font) => (
-                  <MenuItem key={font.name} value={font.value} sx={{ fontFamily: font.value }}>
-                    {font.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Stack spacing={3}>
+              <FormControl size="small" sx={{ width: 300 }}>
+                <InputLabel>Font Family</InputLabel>
+                <Select
+                  value={fontFamily}
+                  label="Font Family"
+                  onChange={(e) => updateTheme({ fontFamily: e.target.value })}
+                >
+                  {FONTS.map((font) => (
+                    <MenuItem key={font.name} value={font.value} sx={{ fontFamily: font.value }}>
+                      {font.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box sx={{ width: 300 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mb: 1 }}>
+                  Base Font Size ({localFontSize}px)
+                </Typography>
+                <Box sx={{ px: 1 }}>
+                  <Slider
+                    value={localFontSize}
+                    onChange={(_, v) => setLocalFontSize(v as number)}
+                    onChangeCommitted={handleFontSizeChangeCommitted}
+                    step={1}
+                    marks={[
+                      { value: 12, label: '12px' },
+                      { value: 14, label: '14px' },
+                      { value: 16, label: '16px' },
+                      { value: 18, label: '18px' },
+                      { value: 20, label: '20px' },
+                    ]}
+                    min={12}
+                    max={20}
+                  />
+                </Box>
+              </Box>
+            </Stack>
           </Box>
 
           <Divider />
