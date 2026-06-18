@@ -73,11 +73,12 @@ const THEME_PALETTES = [
 const FONTS = [
   { name: 'System Default', value: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif' },
   { name: 'Atkinson Hyperlegible (Accessible)', value: '"Atkinson Hyperlegible", sans-serif' },
-  { name: 'Inter (Modern)', value: '"Inter", sans-serif' },
-  { name: 'Open Sans (Humanist)', value: '"Open Sans", sans-serif' },
-  { name: 'Outfit (Geometric)', value: '"Outfit", sans-serif' },
-  { name: 'Lora (Serif)', value: '"Lora", serif' },
-  { name: 'Fira Code (Monospace)', value: '"Fira Code", monospace' },
+  { name: 'Helvetica (Classic Sans)', value: '"Helvetica Neue", Helvetica, Arial, sans-serif' },
+  { name: 'Georgia (Standard Serif)', value: 'Georgia, serif' },
+  { name: 'EB Garamond (Premium Serif)', value: '"EB Garamond", Garamond, serif' },
+  { name: 'Playfair Display (Editorial Serif)', value: '"Playfair Display", serif' },
+  { name: 'Futura (Wes Anderson Sans)', value: '"Futura", "Trebuchet MS", sans-serif' },
+  { name: 'Courier Prime (Wes Anderson Typewriter)', value: '"Courier Prime", Courier, monospace' },
 ];
 
 export default function ThemeManager() {
