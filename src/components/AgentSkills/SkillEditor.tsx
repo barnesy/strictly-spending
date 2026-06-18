@@ -166,10 +166,11 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
           height: 'calc(100vh - 180px)',
           minHeight: '580px',
           p: 0,
-          borderRadius: 2,
+          borderRadius: (theme) => `${theme.shape.borderRadius}px`,
           overflow: 'hidden',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-          border: '1px solid rgba(0,0,0,0.08)',
+          boxShadow: 'none',
+          border: '1px solid',
+          borderColor: 'divider',
         }}
       >
         {/* Left Panel: Sidebar (Metadata, Reference Guide, & Diagnostics) */}
@@ -177,16 +178,17 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
           sx={{
             width: 320,
             flexShrink: 0,
-            borderRight: '1px solid rgba(0,0,0,0.08)',
+            borderRight: '1px solid',
+            borderRightColor: 'divider',
             display: 'flex',
             flexDirection: 'column',
-            bgcolor: '#ffffff',
+            bgcolor: 'background.paper',
             height: '100%',
             overflow: 'hidden',
           }}
         >
           {/* Sidebar Tabs */}
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Tabs
               value={sidebarTab}
               onChange={(_, val) => setSidebarTab(val)}
@@ -211,7 +213,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
           {sidebarTab === 0 && (
             <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
               {/* Metadata Section */}
-              <Box sx={{ p: 2.5, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+              <Box sx={{ p: 2.5, borderBottom: '1px solid', borderBottomColor: 'divider' }}>
                 <Typography
                   variant="subtitle2"
                   sx={{
@@ -264,7 +266,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
               </Box>
 
               {/* Guide & Interactive Variables */}
-              <Box sx={{ p: 2.5, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+              <Box sx={{ p: 2.5, borderBottom: '1px solid', borderBottomColor: 'divider' }}>
                 <Typography
                   variant="subtitle2"
                   sx={{
@@ -298,14 +300,13 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                       sx={{
                         p: 1.5,
                         cursor: isBuiltIn ? 'default' : 'pointer',
-                        borderColor: 'rgba(0,0,0,0.06)',
-                        bgcolor: isBuiltIn ? 'grey.50' : 'background.default',
+                        borderColor: 'divider',
+                        bgcolor: isBuiltIn ? 'action.hover' : 'background.default',
                         transition: 'all 0.2s',
                         opacity: isBuiltIn ? 0.85 : 1,
                         '&:hover': isBuiltIn ? {} : {
                           borderColor: 'primary.main',
-                          bgcolor: 'rgba(25, 118, 210, 0.02)',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                          bgcolor: 'action.hover',
                         }
                       }}
                     >
@@ -322,7 +323,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         component="code"
                         sx={{
                           fontFamily: 'monospace',
-                          bgcolor: 'grey.100',
+                          bgcolor: 'action.selected',
                           px: 0.75,
                           py: 0.25,
                           borderRadius: 0.5,
@@ -376,14 +377,13 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                       sx={{
                         p: 1.5,
                         cursor: isBuiltIn ? 'default' : 'pointer',
-                        borderColor: 'rgba(0,0,0,0.06)',
-                        bgcolor: isBuiltIn ? 'grey.50' : 'background.default',
+                        borderColor: 'divider',
+                        bgcolor: isBuiltIn ? 'action.hover' : 'background.default',
                         transition: 'all 0.2s',
                         opacity: isBuiltIn ? 0.85 : 1,
                         '&:hover': isBuiltIn ? {} : {
                           borderColor: 'primary.main',
-                          bgcolor: 'rgba(25, 118, 210, 0.02)',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                          bgcolor: 'action.hover',
                         }
                       }}
                     >
@@ -400,7 +400,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         component="code"
                         sx={{
                           fontFamily: 'monospace',
-                          bgcolor: 'grey.100',
+                          bgcolor: 'action.selected',
                           px: 0.75,
                           py: 0.25,
                           borderRadius: 0.5,
@@ -422,7 +422,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
               </Box>
 
               {/* Gen UX Components Reference */}
-              <Box sx={{ p: 2.5, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              <Box sx={{ p: 2.5, borderTop: '1px solid', borderTopColor: 'divider' }}>
                 <Typography
                   variant="subtitle2"
                   sx={{
@@ -454,14 +454,13 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                       sx={{
                         p: 1.5,
                         cursor: isBuiltIn ? 'default' : 'pointer',
-                        borderColor: 'rgba(0,0,0,0.06)',
-                        bgcolor: isBuiltIn ? 'grey.50' : 'background.default',
+                        borderColor: 'divider',
+                        bgcolor: isBuiltIn ? 'action.hover' : 'background.default',
                         transition: 'all 0.2s',
                         opacity: isBuiltIn ? 0.85 : 1,
                         '&:hover': isBuiltIn ? {} : {
                           borderColor: 'primary.main',
-                          bgcolor: 'rgba(25, 118, 210, 0.02)',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                          bgcolor: 'action.hover',
                         }
                       }}
                     >
@@ -478,7 +477,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         component="code"
                         sx={{
                           fontFamily: 'monospace',
-                          bgcolor: 'grey.100',
+                          bgcolor: 'action.selected',
                           px: 0.75,
                           py: 0.25,
                           borderRadius: 0.5,
@@ -537,7 +536,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                       }
                       sx={{ textTransform: 'none', fontWeight: 600 }}
                     >
-                      {isRunningSuite ? 'Running Suite...' : 'Run Diagnostics'}
+                      {isRunningSuite ? 'Running suite...' : 'Run diagnostics'}
                     </Button>
                     {isRunningSuite && (
                       <Typography variant="caption" sx={{ fontStyle: 'italic', textAlign: 'center', color: 'text.secondary', display: 'block' }}>
@@ -552,7 +551,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                 )}
               </Box>
 
-              <Box sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)', my: 1.5 }} />
+              <Box sx={{ borderBottom: '1px solid', borderBottomColor: 'divider', my: 1.5 }} />
 
               {!isBuiltIn && (
                 <Button
@@ -569,7 +568,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                   sx={{ mb: 2, textTransform: 'none', fontWeight: 600 }}
                   fullWidth
                 >
-                  Add Test Case
+                  Add test case
                 </Button>
               )}
 
@@ -585,7 +584,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                   mb: 1.5,
                 }}
               >
-                Test Cases ({editorSkill.testCases?.length || 0})
+                Test cases ({editorSkill.testCases?.length || 0})
               </Typography>
 
               <Stack spacing={1.5} sx={{ pb: 2 }}>
@@ -608,7 +607,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                             ? 'success.light'
                             : res?.success === false
                             ? 'error.light'
-                            : 'grey.200',
+                            : 'divider',
                           bgcolor: res?.running
                             ? 'rgba(25, 118, 210, 0.02)'
                             : res?.success === true
@@ -616,7 +615,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                             : res?.success === false
                             ? 'rgba(244, 67, 54, 0.01)'
                             : 'background.paper',
-                          boxShadow: res?.running ? '0 0 8px rgba(25, 118, 210, 0.1)' : 'none',
+                          boxShadow: 'none',
                         }}
                       >
                         <Stack spacing={1}>
@@ -665,10 +664,10 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                                   py: 0,
                                   px: 1,
                                   minWidth: 0,
-                                  borderRadius: 1,
+                                  borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                                 }}
                               >
-                                {res?.running ? 'Running...' : 'Run Test'}
+                                {res?.running ? 'Running...' : 'Run test'}
                               </Button>
                             </Stack>
                           </Stack>
@@ -681,7 +680,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                           </Typography>
 
                           {res && !res.running && (
-                            <Box sx={{ mt: 0.5, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                            <Box sx={{ mt: 0.5, p: 1, bgcolor: 'action.hover', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
                               <Typography variant="caption" color="text.primary" sx={{ fontSize: 10.5, display: 'block', fontStyle: 'italic', wordBreak: 'break-word' }}>
                                 <strong>AI Reason:</strong> {res.reasoning}
                               </Typography>
@@ -690,7 +689,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                                 onClick={() => setSelectedInspectTest({ index, prompt: tc.prompt, criteria: tc.criteria, result: res })}
                                 sx={{ textTransform: 'none', fontSize: 10, mt: 0.5, p: 0, minWidth: 0, display: 'inline-block' }}
                               >
-                                Inspect Output
+                                Inspect output
                               </Button>
                             </Box>
                           )}
@@ -733,13 +732,14 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
         </Box>
 
         {/* Right Panel: Light Code Editor Canvas */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'grey.50', minWidth: 0 }}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.default', minWidth: 0 }}>
           {/* Editor Tab bar */}
           <Box
             sx={{
               height: 40,
-              bgcolor: 'grey.100',
-              borderBottom: '1px solid rgba(0,0,0,0.08)',
+              bgcolor: 'action.hover',
+              borderBottom: '1px solid',
+              borderBottomColor: 'divider',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -754,7 +754,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                   gap: 1,
                   px: 2.5,
                   height: '100%',
-                  bgcolor: 'grey.50',
+                  bgcolor: 'background.paper',
                   borderTop: '2px solid',
                   borderColor: 'primary.main',
                   color: 'text.primary',
@@ -811,13 +811,14 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                   maxHeight: '260px',
                   overflowY: 'auto',
                   zIndex: 100,
-                  border: '1px solid rgba(0,0,0,0.12)',
-                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
-                  bgcolor: '#ffffff',
+                  bgcolor: 'background.paper',
                 }}
               >
-                <Box sx={{ p: 1.25, borderBottom: '1px solid rgba(0,0,0,0.06)', bgcolor: 'grey.50' }}>
+                <Box sx={{ p: 1.25, borderBottom: '1px solid', borderBottomColor: 'divider', bgcolor: 'action.hover' }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     Select Tool Action to Insert
                   </Typography>
@@ -832,13 +833,13 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         onMouseEnter={() => setSelectedAutocompleteIndex(idx)}
                         sx={{
                           p: 1.25,
-                          borderRadius: 1,
+                          borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                           cursor: 'pointer',
-                          bgcolor: isSelected ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+                          bgcolor: isSelected ? 'action.selected' : 'transparent',
                           color: isSelected ? 'primary.main' : 'text.primary',
                           transition: 'all 0.15s',
                           '&:hover': {
-                            bgcolor: 'rgba(25, 118, 210, 0.08)',
+                            bgcolor: 'action.selected',
                           }
                         }}
                       >
@@ -851,7 +852,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                             sx={{
                               fontFamily: 'monospace',
                               fontSize: 10,
-                              bgcolor: isSelected ? 'rgba(25, 118, 210, 0.12)' : 'grey.100',
+                              bgcolor: isSelected ? 'rgba(25, 118, 210, 0.12)' : 'action.hover',
                               color: isSelected ? 'primary.main' : 'text.secondary',
                               px: 0.5,
                               py: 0.2,
@@ -877,8 +878,9 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
           <Box
             sx={{
               height: 28,
-              bgcolor: 'grey.100',
-              borderTop: '1px solid rgba(0,0,0,0.08)',
+              bgcolor: 'action.hover',
+              borderTop: '1px solid',
+              borderTopColor: 'divider',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',

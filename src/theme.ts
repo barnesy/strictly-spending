@@ -171,6 +171,13 @@ export function getAppTheme(config: ThemeConfig) {
           },
         },
       },
+      MuiTab: {
+        styleOverrides: {
+          root: {
+            textTransform: 'none',
+          },
+        },
+      },
       MuiToggleButton: {
         styleOverrides: {
           root: {

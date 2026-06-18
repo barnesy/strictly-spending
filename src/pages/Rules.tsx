@@ -23,6 +23,7 @@ import {
   TablePagination,
 } from '@mui/material';
 import PageLoader from '../components/PageLoader';
+import { useTheme } from '@mui/material/styles';
 
 import AutoCleanupDialog from '../components/AutoCleanupDialog';
 import AddIcon from '@mui/icons-material/Add';
@@ -33,6 +34,9 @@ import type { CategoryRule } from '../types';
 import { normalizeForMatch } from '../categorize';
 
 export default function Rules() {
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
+
   const allRules = useLiveQuery(() => db.rules.orderBy('priority').reverse().toArray(), []);
   const allTxns = useLiveQuery(() => db.transactions.toArray(), []);
   const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
@@ -203,22 +207,25 @@ export default function Rules() {
             {paginatedRules?.map((r) => (
               <TableRow key={r.id} hover>
                 <TableCell>
-                  <code style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>
-                    {r.pattern}
-                  </code>
+                  <Chip
+                    size="small"
+                    label={r.pattern}
+                    variant="outlined"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                    }}
+                  />
                 </TableCell>
                 <TableCell>
                   <Chip
                     size="small"
                     label={r.category}
-                    sx={{
-                      bgcolor:
-                        (categories?.find((c) => c.name === r.category)
-                          ?.color || '#bdbdbd') + '22',
-                      color:
-                        categories?.find((c) => c.name === r.category)?.color ||
-                        '#666',
-                    }}
+                    sx={getAccessibleChipStyles(
+                      categories?.find((c) => c.name === r.category)?.color || (isDarkMode ? '#b0bec5' : '#78909c'),
+                      isDarkMode
+                    )}
                   />
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>
@@ -449,4 +456,71 @@ function RuleDialog({
       </DialogActions>
     </Dialog>
   );
+}
+
+function adjustColorLuminance(hex: string, percent: number): string {
+  let R = parseInt(hex.substring(1, 3), 16);
+  let G = parseInt(hex.substring(3, 5), 16);
+  let B = parseInt(hex.substring(5, 7), 16);
+
+  R = Math.floor(R * (1 + percent));
+  G = Math.floor(G * (1 + percent));
+  B = Math.floor(B * (1 + percent));
+
+  R = Math.min(255, Math.max(0, R));
+  G = Math.min(255, Math.max(0, G));
+  B = Math.min(255, Math.max(0, B));
+
+  const rHex = R.toString(16).padStart(2, '0');
+  const gHex = G.toString(16).padStart(2, '0');
+  const bHex = B.toString(16).padStart(2, '0');
+
+  return `#${rHex}${gHex}${bHex}`;
+}
+
+function getAccessibleChipStyles(hexColor: string, isDark: boolean) {
+  let hex = hexColor.trim();
+  if (!hex.startsWith('#')) {
+    hex = '#9e9e9e';
+  }
+  if (hex.length === 4) {
+    hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+  }
+  if (hex.length !== 7) {
+    hex = '#9e9e9e';
+  }
+
+  try {
+    const R = parseInt(hex.substring(1, 3), 16);
+    const G = parseInt(hex.substring(3, 5), 16);
+    const B = parseInt(hex.substring(5, 7), 16);
+    const luminance = (0.299 * R + 0.587 * G + 0.114 * B) / 255;
+
+    let finalColor = hex;
+    if (isDark) {
+      if (luminance < 0.65) {
+        const factor = (0.65 - luminance) / (1 - luminance || 1);
+        finalColor = adjustColorLuminance(hex, Math.min(1.5, Math.max(0.1, factor)));
+      }
+    } else {
+      if (luminance > 0.35) {
+        const factor = (0.35 - luminance) / (luminance || 1);
+        finalColor = adjustColorLuminance(hex, Math.max(-0.8, Math.min(-0.1, factor)));
+      }
+    }
+
+    return {
+      bgcolor: finalColor + '18', // ~9% opacity background
+      color: finalColor,
+      border: `1px solid ${finalColor}33`,
+      fontWeight: 600,
+    };
+  } catch (e) {
+    return {
+      bgcolor: isDark ? '#ffffff11' : '#00000008',
+      color: isDark ? '#fff' : '#000',
+      border: `1px solid ${isDark ? '#ffffff22' : '#00000011'}`,
+      fontWeight: 600,
+    };
+  }
 }

@@ -681,7 +681,7 @@ export default function Dashboard() {
 
 function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
   return (
-    <PanelResizeHandle aria-label={ariaLabel} style={{ width: 8, position: 'relative' }}>
+    <PanelResizeHandle aria-label={ariaLabel} style={{ width: 16, position: 'relative' }}>
       <Box
         sx={{
           position: 'absolute',

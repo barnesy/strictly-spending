@@ -11,6 +11,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import TuneIcon from '@mui/icons-material/Tune';
+import BrushIcon from '@mui/icons-material/Brush';
 import {
   Group as PanelGroup,
   Panel,
@@ -29,6 +30,7 @@ import LocalModel from './pages/LocalModel';
 import { AgentSkills } from './pages/AgentSkills';
 import Sort from './pages/Sort';
 import AnimationSettings from './pages/AnimationSettings';
+import Merchants from './pages/Merchants';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
 import { db } from './db';
@@ -42,6 +44,7 @@ const PRIMARY_NAV = [
   { to: '/sort', label: 'Sort', badge: 'uncategorized' as const },
   { to: '/categories', label: 'Categories' },
   { to: '/rules', label: 'Rules' },
+  { to: '/merchants', label: 'Merchants' },
 ];
 
 const MANAGE_NAV = [
@@ -50,7 +53,7 @@ const MANAGE_NAV = [
   { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
   { to: '/animation-playground', label: 'Animation Playground', icon: <TuneIcon fontSize="small" /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
-  { to: '/theme', label: 'Theme', icon: <SettingsIcon fontSize="small" /> },
+  { to: '/theme', label: 'Theme', icon: <BrushIcon fontSize="small" /> },
 ];
 
 export default function App() {
@@ -145,13 +148,13 @@ export default function App() {
   // Find database date boundaries using the indexed 'date' field
   const bounds = useLiveQuery(async () => {
     if (demoMode) {
-      const demoTxns = await db.transactions.where('source').equals('demo').sortBy('date');
-      if (demoTxns.length === 0) return { earliest: undefined, latest: undefined };
-      return { earliest: demoTxns[0].date, latest: demoTxns[demoTxns.length - 1].date };
+      const earliestTxn = await db.transactions.orderBy('date').filter(t => t.source === 'demo').first();
+      const latestTxn = await db.transactions.orderBy('date').reverse().filter(t => t.source === 'demo').first();
+      return { earliest: earliestTxn?.date, latest: latestTxn?.date };
     } else {
-      const realTxns = await db.transactions.where('source').notEqual('demo').sortBy('date');
-      if (realTxns.length === 0) return { earliest: undefined, latest: undefined };
-      return { earliest: realTxns[0].date, latest: realTxns[realTxns.length - 1].date };
+      const earliestTxn = await db.transactions.orderBy('date').filter(t => t.source !== 'demo').first();
+      const latestTxn = await db.transactions.orderBy('date').reverse().filter(t => t.source !== 'demo').first();
+      return { earliest: earliestTxn?.date, latest: latestTxn?.date };
     }
   }, [demoMode]);
 
@@ -166,11 +169,17 @@ export default function App() {
   // Live count of Uncategorized transactions for the nav badge, optimized via index counts
   const uncategorizedCount = useLiveQuery(async () => {
     if (demoMode) {
-      const demoTxns = await db.transactions.where('source').equals('demo').toArray();
-      return demoTxns.filter((t) => t.category === 'Uncategorized').length;
+      return await db.transactions
+        .where('category')
+        .equals('Uncategorized')
+        .filter(t => t.source === 'demo')
+        .count();
     } else {
-      const realTxns = await db.transactions.where('source').notEqual('demo').toArray();
-      return realTxns.filter((t) => t.category === 'Uncategorized').length;
+      return await db.transactions
+        .where('category')
+        .equals('Uncategorized')
+        .filter(t => t.source !== 'demo')
+        .count();
     }
   }, [demoMode]) ?? 0;
 
@@ -295,9 +304,9 @@ export default function App() {
               startIcon={<RestartAltIcon />}
               sx={{
                 textTransform: 'none',
-                borderRadius: 2,
+                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                 fontWeight: 600,
-                mr: 1.5,
+                mr: 1,
               }}
             >
               Reset Filters
@@ -310,7 +319,7 @@ export default function App() {
             size="small"
             sx={{
               textTransform: 'none',
-              borderRadius: 2,
+              borderRadius: (theme) => `${theme.shape.borderRadius}px`,
               fontWeight: 600,
               boxShadow: isChatOpen ? '0 2px 8px rgba(25, 118, 210, 0.25)' : 'none',
             }}
@@ -344,7 +353,7 @@ export default function App() {
               : {}),
           }}
         >
-          <PageTransition key={location.pathname === '/' || location.pathname === '/transactions' ? 'dashboard' : location.pathname}>
+          <PageTransition transitionKey={location.pathname === '/' || location.pathname === '/transactions' ? 'dashboard' : location.pathname}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/sort" element={<Sort />} />
@@ -358,6 +367,7 @@ export default function App() {
               <Route path="/local-model" element={<LocalModel />} />
               <Route path="/agent-skills" element={<AgentSkills />} />
               <Route path="/animation-playground" element={<AnimationSettings />} />
+              <Route path="/merchants" element={<Merchants />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </PageTransition>

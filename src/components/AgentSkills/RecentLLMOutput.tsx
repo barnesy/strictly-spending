@@ -19,7 +19,7 @@ export const RecentLLMOutput: React.FC<RecentLLMOutputProps> = ({ chatMessages, 
         component="pre"
         sx={{
           p: 2.5,
-          bgcolor: 'grey.900',
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.default' : 'grey.950',
           color: 'success.main',
           fontFamily: 'monospace',
           fontSize: 12,

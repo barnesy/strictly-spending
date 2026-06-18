@@ -34,15 +34,15 @@ export const highlightKeywords = (text: string) => {
   const regex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
 
   escaped = escaped.replace(regex, (match) => {
-    let color = '#1976d2'; // blue for tools
+    let colorVar = 'var(--highlight-blue)'; // blue for tools
     if (['agent_action', 'gen_ux'].includes(match)) {
-      color = '#9c27b0'; // purple for schema structures
+      colorVar = 'var(--highlight-purple)'; // purple for schema structures
     } else if (['choices', 'confirmation', 'form'].includes(match)) {
-      color = '#2e7d32'; // green for UX states
+      colorVar = 'var(--highlight-green)'; // green for UX states
     } else if (match === 'none') {
-      color = '#ed6c02'; // orange for none
+      colorVar = 'var(--highlight-orange)'; // orange for none
     }
-    return `<span style="color: ${color}; font-weight: 700;">${match}</span>`;
+    return `<span style="color: ${colorVar}; font-weight: 700;">${match}</span>`;
   });
 
   // Make sure trailing newlines render nicely in pre/code
@@ -91,8 +91,12 @@ export const HighlightingEditor = forwardRef<HTMLTextAreaElement, HighlightingEd
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: theme.palette.grey[50],
+          backgroundColor: 'background.default',
           boxSizing: 'border-box',
+          '--highlight-blue': theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main,
+          '--highlight-purple': theme.palette.mode === 'dark' ? theme.palette.secondary.light : theme.palette.secondary.main,
+          '--highlight-green': theme.palette.mode === 'dark' ? '#81c784' : '#2e7d32',
+          '--highlight-orange': theme.palette.mode === 'dark' ? '#ffb74d' : '#ed6c02',
         }}
       >
         {/* Backdrop (rendered under textarea) */}
@@ -104,12 +108,12 @@ export const HighlightingEditor = forwardRef<HTMLTextAreaElement, HighlightingEd
             left: 0,
             right: 0,
             bottom: 0,
-            padding: '24px',
+            padding: '24px max(24px, calc((100% - 900px) / 2))',
             margin: 0,
             fontFamily: 'Consolas, Monaco, "Courier New", monospace',
             fontSize: 13,
             lineHeight: 1.65,
-            color: theme.palette.text.primary,
+            color: 'text.primary',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             overflow: 'hidden', // matched scroll via ref
@@ -148,7 +152,7 @@ export const HighlightingEditor = forwardRef<HTMLTextAreaElement, HighlightingEd
             border: 'none',
             outline: 'none',
             resize: 'none',
-            padding: '24px',
+            padding: '24px max(24px, calc((100% - 900px) / 2))',
             margin: 0,
             overflowY: 'scroll',
             boxSizing: 'border-box',

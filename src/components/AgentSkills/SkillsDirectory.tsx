@@ -49,7 +49,7 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
           onClick={onAddSkill}
           sx={{ textTransform: 'none' }}
         >
-          Add Custom Skill
+          Add custom skill
         </Button>
       </Box>
 
@@ -58,12 +58,12 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
           No skills found. Seeding defaults...
         </Typography>
       ) : (
-        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-          <Table size="small">
-            <TableHead sx={{ bgcolor: 'grey.50' }}>
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: (theme) => `${theme.shape.borderRadius}px`, overflow: 'hidden' }}>
+          <Table sx={{ '& .MuiTableCell-root': { py: 1.5, px: 2 } }}>
+            <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, width: 80 }}>Active</TableCell>
-                <TableCell sx={{ fontWeight: 600, width: 200 }}>Name</TableCell>
+                <TableCell sx={{ fontWeight: 600, width: 300 }}>Name</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
                 <TableCell sx={{ fontWeight: 600, width: 120 }}>Type</TableCell>
                 <TableCell sx={{ fontWeight: 600, width: 100 }} align="right">Actions</TableCell>

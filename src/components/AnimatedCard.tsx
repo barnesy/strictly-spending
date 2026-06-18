@@ -115,7 +115,7 @@ export default function AnimatedCard({
       }}
       sx={(theme) => ({
         p: 3,
-        borderRadius: 4,
+        borderRadius: `${theme.shape.borderRadius}px`,
         borderLeft: suggestedColor ? `5px solid ${suggestedColor}` : '5px solid transparent',
         transition: isAnimating
           ? 'none'

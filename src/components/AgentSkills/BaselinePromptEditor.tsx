@@ -97,7 +97,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
             size="small"
             sx={{ textTransform: 'none', minWidth: 160 }}
           >
-            Reset to Default
+            Reset to default
           </Button>
           <Button
             variant="contained"
@@ -106,7 +106,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
             size="small"
             sx={{ textTransform: 'none', minWidth: 160 }}
           >
-            Save Prompt
+            Save prompt
           </Button>
         </Stack>
       </Box>
@@ -117,10 +117,11 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
           flexDirection: 'row',
           flex: 1,
           p: 0,
-          borderRadius: 2,
+          borderRadius: (theme) => `${theme.shape.borderRadius}px`,
           overflow: 'hidden',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-          border: '1px solid rgba(0,0,0,0.08)',
+          boxShadow: 'none',
+          border: '1px solid',
+          borderColor: 'divider',
         }}
       >
         {/* Left Panel: Sidebar (Reference Guide & Diagnostics) */}
@@ -128,16 +129,17 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
           sx={{
             width: 300,
             flexShrink: 0,
-            borderRight: '1px solid rgba(0,0,0,0.08)',
+            borderRight: '1px solid',
+            borderRightColor: 'divider',
             display: 'flex',
             flexDirection: 'column',
-            bgcolor: '#ffffff',
+            bgcolor: 'background.paper',
             height: '100%',
             overflow: 'hidden',
           }}
         >
           {/* Sidebar Tabs */}
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Tabs
               value={baselineSidebarTab}
               onChange={(_, val) => setBaselineSidebarTab(val)}
@@ -189,13 +191,12 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                       sx={{
                         p: 1.25,
                         cursor: 'pointer',
-                        borderColor: 'rgba(0,0,0,0.06)',
+                        borderColor: 'divider',
                         bgcolor: 'background.default',
                         transition: 'all 0.2s',
                         '&:hover': {
                           borderColor: 'primary.main',
-                          bgcolor: 'rgba(25, 118, 210, 0.02)',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                          bgcolor: 'action.hover',
                         }
                       }}
                     >
@@ -210,7 +211,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                         component="code"
                         sx={{
                           fontFamily: 'monospace',
-                          bgcolor: 'grey.100',
+                          bgcolor: 'action.selected',
                           px: 0.75,
                           py: 0.25,
                           borderRadius: 0.5,
@@ -259,13 +260,12 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                       sx={{
                         p: 1.25,
                         cursor: 'pointer',
-                        borderColor: 'rgba(0,0,0,0.06)',
+                        borderColor: 'divider',
                         bgcolor: 'background.default',
                         transition: 'all 0.2s',
                         '&:hover': {
                           borderColor: 'primary.main',
-                          bgcolor: 'rgba(25, 118, 210, 0.02)',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                          bgcolor: 'action.hover',
                         }
                       }}
                     >
@@ -280,7 +280,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                         component="code"
                         sx={{
                           fontFamily: 'monospace',
-                          bgcolor: 'grey.100',
+                          bgcolor: 'action.selected',
                           px: 0.75,
                           py: 0.25,
                           borderRadius: 0.5,
@@ -338,7 +338,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                     }
                     sx={{ textTransform: 'none', fontWeight: 600 }}
                   >
-                    {isBaselineRunningSuite ? 'Running Suite...' : 'Run Diagnostics'}
+                    {isBaselineRunningSuite ? 'Running suite...' : 'Run diagnostics'}
                   </Button>
                   {isBaselineRunningSuite && (
                     <Typography variant="caption" sx={{ fontStyle: 'italic', textAlign: 'center', color: 'text.secondary', display: 'block' }}>
@@ -348,7 +348,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                 </Stack>
               </Box>
 
-              <Box sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)', my: 1.5 }} />
+              <Box sx={{ borderBottom: '1px solid', borderBottomColor: 'divider', my: 1.5 }} />
 
               <Button
                 variant="outlined"
@@ -364,7 +364,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                 sx={{ mb: 2, textTransform: 'none', fontWeight: 600 }}
                 fullWidth
               >
-                Add Baseline Test Case
+                Add baseline test case
               </Button>
 
               {/* Test Cases List */}
@@ -379,7 +379,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                   mb: 1.5,
                 }}
               >
-                Baseline Test Cases ({baselineTestCases.length})
+                Baseline test cases ({baselineTestCases.length})
               </Typography>
 
               <Stack spacing={1.5} sx={{ pb: 2 }}>
@@ -397,7 +397,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                           ? 'success.light'
                           : res?.success === false
                           ? 'error.light'
-                          : 'grey.200',
+                          : 'divider',
                         bgcolor: res?.running
                           ? 'rgba(25, 118, 210, 0.02)'
                           : res?.success === true
@@ -405,7 +405,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                           : res?.success === false
                           ? 'rgba(244, 67, 54, 0.01)'
                           : 'background.paper',
-                        boxShadow: res?.running ? '0 0 8px rgba(25, 118, 210, 0.1)' : 'none',
+                        boxShadow: 'none',
                       }}
                     >
                       <Stack spacing={1}>
@@ -454,10 +454,10 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                                 py: 0,
                                 px: 1,
                                 minWidth: 0,
-                                borderRadius: 1,
+                                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                               }}
                             >
-                              {res?.running ? 'Running...' : 'Run Test'}
+                              {res?.running ? 'Running...' : 'Run test'}
                             </Button>
                           </Stack>
                         </Stack>
@@ -470,7 +470,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                         </Typography>
 
                         {res && !res.running && (
-                          <Box sx={{ mt: 0.5, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                          <Box sx={{ mt: 0.5, p: 1, bgcolor: 'action.hover', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
                             <Typography variant="caption" color="text.primary" sx={{ fontSize: 10.5, display: 'block', fontStyle: 'italic', wordBreak: 'break-word' }}>
                               <strong>AI Reason:</strong> {res.reasoning}
                             </Typography>
@@ -479,7 +479,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                               onClick={() => setSelectedInspectTest({ index, prompt: tc.prompt, criteria: tc.criteria, result: res })}
                               sx={{ textTransform: 'none', fontSize: 10, mt: 0.5, p: 0, minWidth: 0, display: 'inline-block' }}
                             >
-                              Inspect Output
+                              Inspect output
                             </Button>
                           </Box>
                         )}
@@ -521,13 +521,14 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
         </Box>
 
         {/* Right Panel: Light Code Editor Canvas */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'grey.50', minWidth: 0, position: 'relative' }}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.default', minWidth: 0, position: 'relative' }}>
           {/* Editor Tab bar */}
           <Box
             sx={{
               height: 40,
-              bgcolor: 'grey.100',
-              borderBottom: '1px solid rgba(0,0,0,0.08)',
+              bgcolor: 'action.hover',
+              borderBottom: '1px solid',
+              borderBottomColor: 'divider',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -542,7 +543,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                   gap: 1,
                   px: 2.5,
                   height: '100%',
-                  bgcolor: 'grey.50',
+                  bgcolor: 'background.paper',
                   borderTop: '2px solid',
                   borderColor: 'primary.main',
                   color: 'text.primary',
@@ -593,13 +594,14 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                   maxHeight: '260px',
                   overflowY: 'auto',
                   zIndex: 100,
-                  border: '1px solid rgba(0,0,0,0.12)',
-                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
-                  bgcolor: '#ffffff',
+                  bgcolor: 'background.paper',
                 }}
               >
-                <Box sx={{ p: 1.25, borderBottom: '1px solid rgba(0,0,0,0.06)', bgcolor: 'grey.50' }}>
+                <Box sx={{ p: 1.25, borderBottom: '1px solid', borderBottomColor: 'divider', bgcolor: 'action.hover' }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                     Select Action to Insert
                   </Typography>
@@ -614,13 +616,13 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                         onMouseEnter={() => setSelectedAutocompleteIndex(idx)}
                         sx={{
                           p: 1.25,
-                          borderRadius: 1,
+                          borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                           cursor: 'pointer',
-                          bgcolor: isSelected ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+                          bgcolor: isSelected ? 'action.selected' : 'transparent',
                           color: isSelected ? 'primary.main' : 'text.primary',
                           transition: 'all 0.15s',
                           '&:hover': {
-                            bgcolor: 'rgba(25, 118, 210, 0.08)',
+                            bgcolor: 'action.selected',
                           }
                         }}
                       >
@@ -633,7 +635,7 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                             sx={{
                               fontFamily: 'monospace',
                               fontSize: 10,
-                              bgcolor: isSelected ? 'rgba(25, 118, 210, 0.12)' : 'grey.100',
+                              bgcolor: isSelected ? 'rgba(25, 118, 210, 0.12)' : 'action.hover',
                               color: isSelected ? 'primary.main' : 'text.secondary',
                               px: 0.5,
                               py: 0.2,
@@ -659,8 +661,9 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
           <Box
             sx={{
               height: 28,
-              bgcolor: 'grey.100',
-              borderTop: '1px solid rgba(0,0,0,0.08)',
+              bgcolor: 'action.hover',
+              borderTop: '1px solid',
+              borderTopColor: 'divider',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',

@@ -88,7 +88,7 @@ export default function AnimatedLogo({ scale = 1, spinSpeed = 0.02, sx = {} }: A
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: isDragging ? 'none' : 'transform 150ms ease-out',
+          transition: isDragging ? 'none' : 'none', // Remove CSS transition to allow smooth rAF spinning
         }}
       >
         {layers.map((z) => {

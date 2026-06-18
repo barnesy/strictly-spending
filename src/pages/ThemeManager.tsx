@@ -20,52 +20,52 @@ import { db } from '../db';
 const THEME_PALETTES = [
   {
     name: 'Grand Budapest',
-    light: { primary: '#E8A598', secondary: '#F3B562', background: '#FAD9C1', paper: '#FCE5D7' },
+    light: { primary: '#E8A598', secondary: '#F3B562', background: '#FDE4D1', paper: '#FEF0E7' },
     dark: { primary: '#E8A598', secondary: '#F3B562', background: '#3D2B26', paper: '#4A342E' },
   },
   {
     name: 'Moonrise 1',
-    light: { primary: '#E2C044', secondary: '#587B7F', background: '#D9D0B8', paper: '#EAE4D3' },
+    light: { primary: '#E2C044', secondary: '#587B7F', background: '#EAE4D3', paper: '#F5F2E8' },
     dark: { primary: '#E2C044', secondary: '#587B7F', background: '#2B2B23', paper: '#38382E' },
   },
   {
     name: 'Royal 1',
-    light: { primary: '#9C2A20', secondary: '#71828C', background: '#EAE2D6', paper: '#F4F0EA' },
+    light: { primary: '#9C2A20', secondary: '#71828C', background: '#F5F0E6', paper: '#FCF9F5' },
     dark: { primary: '#E04A3D', secondary: '#8A9BA6', background: '#2B2624', paper: '#38322F' },
   },
   {
     name: 'Moonrise 2',
-    light: { primary: '#C68A47', secondary: '#708A81', background: '#D2C5A9', paper: '#E6DECA' },
+    light: { primary: '#C68A47', secondary: '#708A81', background: '#E6DECA', paper: '#F2EEDF' },
     dark: { primary: '#DBA15E', secondary: '#82A197', background: '#2E2B25', paper: '#3D3831' },
   },
   {
     name: 'Cavalcanti',
-    light: { primary: '#B28F27', secondary: '#193E2B', background: '#D3C6A6', paper: '#E4DCC4' },
+    light: { primary: '#B28F27', secondary: '#193E2B', background: '#E4DCC4', paper: '#F0EAD6' },
     dark: { primary: '#D1AC36', secondary: '#255C40', background: '#272621', paper: '#33322C' },
   },
   {
     name: 'Royal 2',
-    light: { primary: '#F29D96', secondary: '#648C74', background: '#E4D0C0', paper: '#F0E4DB' },
+    light: { primary: '#F29D96', secondary: '#648C74', background: '#F0E4DB', paper: '#F8F1EB' },
     dark: { primary: '#F29D96', secondary: '#648C74', background: '#362E2A', paper: '#453C37' },
   },
   {
     name: 'Chevalier',
-    light: { primary: '#F2C14E', secondary: '#3B5243', background: '#DACBBA', paper: '#EBE1D4' },
+    light: { primary: '#F2C14E', secondary: '#3B5243', background: '#EBE1D4', paper: '#F5F0E8' },
     dark: { primary: '#F2C14E', secondary: '#53735E', background: '#2E2D2B', paper: '#3D3B38' },
   },
   {
     name: 'Zissou',
-    light: { primary: '#E62729', secondary: '#33829E', background: '#C9D2CB', paper: '#DFE5E0' },
+    light: { primary: '#E62729', secondary: '#33829E', background: '#DFE5E0', paper: '#EFF3F0' },
     dark: { primary: '#F05253', secondary: '#48A2C2', background: '#212626', paper: '#2C3333' },
   },
   {
     name: 'Fantastic Fox',
-    light: { primary: '#D3612C', secondary: '#9A1622', background: '#DBC4A4', paper: '#EBDBC4' },
+    light: { primary: '#D3612C', secondary: '#9A1622', background: '#EBDBC4', paper: '#F5EAD6' },
     dark: { primary: '#E87D4A', secondary: '#C22635', background: '#332921', paper: '#42362C' },
   },
   {
     name: 'Darjeeling',
-    light: { primary: '#F37324', secondary: '#118C74', background: '#D0CDC0', paper: '#E6E4DB' },
+    light: { primary: '#F37324', secondary: '#118C74', background: '#E6E4DB', paper: '#F3F1EC' },
     dark: { primary: '#F37324', secondary: '#1BA88D', background: '#262A29', paper: '#323837' },
   },
 ];

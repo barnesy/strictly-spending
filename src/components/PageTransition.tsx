@@ -3,21 +3,30 @@ import { Box } from '@mui/material';
 
 interface PageTransitionProps {
   children: React.ReactNode;
+  transitionKey?: string;
 }
 
-export function PageTransition({ children }: PageTransitionProps) {
+export function PageTransition({ children, transitionKey }: PageTransitionProps) {
   const [active, setActive] = useState(false);
 
   useEffect(() => {
-    // Request a frame timeout or double rAF to trigger transition classes after mount
+    // Reset active state to re-trigger the transition
+    setActive(false);
+    
+    // Request a double rAF to ensure the browser paints the inactive state first
+    let rAFId2: number;
     const rAFId = requestAnimationFrame(() => {
-      setActive(true);
+      rAFId2 = requestAnimationFrame(() => {
+        setActive(true);
+      });
     });
+    
     return () => {
       cancelAnimationFrame(rAFId);
+      if (rAFId2) cancelAnimationFrame(rAFId2);
       setActive(false);
     };
-  }, []);
+  }, [transitionKey]);
 
   return (
     <Box

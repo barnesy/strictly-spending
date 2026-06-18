@@ -73,7 +73,7 @@ export default function AnimationSettings() {
           color="warning"
           startIcon={<SettingsBackupRestoreIcon />}
           onClick={handleReset}
-          sx={{ textTransform: 'none', borderRadius: 2 }}
+          sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}
         >
           Reset to Defaults
         </Button>
@@ -87,7 +87,7 @@ export default function AnimationSettings() {
           <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
             <Stack spacing={3}>
               {/* Group 1: Timing & Easing */}
-              <Paper sx={{ p: 3, borderRadius: 3 }}>
+              <Paper sx={{ p: 3, borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'primary.main' }}>
                   1. Timing & Easing
                 </Typography>
@@ -158,7 +158,7 @@ export default function AnimationSettings() {
               </Paper>
 
               {/* Group 2: Step 1 - Start State (0% / Active Card) */}
-              <Paper sx={{ p: 3, borderRadius: 3 }}>
+              <Paper sx={{ p: 3, borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'info.main' }}>
                   2. Step 1: Start (0% Timeline / Active Card)
                 </Typography>
@@ -258,7 +258,7 @@ export default function AnimationSettings() {
               </Paper>
 
               {/* Group 3: Step 2 - Midpoint Flight */}
-              <Paper sx={{ p: 3, borderRadius: 3 }}>
+              <Paper sx={{ p: 3, borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'secondary.main' }}>
                   3. Step 2: Midpoint Flight
                 </Typography>
@@ -372,7 +372,7 @@ export default function AnimationSettings() {
               </Paper>
 
               {/* Group 4: Step 3 - Final Landing */}
-              <Paper sx={{ p: 3, borderRadius: 3 }}>
+              <Paper sx={{ p: 3, borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'success.main' }}>
                   4. Step 3: Final Landing (100% Timeline)
                 </Typography>
@@ -508,14 +508,14 @@ export default function AnimationSettings() {
           <Paper
             sx={{
               p: 3,
-              borderRadius: 3,
-              border: '1px solid',
-              borderColor: 'divider',
+              borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+              border: 'none',
               height: '100%',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
-              bgcolor: 'background.default',
+              bgcolor: 'transparent',
+              boxShadow: 'none',
             }}
           >
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, textAlign: 'center' }}>
@@ -531,8 +531,6 @@ export default function AnimationSettings() {
                 justifyContent: 'center',
                 position: 'relative',
                 overflow: 'hidden',
-                borderRadius: 2,
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? '#121212' : '#f5f5f5',
                 py: 4,
                 width: '100%',
               }}
@@ -598,7 +596,7 @@ export default function AnimationSettings() {
                     } else if (previewState === 'inspectStart' || previewState === 'idle') {
                       transform =
                         stackIndex === 0
-                          ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
+                           ? `perspective(1200px) translate3d(${config.startX}px, ${config.startY}px, ${config.startZ}px) rotateX(${config.startRotationX}deg) rotateY(${config.startRotationY}deg) rotateZ(${config.startRotationZ}deg) scale(${config.startScale})`
                           : stackIndex === 1
                           ? 'perspective(1200px) translate3d(0, 16px, -45px) rotateX(7deg) rotateY(-7deg) rotateZ(-1.5deg) scale(0.96)'
                           : `perspective(1200px) translate3d(${config.finalXRight}px, ${config.finalY}px, ${config.finalZ}px) rotateX(${config.finalRotationX}deg) rotateY(${config.finalRotationY}deg) rotateZ(${config.finalRotationZ}deg) scale(${config.finalScale})`;
@@ -649,7 +647,7 @@ export default function AnimationSettings() {
                             </Typography>
                           </Box>
                           {stackIndex === 0 && (
-                            <Box sx={{ bgcolor: 'action.selected', p: 1, borderRadius: 2 }}>
+                            <Box sx={{ bgcolor: 'action.selected', p: 1, borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
                               <Typography variant="caption" color="text.secondary" display="block">
                                 Animation Status:
                               </Typography>
@@ -687,7 +685,7 @@ export default function AnimationSettings() {
                   variant={previewState === 'inspectStart' ? 'contained' : 'outlined'}
                   color="info"
                   onClick={() => setPreviewState('inspectStart')}
-                  sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
+                  sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
                 >
                   Start (0%)
                 </Button>
@@ -696,7 +694,7 @@ export default function AnimationSettings() {
                   variant={previewState === 'inspectMid' ? 'contained' : 'outlined'}
                   color="secondary"
                   onClick={() => setPreviewState('inspectMid')}
-                  sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
+                  sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
                 >
                   Midpoint
                 </Button>
@@ -705,7 +703,7 @@ export default function AnimationSettings() {
                   variant={previewState === 'inspectEnd' ? 'contained' : 'outlined'}
                   color="success"
                   onClick={() => setPreviewState('inspectEnd')}
-                  sx={{ textTransform: 'none', borderRadius: 1.5, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
+                  sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, fontSize: 11, py: 0.5, px: 1, minWidth: 0, flex: '1 1 auto' }}
                 >
                   Landing (100%)
                 </Button>
@@ -719,7 +717,7 @@ export default function AnimationSettings() {
                 color="primary"
                 startIcon={<ArrowForwardIcon />}
                 onClick={() => triggerPreview('right')}
-                sx={{ flex: 1, textTransform: 'none', borderRadius: 2, whiteSpace: 'nowrap', px: 1.5 }}
+                sx={{ flex: 1, textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, whiteSpace: 'nowrap', px: 1.5 }}
               >
                 Arrow Right (Sort)
               </Button>
@@ -728,7 +726,7 @@ export default function AnimationSettings() {
                 color="secondary"
                 startIcon={<ArrowBackIcon />}
                 onClick={() => triggerPreview('left')}
-                sx={{ flex: 1, textTransform: 'none', borderRadius: 2, whiteSpace: 'nowrap', px: 1.5 }}
+                sx={{ flex: 1, textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, whiteSpace: 'nowrap', px: 1.5 }}
               >
                 Arrow Left (Back / Undo)
               </Button>
@@ -736,7 +734,7 @@ export default function AnimationSettings() {
                 variant="outlined"
                 color="inherit"
                 onClick={() => setPreviewState('idle')}
-                sx={{ flex: 1, textTransform: 'none', borderRadius: 2, whiteSpace: 'nowrap', px: 1.5 }}
+                sx={{ flex: 1, textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, whiteSpace: 'nowrap', px: 1.5 }}
               >
                 Reset
               </Button>

@@ -44,7 +44,7 @@ export const InspectDiagnosticModal: React.FC<InspectDiagnosticModalProps> = ({
       maxWidth="md"
       fullWidth
       PaperProps={{
-        sx: { borderRadius: 2 }
+        sx: { borderRadius: (theme) => `${theme.shape.borderRadius}px` }
       }}
     >
       <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
@@ -57,7 +57,7 @@ export const InspectDiagnosticModal: React.FC<InspectDiagnosticModalProps> = ({
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.5 }}>
                 Test Prompt / Input
               </Typography>
-              <Paper variant="outlined" sx={{ p: 1.5, mt: 0.5, bgcolor: 'grey.50', fontFamily: 'monospace', fontSize: 12 }}>
+              <Paper variant="outlined" sx={{ p: 1.5, mt: 0.5, bgcolor: 'action.hover', fontFamily: 'monospace', fontSize: 12 }}>
                 {selectedInspectTest.prompt}
               </Paper>
             </Box>
@@ -66,7 +66,7 @@ export const InspectDiagnosticModal: React.FC<InspectDiagnosticModalProps> = ({
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.5 }}>
                 Expected Target Criteria
               </Typography>
-              <Paper variant="outlined" sx={{ p: 1.5, mt: 0.5, bgcolor: 'grey.50', fontSize: 12 }}>
+              <Paper variant="outlined" sx={{ p: 1.5, mt: 0.5, bgcolor: 'action.hover', fontSize: 12 }}>
                 {selectedInspectTest.criteria}
               </Paper>
             </Box>
@@ -100,7 +100,7 @@ export const InspectDiagnosticModal: React.FC<InspectDiagnosticModalProps> = ({
                 sx={{
                   p: 2,
                   mt: 0.5,
-                  bgcolor: 'grey.900',
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.default' : 'grey.950',
                   color: 'success.main',
                   fontFamily: 'monospace',
                   fontSize: 12.5,

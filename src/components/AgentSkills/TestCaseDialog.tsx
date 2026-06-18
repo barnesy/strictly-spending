@@ -50,7 +50,7 @@ export const TestCaseDialog: React.FC<TestCaseDialogProps> = ({
       maxWidth="sm"
       fullWidth
       PaperProps={{
-        sx: { borderRadius: 2 }
+        sx: { borderRadius: (theme) => `${theme.shape.borderRadius}px` }
       }}
     >
       <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
