@@ -68,7 +68,7 @@ export default function AnimationSettings() {
 
       <Grid container spacing={4}>
         {/* Sliders Panel */}
-        <Grid item xs={12} md={7}>
+        <Grid item xs={12} md={5}>
           <Stack spacing={3}>
             {/* Group 1: Timing & Easing */}
             <Paper sx={{ p: 3, borderRadius: 3 }}>
@@ -496,7 +496,7 @@ export default function AnimationSettings() {
         </Grid>
 
         {/* Live Preview Panel */}
-        <Grid item xs={12} md={5}>
+        <Grid item xs={12} md={7}>
           <Box sx={{ position: 'sticky', top: 24 }}>
             <Paper
               sx={{
@@ -504,6 +504,7 @@ export default function AnimationSettings() {
                 borderRadius: 3,
                 border: '1px solid',
                 borderColor: 'divider',
+                height: 'calc(100vh - 140px)',
                 minHeight: 580,
                 display: 'flex',
                 flexDirection: 'column',
