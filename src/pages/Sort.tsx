@@ -41,6 +41,7 @@ import SortCard from '../components/SortCard';
 import SortCategoryGrid from '../components/SortCategoryGrid';
 import SortEmptyState from '../components/SortEmptyState';
 import { localAI } from '../ai';
+import { playThinkingSound, stopThinkingSound, playSuccessSound, playFailSound } from '../audio';
 
 export default function Sort() {
   const demoMode = useFilters((s) => s.demoMode);
@@ -214,6 +215,8 @@ export default function Sort() {
         return updated;
       });
 
+      playThinkingSound();
+
       try {
         if (!localAI.isLoaded) {
           console.log('[Sort.tsx] localAI is not loaded. Initializing...');
@@ -223,6 +226,7 @@ export default function Sort() {
 
         if (!active) {
           console.log('[Sort.tsx] fetchSuggestion aborted because component unmounted or active is false.');
+          stopThinkingSound();
           return;
         }
 
@@ -242,20 +246,30 @@ export default function Sort() {
         const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal);
         console.log('[Sort.tsx] localAI.reviewTransactionsWithRules results:', results);
 
-        if (!active) return;
+        if (!active) {
+          stopThinkingSound();
+          return;
+        }
         if (results && results.length > 0) {
           const result = results[0];
           if (result && result.category && result.category !== 'Uncategorized' && catNames.includes(result.category)) {
             console.log('[Sort.tsx] Setting AI suggestion for key:', key, result);
+            playSuccessSound();
             setAiSuggestions(prev => ({ ...prev, [key]: result }));
           } else {
             console.log('[Sort.tsx] Suggestion category invalid or Uncategorized:', result);
+            playFailSound();
           }
+        } else {
+          playFailSound();
         }
       } catch (err: any) {
         if (active && err.name !== 'AbortError') {
           console.error('[Sort.tsx] AI Auto-Suggest failed:', err);
+          playFailSound();
           setAiErrors(prev => ({ ...prev, [key]: err.message || String(err) }));
+        } else if (err.name === 'AbortError') {
+          stopThinkingSound();
         }
       } finally {
         fetchingKeysRef.current.delete(key);
@@ -275,6 +289,7 @@ export default function Sort() {
     return () => {
       active = false;
       controller.abort();
+      stopThinkingSound();
     };
   }, [currentCard?.merchantKey, aiSuggestEnabled, categories]);
 
@@ -494,19 +509,7 @@ export default function Sort() {
               sx={{ height: 26, borderRadius: 2 }}
             />
           )}
-          {selectionsCount > 0 && (
-            <Button
-              size="small"
-              onClick={() => {
-                if (window.confirm('Clear all your current pending selections?')) {
-                  setSelections({});
-                }
-              }}
-              sx={{ color: 'error.main' }}
-            >
-              Reset selections
-            </Button>
-          )}
+
           <Button
             size="small"
             startIcon={<HelpOutlineIcon />}
@@ -540,14 +543,27 @@ export default function Sort() {
                 You have categorized **{selectionsCount}** merchant(s) in this session.
               </Typography>
             </Box>
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleApplySelections}
-              sx={{ fontWeight: 700 }}
-            >
-              Apply {selectionsCount} selection(s)
-            </Button>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Button
+                size="small"
+                onClick={() => {
+                  if (window.confirm('Clear all your current pending selections?')) {
+                    setSelections({});
+                  }
+                }}
+                sx={{ color: 'error.main', fontWeight: 600 }}
+              >
+                Reset selections
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={handleApplySelections}
+                sx={{ fontWeight: 700 }}
+              >
+                Apply {selectionsCount} selection(s)
+              </Button>
+            </Stack>
           </Stack>
         </Paper>
       )}
@@ -585,45 +601,39 @@ export default function Sort() {
               const sel = selections[card.merchantKey];
               const isActive = idx === currentIndex;
               const isSelected = !!sel?.category;
+              const chosenColor = isSelected ? lookupCategoryColor(sel.category) : undefined;
+              
               return (
                 <Button
                   key={card.merchantKey}
                   variant={isActive ? "contained" : "outlined"}
-                  color={isSelected ? "success" : isActive ? "primary" : "inherit"}
+                  color={isActive ? "primary" : "inherit"}
                   onClick={() => setCurrentIndex(idx)}
                   sx={{
                     flexShrink: 0,
                     px: 2,
                     py: 1,
-                    borderWidth: isActive ? 2 : 1,
+                    borderWidth: isSelected ? 3 : (isActive ? 2 : 1),
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     minWidth: 140,
                     maxWidth: 180,
-                    bgcolor: isActive ? 'primary.main' : isSelected ? 'success.light' : 'background.paper',
-                    color: isActive ? 'primary.contrastText' : isSelected ? 'success.contrastText' : 'text.primary',
-                    borderColor: isActive ? 'primary.main' : isSelected ? 'success.main' : 'divider',
+                    bgcolor: isActive ? 'primary.main' : 'background.paper',
+                    color: isActive ? 'primary.contrastText' : 'text.primary',
+                    borderColor: isSelected ? chosenColor : (isActive ? 'primary.main' : 'divider'),
                     '&:hover': {
-                      bgcolor: isActive ? 'primary.dark' : isSelected ? 'success.main' : 'action.hover',
+                      bgcolor: isActive ? 'primary.dark' : 'action.hover',
                     }
                   }}
                 >
                   <Typography
                     variant="body2"
                     noWrap
-                    sx={{ fontWeight: isActive ? 700 : 600, fontSize: '0.8rem', width: '100%', textAlign: 'center' }}
+                    sx={{ fontWeight: isActive || isSelected ? 700 : 600, fontSize: '0.8rem', width: '100%', textAlign: 'center' }}
                   >
                     {card.merchantKey}
                   </Typography>
-                  {isSelected && (
-                    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
-                      <CheckIcon sx={{ fontSize: 12 }} />
-                      <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
-                        {sel.category}
-                      </Typography>
-                    </Stack>
-                  )}
                 </Button>
               );
             })}

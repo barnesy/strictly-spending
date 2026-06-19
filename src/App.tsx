@@ -12,6 +12,7 @@ import PsychologyIcon from '@mui/icons-material/Psychology';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import TuneIcon from '@mui/icons-material/Tune';
 import BrushIcon from '@mui/icons-material/Brush';
+import BugReportIcon from '@mui/icons-material/BugReport';
 import {
   Group as PanelGroup,
   Panel,
@@ -283,6 +284,31 @@ export default function App() {
               </Menu>
             )}
           </Box>
+          <Button
+            onClick={async () => {
+              const url = "https://github.com/barnesy/strictly-spending/issues/new";
+              const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+              if (isTauri) {
+                const { open } = await import('@tauri-apps/plugin-shell');
+                await open(url);
+              } else {
+                window.open(url, '_blank');
+              }
+            }}
+            variant="text"
+            color="inherit"
+            size="small"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 500,
+              color: 'text.secondary',
+              mr: 1,
+              '&:hover': { color: 'text.primary', bgcolor: 'transparent' }
+            }}
+            startIcon={<BugReportIcon fontSize="small" />}
+          >
+            Feedback
+          </Button>
           <Button
             onClick={() => setIsChatOpen((prev) => !prev)}
             variant={isChatOpen ? 'contained' : 'outlined'}

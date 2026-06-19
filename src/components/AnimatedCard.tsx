@@ -42,8 +42,8 @@ export default function AnimatedCard({
 
     if (prev !== undefined && prev !== stackIndex) {
       if (
-        (stackIndex === 0 && prev === -1) || // Entering (undo)
-        (stackIndex <= -1 && prev === 0)     // Leaving (sorted/skipped)
+        (stackIndex === 0 && prev <= -1) || // Entering (undo or jump back)
+        (stackIndex <= -1 && prev === 0)    // Leaving (sorted/skipped or jump forward)
       ) {
         setLocalAnimating(true);
       }
@@ -53,7 +53,7 @@ export default function AnimatedCard({
   const isAnimating = isAnimatingOverride !== undefined
     ? isAnimatingOverride
     : (localAnimating ||
-       (stackIndex === 0 && prevStackIndexRef.current === -1) ||
+       (stackIndex === 0 && prevStackIndexRef.current !== undefined && prevStackIndexRef.current <= -1) ||
        (stackIndex <= -1 && prevStackIndexRef.current === 0));
 
   // Determine transform based on stack index and config settings
@@ -80,7 +80,7 @@ export default function AnimatedCard({
   let animation = 'none';
   if (animationOverride !== undefined) {
     animation = animationOverride;
-  } else if (stackIndex === 0 && prevStackIndexRef.current === -1) {
+  } else if (stackIndex === 0 && prevStackIndexRef.current !== undefined && prevStackIndexRef.current <= -1) {
     animation = zipDirection === 'right'
       ? `entryFlipRight ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
       : `entryFlipLeft ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`;
@@ -113,14 +113,20 @@ export default function AnimatedCard({
           setLocalAnimating(false);
         }
       }}
-      sx={(theme) => ({
-        p: 3,
-        borderRadius: `${theme.shape.borderRadius}px`,
-        borderLeft: suggestedColor ? `5px solid ${suggestedColor}` : '5px solid transparent',
-        transition: isAnimating
-          ? 'none'
-          : `transform ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}), opacity ${config.duration}ms ease`,
-        transform,
+      sx={(theme) => {
+        const disableTransition = 
+          isAnimating || 
+          (stackIndex <= -1 && prevStackIndexRef.current !== undefined && prevStackIndexRef.current > 0) ||
+          (stackIndex > 0 && prevStackIndexRef.current !== undefined && prevStackIndexRef.current <= -1);
+
+        return {
+          p: 3,
+          borderRadius: `${theme.shape.borderRadius}px`,
+          borderLeft: suggestedColor ? `5px solid ${suggestedColor}` : '5px solid transparent',
+          transition: disableTransition
+            ? 'none'
+            : `transform ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}), opacity ${config.duration}ms ease`,
+          transform,
         opacity: (isAnimating || (stackIndex >= 0 && stackIndex <= 2)) ? 1 : 0,
         boxShadow: stackIndex === 0 || chosenColor
           ? theme.palette.mode === 'dark'
@@ -146,7 +152,8 @@ export default function AnimatedCard({
         display: 'flex',
         flexDirection: 'column',
         animation,
-      })}
+        };
+      }}
     >
       {children}
     </Paper>
