@@ -260,8 +260,10 @@ export interface SkillTestCase {
 }
 
 export interface AgentSkillStage {
+  id?: string;
   title: string;
   requiredAction: string;
+  systemPromptExtension?: string;
 }
 
 export interface AgentSkill {
@@ -271,6 +273,7 @@ export interface AgentSkill {
   systemPromptExtension: string;
   enabled: boolean;
   isBuiltIn?: boolean;
+  isModified?: boolean;
   testCases?: SkillTestCase[];
   stages?: AgentSkillStage[];
 }

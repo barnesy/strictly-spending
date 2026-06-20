@@ -232,6 +232,45 @@ export function getAppTheme(config: ThemeConfig) {
           }),
         },
       },
+      MuiTableCell: {
+        styleOverrides: {
+          root: {
+            paddingTop: '16px !important',
+            paddingBottom: '16px !important',
+            paddingLeft: '24px !important',
+            paddingRight: '24px !important',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: 250,
+          },
+          head: {
+            position: 'sticky',
+            top: 0,
+            backgroundColor: bgDefault,
+            zIndex: 2,
+          },
+          footer: {
+            position: 'sticky',
+            bottom: 0,
+            backgroundColor: bgDefault,
+            zIndex: 2,
+          },
+        },
+      },
+      MuiTableRow: {
+        styleOverrides: {
+          root: {
+            backgroundColor: bgPaper,
+            '&.Mui-selected, &.Mui-selected:hover': {
+              backgroundColor: mode === 'light' ? 'rgba(25, 118, 210, 0.08)' : 'rgba(144, 202, 249, 0.16)',
+            },
+            '&.MuiTableRow-hover:hover': {
+              backgroundColor: mode === 'light' ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.08)',
+            },
+          },
+        },
+      },
     },
   });
 }

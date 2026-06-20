@@ -18,12 +18,11 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Chip,
-  Table,
   TableHead,
   TableRow,
   TableCell,
   TableBody,
-  TableContainer,
+  TableFooter,
   TablePagination,
   Tooltip,
   Alert,
@@ -37,6 +36,7 @@ import {
 } from '@mui/material';
 import { SCHEDULE_C_CATEGORIES } from '../taxUtils';
 import PageLoader from '../components/PageLoader';
+import DataTable from '../components/DataTable';
 import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -61,6 +61,7 @@ import {
   recurrenceLabel,
 } from '../recurrence';
 import type { Transaction } from '../types';
+import { useDeferredRender } from '../hooks/useDeferredRender';
 
 export default function Dashboard() {
   const location = useLocation();
@@ -144,6 +145,8 @@ export default function Dashboard() {
   const transactions = useDataStore((s) => s.transactions);
   const accountsAll = useDataStore((s) => s.accounts);
   const categories = useDataStore((s) => s.categories);
+  const globalRecurrenceMap = useDataStore((s) => s.recurrenceMap);
+  const globalDemoRecurrenceMap = useDataStore((s) => s.demoRecurrenceMap);
   const dbTxnCount = transactions.length;
   const dbAcctCount = accountsAll.length;
 
@@ -173,7 +176,7 @@ export default function Dashboard() {
   }, [transactions]);
   const deferredForecastTxnsAll = useDeferredValue(forecastTxnsAll);
 
-  const merchantOverrides = useDataStore((s) => s.merchantOverrides);
+
 
   // Demo-mode filter: hide real accounts/transactions.
   const accounts = useMemo(
@@ -197,10 +200,8 @@ export default function Dashboard() {
         : deferredForecastTxnsAll?.filter((t) => t.source !== 'demo'),
     [deferredForecastTxnsAll, demoMode]
   );
-  const recurrenceMap = useMemo(
-    () => buildRecurrenceMap(forecastTxns || [], merchantOverrides || []),
-    [forecastTxns, merchantOverrides]
-  );
+  
+  const recurrenceMap = demoMode ? globalDemoRecurrenceMap : globalRecurrenceMap;
 
   const seenAccountIds = useFilters((s) => s.seenAccountIds);
   const setSeenAccounts = useFilters((s) => s.setSeenAccounts);
@@ -320,6 +321,11 @@ export default function Dashboard() {
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
   const isLoading = !accounts || !categories || !allTxns || dbTxnCount === undefined || dbAcctCount === undefined;
+  const shouldRender = useDeferredRender();
+
+  if (isLoading || !shouldRender) {
+    return <PageLoader isLoading={true}>{false}</PageLoader>;
+  }
 
   if (dbTxnCount === 0) {
     return (
@@ -339,8 +345,7 @@ export default function Dashboard() {
 
   const mainTable = (
     <Stack spacing={2} sx={{ height: '100%' }}>
-      <TableContainer sx={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 1, bgcolor: 'background.paper', flex: 1, minHeight: 0, overflow: 'auto', ...subtleScrollSx }}>
-        <Table size="small" stickyHeader>
+      <DataTable containerSx={{ border: '1px solid rgba(0,0,0,0.08)', bgcolor: 'background.paper', ...subtleScrollSx }} size="small" stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>Date</TableCell>
@@ -478,20 +483,22 @@ export default function Dashboard() {
               </TableRow>
             )}
           </TableBody>
-        </Table>
-        <TablePagination
-          component="div"
-          count={visibleTxns.length}
-          page={page}
-          onPageChange={(_, p) => setPage(p)}
-          rowsPerPage={pageSize}
-          onRowsPerPageChange={(e) => {
-            setPageSize(Number(e.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[25, 50, 100, 250]}
-        />
-      </TableContainer>
+          <TableFooter>
+            <TableRow>
+              <TablePagination
+                count={visibleTxns.length}
+                page={page}
+                onPageChange={(_, p) => setPage(p)}
+                rowsPerPage={pageSize}
+                onRowsPerPageChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(0);
+                }}
+                rowsPerPageOptions={[25, 50, 100, 250]}
+              />
+            </TableRow>
+          </TableFooter>
+        </DataTable>
     </Stack>
   );
 
@@ -924,7 +931,7 @@ function TopMerchantsCard({
           ...subtleScrollSx,
         }}
       >
-        <Table size="small" stickyHeader>
+        <DataTable component={Box} containerSx={{ border: 'none', borderRadius: 0 }} size="small" stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>Merchant</TableCell>
@@ -982,7 +989,7 @@ function TopMerchantsCard({
               </TableRow>
             )}
           </TableBody>
-        </Table>
+        </DataTable>
       </Box>
       {editingMerchant && (
         <BulkRecategorizeDialog

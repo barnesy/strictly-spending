@@ -34,7 +34,7 @@ export function GenUXConfirmation({ options, onConfirm, disabled }: GenUXConfirm
           p: 2,
           bgcolor: 'background.paper',
           borderColor: 'divider',
-          borderRadius: 1,
+          borderRadius: (theme) => `${theme.shape.borderRadius}px`,
         }}
       >
         <Stack direction="row" spacing={2} justifyContent="flex-start">
@@ -44,7 +44,7 @@ export function GenUXConfirmation({ options, onConfirm, disabled }: GenUXConfirm
             size="small"
             onClick={() => handleClick(confirmText)}
             disabled={isDisabled}
-            sx={{ textTransform: 'none', borderRadius: 1, fontWeight: 600 }}
+            sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, fontWeight: 600 }}
           >
             {confirmText}
           </Button>
@@ -54,7 +54,7 @@ export function GenUXConfirmation({ options, onConfirm, disabled }: GenUXConfirm
             size="small"
             onClick={() => handleClick(cancelText)}
             disabled={isDisabled}
-            sx={{ textTransform: 'none', borderRadius: 1, fontWeight: 600 }}
+            sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, fontWeight: 600 }}
           >
             {cancelText}
           </Button>
@@ -95,7 +95,7 @@ export function GenUXForm({ options, onSubmit, disabled }: GenUXFormProps) {
           p: 2,
           bgcolor: 'background.paper',
           borderColor: 'divider',
-          borderRadius: 1,
+          borderRadius: (theme) => `${theme.shape.borderRadius}px`,
         }}
       >
         <Box component="form" onSubmit={handleSubmit}>
@@ -120,7 +120,7 @@ export function GenUXForm({ options, onSubmit, disabled }: GenUXFormProps) {
                 variant="contained"
                 size="small"
                 disabled={isDisabled}
-                sx={{ textTransform: 'none', borderRadius: 1, fontWeight: 600 }}
+                sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, fontWeight: 600 }}
               >
                 Submit Form
               </Button>
@@ -168,7 +168,7 @@ export function ProposedCategorizationReportUX({
             p: 2,
             bgcolor: 'background.paper',
             borderColor: 'success.main',
-            borderRadius: 1,
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
           }}
         >
           <Typography
@@ -195,7 +195,7 @@ export function ProposedCategorizationReportUX({
             p: 2,
             bgcolor: 'background.paper',
             borderColor: 'divider',
-            borderRadius: 1,
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
           }}
         >
           <Typography
@@ -223,7 +223,7 @@ export function ProposedCategorizationReportUX({
             p: 2,
             bgcolor: 'background.paper',
             borderColor: 'divider',
-            borderRadius: 1,
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
           }}
         >
           <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -321,7 +321,7 @@ export function ProposedCategorizationReportUX({
           p: 2,
           bgcolor: 'background.paper',
           borderColor: 'divider',
-          borderRadius: 1,
+          borderRadius: (theme) => `${theme.shape.borderRadius}px`,
           boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
         }}
       >
@@ -349,7 +349,7 @@ export function ProposedCategorizationReportUX({
               },
               '&::-webkit-scrollbar-thumb': {
                 bgcolor: 'action.selected',
-                borderRadius: 1,
+                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
               },
             }}
           >
@@ -358,7 +358,7 @@ export function ProposedCategorizationReportUX({
                 key={item.transactionId}
                 sx={{
                   p: 1,
-                  borderRadius: 1,
+                  borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                   border: '1px solid',
                   borderColor: item.approved ? 'divider' : 'action.disabledBackground',
                   bgcolor: item.approved ? 'transparent' : 'action.hover',
@@ -438,7 +438,7 @@ export function ProposedCategorizationReportUX({
                 color="inherit"
                 onClick={handleDiscard}
                 disabled={isBtnDisabled}
-                sx={{ textTransform: 'none', borderRadius: 1 }}
+                sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}
               >
                 Discard
               </Button>
@@ -447,7 +447,7 @@ export function ProposedCategorizationReportUX({
                 variant="contained"
                 onClick={handleApply}
                 disabled={isBtnDisabled}
-                sx={{ textTransform: 'none', borderRadius: 1 }}
+                sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}
               >
                 Approve & Apply
               </Button>

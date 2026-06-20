@@ -36,6 +36,8 @@ import { localAI } from '../ai';
 const RECOMMENDED_OLLAMA_MODELS = [
   { name: 'llama3.2:1b', label: 'Llama 3.2 1B (Default)', desc: 'Fast, lightweight (1.3 GB). Ideal for most machines.', size: '1.3 GB' },
   { name: 'llama3.2:3b', label: 'Llama 3.2 3B', desc: 'Higher quality reasoning (2.0 GB). Recommended if you have 8GB+ RAM.', size: '2.0 GB' },
+  { name: 'gemma4:2b', label: 'Gemma 4 2B', desc: 'Google-developed fast reasoning model. Highly responsive.', size: '1.6 GB' },
+  { name: 'gemma4:9b', label: 'Gemma 4 9B', desc: 'Extremely powerful logic and formatting. Requires 16GB+ RAM.', size: '5.5 GB' },
   { name: 'gemma2:2b', label: 'Gemma 2 2B', desc: 'Google-developed lightweight model (1.6 GB). Highly responsive.', size: '1.6 GB' },
   { name: 'mistral:latest', label: 'Mistral 7B', desc: 'High capability model (4.1 GB). Requires 16GB+ RAM.', size: '4.1 GB' },
 ];

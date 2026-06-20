@@ -146,7 +146,7 @@ export default function Documents() {
   }, [auditedTxns]);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: derivedPreviewDoc ? 'hidden' : 'auto' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
       {derivedPreviewDoc ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           {/* Top Bar for Preview Mode */}

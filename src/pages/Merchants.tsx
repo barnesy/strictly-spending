@@ -14,6 +14,7 @@ import {
   TableCell,
   TableBody,
   TableContainer,
+  TableFooter,
   Checkbox,
   IconButton,
   Dialog,
@@ -31,6 +32,8 @@ import {
   TablePagination,
   Autocomplete,
 } from '@mui/material';
+import { subtleScrollSx } from '../styles';
+import DataTable from '../components/DataTable';
 import EditIcon from '@mui/icons-material/Edit';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import CategoryIcon from '@mui/icons-material/Category';
@@ -39,12 +42,47 @@ import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import {
+  Group as PanelGroup,
+  Panel,
+  Separator as PanelResizeHandle,
+  useDefaultLayout,
+} from 'react-resizable-panels';
 
 import { db } from '../db';
 import { usd, usdCents } from '../lib';
 import PageLoader from '../components/PageLoader';
 import AnimatedLogo from '../components/AnimatedLogo';
+
+function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
+  return (
+    <PanelResizeHandle aria-label={ariaLabel} style={{ width: 16, position: 'relative' }}>
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          margin: '0 auto',
+          width: 2,
+          bgcolor: 'divider',
+          borderRadius: 1,
+          transition: 'background-color 120ms ease',
+          '[data-resize-handle-active] &, &:hover': {
+            bgcolor: 'primary.main',
+            width: 3,
+          },
+        }}
+      />
+    </PanelResizeHandle>
+  );
+}
+
+function PanelScroll({ children }: { children: React.ReactNode }) {
+  return (
+    <Box sx={{ height: '100%', overflow: 'auto', ...subtleScrollSx }}>
+      {children}
+    </Box>
+  );
+}
 
 interface MerchantGroup {
   merchantKey: string;
@@ -69,6 +107,17 @@ export default function Merchants() {
   // Search Debouncing
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const panelIds = [
+    ...(filtersOpen ? ['filters'] : []),
+    'table'
+  ];
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: `merchants-layout-v3-${panelIds.join('-')}`,
+    panelIds,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -85,7 +134,6 @@ export default function Merchants() {
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
 
   // Advanced Filters state
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [minSpend, setMinSpend] = useState<number | ''>('');
   const [maxSpend, setMaxSpend] = useState<number | ''>('');
   const [minTxns, setMinTxns] = useState<number | ''>('');
@@ -457,7 +505,7 @@ export default function Merchants() {
 
   return (
     <PageLoader isLoading={isLoading}>
-      <Stack spacing={3}>
+      <Stack spacing={3} sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
@@ -543,9 +591,17 @@ export default function Merchants() {
         </Paper>
       ) : (
         // Main directory table
-        <Paper sx={{ p: 3 }}>
-          <Stack spacing={2.5}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0, gap: 2.5 }}>
             <Stack direction="row" spacing={2} alignItems="center">
+              <Button
+                variant={filtersOpen ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={<FilterListIcon />}
+                onClick={() => setFiltersOpen(!filtersOpen)}
+                sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, height: 40 }}
+              >
+                Filters {(minSpend !== '' || maxSpend !== '' || minTxns !== '' || maxTxns !== '' || filterCategory !== 'all' || startDate || endDate) ? '•' : ''}
+              </Button>
               <Box sx={{ flex: 1, maxWidth: 400 }}>
                 <TextField
                   placeholder="Search merchants..."
@@ -571,87 +627,32 @@ export default function Merchants() {
                   }}
                 />
               </Box>
-              <Button
-                variant={showAdvancedFilters ? 'contained' : 'outlined'}
-                size="small"
-                startIcon={<FilterListIcon />}
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, height: 40 }}
-              >
-                Filters {(minSpend !== '' || maxSpend !== '' || minTxns !== '' || maxTxns !== '' || filterCategory !== 'all' || startDate || endDate) ? '•' : ''}
-              </Button>
-              {(minSpend !== '' || maxSpend !== '' || minTxns !== '' || maxTxns !== '' || filterCategory !== 'all' || startDate || endDate || searchQuery) && (
-                <Button
-                  variant="text"
-                  color="inherit"
-                  size="small"
-                  startIcon={<RestartAltIcon />}
-                  onClick={() => {
-                    setMinSpend('');
-                    setMaxSpend('');
-                    setMinTxns('');
-                    setMaxTxns('');
-                    setFilterCategory('all');
-                    setStartDate('');
-                    setEndDate('');
-                    setSearchInput('');
-                    setSearchQuery('');
-                  }}
-                  sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, height: 40 }}
-                >
-                  Clear Filters
-                </Button>
-              )}
             </Stack>
 
-            {showAdvancedFilters && (
-              <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: (theme) => `${theme.shape.borderRadius}px`, border: '1px solid', borderColor: 'divider' }}>
-                <Stack spacing={2}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Filter Merchants</Typography>
-                  <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap" gap={2}>
-                    {/* Price / Spend range */}
-                    <TextField
-                      label="Min Spend ($)"
-                      type="number"
-                      size="small"
-                      value={minSpend}
-                      onChange={(e) => setMinSpend(e.target.value === '' ? '' : Number(e.target.value))}
-                      sx={{ width: 140 }}
-                    />
-                    <TextField
-                      label="Max Spend ($)"
-                      type="number"
-                      size="small"
-                      value={maxSpend}
-                      onChange={(e) => setMaxSpend(e.target.value === '' ? '' : Number(e.target.value))}
-                      sx={{ width: 140 }}
-                    />
+        {/* Main Layout Area */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>
+          <PanelGroup
+            orientation="horizontal"
+            defaultLayout={defaultLayout}
+            onLayoutChanged={onLayoutChanged}
+            style={{ height: '100%' }}
+          >
+            {filtersOpen && (
+              <Panel id="filters" defaultSize="25%" minSize="20%" maxSize="40%">
+                <PanelScroll>
+                  <Stack spacing={3} sx={{ pr: 1, py: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      Advanced Filters
+                    </Typography>
 
-                    {/* Txn Count range */}
-                    <TextField
-                      label="Min Txns"
-                      type="number"
-                      size="small"
-                      value={minTxns}
-                      onChange={(e) => setMinTxns(e.target.value === '' ? '' : Number(e.target.value))}
-                      sx={{ width: 120 }}
-                    />
-                    <TextField
-                      label="Max Txns"
-                      type="number"
-                      size="small"
-                      value={maxTxns}
-                      onChange={(e) => setMaxTxns(e.target.value === '' ? '' : Number(e.target.value))}
-                      sx={{ width: 120 }}
-                    />
-
-                    {/* Category */}
-                    <FormControl size="small" sx={{ width: 180 }}>
-                      <InputLabel id="filter-category-label">Primary Category</InputLabel>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Category
+                      </Typography>
                       <Select
-                        labelId="filter-category-label"
+                        fullWidth
+                        size="small"
                         value={filterCategory}
-                        label="Primary Category"
                         onChange={(e) => setFilterCategory(e.target.value)}
                       >
                         <MenuItem value="all">All Categories</MenuItem>
@@ -661,139 +662,267 @@ export default function Merchants() {
                           </MenuItem>
                         ))}
                       </Select>
-                    </FormControl>
+                    </Box>
 
-                    {/* Date Range */}
-                    <TextField
-                      label="Start Date"
-                      type="date"
-                      size="small"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                      sx={{ width: 150 }}
-                    />
-                    <TextField
-                      label="End Date"
-                      type="date"
-                      size="small"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                      sx={{ width: 150 }}
-                    />
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Total Spend Range
+                      </Typography>
+                      <Stack direction="row" spacing={1}>
+                        <TextField
+                          size="small"
+                          placeholder="Min"
+                          type="number"
+                          value={minSpend}
+                          onChange={(e) => setMinSpend(e.target.value ? Number(e.target.value) : '')}
+                          slotProps={{
+                            input: {
+                              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                              endAdornment: minSpend !== '' && (
+                                <InputAdornment position="end">
+                                  <IconButton size="small" edge="end" onClick={() => setMinSpend('')}>
+                                    <CloseIcon fontSize="small" />
+                                  </IconButton>
+                                </InputAdornment>
+                              )
+                            },
+                          }}
+                        />
+                        <TextField
+                          size="small"
+                          placeholder="Max"
+                          type="number"
+                          value={maxSpend}
+                          onChange={(e) => setMaxSpend(e.target.value ? Number(e.target.value) : '')}
+                          slotProps={{
+                            input: {
+                              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                              endAdornment: maxSpend !== '' && (
+                                <InputAdornment position="end">
+                                  <IconButton size="small" edge="end" onClick={() => setMaxSpend('')}>
+                                    <CloseIcon fontSize="small" />
+                                  </IconButton>
+                                </InputAdornment>
+                              )
+                            },
+                          }}
+                        />
+                      </Stack>
+                    </Box>
+
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Transactions Count
+                      </Typography>
+                      <Stack direction="row" spacing={1}>
+                        <TextField
+                          size="small"
+                          placeholder="Min"
+                          type="number"
+                          value={minTxns}
+                          onChange={(e) => setMinTxns(e.target.value ? Number(e.target.value) : '')}
+                          slotProps={{
+                            input: {
+                              endAdornment: minTxns !== '' && (
+                                <InputAdornment position="end">
+                                  <IconButton size="small" edge="end" onClick={() => setMinTxns('')}>
+                                    <CloseIcon fontSize="small" />
+                                  </IconButton>
+                                </InputAdornment>
+                              )
+                            }
+                          }}
+                        />
+                        <TextField
+                          size="small"
+                          placeholder="Max"
+                          type="number"
+                          value={maxTxns}
+                          onChange={(e) => setMaxTxns(e.target.value ? Number(e.target.value) : '')}
+                          slotProps={{
+                            input: {
+                              endAdornment: maxTxns !== '' && (
+                                <InputAdornment position="end">
+                                  <IconButton size="small" edge="end" onClick={() => setMaxTxns('')}>
+                                    <CloseIcon fontSize="small" />
+                                  </IconButton>
+                                </InputAdornment>
+                              )
+                            }
+                          }}
+                        />
+                      </Stack>
+                    </Box>
+
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Date Range
+                      </Typography>
+                      <Stack spacing={1.5}>
+                        <TextField
+                          size="small"
+                          type="date"
+                          label="From"
+                          InputLabelProps={{ shrink: true }}
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                        />
+                        <TextField
+                          size="small"
+                          type="date"
+                          label="To"
+                          InputLabelProps={{ shrink: true }}
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                        />
+                      </Stack>
+                    </Box>
+
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      onClick={() => {
+                        setFilterCategory('all');
+                        setMinSpend('');
+                        setMaxSpend('');
+                        setMinTxns('');
+                        setMaxTxns('');
+                        setStartDate('');
+                        setEndDate('');
+                        setSearchQuery('');
+                      }}
+                    >
+                      Clear All Filters
+                    </Button>
                   </Stack>
-                </Stack>
-              </Box>
+                </PanelScroll>
+              </Panel>
             )}
 
-            <TableContainer sx={{ borderRadius: (theme) => `${theme.shape.borderRadius}px`, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
-              <Table sx={{ '& .MuiTableCell-root': { py: 1.5, px: 2 } }}>
-                <TableHead sx={{ bgcolor: 'action.hover' }}>
-                  <TableRow>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        indeterminate={selectedKeys.length > 0 && selectedKeys.length < filteredGroups.length}
-                        checked={filteredGroups.length > 0 && selectedKeys.length === filteredGroups.length}
-                        onChange={(e) => handleSelectAll(e.target.checked)}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600, width: 300 }}>Merchant Name</TableCell>
-                    <TableCell sx={{ fontWeight: 600, width: 120 }}>Total Spend</TableCell>
-                    <TableCell sx={{ fontWeight: 600, width: 100 }}>Count</TableCell>
-                    <TableCell sx={{ fontWeight: 600, width: 180 }}>Primary Category</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Active Dates</TableCell>
-                    <TableCell sx={{ fontWeight: 600, width: 160 }} align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredGroups.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary', fontStyle: 'italic' }}>
-                        No merchants found.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedGroups.map((g) => {
-                      const isSelected = selectedKeys.includes(g.merchantKey);
-                      return (
-                        <TableRow key={g.merchantKey} hover selected={isSelected}>
-                          <TableCell padding="checkbox">
-                            <Checkbox
-                              checked={isSelected}
-                              onChange={(e) => handleSelectOne(g.merchantKey, e.target.checked)}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {g.merchantKey}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {usd.format(g.totalSpend)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="text.secondary">
-                              {g.totalTransactions} txns
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={g.mostCommonCategory}
-                              size="small"
-                              variant="outlined"
-                              sx={{ fontWeight: 500 }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="caption" color="text.secondary">
-                              {g.earliestDate} to {g.latestDate}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                              <Tooltip title="Rename merchant name">
-                                <IconButton size="small" onClick={() => handleOpenRename(g)} color="primary">
-                                  <EditIcon sx={{ fontSize: 18 }} />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Recategorize all transactions">
-                                <IconButton size="small" onClick={() => handleOpenRecategorize(g)} color="secondary">
-                                  <CategoryIcon sx={{ fontSize: 18 }} />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="View transaction ledger">
-                                <IconButton size="small" onClick={() => setViewTransactionsTarget(g)}>
-                                  <ListAltIcon sx={{ fontSize: 18 }} />
-                                </IconButton>
-                              </Tooltip>
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            {filtersOpen && <StyledResizeHandle ariaLabel="Resize filters / table" />}
 
-            <TablePagination
-              rowsPerPageOptions={[10, 25, 50, 100]}
-              component="div"
-              count={filteredGroups.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-            />
-          </Stack>
-        </Paper>
-      )}
+            <Panel id="table" defaultSize="75%" minSize="30%">
+              <Box
+                sx={{
+                  position: 'relative',
+                  flexGrow: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100%',
+                  pl: filtersOpen ? 1 : 0,
+                }}
+              >
+                <DataTable size="small" stickyHeader>
+                  <TableHead sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          indeterminate={selectedKeys.length > 0 && selectedKeys.length < filteredGroups.length}
+                          checked={filteredGroups.length > 0 && selectedKeys.length === filteredGroups.length}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600, width: 300 }}>Merchant Name</TableCell>
+                      <TableCell sx={{ fontWeight: 600, width: 120 }}>Total Spend</TableCell>
+                      <TableCell sx={{ fontWeight: 600, width: 100 }}>Count</TableCell>
+                      <TableCell sx={{ fontWeight: 600, width: 180 }}>Primary Category</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Active Dates</TableCell>
+                      <TableCell sx={{ fontWeight: 600, width: 160 }} align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredGroups.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary', fontStyle: 'italic' }}>
+                          No merchants found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paginatedGroups.map((g) => {
+                        const isSelected = selectedKeys.includes(g.merchantKey);
+                        return (
+                          <TableRow key={g.merchantKey} hover selected={isSelected}>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={isSelected}
+                                onChange={(e) => handleSelectOne(g.merchantKey, e.target.checked)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {g.merchantKey}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {usd.format(g.totalSpend)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" color="text.secondary">
+                                {g.totalTransactions} txns
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={g.mostCommonCategory}
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontWeight: 500 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption" color="text.secondary">
+                                {g.earliestDate} to {g.latestDate}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                                <Tooltip title="Rename merchant name">
+                                  <IconButton size="small" onClick={() => handleOpenRename(g)} color="primary">
+                                    <EditIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Recategorize all transactions">
+                                  <IconButton size="small" onClick={() => handleOpenRecategorize(g)} color="secondary">
+                                    <CategoryIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="View transaction ledger">
+                                  <IconButton size="small" onClick={() => setViewTransactionsTarget(g)}>
+                                    <ListAltIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow>
+                      <TablePagination
+                        rowsPerPageOptions={[10, 25, 50, 100]}
+                        count={filteredGroups.length}
+                        rowsPerPage={rowsPerPage}
+                        page={page}
+                        onPageChange={(_, newPage) => setPage(newPage)}
+                        onRowsPerPageChange={(e) => {
+                          setRowsPerPage(parseInt(e.target.value, 10));
+                          setPage(0);
+                        }}
+                      />
+                    </TableRow>
+                  </TableFooter>
+                </DataTable>
+              </Box>
+            </Panel>
+          </PanelGroup>
+        </Box>
+      </Box>
+    )}
 
       {/* Rename Dialog */}
       <Dialog

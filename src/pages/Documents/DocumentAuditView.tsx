@@ -1,10 +1,9 @@
 import {
   Box,
   Typography,
-  Table,
   TableBody,
   TableCell,
-  TableContainer,
+  TableFooter,
   TableHead,
   TableRow,
   TablePagination,
@@ -13,14 +12,14 @@ import {
   Select,
   MenuItem,
   alpha,
-  Button,
-  Paper
+  Button
 } from '@mui/material';
 import {
   Group as PanelGroup,
   Panel,
   Separator as PanelResizeHandle
 } from 'react-resizable-panels';
+import DataTable from '../../components/DataTable';
 
 interface DocumentAuditViewProps {
   derivedPreviewDoc: any;
@@ -107,8 +106,7 @@ export function DocumentAuditView({
             <Typography variant="subtitle2" fontWeight="700" color="text.secondary" sx={{ mb: 1.5 }}>
               Category Breakdown
             </Typography>
-            <TableContainer component={Box} sx={{ border: 'none', overflowX: 'auto' }}>
-              <Table size="small">
+            <DataTable component={Box} containerSx={{ border: 'none', borderRadius: 0 }} size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Category</TableCell>
@@ -192,8 +190,7 @@ export function DocumentAuditView({
                     </TableCell>
                   </TableRow>
                 </TableBody>
-              </Table>
-            </TableContainer>
+            </DataTable>
           </Box>
         </Panel>
 
@@ -232,9 +229,8 @@ export function DocumentAuditView({
               />
             </Box>
 
-            <Paper variant="outlined" sx={{ borderRadius: `${theme.shape.borderRadius}px`, border: `1px solid ${theme.palette.divider}`, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              <TableContainer sx={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
-                <Table size="small" stickyHeader>
+            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <DataTable containerSx={{ flex: 1, border: 'none', borderRadius: 0 }} size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
                       <TableCell>Date</TableCell>
@@ -279,22 +275,24 @@ export function DocumentAuditView({
                       );
                     })}
                   </TableBody>
-                </Table>
-              </TableContainer>
-              <TablePagination
-                component="div"
-                count={auditedTxns.length}
-                page={auditPage}
-                onPageChange={(_, p) => setAuditPage(p)}
-                rowsPerPage={auditPageSize}
-                onRowsPerPageChange={(e) => {
-                  setAuditPageSize(Number(e.target.value));
-                  setAuditPage(0);
-                }}
-                rowsPerPageOptions={[10, 25, 50, 100]}
-                sx={{ borderTop: `1px solid ${theme.palette.divider}`, flexShrink: 0 }}
-              />
-            </Paper>
+                  <TableFooter>
+                    <TableRow>
+                      <TablePagination
+                        count={auditedTxns.length}
+                        page={auditPage}
+                        onPageChange={(_, p) => setAuditPage(p)}
+                        rowsPerPage={auditPageSize}
+                        onRowsPerPageChange={(e) => {
+                          setAuditPageSize(Number(e.target.value));
+                          setAuditPage(0);
+                        }}
+                        rowsPerPageOptions={[10, 25, 50, 100]}
+                        sx={{ borderTop: `1px solid ${theme.palette.divider}` }}
+                      />
+                    </TableRow>
+                  </TableFooter>
+                </DataTable>
+            </Box>
           </Box>
         </Panel>
       </PanelGroup>

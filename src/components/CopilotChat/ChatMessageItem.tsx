@@ -112,12 +112,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
     }
   };
 
-  const agentSkillsSetting = useLiveQuery(() => db.settings.get('app:agentSkills'));
-  const agentSkills = (agentSkillsSetting?.value as any[]) || [];
-  const activeSkill = useMemo(() => {
-    if (!message.activeSkillId) return null;
-    return agentSkills.find((s) => s.id === message.activeSkillId) || null;
-  }, [message.activeSkillId, agentSkills]);
+  // Skill metadata resolved from steps list dynamically
 
   const updateMessageResult = async (targetMsg: ChatMessage, newResult: any) => {
     const currentMessages = useChatStore.getState().messages;
@@ -419,7 +414,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
             variant="outlined"
             sx={{
               p: 2,
-              borderRadius: 2,
+              borderRadius: (theme) => `${theme.shape.borderRadius}px`,
               borderColor: 'divider',
               bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'grey.50',
               display: 'flex',
@@ -560,54 +555,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         </Box>
       )}
 
-      {activeSkill && (
-        <Box sx={{ width: '85%', mt: 0.5 }}>
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 1.5,
-              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.05)' : 'rgba(25, 118, 210, 0.02)',
-              borderColor: 'primary.light',
-              borderRadius: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 1,
-            }}
-          >
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              ⚡ Executing: {activeSkill.name}
-            </Typography>
-            <Stack spacing={0.75} sx={{ mt: 0.5 }}>
-              {activeSkill.stages.map((stage: any, idx: number) => {
-                const isCompleted = message.completedStages?.includes(stage.requiredAction);
-                const isCurrent = !isCompleted && (idx === 0 || message.completedStages?.includes(activeSkill.stages[idx - 1].requiredAction));
-                return (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1, opacity: isCompleted ? 0.6 : 1 }}>
-                    <Box sx={{ 
-                      width: 14, 
-                      height: 14, 
-                      borderRadius: '50%', 
-                      border: '2px solid', 
-                      borderColor: isCompleted ? 'success.main' : isCurrent ? 'primary.main' : 'divider', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      bgcolor: isCompleted ? 'success.main' : isCurrent && message.isStreaming ? 'primary.main' : 'transparent',
-                      transition: 'all 0.3s ease',
-                      animation: isCurrent && message.isStreaming ? 'pulse 1.5s infinite' : 'none'
-                    }}>
-                      {isCompleted && <Box sx={{ width: 6, height: 6, borderBottom: '2px solid white', borderRight: '2px solid white', transform: 'rotate(45deg) translate(-1px, -1px)' }} />}
-                    </Box>
-                    <Typography variant="caption" sx={{ fontWeight: isCurrent ? 600 : 400, color: isCompleted ? 'text.secondary' : isCurrent ? 'primary.main' : 'text.disabled' }}>
-                      {stage.title}
-                    </Typography>
-                  </Box>
-                );
-              })}
-            </Stack>
-          </Paper>
-        </Box>
-      )}
+      {/* Skill stages are now embedded directly in the execution log steps */}
 
       {hasSteps && (
         <Box sx={{ width: '85%', mt: 0.5 }}>
@@ -660,11 +608,17 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                   const isLast = idx === stepsList.length - 1;
                   const isPending = message.isStreaming && isLast;
 
+                  const isSkillStage = step.startsWith('Skill Stage:');
+
                   let dotColor = 'text.secondary';
                   let textColor: any = 'text.primary';
                   let fontWeight = 400;
 
-                  if (isToolCall) {
+                  if (isSkillStage) {
+                    dotColor = 'success.main';
+                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'success.light' : 'success.dark';
+                    fontWeight = 600;
+                  } else if (isToolCall) {
                     dotColor = 'info.main';
                     textColor = (theme: any) => theme.palette.mode === 'dark' ? 'info.light' : 'info.dark';
                     fontWeight = 500;
@@ -705,7 +659,9 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                       }}
                     >
                       {/* Step Indicator */}
-                      {isPending ? (
+                      {isSkillStage ? (
+                        <Box sx={{ color: 'success.main', fontWeight: 900, flexShrink: 0, fontSize: '11px', lineHeight: 1 }}>✓</Box>
+                      ) : isPending ? (
                         <AnimatedLogo scale={0.9} spinSpeed={0.04} />
                       ) : (
                         <Box

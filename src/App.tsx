@@ -92,7 +92,8 @@ export default function App() {
   const location = useLocation();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-  const isLayoutPage = (location.pathname === '/' || location.pathname === '/transactions' || location.pathname === '/documents') && isDesktop;
+  const layoutPages = ['/', '/transactions', '/documents', '/categories', '/rules', '/merchants'];
+  const isLayoutPage = layoutPages.includes(location.pathname) && isDesktop;
   const [manageAnchorEl, setManageAnchorEl] = useState<null | HTMLElement>(null);
   const isManageOpen = Boolean(manageAnchorEl);
   const handleManageClick = (event: React.MouseEvent<HTMLButtonElement>) => {

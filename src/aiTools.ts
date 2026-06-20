@@ -30,7 +30,7 @@ export const AVAILABLE_TOOLS: AITool[] = [
   },
   {
     name: 'generate_document',
-    description: "Use this to generate any document (P&L, Balance Sheet, Ledger, Expense Summary, Mileage Log, Asset Log, Estimated Tax Payments, W-2/W-3 issued, 1099 issued, lists, emails, spreadsheets) and save it securely. CRITICAL RULE: You MUST NEVER use this tool until you have already used the 'query_data' tool to retrieve the necessary financial data. Output the raw document text in 'documentContent', and specify the target checklist ID in 'documentType' for tax documents: 'business_pnl' (P&L), 'business_balance_sheet' (Balance Sheet), 'business_ledger' (Ledger), 'deduction_expense_summary' (Expense Summary), 'deduction_mileage_log' (Mileage Log), 'deduction_assets' (Asset log), 'deduction_w2_w3' (W-2/W-3 issued), 'deduction_1099_issued' (1099s issued), 'payments_estimated' (Estimated payments 1040-ES)."
+    description: "Use this to save a generated document to the file system. Output the raw document text in 'documentContent', and specify the type of document in 'documentType'."
   },
   {
     name: 'audit_accessibility',

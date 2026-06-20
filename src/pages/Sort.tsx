@@ -11,6 +11,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { useDataStore } from '../dataStore';
+import { refreshRecurrenceAll } from '../recurrence';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useShallow } from 'zustand/react/shallow';
 import PageLoader from '../components/PageLoader';
@@ -38,7 +39,6 @@ import { db } from '../db';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 
 import { useFilters } from '../store';
-import { buildRecurrenceMap, refreshRecurrenceAll } from '../recurrence';
 import { buildSortQueue, type SortCard as SortCardData } from '../sort';
 import type { Transaction } from '../types';
 
@@ -47,17 +47,19 @@ import SortCategoryGrid from '../components/SortCategoryGrid';
 import SortEmptyState from '../components/SortEmptyState';
 import { localAI } from '../ai';
 import { playThinkingSound, stopThinkingSound, playSuccessSound, playFailSound } from '../audio';
+import { useDeferredRender } from '../hooks/useDeferredRender';
 
 export default function Sort() {
   const demoMode = useFilters((s) => s.demoMode);
   const [mode, setMode] = useState<'categorize' | 'tax'>('categorize');
 
-  const { allTransactions, categories, rules, overrides, isDataLoading } = useDataStore(useShallow((s) => ({
+  const { allTransactions, categories, rules, isDataLoading, globalRecurrenceMap, globalDemoRecurrenceMap } = useDataStore(useShallow((s) => ({
     allTransactions: s.transactions,
     categories: s.categories,
     rules: s.rules,
-    overrides: s.merchantOverrides,
     isDataLoading: s.isLoading,
+    globalRecurrenceMap: s.recurrenceMap,
+    globalDemoRecurrenceMap: s.demoRecurrenceMap,
   })));
 
   const uncategorizedAll = useMemo(
@@ -92,15 +94,6 @@ export default function Sort() {
     const keySet = new Set(merchantKeys);
     return allTransactions.filter((t) => t.merchantKey && keySet.has(t.merchantKey));
   }, [merchantKeys, allTransactions]);
-  const deferredRelevantTxnsAll = useDeferredValue(relevantTxnsAll);
-
-  const relevantTxns = useMemo(
-    () =>
-      deferredRelevantTxnsAll && demoMode
-        ? deferredRelevantTxnsAll.filter((t) => t.source === 'demo')
-        : deferredRelevantTxnsAll?.filter((t) => t.source !== 'demo') || [],
-    [deferredRelevantTxnsAll, demoMode]
-  );
 
   const uncategorized = useMemo(
     () =>
@@ -110,10 +103,7 @@ export default function Sort() {
     [deferredUncategorizedAll, demoMode]
   );
 
-  const recurrenceMap = useMemo(
-    () => buildRecurrenceMap(relevantTxns, overrides || []),
-    [relevantTxns, overrides]
-  );
+  const recurrenceMap = demoMode ? globalDemoRecurrenceMap : globalRecurrenceMap;
 
   // Build queue from current state. useLiveQuery means this rebuilds as the
   // DB changes (e.g. after a decision commits, the row no longer matches
@@ -578,14 +568,16 @@ export default function Sort() {
     return () => window.removeEventListener('keydown', onKey);
   }, [onPick, isInteractive, helpOpen, activeSuggestion, visibleQueue.length]);
 
-  if (!uncategorizedAll || !relevantTxnsAll || !categories || !rules) {
+  const remaining = visibleQueue.length;
+
+  const isLoading = isDataLoading || allTransactions === undefined || categories === undefined;
+  const shouldRender = useDeferredRender();
+
+  if (!uncategorizedAll || !relevantTxnsAll || !categories || !rules || isLoading || !shouldRender) {
     return <PageLoader isLoading={true}>{false}</PageLoader>;
   }
 
   const selectionsCount = Object.keys(selections).length;
-  const remaining = visibleQueue.length;
-
-  const isLoading = isDataLoading || allTransactions === undefined || categories === undefined;
 
   return (
     <PageLoader isLoading={isLoading}>

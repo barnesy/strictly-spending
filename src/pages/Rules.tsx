@@ -5,9 +5,7 @@ import {
   Box,
   Stack,
   Typography,
-  Paper,
   Button,
-  Table,
   TableHead,
   TableRow,
   TableCell,
@@ -22,17 +20,59 @@ import {
   Alert,
   Chip,
   TablePagination,
+  TableFooter,
+  InputAdornment,
 } from '@mui/material';
 import PageLoader from '../components/PageLoader';
 import { useTheme } from '@mui/material/styles';
-
+import DataTable from '../components/DataTable';
 import AutoCleanupDialog from '../components/AutoCleanupDialog';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import CloseIcon from '@mui/icons-material/Close';
+import SearchIcon from '@mui/icons-material/Search';
+import {
+  Group as PanelGroup,
+  Panel,
+  Separator as PanelResizeHandle,
+  useDefaultLayout,
+} from 'react-resizable-panels';
+import { subtleScrollSx } from '../styles';
 import { db } from '../db';
 import type { CategoryRule, Transaction } from '../types';
 import { normalizeForMatch } from '../categorize';
+
+function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
+  return (
+    <PanelResizeHandle aria-label={ariaLabel} style={{ width: 16, position: 'relative' }}>
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          margin: '0 auto',
+          width: 2,
+          bgcolor: 'divider',
+          borderRadius: 1,
+          transition: 'background-color 120ms ease',
+          '[data-resize-handle-active] &, &:hover': {
+            bgcolor: 'primary.main',
+            width: 3,
+          },
+        }}
+      />
+    </PanelResizeHandle>
+  );
+}
+
+function PanelScroll({ children }: { children: React.ReactNode }) {
+  return (
+    <Box sx={{ height: '100%', overflow: 'auto', ...subtleScrollSx }}>
+      {children}
+    </Box>
+  );
+}
 
 export default function Rules() {
   const theme = useTheme();
@@ -56,6 +96,17 @@ export default function Rules() {
 
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const panelIds = [
+    ...(filtersOpen ? ['filters'] : []),
+    'table'
+  ];
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: `rules-layout-v3-${panelIds.join('-')}`,
+    panelIds,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -150,7 +201,7 @@ export default function Rules() {
 
   return (
     <PageLoader isLoading={isLoading}>
-      <Stack spacing={3}>
+      <Stack spacing={3} sx={{ flexGrow: 1, minHeight: 0 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="h5">Rules</Typography>
         <Stack direction="row" spacing={1}>
@@ -173,117 +224,195 @@ export default function Rules() {
       {feedback && <Alert severity="success" onClose={() => setFeedback(null)}>{feedback}</Alert>}
 
       {/* Search & Filter bar */}
-      <Paper sx={{ p: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-        <TextField
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ pb: 1 }}>
+        <Button
+          variant={filtersOpen ? 'contained' : 'outlined'}
           size="small"
-          label="Search Patterns"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          sx={{ flexGrow: 1, minWidth: 200 }}
-        />
-        <TextField
-          select
-          size="small"
-          label="Category"
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          sx={{ minWidth: 200 }}
+          startIcon={<FilterListIcon />}
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px`, height: 40 }}
         >
-          <MenuItem value="all">All Categories</MenuItem>
-          {categories.map((c) => (
-            <MenuItem key={c.id} value={c.name}>
-              {c.name}
-            </MenuItem>
-          ))}
-        </TextField>
-      </Paper>
+          Filters {categoryFilter !== 'all' ? '•' : ''}
+        </Button>
+        <Box sx={{ flex: 1, maxWidth: 400 }}>
+          <TextField
+            placeholder="Search patterns..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            size="small"
+            fullWidth
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchInput && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => { setSearchInput(''); setSearchQuery(''); }}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                )
+              }
+            }}
+          />
+        </Box>
+      </Stack>
 
+      {/* Main Layout Area */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>
+        <PanelGroup
+          orientation="horizontal"
+          defaultLayout={defaultLayout}
+          onLayoutChanged={onLayoutChanged}
+          style={{ height: '100%' }}
+        >
+          {filtersOpen && (
+            <Panel id="filters" defaultSize="25%" minSize="20%" maxSize="40%">
+              <PanelScroll>
+                <Stack spacing={3} sx={{ pr: 1, py: 1 }}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Advanced Filters
+                  </Typography>
 
-
-      <Box sx={{ position: 'relative' }}>
-        <Paper>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Pattern</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell align="right">Matches</TableCell>
-              <TableCell align="right">Priority</TableCell>
-              <TableCell width={100}></TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedRules?.map((r) => (
-              <TableRow key={r.id} hover>
-                <TableCell>
-                  <Chip
-                    size="small"
-                    label={r.pattern}
-                    variant="outlined"
-                    sx={{
-                      fontFamily: 'monospace',
-                      fontWeight: 600,
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    size="small"
-                    label={r.category}
-                    sx={getAccessibleChipStyles(
-                      categories?.find((c) => c.name === r.category)?.color || (isDarkMode ? '#b0bec5' : '#78909c'),
-                      isDarkMode
-                    )}
-                  />
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  {matchCounts[r.id!] || 0}
-                </TableCell>
-                <TableCell align="right">{r.priority}</TableCell>
-                <TableCell>
-                  <IconButton
-                    size="small"
-                    onClick={() => setEditing(r)}
-                    aria-label={`Edit rule: ${r.pattern}`}
-                  >
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteClick(r.id!)}
-                    aria-label={`Delete rule: ${r.pattern}`}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-            {totalRules === 0 && (
-              <TableRow>
-                <TableCell colSpan={5}>
-                  <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
-                    No matching rules found.
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Category
+                    </Typography>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                    >
+                      <MenuItem value="all">All Categories</MenuItem>
+                      {categories.map((c) => (
+                        <MenuItem key={c.id} value={c.name}>
+                          {c.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </Box>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-        <TablePagination
-          component="div"
-          count={totalRules}
-          page={page}
-          onPageChange={(_, p) => setPage(p)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(Number(e.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50, 100]}
-        />
-      </Paper>
 
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={() => {
+                      setCategoryFilter('all');
+                      setSearchQuery('');
+                      setSearchInput('');
+                    }}
+                  >
+                    Clear All Filters
+                  </Button>
+                </Stack>
+              </PanelScroll>
+            </Panel>
+          )}
+
+          {filtersOpen && <StyledResizeHandle ariaLabel="Resize filters / table" />}
+
+          <Panel id="table" defaultSize="75%" minSize="30%">
+            <Box
+              sx={{
+                position: 'relative',
+                flexGrow: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                pl: filtersOpen ? 1 : 0,
+              }}
+            >
+              <DataTable stickyHeader size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Pattern</TableCell>
+                    <TableCell>Category</TableCell>
+                    <TableCell align="right">Matches</TableCell>
+                    <TableCell align="right">Priority</TableCell>
+                    <TableCell width={100}></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedRules?.map((r) => (
+                    <TableRow key={r.id} hover>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={r.pattern}
+                          variant="outlined"
+                          sx={{
+                            fontFamily: 'monospace',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={r.category}
+                          sx={getAccessibleChipStyles(
+                            categories?.find((c) => c.name === r.category)?.color || (isDarkMode ? '#b0bec5' : '#78909c'),
+                            isDarkMode
+                          )}
+                        />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>
+                        {matchCounts[r.id!] || 0}
+                      </TableCell>
+                      <TableCell align="right">{r.priority}</TableCell>
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          onClick={() => setEditing(r)}
+                          aria-label={`Edit rule: ${r.pattern}`}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteClick(r.id!)}
+                          aria-label={`Delete rule: ${r.pattern}`}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {totalRules === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
+                          No matching rules found.
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TablePagination
+                      count={totalRules}
+                      page={page}
+                      onPageChange={(_, p) => setPage(p)}
+                      rowsPerPage={rowsPerPage}
+                      onRowsPerPageChange={(e) => {
+                        setRowsPerPage(Number(e.target.value));
+                        setPage(0);
+                      }}
+                      rowsPerPageOptions={[10, 25, 50, 100]}
+                    />
+                  </TableRow>
+                </TableFooter>
+              </DataTable>
+            </Box>
+          </Panel>
+        </PanelGroup>
       </Box>
 
       {editing !== null && (

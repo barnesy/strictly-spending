@@ -7,7 +7,6 @@ import {
   Stack,
   Typography,
   Button,
-  Table,
   TableRow,
   TableCell,
   TableBody,
@@ -24,7 +23,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { db } from '../db';
 import { usd, usdCents } from '../lib';
-import { buildRecurrenceMap, recurrenceLabel } from '../recurrence';
+import { recurrenceLabel } from '../recurrence';
 import {
   buildForecast,
   lastMonthActualSpend,
@@ -35,25 +34,23 @@ import { useBudgetStore } from '../budgetStore';
 import { useFilters } from '../store';
 import BulkRecategorizeDialog from '../components/BulkRecategorizeDialog';
 import PageLoader from '../components/PageLoader';
+import DataTable from '../components/DataTable';
 import type { Budget as BudgetType, Category } from '../types';
+import { useDeferredRender } from '../hooks/useDeferredRender';
 
 export default function Budget() {
   const demoMode = useFilters((s) => s.demoMode);
-  const { allTransactions, categories, overrides, budgets, isDataLoading } = useDataStore(useShallow((s) => ({
+  const { allTransactions, categories, overrides, budgets, isDataLoading, globalRecurrenceMap, globalDemoRecurrenceMap } = useDataStore(useShallow((s) => ({
     allTransactions: s.transactions,
     categories: s.categories,
     overrides: s.merchantOverrides,
     budgets: s.budgets,
     isDataLoading: s.isLoading,
+    globalRecurrenceMap: s.recurrenceMap,
+    globalDemoRecurrenceMap: s.demoRecurrenceMap,
   })));
 
-  const allTxnsAll = useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 6);
-    const cutoffISO = d.toISOString().slice(0, 10);
-    return allTransactions.filter((t) => t.date >= cutoffISO);
-  }, [allTransactions]);
-  const deferredAllTxnsAll = useDeferredValue(allTxnsAll);
+  const deferredAllTxnsAll = useDeferredValue(allTransactions);
   
   const allTxns = useMemo(
     () =>
@@ -71,10 +68,7 @@ export default function Budget() {
   const toggleBudgetCategory = useBudgetStore((s) => s.toggleBudgetCategory);
   const reset = useBudgetStore((s) => s.reset);
 
-  const recurrenceMap = useMemo(
-    () => buildRecurrenceMap(allTxns || [], overrides || []),
-    [allTxns, overrides]
-  );
+  const recurrenceMap = demoMode ? globalDemoRecurrenceMap : globalRecurrenceMap;
 
   const forecast = useMemo(
     () => buildForecast(allTxns || [], recurrenceMap, categories || []),
@@ -115,8 +109,9 @@ export default function Budget() {
   }, [budgets, categories, trailingAvgByCategory]);
 
   const isLoading = isDataLoading || !allTxns || !categories || !overrides || !budgets;
+  const shouldRender = useDeferredRender();
 
-  if (isLoading) {
+  if (isLoading || !shouldRender) {
     return <PageLoader isLoading={true}><Box /></PageLoader>;
   }
 
@@ -461,7 +456,7 @@ function RecurringCard({
                   </Tooltip>
                 </Stack>
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                  <Table size="small">
+                  <DataTable component={Box} containerSx={{ border: 'none', borderRadius: 0 }} size="small">
                     <TableBody>
                       {g.list.map((item) => {
                         const isExcluded = excluded.has(item.merchantKey);
@@ -524,7 +519,7 @@ function RecurringCard({
                         );
                       })}
                     </TableBody>
-                  </Table>
+                  </DataTable>
                 </Collapse>
               </Box>
             );
@@ -686,7 +681,7 @@ function BudgetCard({
           No non-recurring spend in the last 90 days.
         </Box>
       ) : (
-        <Table size="small">
+        <DataTable component={Box} containerSx={{ border: 'none', borderRadius: 0 }} size="small">
           <TableBody>
             {sorted.map((b) => {
               const isExcluded = excluded.has(b.category);
@@ -782,7 +777,7 @@ function BudgetCard({
               );
             })}
           </TableBody>
-        </Table>
+        </DataTable>
       )}
     </Paper>
   );

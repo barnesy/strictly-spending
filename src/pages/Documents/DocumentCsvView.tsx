@@ -1,11 +1,9 @@
 import { useMemo, useState, useEffect } from 'react';
 import {
   Box,
-  Paper,
-  Table,
   TableBody,
   TableCell,
-  TableContainer,
+  TableFooter,
   TableHead,
   TableRow,
   Tabs,
@@ -16,6 +14,7 @@ import {
   MenuItem
 } from '@mui/material';
 import Papa from 'papaparse';
+import DataTable from '../../components/DataTable';
 
 interface DocumentCsvViewProps {
   loadedContent: string;
@@ -98,8 +97,7 @@ export function DocumentCsvView({
         ))}
       </Tabs>
       
-      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: (theme) => `${theme.shape.borderRadius}px`, maxHeight: '60vh', overflowY: 'auto' }}>
-        <Table size="small" stickyHeader>
+      <DataTable containerSx={{ maxHeight: '60vh' }} size="small" stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>Date</TableCell>
@@ -150,21 +148,23 @@ export function DocumentCsvView({
               );
             })}
           </TableBody>
-        </Table>
-        <TablePagination
-          component="div"
-          count={filteredRows.length}
-          page={page}
-          onPageChange={(_, p) => setPage(p)}
-          rowsPerPage={pageSize}
-          onRowsPerPageChange={(e) => {
-            setPageSize(Number(e.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[25, 50, 100, 250]}
-          sx={{ borderTop: '1px solid rgba(0, 0, 0, 0.08)' }}
-        />
-      </TableContainer>
+          <TableFooter>
+            <TableRow>
+              <TablePagination
+                count={filteredRows.length}
+                page={page}
+                onPageChange={(_, p) => setPage(p)}
+                rowsPerPage={pageSize}
+                onRowsPerPageChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(0);
+                }}
+                rowsPerPageOptions={[25, 50, 100, 250]}
+                sx={{ borderTop: '1px solid rgba(0, 0, 0, 0.08)' }}
+              />
+            </TableRow>
+          </TableFooter>
+        </DataTable>
     </Box>
   );
 }

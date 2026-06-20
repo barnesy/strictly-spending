@@ -155,12 +155,15 @@ export class OllamaProvider implements AIProvider {
             ...cleanedMessages
           ];
 
+      const isGemma = this.modelName.toLowerCase().includes('gemma');
+      const numCtx = isGemma ? 8192 : 4096; // Adjust context based on model
+
       const schema = responseSchema !== undefined ? responseSchema : COPILOT_RESPONSE_SCHEMA;
       const body: any = {
         model: this.modelName,
         messages: fullMessages,
         stream: !!onChunk,
-        options: { temperature: 0.2, num_predict: 1024 }
+        options: { temperature: 0.2, num_predict: 1024, num_ctx: numCtx }
       };
 
       if (schema) {

@@ -13,8 +13,7 @@ import { buildRecurrenceMap } from '../../recurrence';
 import { buildForecast } from '../../forecast';
 import { useBudgetStore } from '../../budgetStore';
 import type { ProposedCategorizationItem } from '../../types';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
+
 import { generatePnlData, generateBalanceSheetData, generateLedgerData, generateExpenseSummaryData } from '../../pnlGenerator';
 
 function findMatchingSkillForPrompt(prompt: string, skills: any[]): any | null {
@@ -333,7 +332,20 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
         currentCompletedStages = [];
       } else {
         const activeSkill = allSkills.find(s => s.id === lastAssistantMsg?.activeSkillId);
-        if (activeSkill && lastAssistantMsg?.completedStages && lastAssistantMsg.completedStages.length < (activeSkill.stages?.length || 0)) {
+        let lastAction = 'none';
+        if (lastAssistantMsg) {
+          try {
+            const parsed = parseAIResponse(lastAssistantMsg.content);
+            lastAction = parsed?.agent_action?.action || 'none';
+          } catch {}
+        }
+        
+        const hasUncompletedStages = activeSkill && activeSkill.stages && activeSkill.stages.length > 0 &&
+          lastAssistantMsg?.completedStages && lastAssistantMsg.completedStages.length < activeSkill.stages.length;
+          
+        const isStillRunningActions = activeSkill && lastAction !== 'none';
+        
+        if (hasUncompletedStages || isStillRunningActions) {
           currentSkillId = lastAssistantMsg.activeSkillId;
           currentCompletedStages = lastAssistantMsg.completedStages || [];
         } else {
@@ -384,16 +396,8 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             ]
           : cleanedHistory;
 
-        // Force next stage via System Enforcement if in a skill
-        let forcedNextStage: any = null;
+        // Load active skill definitions (without system enforcement overrides)
         const activeSkill = allSkills.find(s => s.id === currentSkillId);
-        if (activeSkill && activeSkill.stages && currentCompletedStages.length < activeSkill.stages.length) {
-          forcedNextStage = activeSkill.stages[currentCompletedStages.length];
-          activeHistory.push({
-            role: 'system',
-            content: `[SYSTEM ENFORCEMENT] You are currently executing the multi-step skill '${activeSkill.name}'. You have completed stages: [${currentCompletedStages.join(', ')}]. The REQUIRED next stage is '${forcedNextStage.title}'. You MUST output 'agent_action.action' = '${forcedNextStage.requiredAction}' in this turn. Do not skip stages.`
-          });
-        }
 
         let customSchema: any = undefined;
         if (isLastLoop) {
@@ -401,10 +405,18 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
           if (customSchema.properties?.agent_action?.properties?.action) {
             customSchema.properties.agent_action.properties.action.enum = ['none'];
           }
-        } else if (forcedNextStage) {
-          customSchema = JSON.parse(JSON.stringify(COPILOT_RESPONSE_SCHEMA));
-          if (customSchema.properties?.agent_action?.properties?.action) {
-            customSchema.properties.agent_action.properties.action.enum = [forcedNextStage.requiredAction];
+        } else if (activeSkill && activeSkill.stages) {
+          const expectedStage = activeSkill.stages[currentCompletedStages.length];
+          if (expectedStage) {
+            customSchema = JSON.parse(JSON.stringify(COPILOT_RESPONSE_SCHEMA));
+            if (customSchema.properties?.agent_action?.properties?.action) {
+              customSchema.properties.agent_action.properties.action.enum = [expectedStage.requiredAction];
+            }
+          } else {
+            customSchema = JSON.parse(JSON.stringify(COPILOT_RESPONSE_SCHEMA));
+            if (customSchema.properties?.agent_action?.properties?.action) {
+              customSchema.properties.agent_action.properties.action.enum = ['none'];
+            }
           }
         }
 
@@ -453,12 +465,13 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
 
         let feedbackError: string | null = null;
 
-        if (forcedNextStage && action !== forcedNextStage.requiredAction) {
-          console.warn(`Enforcement triggered: LLM tried ${action}, forced to ${forcedNextStage.requiredAction}`);
-          feedbackError = `[SYSTEM ENFORCEMENT ERROR] You attempted to use '${action}', but you are required to use '${forcedNextStage.requiredAction}' next for the '${activeSkill?.name}' skill. Please correct your action.`;
-          action = 'none'; // Prevent wrong action
-        } else if (forcedNextStage && action === forcedNextStage.requiredAction) {
-          currentCompletedStages = [...currentCompletedStages, action];
+        // Dynamic Stage Completion check:
+        if (activeSkill && activeSkill.stages) {
+          const expectedStage = activeSkill.stages[currentCompletedStages.length];
+          if (expectedStage && action === expectedStage.requiredAction) {
+            currentSteps.push(`Skill Stage: ${expectedStage.title}`);
+            currentCompletedStages = [...currentCompletedStages, action];
+          }
         }
 
         // Safety net: Force data query before P&L document generation
@@ -1355,9 +1368,6 @@ Please summarize this accessibility report for the developer in the 'body' field
           } else {
             try {
               let filePath: string | null = null;
-              let csvFilePath: string | null = null;
-              const isTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
-              
               if (isNativeDualFormat && generatedCsv) {
                 let baseName = 'Document';
                 if (docType === 'business_pnl') baseName = 'P&L_Statement';
@@ -1366,26 +1376,8 @@ Please summarize this accessibility report for the developer in the 'body' field
                 if (docType === 'deduction_expense_summary') baseName = 'Expense_Summary';
 
                 const defaultMdFilename = `Tax_${baseName}_${new Date().getFullYear()}.md`;
-                const defaultCsvFilename = `Tax_${baseName}_Spreadsheet_${new Date().getFullYear()}.csv`;
 
-                if (isTauri) {
-                  filePath = await save({
-                    filters: [{ name: 'Markdown Report', extensions: ['md'] }],
-                    defaultPath: defaultMdFilename
-                  });
-                  if (filePath) {
-                    await writeTextFile(filePath, content);
-                    csvFilePath = filePath.replace(/\.md$/i, '.csv');
-                    if (csvFilePath === filePath) {
-                      csvFilePath = filePath + '.csv';
-                    }
-                    await writeTextFile(csvFilePath, generatedCsv);
-                  }
-                } else {
-                  // Web browser fallback
-                  filePath = `~/Downloads/${defaultMdFilename}`;
-                  csvFilePath = `~/Downloads/${defaultCsvFilename}`;
-                }
+                filePath = `~/Documents/${defaultMdFilename}`;
 
                 if (filePath) {
                   const filename = filePath.split(/[\\/]/).pop() || defaultMdFilename;
@@ -1431,7 +1423,7 @@ Please summarize this accessibility report for the developer in the 'body' field
 
                   systemResultsMsg = {
                     role: 'system',
-                    content: `Document successfully generated and saved to ${filePath}. The document has been automatically attached to the tax checklist item '${docType}' and stored in the Documents tab. Inform the user they can view it in Finder.`
+                    content: `Document successfully generated. The document has been automatically attached to the tax checklist item '${docType}' and stored in the Documents tab.`
                   };
 
                   actionResult = {
@@ -1441,11 +1433,6 @@ Please summarize this accessibility report for the developer in the 'body' field
                     documentName: filename,
                     content,
                     path: filePath
-                  };
-                } else {
-                  systemResultsMsg = {
-                    role: 'system',
-                    content: `The user canceled the save dialog. The document was not generated.`
                   };
                 }
               } else {
@@ -1466,17 +1453,7 @@ Please summarize this accessibility report for the developer in the 'body' field
                   defaultFilename = `Tax_1099_NEC_Issued_${new Date().getFullYear()}.${defaultExt}`;
                 }
                 
-                if (isTauri) {
-                  filePath = await save({
-                    filters: [{ name: 'Document', extensions: [defaultExt] }],
-                    defaultPath: defaultFilename
-                  });
-                  if (filePath) {
-                    await writeTextFile(filePath, content);
-                  }
-                } else {
-                  filePath = `~/Downloads/${defaultFilename}`;
-                }
+                filePath = `~/Documents/${defaultFilename}`;
 
                 if (filePath) {
                   const filename = filePath.split(/[\\/]/).pop() || 'Generated_Document';
@@ -1505,7 +1482,7 @@ Please summarize this accessibility report for the developer in the 'body' field
 
                     systemResultsMsg = {
                       role: 'system',
-                      content: `Document successfully generated and saved to ${filePath}. The document has been automatically attached to the tax checklist item '${docType}' and stored in the Documents tab. Inform the user they can view it in Finder.`
+                      content: `Document successfully generated. The document has been automatically attached to the tax checklist item '${docType}' and stored in the Documents tab.`
                     };
                   } else {
                     await db.documents.put({
@@ -1524,7 +1501,7 @@ Please summarize this accessibility report for the developer in the 'body' field
 
                     systemResultsMsg = {
                       role: 'system',
-                      content: `Document successfully generated and saved to ${filePath}. The document has been stored in the Documents tab. Inform the user they can view it in Finder.`
+                      content: `Document successfully generated and stored in the Documents tab.`
                     };
                   }
 
@@ -1535,11 +1512,6 @@ Please summarize this accessibility report for the developer in the 'body' field
                     documentName: filename,
                     content,
                     path: filePath
-                  };
-                } else {
-                  systemResultsMsg = {
-                    role: 'system',
-                    content: `The user canceled the save dialog. The document was not generated.`
                   };
                 }
               }

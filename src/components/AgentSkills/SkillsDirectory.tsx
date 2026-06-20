@@ -3,21 +3,20 @@ import {
   Box,
   Typography,
   Button,
-  Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Switch,
   Chip,
   IconButton,
   Stack,
-  Paper,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import DataTable from '../DataTable';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import RestoreIcon from '@mui/icons-material/Restore';
 import type { AgentSkill } from '../../types';
 
 export interface SkillsDirectoryProps {
@@ -26,6 +25,7 @@ export interface SkillsDirectoryProps {
   onToggleSkill: (id: string) => void;
   onEditSkill: (skill: AgentSkill) => void;
   onDeleteSkill: (id: string) => void;
+  onResetSkill?: (skill: AgentSkill) => void;
 }
 
 export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
@@ -34,9 +34,10 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
   onToggleSkill,
   onEditSkill,
   onDeleteSkill,
+  onResetSkill,
 }) => {
   return (
-    <Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2 }}>
         <Button
           size="small"
@@ -54,8 +55,7 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
           No skills found. Seeding defaults...
         </Typography>
       ) : (
-        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: (theme) => `${theme.shape.borderRadius}px`, overflow: 'hidden' }}>
-          <Table sx={{ '& .MuiTableCell-root': { py: 1.5, px: 2 } }}>
+        <DataTable>
             <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, width: 80 }}>Active</TableCell>
@@ -105,6 +105,16 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
                   </TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      {skill.isBuiltIn && skill.isModified && onResetSkill && (
+                        <IconButton
+                          size="small"
+                          onClick={() => onResetSkill(skill)}
+                          color="warning"
+                          title="Reset to Default"
+                        >
+                          <RestoreIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      )}
                       <IconButton
                         size="small"
                         onClick={() => onEditSkill(skill)}
@@ -126,8 +136,7 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </TableContainer>
+          </DataTable>
       )}
     </Box>
   );

@@ -4,6 +4,7 @@ import { Box, Stack, Typography, Paper, Tabs, Tab, Snackbar } from '@mui/materia
 import { db } from '../db';
 import type { AgentSkill, SkillTestCase, AgentSkillStage } from '../types';
 import { useChatStore } from '../chatStore';
+import { DEFAULT_SKILLS } from '../defaultSkills';
 import { GENERAL_SYSTEM_PROMPT, runSkillTestCase, runSystemPromptTestCase, BASELINE_TEST_CASES, CURRENT_PROMPT_VERSION } from '../ai';
 
 import { LicenseGate } from '../components/AgentSkills/LicenseGate';
@@ -201,6 +202,10 @@ export const AgentSkills: React.FC = () => {
         const idx = updatedSkills.findIndex(s => s.id === def.id);
         if (idx >= 0) {
           const existing = updatedSkills[idx];
+          if (existing.isModified) {
+            // Skip overwriting user modifications
+            return;
+          }
           if (
             existing.name !== def.name ||
             existing.description !== def.description ||
@@ -208,7 +213,7 @@ export const AgentSkills: React.FC = () => {
             JSON.stringify(existing.stages) !== JSON.stringify(def.stages) ||
             JSON.stringify(existing.testCases) !== JSON.stringify(def.testCases)
           ) {
-            updatedSkills[idx] = { ...def, enabled: existing.enabled };
+            updatedSkills[idx] = { ...def, enabled: existing.enabled, isModified: false };
             hasChanges = true;
           }
         } else {
@@ -217,111 +222,7 @@ export const AgentSkills: React.FC = () => {
         }
       };
 
-      upsertBuiltInSkill({
-        id: 'builtin:runway',
-        name: 'Financial Runway & Cash Projection',
-        description: 'Uses the project_runway tool to calculate budget runway based on cash reserves, CC debt, and monthly outflow.',
-        systemPromptExtension: `- When asked about financial runway, cash rundown, or CC debt:
-  1. Stage 1: You MUST set 'agent_action.action' to 'project_runway'. Do NOT perform calculations or output tables in the body during Stage 1.
-  2. Stage 2: Once the runway metrics are returned, output the starting cash reserves, monthly outflow, and runway months in a clean markdown table.
-  3. If the user asks for a simulation (e.g. "What if I get $30k more cash?"), adjust the returned base numbers mathematically.`,
-        enabled: true,
-        isBuiltIn: true,
-        stages: [
-          { title: 'Project Runway', requiredAction: 'project_runway' }
-        ],
-        testCases: [
-          {
-            prompt: "How much runway do I have?",
-            criteria: "Must call the project_runway action in Stage 1, and in Stage 2 format the runway metrics in a markdown table."
-          },
-          {
-            prompt: "If I get 30k of income how much runway would I have if I raise the budget by $1000/month",
-            criteria: "Must call project_runway in Stage 1, and in Stage 2 mathematically adjust the provided numbers in a markdown table (e.g. 20 months)."
-          }
-        ]
-      });
-
-      upsertBuiltInSkill({
-        id: 'builtin:categorization',
-        name: 'Manual Transaction Categorization',
-        description: 'Uses local AI to auto-categorize uncategorized transactions chunk-by-chunk.',
-        systemPromptExtension: `- When asked to auto-categorize, sort, organize, classify, or run AI review/categorization on remaining, new, or uncategorized transactions (e.g. phrases like "auto-categorize", "auto categorize", "AI categorize", "sort transactions using AI", "classify remaining transactions", "run categorization"):
-  1. Stage 1: You MUST set 'agent_action.action' to 'categorize_transactions'. Do NOT explain results, suggest rules, or do math in the body field during Stage 1.
-  2. Stage 2: Once the database updates are completed and the system returns the count of processed transactions, summarize the categorization results clearly in the body. Cite the exact count of processed transactions.`,
-        enabled: true,
-        isBuiltIn: true,
-        stages: [
-          { title: 'Categorize Transactions', requiredAction: 'categorize_transactions' }
-        ],
-        testCases: [
-          {
-            prompt: "AI categorize remaining transactions",
-            criteria: "Must call the categorize_transactions action in Stage 1."
-          },
-          {
-            prompt: "please auto-categorize all uncategorized items",
-            criteria: "Must call categorize_transactions to initiate the AI review."
-          }
-        ]
-      });
-
-      upsertBuiltInSkill({
-        id: 'builtin:pnl',
-        name: 'Generate Profit & Loss Statement',
-        description: 'Queries financial data and generates a business Profit and Loss statement, saving it to the Documents tab.',
-        systemPromptExtension: `- To generate a business Profit and Loss (P&L) document, you must follow a multi-step sequence:
-  1. Stage 1: You MUST immediately set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd". This is required to fetch the raw transaction data. Do NOT generate the document content in Stage 1.
-  2. Stage 2: Once the database query results are returned, you MUST set 'agent_action.action' to 'generate_document', specify 'documentType' as "business_pnl", and write the Profit and Loss statement in 'documentContent' based on the queried data.
-
-In Stage 2, you MUST write the Profit and Loss document in 'documentContent' and a short conversational explanation in 'body'.
-- Set 'body' to a brief summary message, e.g.: "I have successfully generated your Profit & Loss statement YTD. You can view the document or download it below."
-- Write the actual Profit & Loss document inside 'agent_action.documentContent'. Do NOT write the document in 'body'.
-- Do NOT start 'agent_action.documentContent' with a '{' or as a JSON object. Start it directly with the markdown heading: "# Profit & Loss Statement".
-
-The markdown content of the P&L document in 'documentContent' MUST be structured exactly as a markdown table with an appendix containing the transaction math computation details:
-# Profit & Loss Statement (YTD)
-**Period:** [Start Date] to [End Date] (from the query results)
-**Basis:** Cash
-
-| Line Item / Category | Amount |
-| :--- | ---: |
-| **REVENUE** | |
-| Income | $[Income Amount] |
-| **Total Revenue** | **$[Income Amount]** |
-| | |
-| **OPERATING EXPENSES** | |
-| [Category Name] | $[Category Amount] |
-...
-| **Total Operating Expenses** | **$[Total Spent Amount]** |
-| | |
-| **NET SUMMARY** | |
-| **Net Income** | **$[Net Income Amount]** |
-
----
-## Transaction Computation Details
-This appendix contains all associated transactions that make up the computation of the summary numbers above. Group the transactions under their respective category with headers displaying the total (e.g. "### Category: [Category Name] (Total: $[Total Category Sum])").
-For each category, list the transactions in a table:
-| Date | Description | Original Amount | Computation Value |
-| :--- | :--- | ---: | ---: |
-| [Date] | [Merchant Description] | $[Original Amt] | $[Comp Value] |`,
-        enabled: true,
-        isBuiltIn: true,
-        stages: [
-          { title: 'Query Data', requiredAction: 'query_data' },
-          { title: 'Generate Document', requiredAction: 'generate_document' }
-        ],
-        testCases: [
-          {
-            prompt: "generate business P&L",
-            criteria: "Must call the query_data action in Stage 1 with categories set to ['all'] and preset set to 'ytd'."
-          },
-          {
-            prompt: "help me create a P&L for my business",
-            criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'business_pnl'."
-          }
-        ]
-      });
+      DEFAULT_SKILLS.forEach(skill => upsertBuiltInSkill(skill));
 
       if (hasChanges || updatedSkills.length !== currentSkills.length) {
         await db.settings.put({ key: 'app:agentSkills', value: updatedSkills });
@@ -376,7 +277,8 @@ For each category, list the transactions in a table:
         ...currentSkills[existingIndex],
         ...skill,
         enabled: skill.enabled ?? currentSkills[existingIndex].enabled,
-        testCases: skill.testCases ?? currentSkills[existingIndex].testCases ?? []
+        testCases: skill.testCases ?? currentSkills[existingIndex].testCases ?? [],
+        isModified: currentSkills[existingIndex].isBuiltIn ? true : currentSkills[existingIndex].isModified
       };
     } else {
       updated = [
@@ -475,6 +377,7 @@ For each category, list the transactions in a table:
       description: skillFormDesc.trim(),
       systemPromptExtension: skillFormPrompt.trim(),
       isBuiltIn: editorSkill?.isBuiltIn || false,
+      isModified: editorSkill?.isBuiltIn ? true : undefined,
       enabled: editorSkill?.enabled ?? true,
       testCases: editorSkill?.testCases || [],
       stages: skillFormStages
@@ -527,6 +430,16 @@ For each category, list the transactions in a table:
      setTestCaseDialogIndex(null);
      setTestCaseDialogPrompt('');
      setTestCaseDialogCriteria('');
+  };
+
+  const handleResetSkill = async (skill: AgentSkill) => {
+    if (window.confirm(`Are you sure you want to reset '${skill.name}' to its default configuration? All your custom edits will be lost.`)) {
+      const def = DEFAULT_SKILLS.find(s => s.id === skill.id);
+      if (!def) return;
+      const updatedSkill = { ...def, enabled: skill.enabled, isModified: false };
+      await handleSaveSkill(updatedSkill);
+      setSnackbarMessage('Skill reset to default successfully!');
+    }
   };
 
   const handleDeleteTestCase = async (index: number) => {
@@ -841,15 +754,15 @@ For each category, list the transactions in a table:
   }
 
   return (
-    <Stack spacing={3}>
+    <Stack spacing={3} sx={{ flexGrow: 1, minHeight: 0 }}>
       <Box>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Agent Skills
         </Typography>
       </Box>
 
-      <Paper sx={{ p: 3 }}>
-        <Stack spacing={2.5}>
+      <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>
+        <Stack spacing={2.5} sx={{ flexGrow: 1, minHeight: 0 }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
             <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)}>
               <Tab label="Agent Skills Directory" />
@@ -865,6 +778,7 @@ For each category, list the transactions in a table:
               onToggleSkill={handleToggleSkill}
               onEditSkill={handleOpenEditSkill}
               onDeleteSkill={handleDeleteSkill}
+              onResetSkill={handleResetSkill}
             />
           )}
 

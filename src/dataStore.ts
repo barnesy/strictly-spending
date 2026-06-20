@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { db } from './db';
 import type { Transaction, Account, Category, MerchantOverride, Budget, CategoryRule } from './types';
+import { buildRecurrenceMap, type RecurrenceInfo } from './recurrence';
 
 interface DataState {
   transactions: Transaction[];
@@ -9,6 +10,8 @@ interface DataState {
   merchantOverrides: MerchantOverride[];
   budgets: Budget[];
   rules: CategoryRule[];
+  recurrenceMap: Map<string, RecurrenceInfo>;
+  demoRecurrenceMap: Map<string, RecurrenceInfo>;
   isInitialized: boolean;
   isLoading: boolean;
   
@@ -24,6 +27,8 @@ export const useDataStore = create<DataState>((set, get) => ({
   merchantOverrides: [],
   budgets: [],
   rules: [],
+  recurrenceMap: new Map(),
+  demoRecurrenceMap: new Map(),
   isInitialized: false,
   isLoading: false,
 
@@ -44,6 +49,12 @@ export const useDataStore = create<DataState>((set, get) => ({
       db.rules.toArray(),
     ]);
 
+    const realTxns = txns.filter(t => t.source !== 'demo');
+    const demoTxns = txns.filter(t => t.source === 'demo');
+
+    const recurrenceMap = buildRecurrenceMap(realTxns, overrides);
+    const demoRecurrenceMap = buildRecurrenceMap(demoTxns, overrides);
+
     set({
       transactions: txns,
       accounts: accts,
@@ -51,6 +62,8 @@ export const useDataStore = create<DataState>((set, get) => ({
       merchantOverrides: overrides,
       budgets: bdgts,
       rules: rls,
+      recurrenceMap,
+      demoRecurrenceMap,
     });
   },
 
