@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Stack,
@@ -82,17 +82,17 @@ const FONTS = [
 
 export default function ThemeManager() {
   const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
-  const config = (themeSetting?.value as any) || {};
+  const config = (themeSetting?.value as Record<string, unknown>) || {};
 
-  const mode = config.mode || 'light';
-  const paletteName = config.paletteName || '';
-  const borderRadius = config.borderRadius ?? 8;
-  const fontFamily = config.fontFamily || FONTS[0].value;
-  const fontSize = config.fontSize ?? 14;
+  const mode = (config.mode as string) || 'light';
+  const paletteName = (config.paletteName as string) || '';
+  const borderRadius = (config.borderRadius as number) ?? 8;
+  const fontFamily = (config.fontFamily as string) || FONTS[0].value;
+  const fontSize = (config.fontSize as number) ?? 14;
 
-  const updateTheme = async (updates: any) => {
-    let newMode = updates.mode || mode;
-    let nextConfig = { ...config, mode: newMode, ...updates };
+  const updateTheme = async (updates: Record<string, unknown>) => {
+    const newMode = updates.mode || mode;
+    const nextConfig: any = { ...config, mode: newMode, ...updates };
 
     // If we just toggled mode, and we are using a preset palette, we need to swap the bg/paper colors
     if (updates.mode && nextConfig.paletteName) {
@@ -110,14 +110,18 @@ export default function ThemeManager() {
   };
 
   const [localRadius, setLocalRadius] = useState(borderRadius);
-  useEffect(() => {
+  const [prevRadius, setPrevRadius] = useState(borderRadius);
+  if (borderRadius !== prevRadius) {
+    setPrevRadius(borderRadius);
     setLocalRadius(borderRadius);
-  }, [borderRadius]);
+  }
 
   const [localFontSize, setLocalFontSize] = useState(fontSize);
-  useEffect(() => {
+  const [prevFontSize, setPrevFontSize] = useState(fontSize);
+  if (fontSize !== prevFontSize) {
+    setPrevFontSize(fontSize);
     setLocalFontSize(fontSize);
-  }, [fontSize]);
+  }
 
   const handleRadiusChangeCommitted = (_event: Event | React.SyntheticEvent, value: number | number[]) => {
     updateTheme({ borderRadius: value as number });

@@ -1,9 +1,7 @@
 import { db } from './db';
-import { buildRecurrenceMap } from './recurrence';
-import { buildForecast } from './forecast';
-import { useBudgetStore } from './budgetStore';
 import { useDataStore } from './dataStore';
 import { SCHEDULE_C_CATEGORIES } from './taxUtils';
+import type { Transaction } from './types';
 
 export interface PnlParams {
   start: string;
@@ -35,38 +33,12 @@ export async function generatePnlData(params: PnlParams) {
   const allTxns = store.isInitialized ? store.transactions : await db.transactions.toArray();
 
   const rawSettings = await db.settings.get('app:taxSettings');
-  const taxSettings = (rawSettings?.value as any) || { hasBusiness: false };
+  const taxSettings = (rawSettings?.value as { hasBusiness?: boolean }) || { hasBusiness: false };
   const hasBusinessMode = !!taxSettings.hasBusiness;
 
   const categoryTypes: Record<string, string> = {};
   for (const c of allCats) {
     categoryTypes[c.name.toLowerCase()] = c.type;
-  }
-
-  const budgets = await db.budgets.toArray();
-  const overrides = await db.merchantOverrides.toArray();
-  const recurrenceMap = buildRecurrenceMap(allTxns, overrides);
-  const forecast = buildForecast(allTxns, recurrenceMap, allCats);
-  const recurring = forecast.filter((f) => f.kind === 'recurring');
-
-  const budgetStore = useBudgetStore.getState();
-  const excludedMerchants = budgetStore.excludedMerchants;
-  const excludedBudgetCategories = budgetStore.excludedBudgetCategories;
-
-  let monthlyBudget = 0;
-  for (const catName of resolvedCats) {
-    const catNameLower = catName.toLowerCase();
-    if (!excludedBudgetCategories.has(catName)) {
-      const b = budgets.find(x => x.category.toLowerCase() === catNameLower);
-      if (b) {
-        monthlyBudget += b.monthlyAmount;
-      }
-    }
-    const catRecurring = recurring.filter(
-      r => r.category.toLowerCase() === catNameLower && !excludedMerchants.has(r.merchantKey)
-    );
-    const recurringSum = catRecurring.reduce((sum, r) => sum + r.monthlyEstimate, 0);
-    monthlyBudget += recurringSum;
   }
 
   const matchedTxns = allTxns.filter(t => {
@@ -163,7 +135,7 @@ export async function generatePnlData(params: PnlParams) {
   tableRows.push(`| [**Net Income (Profit/Loss)**](doc://${spreadsheetDocId}#tab=All) | [${netIncomeText}](doc://${spreadsheetDocId}#tab=All) |`);
 
   // Build groups of transactions per category
-  const categoryTxnsMap = new Map<string, any[]>();
+  const categoryTxnsMap = new Map<string, Transaction[]>();
   for (const t of matchedTxns) {
     if (t.category.toLowerCase() === 'transfers') continue;
     
@@ -323,7 +295,7 @@ export async function generateBalanceSheetData(params: BalanceSheetParams) {
   const allTxns = store.isInitialized ? store.transactions : await db.transactions.toArray();
 
   const rawSettings = await db.settings.get('app:taxSettings');
-  const taxSettings = (rawSettings?.value as any) || { hasBusiness: false };
+  const taxSettings = (rawSettings?.value as { hasBusiness?: boolean }) || { hasBusiness: false };
   const hasBusinessMode = !!taxSettings.hasBusiness;
 
   const activeAccounts = allAccts.filter(a => a.id !== undefined && resolvedAccts.includes(a.id));

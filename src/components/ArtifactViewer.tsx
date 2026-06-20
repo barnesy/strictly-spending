@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -24,21 +24,27 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../chatStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import type { AgentSkill } from '../types';
 import SimpleMarkdown from './SimpleMarkdown';
 
 export default function ArtifactViewer() {
-  const { activeArtifact, setActiveArtifact } = useChatStore();
+  const { activeArtifact, setActiveArtifact } = useChatStore(useShallow((s) => ({
+    activeArtifact: s.activeArtifact,
+    setActiveArtifact: s.setActiveArtifact,
+  })));
   const navigate = useNavigate();
   const activeSkills = useLiveQuery(() => db.settings.get('app:agentSkills'), [])?.value as AgentSkill[] || [];
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  useEffect(() => {
+  const [prevArtifact, setPrevArtifact] = useState(activeArtifact);
+  if (activeArtifact !== prevArtifact) {
+    setPrevArtifact(activeArtifact);
     setIsFullscreen(false);
-  }, [activeArtifact]);
+  }
 
   if (!activeArtifact) return null;
 

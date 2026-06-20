@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Default category taxonomy + a comprehensive US-household starter rule pack.
 //
 // IMPORTANT (privacy): the rules in this file are a generic "starter pack"

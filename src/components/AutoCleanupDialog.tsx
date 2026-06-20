@@ -86,9 +86,16 @@ export default function AutoCleanupDialog({ open, categories, onClose, onComplet
   const [customRetroCategories, setCustomRetroCategories] = useState<Record<string, string>>({});
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setLoading(true);
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
       generateCleanupReport().then(rep => {
         setReport(rep);
         setSelectedSuggestions(new Set(rep.suggestions.map(s => s.pattern + '|' + s.category)));

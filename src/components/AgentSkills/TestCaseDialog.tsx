@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -31,12 +31,14 @@ export const TestCaseDialog: React.FC<TestCaseDialogProps> = ({
   const [prompt, setPrompt] = useState(initialPrompt);
   const [criteria, setCriteria] = useState(initialCriteria);
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setPrompt(initialPrompt);
       setCriteria(initialCriteria);
     }
-  }, [open, initialPrompt, initialCriteria]);
+  }
 
   const handleSave = () => {
     onSave(prompt, criteria);

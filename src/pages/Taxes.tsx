@@ -26,14 +26,10 @@ import {
   Button,
   Stack,
 } from '@mui/material';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
-import PersonIcon from '@mui/icons-material/Person';
-import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
-import SettingsIcon from '@mui/icons-material/Settings';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
+import { useDataStore } from '../dataStore';
 import type { TaxSettings } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
 import { SCHEDULE_C_CATEGORIES, guessTaxFields } from '../taxUtils';
@@ -98,13 +94,9 @@ export default function Taxes() {
 
   const documents = useLiveQuery(() => db.documents?.toArray(), []) || [];
 
-  const transactions = useLiveQuery(
-    () => db.transactions.toArray(),
-    []
-  ) || [];
-
-  const accounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
-  const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
+  const transactions = useDataStore((s) => s.transactions);
+  const accounts = useDataStore((s) => s.accounts);
+  const categories = useDataStore((s) => s.categories);
 
   const [bulkPromptOpen, setBulkPromptOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState<{
@@ -122,10 +114,10 @@ export default function Taxes() {
     });
   };
 
-  const updateNestedSetting = (category: keyof TaxSettings, field: string, value: any) => {
+  const updateNestedSetting = (category: keyof TaxSettings, field: string, value: unknown) => {
     handleUpdateSettings({
       [category]: {
-        ...(taxSettings[category] as any || {}),
+        ...(taxSettings[category] as Record<string, unknown> || {}),
         [field]: value
       }
     });
@@ -268,8 +260,7 @@ export default function Taxes() {
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, md: 0 } }}>
       <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h4" fontWeight="800" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <ReceiptLongIcon fontSize="large" color="primary" />
+          <Typography variant="h4" fontWeight="800" sx={{ mb: 1 }}>
             Tax Center
           </Typography>
           <Typography variant="body1" color="text.secondary">
@@ -298,7 +289,7 @@ export default function Taxes() {
         <Grid size={{ xs: 12, md: 4 }}>
           <Paper
             elevation={0}
-            sx={{ p: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider', height: '100%', 
+            sx={{ p: 3, borderRadius: (theme) => `${theme.shape.borderRadius}px`, border: '1px solid', borderColor: 'divider', height: '100%', 
                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.primary.main, 0.01)} 100%)` }}
           >
             <Typography variant="subtitle2" color="text.secondary" fontWeight="600" gutterBottom>
@@ -306,7 +297,7 @@ export default function Taxes() {
             </Typography>
             <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ flex: 1 }}>
-                 <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 10, borderRadius: 5 }} color={progressPercent === 100 ? 'success' : 'primary'} />
+                 <LinearProgress variant="determinate" value={progressPercent} sx={{ height: 10, borderRadius: (theme) => `${theme.shape.borderRadius}px` }} color={progressPercent === 100 ? 'success' : 'primary'} />
               </Box>
               <Typography variant="h6" fontWeight="700" color={progressPercent === 100 ? 'success.main' : 'primary.main'}>
                 {Math.round(progressPercent)}%
@@ -318,7 +309,7 @@ export default function Taxes() {
           </Paper>
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider', height: '100%' }}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: (theme) => `${theme.shape.borderRadius}px`, border: '1px solid', borderColor: 'divider', height: '100%' }}>
             <Typography variant="subtitle2" color="text.secondary" fontWeight="600" gutterBottom>
               Personal Deductions Identified
             </Typography>
@@ -331,7 +322,7 @@ export default function Taxes() {
           </Paper>
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider', height: '100%' }}>
+          <Paper elevation={0} sx={{ p: 3, borderRadius: (theme) => `${theme.shape.borderRadius}px`, border: '1px solid', borderColor: 'divider', height: '100%' }}>
             <Typography variant="subtitle2" color="text.secondary" fontWeight="600" gutterBottom>
               Business Expenses Identified
             </Typography>
@@ -349,10 +340,10 @@ export default function Taxes() {
       <Box sx={{ mb: 6 }}>
 
         {/* 1. Business Basics */}
-        <Accordion defaultExpanded sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+        <Accordion defaultExpanded sx={{ mb: 2, borderRadius: (theme) => `${theme.shape.borderRadius}px`, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(theme.palette.background.default, 0.5) }}>
-            <Typography variant="h6" fontWeight="700" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <BusinessCenterIcon color="primary" /> Business Basics & Financials
+            <Typography variant="h6" fontWeight="700">
+              Business Basics & Financials
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
@@ -396,10 +387,10 @@ export default function Taxes() {
         </Accordion>
 
         {/* Default Tax Rules (Accounts & Categories) */}
-        <Accordion sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+        <Accordion sx={{ mb: 2, borderRadius: (theme) => `${theme.shape.borderRadius}px`, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(theme.palette.background.default, 0.5) }}>
-            <Typography variant="h6" fontWeight="700" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SettingsIcon color="action" /> Default Tax Deduction Rules
+            <Typography variant="h6" fontWeight="700">
+              Default Tax Deduction Rules
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
@@ -516,10 +507,10 @@ export default function Taxes() {
 
         {/* 2. Business Income */}
         {taxSettings.hasBusiness && (
-          <Accordion sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+          <Accordion sx={{ mb: 2, borderRadius: (theme) => `${theme.shape.borderRadius}px`, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(theme.palette.background.default, 0.5) }}>
-              <Typography variant="h6" fontWeight="700" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <MonetizationOnIcon color="success" /> Business Income & Tax Forms
+              <Typography variant="h6" fontWeight="700">
+                Business Income & Tax Forms
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
@@ -560,10 +551,10 @@ export default function Taxes() {
 
         {/* 3. Business Deductions */}
         {taxSettings.hasBusiness && (
-          <Accordion sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+          <Accordion sx={{ mb: 2, borderRadius: (theme) => `${theme.shape.borderRadius}px`, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(theme.palette.background.default, 0.5) }}>
-              <Typography variant="h6" fontWeight="700" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ReceiptLongIcon color="warning" /> Business Deductions & Expenses
+              <Typography variant="h6" fontWeight="700">
+                Business Deductions & Expenses
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
@@ -611,10 +602,10 @@ export default function Taxes() {
         )}
 
         {/* 4. Personal Tax Info */}
-        <Accordion sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+        <Accordion sx={{ mb: 2, borderRadius: (theme) => `${theme.shape.borderRadius}px`, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(theme.palette.background.default, 0.5) }}>
-            <Typography variant="h6" fontWeight="700" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PersonIcon color="info" /> Personal Tax Information
+            <Typography variant="h6" fontWeight="700">
+              Personal Tax Information
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
@@ -665,10 +656,10 @@ export default function Taxes() {
         </Accordion>
 
         {/* 5. Payments */}
-        <Accordion sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+        <Accordion sx={{ mb: 2, borderRadius: (theme) => `${theme.shape.borderRadius}px`, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(theme.palette.background.default, 0.5) }}>
-            <Typography variant="h6" fontWeight="700" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <MonetizationOnIcon color="error" /> Tax Payments Already Made
+            <Typography variant="h6" fontWeight="700">
+              Tax Payments Already Made
             </Typography>
           </AccordionSummary>
           <AccordionDetails>

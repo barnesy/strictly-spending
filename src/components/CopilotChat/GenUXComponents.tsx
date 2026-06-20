@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Box, Stack, Paper, Button, TextField, Checkbox, Select, MenuItem, Typography, Divider } from '@mui/material';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
+import { useDataStore } from '../../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import { refreshRecurrenceAll } from '../../recurrence';
 import type { ProposedCategorizationItem, ProposedCategorizationReport } from '../../types';
 import type { ChatMessage } from '../../ai';
@@ -143,7 +145,7 @@ export function ProposedCategorizationReportUX({
   const [initialized, setInitialized] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []);
+  const categories = useDataStore(useShallow(s => s.categories));
   const reportSetting = useLiveQuery(() => db.settings.get('app:pendingCategorizationReport'), []);
   const report = reportSetting?.value as ProposedCategorizationReport | undefined;
 

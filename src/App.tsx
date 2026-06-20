@@ -92,7 +92,7 @@ export default function App() {
   const location = useLocation();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-  const isLayoutPage = (location.pathname === '/' || location.pathname === '/transactions') && isDesktop;
+  const isLayoutPage = (location.pathname === '/' || location.pathname === '/transactions' || location.pathname === '/documents') && isDesktop;
   const [manageAnchorEl, setManageAnchorEl] = useState<null | HTMLElement>(null);
   const isManageOpen = Boolean(manageAnchorEl);
   const handleManageClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -129,7 +129,7 @@ export default function App() {
     if (chatPanel) {
       setIsTransitioning(true);
       if (isChatOpen) {
-        chatPanel.resize("360px");
+        chatPanel.resize("480px");
       } else {
         chatPanel.collapse();
       }
@@ -427,7 +427,7 @@ export default function App() {
               panelRef={chatPanelRef}
               id="copilot-chat"
               minSize="360px"
-              defaultSize={isChatOpen ? "360px" : "0px"}
+              defaultSize={isChatOpen ? "480px" : "0px"}
               collapsible={true}
               groupResizeBehavior="preserve-pixel-size"
               onResize={(size, _, prevSize) => {

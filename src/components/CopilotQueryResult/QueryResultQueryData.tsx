@@ -57,7 +57,7 @@ export function QueryResultQueryData({
                   TOTAL SPENT
                 </Typography>
               </Stack>
-              <Typography variant="h5" color="error.dark" sx={{ fontWeight: 700, mb: 0.5 }}>
+              <Typography variant="h5" color="error.dark" sx={{ fontWeight: 700, mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatCurrency(totalSpend)}>
                 {formatCurrency(totalSpend)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -91,7 +91,7 @@ export function QueryResultQueryData({
                   TOTAL INCOME
                 </Typography>
               </Stack>
-              <Typography variant="h5" color="success.dark" sx={{ fontWeight: 700, mb: 0.5 }}>
+              <Typography variant="h5" color="success.dark" sx={{ fontWeight: 700, mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={formatCurrency(totalIncome)}>
                 {formatCurrency(totalIncome)}
               </Typography>
               <Typography variant="caption" color="text.secondary">

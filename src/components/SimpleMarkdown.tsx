@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -175,177 +176,156 @@ function renderInlineMarkdown(text: string, onLinkClick?: (url: string) => void)
 }
 
 export default function SimpleMarkdown({ content, onLinkClick }: { content: string; onLinkClick?: (url: string) => void }) {
-  const blocks = parseMarkdown(content);
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      {blocks.map((block, idx) => {
-        switch (block.type) {
-          case 'h1':
-            return (
-              <Typography
-                id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
-                key={idx}
-                variant="h6"
-                sx={{
-                  fontWeight: 700,
-                  borderBottom: '1px solid rgba(0,0,0,0.08)',
-                  pb: 0.5,
-                  mt: 1.5,
-                  color: 'text.primary',
-                }}
-              >
-                {renderInlineMarkdown(block.text, onLinkClick)}
-              </Typography>
-            );
-          case 'h2':
-            return (
-              <Typography
-                id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
-                key={idx}
-                variant="subtitle1"
-                sx={{ fontWeight: 700, mt: 1, color: 'text.primary' }}
-              >
-                {renderInlineMarkdown(block.text, onLinkClick)}
-              </Typography>
-            );
-          case 'h3':
-            return (
-              <Typography
-                id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
-                key={idx}
-                variant="subtitle2"
-                sx={{ fontWeight: 700, color: 'text.secondary', mt: 0.5 }}
-              >
-                {renderInlineMarkdown(block.text, onLinkClick)}
-              </Typography>
-            );
-          case 'bullet':
-            return (
-              <Box
-                key={idx}
-                sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, pl: 1 }}
-              >
-                <Box
-                  sx={{
-                    width: 5,
-                    height: 5,
-                    borderRadius: '50%',
-                    bgcolor: 'primary.main',
-                    mt: 0.85,
-                    flexShrink: 0,
-                  }}
-                />
+  const blocks = useMemo(() => parseMarkdown(content), [content]);
+
+  return useMemo(() => {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {blocks.map((block, idx) => {
+          switch (block.type) {
+            case 'h1':
+              return (
                 <Typography
+                  id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
+                  key={idx}
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    borderBottom: '1px solid rgba(0,0,0,0.08)',
+                    pb: 0.5,
+                    mt: 1.5,
+                    color: 'text.primary',
+                  }}
+                >
+                  {renderInlineMarkdown(block.text, onLinkClick)}
+                </Typography>
+              );
+            case 'h2':
+              return (
+                <Typography
+                  id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
+                  key={idx}
+                  variant="subtitle1"
+                  sx={{ fontWeight: 700, mt: 1, color: 'text.primary' }}
+                >
+                  {renderInlineMarkdown(block.text, onLinkClick)}
+                </Typography>
+              );
+            case 'h3':
+              return (
+                <Typography
+                  id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
+                  key={idx}
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: 'text.secondary', mt: 0.5 }}
+                >
+                  {renderInlineMarkdown(block.text, onLinkClick)}
+                </Typography>
+              );
+            case 'bullet':
+              return (
+                <Box
+                  key={idx}
+                  sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, pl: 1 }}
+                >
+                  <Box
+                    sx={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: '50%',
+                      bgcolor: 'primary.main',
+                      mt: 0.85,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography
+                    variant="body2"
+                    color="text.primary"
+                    sx={{ fontSize: 13, lineHeight: 1.5 }}
+                  >
+                    {renderInlineMarkdown(block.text, onLinkClick)}
+                  </Typography>
+                </Box>
+              );
+            case 'divider':
+              return <Divider key={idx} sx={{ my: 1 }} />;
+            case 'empty':
+              return <Box key={idx} sx={{ height: 4 }} />;
+            case 'table':
+              return (
+                <TableContainer
+                  key={idx}
+                  component={Paper}
+                  sx={{ my: 2, overflowX: 'auto' }}
+                >
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        {block.headers.map((h, i) => {
+                          const align = block.alignments && block.alignments[i] ? block.alignments[i] : 'left';
+                          return (
+                            <TableCell
+                              key={i}
+                              align={align}
+                            >
+                              {renderInlineMarkdown(h, onLinkClick)}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {block.rows.map((row, rIdx) => (
+                        <TableRow key={rIdx} hover>
+                          {row.map((cell, cIdx) => {
+                            let align: 'left' | 'center' | 'right' = 'left';
+                            if (block.alignments && block.alignments[cIdx]) {
+                              align = block.alignments[cIdx];
+                            } else {
+                              // Robust fallback check for numbers
+                              const cleanVal = cell.replace(/\*\*|\*|_/g, '').trim();
+                              const withoutParentheses = cleanVal.replace(/^\((.*)\)$/, '$1').trim();
+                              const finalVal = withoutParentheses.replace(/^\$/, '').replace(/,/g, '').replace(/%$/, '').trim();
+                              const isNum = finalVal !== '' && !isNaN(Number(finalVal));
+                              if (isNum) align = 'right';
+                            }
+
+                            const isBold = cell.trim().startsWith('**') && cell.trim().endsWith('**');
+
+                            return (
+                              <TableCell
+                                key={cIdx}
+                                align={align}
+                                sx={{
+                                  fontVariantNumeric: 'tabular-nums', // line up math digits!
+                                  fontWeight: isBold ? 700 : 400,
+                                }}
+                              >
+                                {renderInlineMarkdown(cell, onLinkClick)}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              );
+            case 'text':
+            default:
+              return (
+                <Typography
+                  key={idx}
                   variant="body2"
                   color="text.primary"
                   sx={{ fontSize: 13, lineHeight: 1.5 }}
                 >
                   {renderInlineMarkdown(block.text, onLinkClick)}
                 </Typography>
-              </Box>
-            );
-          case 'divider':
-            return <Divider key={idx} sx={{ my: 1 }} />;
-          case 'empty':
-            return <Box key={idx} sx={{ height: 4 }} />;
-          case 'table':
-            return (
-              <TableContainer
-                key={idx}
-                component={Paper}
-                variant="outlined"
-                sx={{
-                  my: 2,
-                  overflowX: 'auto',
-                  borderRadius: 2.5,
-                  borderColor: 'divider',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                }}
-              >
-                <Table size="small" sx={{ minWidth: 320 }}>
-                  <TableHead sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'grey.50' }}>
-                    <TableRow>
-                      {block.headers.map((h, i) => {
-                        const align = block.alignments && block.alignments[i] ? block.alignments[i] : 'left';
-                        return (
-                          <TableCell
-                            key={i}
-                            align={align}
-                            sx={{
-                              fontWeight: 700,
-                              fontSize: '12px',
-                              py: 1.25,
-                              px: 2,
-                              color: 'text.secondary',
-                              borderBottom: '2px solid',
-                              borderColor: 'divider',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.5px',
-                            }}
-                          >
-                            {renderInlineMarkdown(h, onLinkClick)}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {block.rows.map((row, rIdx) => (
-                      <TableRow key={rIdx} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
-                        {row.map((cell, cIdx) => {
-                          let align: 'left' | 'center' | 'right' = 'left';
-                          if (block.alignments && block.alignments[cIdx]) {
-                            align = block.alignments[cIdx];
-                          } else {
-                            // Robust fallback check for numbers
-                            const cleanVal = cell.replace(/\*\*|\*|_/g, '').trim();
-                            const withoutParentheses = cleanVal.replace(/^\((.*)\)$/, '$1').trim();
-                            const finalVal = withoutParentheses.replace(/^\$/, '').replace(/,/g, '').replace(/%$/, '').trim();
-                            const isNum = finalVal !== '' && !isNaN(Number(finalVal));
-                            if (isNum) align = 'right';
-                          }
-
-                          const isBold = cell.trim().startsWith('**') && cell.trim().endsWith('**');
-
-                          return (
-                            <TableCell
-                              key={cIdx}
-                              align={align}
-                              sx={{
-                                fontSize: '13px',
-                                py: 1.25,
-                                px: 2,
-                                color: 'text.primary',
-                                borderBottom: '1px solid',
-                                borderColor: 'divider',
-                                fontVariantNumeric: 'tabular-nums', // line up math digits!
-                                fontWeight: isBold ? 700 : 400,
-                              }}
-                            >
-                              {renderInlineMarkdown(cell, onLinkClick)}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            );
-          case 'text':
-          default:
-            return (
-              <Typography
-                key={idx}
-                variant="body2"
-                color="text.primary"
-                sx={{ fontSize: 13, lineHeight: 1.5 }}
-              >
-                {renderInlineMarkdown(block.text, onLinkClick)}
-              </Typography>
-            );
-        }
-      })}
-    </Box>
-  );
+              );
+          }
+        })}
+      </Box>
+    );
+  }, [blocks, onLinkClick]);
 }

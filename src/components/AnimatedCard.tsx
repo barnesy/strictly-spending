@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Paper } from '@mui/material';
 import { useAnimationStore } from '../animationStore';
 
@@ -32,29 +32,42 @@ export default function AnimatedCard({
   children,
 }: AnimatedCardProps) {
   const config = useAnimationStore();
+  const [lastStackIndex, setLastStackIndex] = useState(stackIndex);
   const [localAnimating, setLocalAnimating] = useState(false);
-  const prevStackIndexRef = useRef<number | undefined>(undefined);
-  const activeAnimationRef = useRef('none');
+  const [activeAnimation, setActiveAnimation] = useState('none');
 
-  useEffect(() => {
-    const prev = prevStackIndexRef.current;
-    prevStackIndexRef.current = stackIndex;
+  if (stackIndex !== lastStackIndex) {
+    const prev = lastStackIndex;
+    setLastStackIndex(stackIndex);
 
-    if (prev !== undefined && prev !== stackIndex) {
-      if (
-        (stackIndex === 0 && prev <= -1) || // Entering (undo or jump back)
-        (stackIndex <= -1 && prev === 0)    // Leaving (sorted/skipped or jump forward)
-      ) {
-        setLocalAnimating(true);
+    if (
+      (stackIndex === 0 && prev <= -1) ||
+      (stackIndex <= -1 && prev === 0)
+    ) {
+      setLocalAnimating(true);
+      const isEntry = stackIndex === 0;
+      if (isEntry) {
+        setActiveAnimation(
+          zipDirection === 'right'
+            ? `entryFlipRight ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
+            : `entryFlipLeft ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
+        );
+      } else {
+        setActiveAnimation(
+          zipDirection === 'right'
+            ? `exitFlipRight ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
+            : `exitFlipLeft ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
+        );
       }
+    } else {
+      setLocalAnimating(false);
+      setActiveAnimation('none');
     }
-  }, [stackIndex]);
+  }
 
   const isAnimating = isAnimatingOverride !== undefined
     ? isAnimatingOverride
-    : (localAnimating ||
-       (stackIndex === 0 && prevStackIndexRef.current !== undefined && prevStackIndexRef.current <= -1) ||
-       (stackIndex <= -1 && prevStackIndexRef.current === 0));
+    : localAnimating;
 
   // Determine transform based on stack index and config settings
   let transform = 'none';
@@ -80,18 +93,8 @@ export default function AnimatedCard({
   let animation = 'none';
   if (animationOverride !== undefined) {
     animation = animationOverride;
-  } else if (stackIndex === 0 && prevStackIndexRef.current !== undefined && prevStackIndexRef.current <= -1) {
-    animation = zipDirection === 'right'
-      ? `entryFlipRight ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
-      : `entryFlipLeft ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`;
-    activeAnimationRef.current = animation;
-  } else if (stackIndex <= -1 && prevStackIndexRef.current === 0) {
-    animation = zipDirection === 'right'
-      ? `exitFlipRight ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`
-      : `exitFlipLeft ${config.duration}ms cubic-bezier(${config.bezierX1}, ${config.bezierY1}, ${config.bezierX2}, ${config.bezierY2}) forwards`;
-    activeAnimationRef.current = animation;
   } else if (localAnimating) {
-    animation = activeAnimationRef.current;
+    animation = activeAnimation;
   }
 
   // Resolve z-index
@@ -114,10 +117,7 @@ export default function AnimatedCard({
         }
       }}
       sx={(theme) => {
-        const disableTransition = 
-          isAnimating || 
-          (stackIndex <= -1 && prevStackIndexRef.current !== undefined && prevStackIndexRef.current > 0) ||
-          (stackIndex > 0 && prevStackIndexRef.current !== undefined && prevStackIndexRef.current <= -1);
+        const disableTransition = isAnimating;
 
         return {
           p: 3,

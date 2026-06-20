@@ -13,17 +13,13 @@ export function PageTransition({ children, transitionKey }: PageTransitionProps)
     // Reset active state to re-trigger the transition
     setActive(false);
     
-    // Request a double rAF to ensure the browser paints the inactive state first
-    let rAFId2: number;
-    const rAFId = requestAnimationFrame(() => {
-      rAFId2 = requestAnimationFrame(() => {
-        setActive(true);
-      });
-    });
+    // Use a small timeout to guarantee execution even if the browser tab goes idle or sleeps
+    const timer = setTimeout(() => {
+      setActive(true);
+    }, 35);
     
     return () => {
-      cancelAnimationFrame(rAFId);
-      if (rAFId2) cancelAnimationFrame(rAFId2);
+      clearTimeout(timer);
       setActive(false);
     };
   }, [transitionKey]);

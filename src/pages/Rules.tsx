@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useDeferredValue } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDataStore } from '../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Box,
   Stack,
@@ -30,19 +31,28 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { db } from '../db';
-import type { CategoryRule } from '../types';
+import type { CategoryRule, Transaction } from '../types';
 import { normalizeForMatch } from '../categorize';
 
 export default function Rules() {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
 
-  const allRules = useLiveQuery(() => db.rules.orderBy('priority').reverse().toArray(), []);
-  const allTxns = useLiveQuery(() => db.transactions.toArray(), []);
-  const deferredAllTxns = useDeferredValue(allTxns);
-  const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
+  const { allRulesUnsorted, allTxns, categories, isDataLoading } = useDataStore(useShallow((s) => ({
+    allRulesUnsorted: s.rules,
+    allTxns: s.transactions,
+    categories: s.categories,
+    isDataLoading: s.isLoading,
+  })));
 
-  const isLoading = allRules === undefined || allTxns === undefined || categories === undefined;
+  const allRules = useMemo(() => {
+    if (!allRulesUnsorted) return undefined;
+    return [...allRulesUnsorted].sort((a, b) => b.priority - a.priority);
+  }, [allRulesUnsorted]);
+
+  const deferredAllTxns = useDeferredValue(allTxns);
+
+  const isLoading = isDataLoading || allRules === undefined || allTxns === undefined || categories === undefined;
 
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,9 +121,13 @@ export default function Rules() {
     }
   };
 
-  useEffect(() => {
+  const [prevSearchQuery, setPrevSearchQuery] = useState(searchQuery);
+  const [prevCategoryFilter, setPrevCategoryFilter] = useState(categoryFilter);
+  if (searchQuery !== prevSearchQuery || categoryFilter !== prevCategoryFilter) {
+    setPrevSearchQuery(searchQuery);
+    setPrevCategoryFilter(categoryFilter);
     setPage(0);
-  }, [searchQuery, categoryFilter]);
+  }
 
   const matchCounts = useMemo(() => {
     const stats: Record<number, number> = {};
@@ -317,31 +331,30 @@ function RuleDialog({
 }: {
   rule: CategoryRule | null;
   categories: string[];
-  allTxns: any[];
+  allTxns: Transaction[];
   onClose: () => void;
   onSave: (r: Omit<CategoryRule, 'id' | 'createdAt'> & { id?: number }) => void;
 }) {
   const [pattern, setPattern] = useState(rule?.pattern || '');
   const [category, setCategory] = useState(rule?.category || categories[0] || '');
   const [priority, setPriority] = useState(rule?.priority || 100);
-  const [activeMatches, setActiveMatches] = useState<any[]>([]);
+  const [activeMatches, setActiveMatches] = useState<Transaction[]>([]);
 
   useEffect(() => {
     const trimmed = pattern.trim();
-    if (!trimmed) {
-      setActiveMatches([]);
-      return;
-    }
-    const norm = normalizeForMatch(trimmed);
-    if (!norm) {
-      setActiveMatches([]);
-      return;
-    }
-
     const timer = setTimeout(() => {
+      if (!trimmed) {
+        setActiveMatches([]);
+        return;
+      }
+      const norm = normalizeForMatch(trimmed);
+      if (!norm) {
+        setActiveMatches([]);
+        return;
+      }
       const matches = allTxns.filter(t => {
-        const desc = normalizeForMatch(t.description);
-        const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey) : '';
+        const desc = normalizeForMatch(t.description as string);
+        const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey as string) : '';
         return desc.includes(norm) || (mkey && mkey.includes(norm));
       });
       setActiveMatches(matches);
@@ -510,7 +523,7 @@ function getAccessibleChipStyles(hexColor: string, isDark: boolean) {
       border: `1px solid ${finalColor}33`,
       fontWeight: 600,
     };
-  } catch (e) {
+  } catch {
     return {
       bgcolor: isDark ? '#ffffff11' : '#00000008',
       color: isDark ? '#fff' : '#000',

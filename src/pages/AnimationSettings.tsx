@@ -83,7 +83,7 @@ export default function AnimationSettings() {
       <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
 
         {/* Left Panel: Sliders (Scrollable) */}
-        <Panel id="sliders-panel" defaultSize={45} minSize={30} style={{ display: 'flex', flexDirection: 'column' }}>
+        <Panel id="sliders-panel" defaultSize="45%" minSize="30%" style={{ display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
             <Stack spacing={3}>
               {/* Group 1: Timing & Easing */}
@@ -504,7 +504,7 @@ export default function AnimationSettings() {
         </PanelResizeHandle>
 
         {/* Right Panel: Interactive Preview (Occupies remaining width and stretches 100%) */}
-        <Panel id="preview-panel" defaultSize={55} minSize={35} style={{ display: 'flex', flexDirection: 'column' }}>
+        <Panel id="preview-panel" defaultSize="55%" minSize="35%" style={{ display: 'flex', flexDirection: 'column' }}>
           <Paper
             sx={{
               p: 3,

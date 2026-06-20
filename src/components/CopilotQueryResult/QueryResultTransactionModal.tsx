@@ -1,6 +1,6 @@
 import { Box, Typography, Stack, Grid, Chip, Dialog, DialogTitle, DialogContent, DialogActions, Button, Divider } from '@mui/material';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../db';
+import { useDataStore } from '../../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 
 interface Props {
   selectedTxn: any;
@@ -15,8 +15,10 @@ export function QueryResultTransactionModal({
   showRecategorize,
   setShowRecategorize,
 }: Props) {
-  const dbAccounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
-  const dbCategories = useLiveQuery(() => db.categories.toArray(), []) || [];
+  const { dbAccounts, dbCategories } = useDataStore(useShallow((s) => ({
+    dbAccounts: s.accounts,
+    dbCategories: s.categories,
+  })));
 
   if (!selectedTxn) return null;
 

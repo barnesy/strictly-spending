@@ -10,7 +10,9 @@
 //     S (skip), ? (help), Esc (close help).
 
 import { useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
+import { useDataStore } from '../dataStore';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useShallow } from 'zustand/react/shallow';
 import PageLoader from '../components/PageLoader';
 import {
   Box,
@@ -50,24 +52,25 @@ export default function Sort() {
   const demoMode = useFilters((s) => s.demoMode);
   const [mode, setMode] = useState<'categorize' | 'tax'>('categorize');
 
-  const uncategorizedAll = useLiveQuery(
-    () => db.transactions.where('category').equals('Uncategorized').toArray(),
-    []
+  const { allTransactions, categories, rules, overrides, isDataLoading } = useDataStore(useShallow((s) => ({
+    allTransactions: s.transactions,
+    categories: s.categories,
+    rules: s.rules,
+    overrides: s.merchantOverrides,
+    isDataLoading: s.isLoading,
+  })));
+
+  const uncategorizedAll = useMemo(
+    () => allTransactions.filter((t) => t.category === 'Uncategorized'),
+    [allTransactions]
   );
   const deferredUncategorizedAll = useDeferredValue(uncategorizedAll);
 
-  const pendingTaxAll = useLiveQuery(
-    () => db.transactions.where('deductionStatus').equals('pending').toArray(),
-    []
+  const pendingTaxAll = useMemo(
+    () => allTransactions.filter((t) => t.deductionStatus === 'pending'),
+    [allTransactions]
   );
   const deferredPendingTaxAll = useDeferredValue(pendingTaxAll);
-  
-  const categories = useLiveQuery(
-    () => db.categories.orderBy('sortOrder').toArray(),
-    []
-  );
-  const rules = useLiveQuery(() => db.rules.toArray(), []);
-  const overrides = useLiveQuery(() => db.merchantOverrides.toArray(), []);
 
   const pendingTax = useMemo(
     () =>
@@ -84,13 +87,11 @@ export default function Sort() {
     return Array.from(keys);
   }, [uncategorizedAll, pendingTaxAll]);
 
-  const relevantTxnsAll = useLiveQuery(
-    () =>
-      merchantKeys.length > 0
-        ? db.transactions.where('merchantKey').anyOf(merchantKeys).toArray()
-        : Promise.resolve([]),
-    [merchantKeys.join(',')]
-  );
+  const relevantTxnsAll = useMemo(() => {
+    if (merchantKeys.length === 0) return [];
+    const keySet = new Set(merchantKeys);
+    return allTransactions.filter((t) => t.merchantKey && keySet.has(t.merchantKey));
+  }, [merchantKeys, allTransactions]);
   const deferredRelevantTxnsAll = useDeferredValue(relevantTxnsAll);
 
   const relevantTxns = useMemo(
@@ -226,7 +227,7 @@ export default function Sort() {
       setRulePattern(aiSug ? aiSug.pattern : key);
       setSaveRule(true);
     }
-  }, [currentCard?.merchantKey, selections, aiSuggestions]);
+  }, [currentCard, selections, aiSuggestions]);
 
   // Sync rulePattern and saveRule changes into selections state if they edit them without selecting category first
   const handlePatternChange = (val: string) => {
@@ -339,12 +340,12 @@ export default function Sort() {
         } else {
           playFailSound();
         }
-      } catch (err: any) {
-        if (active && err.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if (active && (err as Error).name !== 'AbortError') {
           console.error('[Sort.tsx] AI Auto-Suggest failed:', err);
           playFailSound();
-          setAiErrors(prev => ({ ...prev, [key]: err.message || String(err) }));
-        } else if (err.name === 'AbortError') {
+          setAiErrors(prev => ({ ...prev, [key]: (err as Error).message || String(err) }));
+        } else if ((err as Error).name === 'AbortError') {
           stopThinkingSound();
         }
       } finally {
@@ -367,7 +368,7 @@ export default function Sort() {
       controller.abort();
       stopThinkingSound();
     };
-  }, [currentCard?.merchantKey, aiSuggestEnabled, categories]);
+  }, [currentCard, aiSuggestEnabled, categories, mode, aiSuggestions]);
 
   const isInteractive = !!currentCard;
 
@@ -584,7 +585,7 @@ export default function Sort() {
   const selectionsCount = Object.keys(selections).length;
   const remaining = visibleQueue.length;
 
-  const isLoading = uncategorizedAll === undefined || categories === undefined || rules === undefined;
+  const isLoading = isDataLoading || allTransactions === undefined || categories === undefined;
 
   return (
     <PageLoader isLoading={isLoading}>
@@ -782,7 +783,7 @@ export default function Sort() {
       {currentCard ? (
         <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
           {/* Left Panel: Controls (Scrollable) */}
-          <Panel id="sort-controls-panel" defaultSize={45} minSize={30} style={{ display: 'flex', flexDirection: 'column' }}>
+          <Panel id="sort-controls-panel" defaultSize="45%" minSize="30%" style={{ display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
               <Stack spacing={2}>
                 <Paper sx={{ p: 3 }}>
@@ -898,7 +899,7 @@ export default function Sort() {
           </PanelResizeHandle>
 
           {/* Right Panel: 3D Stack Viewport */}
-          <Panel id="sort-preview-panel" defaultSize={55} minSize={35} style={{ display: 'flex', flexDirection: 'column' }}>
+          <Panel id="sort-preview-panel" defaultSize="55%" minSize="35%" style={{ display: 'flex', flexDirection: 'column' }}>
             <Box
               sx={{
                 flex: 1,

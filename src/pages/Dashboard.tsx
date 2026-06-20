@@ -731,19 +731,19 @@ export default function Dashboard() {
               style={{ height: '100%' }}
             >
               {filterVisible && (
-                <Panel id="filter" defaultSize={18} minSize={15}>
+                <Panel id="filter" defaultSize="18%" minSize="15%">
                   <PanelScroll>{filterPanel}</PanelScroll>
                 </Panel>
               )}
               {filterVisible && <StyledResizeHandle ariaLabel="Resize filters / content" />}
 
-              <Panel id="chart" defaultSize={40} minSize={25}>
+              <Panel id="chart" defaultSize="40%" minSize="25%">
                 {middleSectionContent}
               </Panel>
 
               {sidebarVisible && <StyledResizeHandle ariaLabel="Resize content / top merchants" />}
               {sidebarVisible && (
-                <Panel id="merchants" defaultSize={20} minSize={15}>
+                <Panel id="merchants" defaultSize="20%" minSize="15%">
                   <PanelScroll>{merchantsCard}</PanelScroll>
                 </Panel>
               )}

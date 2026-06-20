@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDataStore } from '../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Box,
   Paper,
@@ -56,11 +57,14 @@ interface MerchantGroup {
 }
 
 export default function Merchants() {
-  const allTransactions = useLiveQuery(() => db.transactions.toArray(), []);
+  const { allTransactions, allCategories, isDataLoading } = useDataStore(useShallow((s) => ({
+    allTransactions: s.transactions,
+    allCategories: s.categories,
+    isDataLoading: s.isLoading,
+  })));
   const deferredAllTransactions = useDeferredValue(allTransactions);
-  const allCategories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) || [];
 
-  const isLoading = allTransactions === undefined;
+  const isLoading = isDataLoading || allTransactions === undefined;
 
   // Search Debouncing
   const [searchInput, setSearchInput] = useState('');
@@ -90,10 +94,23 @@ export default function Merchants() {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
-  // Reset page when filters change
-  useEffect(() => {
+  const [prevFilters, setPrevFilters] = useState({
+    searchQuery, minSpend, maxSpend, minTxns, maxTxns, filterCategory, startDate, endDate
+  });
+
+  if (
+    searchQuery !== prevFilters.searchQuery ||
+    minSpend !== prevFilters.minSpend ||
+    maxSpend !== prevFilters.maxSpend ||
+    minTxns !== prevFilters.minTxns ||
+    maxTxns !== prevFilters.maxTxns ||
+    filterCategory !== prevFilters.filterCategory ||
+    startDate !== prevFilters.startDate ||
+    endDate !== prevFilters.endDate
+  ) {
     setPage(0);
-  }, [searchQuery, minSpend, maxSpend, minTxns, maxTxns, filterCategory, startDate, endDate]);
+    setPrevFilters({ searchQuery, minSpend, maxSpend, minTxns, maxTxns, filterCategory, startDate, endDate });
+  }
 
   // Dialog states
   const [renameTarget, setRenameTarget] = useState<MerchantGroup | null>(null);
@@ -108,10 +125,9 @@ export default function Merchants() {
   const [viewTransactionsTarget, setViewTransactionsTarget] = useState<MerchantGroup | null>(null);
   
   const targetMerchantKey = viewTransactionsTarget?.merchantKey || '';
-  const viewTransactions = useLiveQuery(
-    () => targetMerchantKey ? db.transactions.where('merchantKey').equals(targetMerchantKey).toArray() : Promise.resolve([]),
-    [targetMerchantKey]
-  ) || [];
+  const viewTransactions = useMemo(() => {
+    return allTransactions ? allTransactions.filter((t) => t.merchantKey === targetMerchantKey) : [];
+  }, [allTransactions, targetMerchantKey]);
 
   // Group transactions by merchantKey
   const merchantGroups = useMemo<MerchantGroup[]>(() => {
@@ -236,9 +252,9 @@ export default function Merchants() {
     try {
       await db.transactions.where('merchantKey').equals(renameTarget.merchantKey).modify({ merchantKey: trimmedName });
       setSnackbarMessage(`Successfully renamed "${renameTarget.merchantKey}" to "${trimmedName}".`);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setSnackbarMessage(`Failed to rename merchant: ${e.message}`);
+      setSnackbarMessage(`Failed to rename merchant: ${(e as Error).message}`);
     } finally {
       setRenameTarget(null);
     }
@@ -256,9 +272,9 @@ export default function Merchants() {
     try {
       await db.transactions.where('merchantKey').equals(recategorizeTarget.merchantKey).modify({ category: selectedCategory });
       setSnackbarMessage(`Successfully recategorized transactions under "${recategorizeTarget.merchantKey}" to "${selectedCategory}".`);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setSnackbarMessage(`Failed to recategorize: ${e.message}`);
+      setSnackbarMessage(`Failed to recategorize: ${(e as Error).message}`);
     } finally {
       setRecategorizeTarget(null);
     }
@@ -284,9 +300,9 @@ export default function Merchants() {
       setSnackbarMessage(`Merged ${selectedKeys.length} merchants into "${finalName}".`);
       setSelectedKeys([]);
       setMergeDialogOpen(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setSnackbarMessage(`Merge failed: ${e.message}`);
+      setSnackbarMessage(`Merge failed: ${(e as Error).message}`);
     }
   };
 
@@ -422,7 +438,7 @@ export default function Merchants() {
     setMergingIndex(primarySuggest);
 
     try {
-      const changes: any = { merchantKey: trimmedName };
+      const changes: Record<string, unknown> = { merchantKey: trimmedName };
       if (selectedCat && selectedCat !== 'keep') {
         changes.category = selectedCat;
       }
@@ -431,9 +447,9 @@ export default function Merchants() {
 
       setSnackbarMessage(`Merged duplicate set into "${trimmedName}".`);
       setDuplicateGroups((prev) => prev.filter((g) => g.primarySuggest !== primarySuggest));
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setSnackbarMessage(`Merge failed: ${e.message}`);
+      setSnackbarMessage(`Merge failed: ${(e as Error).message}`);
     } finally {
       setMergingIndex(null);
     }

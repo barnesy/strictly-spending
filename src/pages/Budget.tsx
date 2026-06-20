@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useDeferredValue } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDataStore } from '../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Box,
   Paper,
@@ -38,13 +39,22 @@ import type { Budget as BudgetType, Category } from '../types';
 
 export default function Budget() {
   const demoMode = useFilters((s) => s.demoMode);
-  const allTxnsAll = useLiveQuery(() => {
+  const { allTransactions, categories, overrides, budgets, isDataLoading } = useDataStore(useShallow((s) => ({
+    allTransactions: s.transactions,
+    categories: s.categories,
+    overrides: s.merchantOverrides,
+    budgets: s.budgets,
+    isDataLoading: s.isLoading,
+  })));
+
+  const allTxnsAll = useMemo(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 6);
     const cutoffISO = d.toISOString().slice(0, 10);
-    return db.transactions.where('date').aboveOrEqual(cutoffISO).toArray();
-  }, []);
+    return allTransactions.filter((t) => t.date >= cutoffISO);
+  }, [allTransactions]);
   const deferredAllTxnsAll = useDeferredValue(allTxnsAll);
+  
   const allTxns = useMemo(
     () =>
       deferredAllTxnsAll && demoMode
@@ -52,12 +62,6 @@ export default function Budget() {
         : deferredAllTxnsAll?.filter((t) => t.source !== 'demo'),
     [deferredAllTxnsAll, demoMode]
   );
-  const categories = useLiveQuery(
-    () => db.categories.orderBy('sortOrder').toArray(),
-    []
-  );
-  const overrides = useLiveQuery(() => db.merchantOverrides.toArray(), []);
-  const budgets = useLiveQuery(() => db.budgets.toArray(), []);
   const excludedMerchants = useBudgetStore((s) => s.excludedMerchants);
   const excludedBudgetCategories = useBudgetStore(
     (s) => s.excludedBudgetCategories
@@ -110,7 +114,7 @@ export default function Budget() {
     }
   }, [budgets, categories, trailingAvgByCategory]);
 
-  const isLoading = !allTxns || !categories || !overrides || !budgets;
+  const isLoading = isDataLoading || !allTxns || !categories || !overrides || !budgets;
 
   if (isLoading) {
     return <PageLoader isLoading={true}><Box /></PageLoader>;

@@ -16,6 +16,7 @@ import BugReportIcon from '@mui/icons-material/BugReport';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFilters } from '../store';
 import { useChatStore, formatModelName } from '../chatStore';
+import { useShallow } from 'zustand/react/shallow';
 import { parseAIResponse } from '../ai';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -55,7 +56,23 @@ export default function CopilotChat({
     loadThreads,
     createThread,
     deleteThread,
-  } = useChatStore();
+  } = useChatStore(useShallow((s) => ({
+    messages: s.messages,
+    clearMessages: s.clearMessages,
+    aiLoaded: s.aiLoaded,
+    aiStatus: s.aiStatus,
+    aiProgress: s.aiProgress,
+    aiProgressPercent: s.aiProgressPercent,
+    initializeAI: s.initializeAI,
+    checkAIStatus: s.checkAIStatus,
+    modelName: s.modelName,
+    activeThreadId: s.activeThreadId,
+    threads: s.threads,
+    setActiveThreadId: s.setActiveThreadId,
+    loadThreads: s.loadThreads,
+    createThread: s.createThread,
+    deleteThread: s.deleteThread,
+  })));
 
   useEffect(() => {
     checkAIStatus();

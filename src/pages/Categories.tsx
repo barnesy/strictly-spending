@@ -13,14 +13,17 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDataStore } from '../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import { db } from '../db';
 import { refreshRecurrenceAll } from '../recurrence';
 import PageLoader from '../components/PageLoader';
 
 export default function Categories() {
-  const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []);
-  const transactions = useLiveQuery(() => db.transactions.toArray(), []);
+  const { categories, transactions } = useDataStore(useShallow((s) => ({
+    categories: s.categories,
+    transactions: s.transactions,
+  })));
   const deferredTransactions = useDeferredValue(transactions);
 
   const counts = useMemo(() => {

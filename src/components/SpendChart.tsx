@@ -7,8 +7,8 @@ import type { Account, Category, Transaction } from '../types';
 import type { GroupBy } from '../store';
 import type { RecurrenceInfo } from '../recurrence';
 import { isRecurring } from '../recurrence';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useDataStore } from '../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useFilters } from '../store';
 import { useBudgetStore } from '../budgetStore';
 import { buildForecast } from '../forecast';
@@ -78,7 +78,7 @@ export default function SpendChart({
   const enabledAccountIds = useFilters((s) => s.enabledAccountIds);
   const showRunway = useFilters((s) => s.showRunway);
   const spendOnly = useFilters((s) => s.spendOnly);
-  const budgets = useLiveQuery(() => db.budgets.toArray(), []);
+  const budgets = useDataStore(useShallow(s => s.budgets));
   const excludedBudgetCategories = useBudgetStore((s) => s.excludedBudgetCategories);
   const excludedMerchants = useBudgetStore((s) => s.excludedMerchants);
 
@@ -115,11 +115,13 @@ export default function SpendChart({
     const labels = monthList.map(monthLabel);
 
     if (groupBy === 'none') {
-      const totals = monthList.map((m) =>
-        transactions
-          .filter((t) => t.amount < 0 && monthKey(t.date) === m)
-          .reduce((s, t) => s + Math.abs(t.amount), 0)
-      );
+      const totalsMap = new Map<string, number>();
+      for (const t of transactions) {
+        if (t.amount >= 0) continue;
+        const m = monthKey(t.date);
+        totalsMap.set(m, (totalsMap.get(m) || 0) + Math.abs(t.amount));
+      }
+      const totals = monthList.map((m) => totalsMap.get(m) || 0);
       return {
         labels,
         series: [
@@ -135,49 +137,54 @@ export default function SpendChart({
 
     if (groupBy === 'category') {
       const presentCats = new Set<string>();
+      const totalsMap = new Map<string, Map<string, number>>();
+
       for (const t of transactions) {
-        if (t.amount < 0) presentCats.add(t.category);
+        if (t.amount >= 0) continue;
+        const cat = t.category;
+        presentCats.add(cat);
+        const m = monthKey(t.date);
+        
+        let mTotals = totalsMap.get(cat);
+        if (!mTotals) {
+          mTotals = new Map<string, number>();
+          totalsMap.set(cat, mTotals);
+        }
+        mTotals.set(m, (mTotals.get(m) || 0) + Math.abs(t.amount));
       }
+
       const orderedCats = categories
         .filter((c) => presentCats.has(c.name))
         .map((c) => c.name);
+
       const series = orderedCats.map((catName) => {
         const cat = categories.find((c) => c.name === catName);
+        const mTotals = totalsMap.get(catName);
         return {
           label: catName,
           color: cat?.color || '#bdbdbd',
           stack: 'spend',
-          data: monthList.map((m) =>
-            transactions
-              .filter(
-                (t) =>
-                  t.amount < 0 &&
-                  t.category === catName &&
-                  monthKey(t.date) === m
-              )
-              .reduce((s, t) => s + Math.abs(t.amount), 0)
-          ),
+          data: monthList.map((m) => mTotals ? (mTotals.get(m) || 0) : 0),
         };
       });
       return { labels, series };
     }
 
     if (groupBy === 'recurring') {
-      const recurringPerMonth: number[] = [];
-      const oneTimePerMonth: number[] = [];
-      for (const m of monthList) {
-        let recurring = 0;
-        let oneTime = 0;
-        for (const t of transactions) {
-          if (t.amount >= 0) continue;
-          if (monthKey(t.date) !== m) continue;
-          const info = recurrenceMap.get(t.merchantKey);
-          if (info && isRecurring(info.kind)) recurring += Math.abs(t.amount);
-          else oneTime += Math.abs(t.amount);
+      const recurringPerMonth = new Map<string, number>();
+      const oneTimePerMonth = new Map<string, number>();
+
+      for (const t of transactions) {
+        if (t.amount >= 0) continue;
+        const m = monthKey(t.date);
+        const info = recurrenceMap.get(t.merchantKey);
+        if (info && isRecurring(info.kind)) {
+          recurringPerMonth.set(m, (recurringPerMonth.get(m) || 0) + Math.abs(t.amount));
+        } else {
+          oneTimePerMonth.set(m, (oneTimePerMonth.get(m) || 0) + Math.abs(t.amount));
         }
-        recurringPerMonth.push(recurring);
-        oneTimePerMonth.push(oneTime);
       }
+
       return {
         labels,
         series: [
@@ -185,38 +192,43 @@ export default function SpendChart({
             label: 'Recurring',
             color: '#1976d2',
             stack: 'spend',
-            data: recurringPerMonth,
+            data: monthList.map((m) => recurringPerMonth.get(m) || 0),
           },
           {
             label: 'One-time',
             color: '#b0bec5',
             stack: 'spend',
-            data: oneTimePerMonth,
+            data: monthList.map((m) => oneTimePerMonth.get(m) || 0),
           },
         ],
       };
     }
 
     const presentAccounts = new Set<number>();
+    const totalsMap = new Map<number, Map<string, number>>();
+
     for (const t of transactions) {
-      if (t.amount < 0) presentAccounts.add(t.accountId);
+      if (t.amount >= 0) continue;
+      presentAccounts.add(t.accountId);
+      const m = monthKey(t.date);
+      let mTotals = totalsMap.get(t.accountId);
+      if (!mTotals) {
+        mTotals = new Map<string, number>();
+        totalsMap.set(t.accountId, mTotals);
+      }
+      mTotals.set(m, (mTotals.get(m) || 0) + Math.abs(t.amount));
     }
+
     const orderedAccounts = accounts.filter((a) => presentAccounts.has(a.id!));
-    const series = orderedAccounts.map((a, i) => ({
-      label: a.name,
-      color: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
-      stack: 'spend',
-      data: monthList.map((m) =>
-        transactions
-          .filter(
-            (t) =>
-              t.amount < 0 &&
-              t.accountId === a.id &&
-              monthKey(t.date) === m
-          )
-          .reduce((s, t) => s + Math.abs(t.amount), 0)
-      ),
-    }));
+    const series = orderedAccounts.map((a, i) => {
+      const mTotals = totalsMap.get(a.id!);
+      return {
+        label: a.name,
+        color: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
+        stack: 'spend',
+        data: monthList.map((m) => mTotals ? (mTotals.get(m) || 0) : 0),
+      };
+    });
     return { labels, series };
   }, [monthList, transactions, accounts, categories, groupBy, recurrenceMap]);
 
@@ -283,9 +295,12 @@ export default function SpendChart({
 
     const lastMonthStr = monthList[monthList.length - 1];
 
-    const currentMonthSpend = transactions
-      .filter((t) => t.amount < 0 && monthKey(t.date) === lastMonthStr)
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const currentMonthSpend = transactions.reduce((sum, t) => {
+      if (t.amount < 0 && monthKey(t.date) === lastMonthStr) {
+        return sum + Math.abs(t.amount);
+      }
+      return sum;
+    }, 0);
 
     const remainingCurrentMonthBudget = Math.max(0, totalBudget - currentMonthSpend);
     const currentMonthRunway = Math.min(startingCash, remainingCurrentMonthBudget);

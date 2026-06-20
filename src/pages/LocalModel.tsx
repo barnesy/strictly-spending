@@ -30,6 +30,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
 import { db } from '../db';
 import { useChatStore, formatModelName } from '../chatStore';
+import { useShallow } from 'zustand/react/shallow';
 import { localAI } from '../ai';
 
 const RECOMMENDED_OLLAMA_MODELS = [
@@ -58,7 +59,18 @@ export default function LocalModel() {
     checkAIStatus,
     pullModel,
     cancelPullModel,
-  } = useChatStore();
+  } = useChatStore(useShallow((s) => ({
+    aiLoaded: s.aiLoaded,
+    aiStatus: s.aiStatus,
+    aiProgress: s.aiProgress,
+    aiProgressPercent: s.aiProgressPercent,
+    modelName: s.modelName,
+    setModelName: s.setModelName,
+    initializeAI: s.initializeAI,
+    checkAIStatus: s.checkAIStatus,
+    pullModel: s.pullModel,
+    cancelPullModel: s.cancelPullModel,
+  })));
 
   const [installedModels, setInstalledModels] = useState<any[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
@@ -91,7 +103,7 @@ export default function LocalModel() {
 
   useEffect(() => {
     if (aiStatus === 'ready' || aiStatus === 'running') {
-      refreshInstalledModels();
+      setTimeout(() => refreshInstalledModels(), 0);
     }
   }, [aiStatus, refreshInstalledModels]);
 
@@ -130,8 +142,8 @@ Active Filters: {}
 Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
       );
       setTestResponse(reply);
-    } catch (e: any) {
-      setTestError(e.message);
+    } catch (e: unknown) {
+      setTestError((e as Error).message);
     } finally {
       setTestingAI(false);
     }

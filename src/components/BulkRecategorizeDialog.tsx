@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDataStore } from '../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Dialog,
   DialogTitle,
@@ -44,15 +45,15 @@ const AUTO = '__auto__';
 type RecurrenceChoice = RecurrenceKind | typeof AUTO;
 
 export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) {
-  const categories = useLiveQuery(
-    () => db.categories.orderBy('sortOrder').toArray(),
-    []
-  );
-  const matchingTxns = useLiveQuery(
-    () => db.transactions.where('merchantKey').equals(merchantKey).toArray(),
-    [merchantKey]
-  );
-  const overrides = useLiveQuery(() => db.merchantOverrides.toArray(), []);
+  const { categories, overrides, allTransactions } = useDataStore(useShallow((s) => ({
+    categories: s.categories,
+    overrides: s.merchantOverrides,
+    allTransactions: s.transactions,
+  })));
+
+  const matchingTxns = useMemo(() => {
+    return allTransactions.filter(t => t.merchantKey === merchantKey);
+  }, [allTransactions, merchantKey]);
   const existingOverride = useMemo(
     () => overrides?.find((o) => o.merchantKey === merchantKey),
     [overrides, merchantKey]

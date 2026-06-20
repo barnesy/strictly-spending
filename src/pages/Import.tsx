@@ -168,8 +168,9 @@ export default function Import() {
     let unlistenDragDrop: (() => void) | undefined;
     
     if ('__TAURI_INTERNALS__' in window || '__TAURI__' in window) {
-      listen<any>('tauri://drop', (event) => {
-        const paths = Array.isArray(event.payload) ? event.payload : event.payload?.paths;
+      listen<unknown>('tauri://drop', (event) => {
+        const payload = event.payload as { paths?: string[] } | string[];
+        const paths = Array.isArray(payload) ? payload : payload?.paths;
         if (paths && paths.length > 0) handleTauriFiles(paths);
       }).then(u => {
         if (active) {
@@ -179,8 +180,9 @@ export default function Import() {
         }
       }).catch(console.error);
 
-      listen<any>('tauri://drag-drop', (event) => {
-        const paths = Array.isArray(event.payload) ? event.payload : event.payload?.paths;
+      listen<unknown>('tauri://drag-drop', (event) => {
+        const payload = event.payload as { paths?: string[] } | string[];
+        const paths = Array.isArray(payload) ? payload : payload?.paths;
         if (paths && paths.length > 0) handleTauriFiles(paths);
       }).then(u => {
         if (active) {
@@ -798,7 +800,7 @@ function ColumnMapperCard({
               <Select
                 value={accountType}
                 label="Account Type"
-                onChange={(e) => setAccountType(e.target.value as any)}
+                onChange={(e) => setAccountType(e.target.value as 'checking' | 'credit' | 'savings')}
               >
                 <MenuItem value="checking">Checking</MenuItem>
                 <MenuItem value="credit">Credit Card</MenuItem>
@@ -854,7 +856,7 @@ function ColumnMapperCard({
               <RadioGroup
                 row
                 value={amountMode}
-                onChange={(e) => setAmountMode(e.target.value as any)}
+                onChange={(e) => setAmountMode(e.target.value as 'single' | 'split')}
               >
                 <FormControlLabel value="single" control={<Radio />} label="Single Amount Column" />
                 <FormControlLabel value="split" control={<Radio />} label="Separate Debit & Credit Columns" />

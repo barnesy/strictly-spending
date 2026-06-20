@@ -104,7 +104,7 @@ export function parseCustomCsv(
 ): { transactions: ParsedTransaction[]; warnings: string[] } {
   const warnings: string[] = [];
 
-  const parsed = Papa.parse<any>(rawText, {
+  const parsed = Papa.parse<Record<string, string>>(rawText, {
     header: true,
     skipEmptyLines: true,
   });

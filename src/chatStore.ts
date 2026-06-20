@@ -427,7 +427,7 @@ export const useChatStore = create<ChatStore>()(
 
       loadThreadMessages: async (threadId) => {
         const list = await db.messages.where('threadId').equals(threadId).sortBy('id');
-        const formatted = list.map(m => {
+        const formatted = list.map((m: any) => {
           if (m.actionResult?.metrics?.transactions) {
             delete m.actionResult.metrics.transactions;
             db.messages.put(m); // scrub legacy data from db

@@ -45,7 +45,7 @@ export function parseTruistChecking(
   const warnings: string[] = [];
 
   // Strip a BOM if present (some banks ship UTF-8 BOM)
-  const cleanText = rawText.replace(/^﻿/, '');
+  const cleanText = rawText.replace(/^ /, '');
 
   const parsed = Papa.parse<TruistRow>(cleanText, {
     header: true,

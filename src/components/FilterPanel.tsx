@@ -18,8 +18,8 @@ import type { Account, Category, Transaction } from '../types';
 import { usd, monthKey, monthsBetween } from '../lib';
 import { useMemo, useState, useEffect } from 'react';
 import { type RecurrenceInfo } from '../recurrence';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useDataStore } from '../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useBudgetStore } from '../budgetStore';
 import { buildForecast } from '../forecast';
 
@@ -64,7 +64,7 @@ export default function FilterPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
-  const budgets = useLiveQuery(() => db.budgets.toArray(), []);
+  const budgets = useDataStore(useShallow(s => s.budgets));
   const excludedBudgetCategories = useBudgetStore((s) => s.excludedBudgetCategories);
   const excludedMerchants = useBudgetStore((s) => s.excludedMerchants);
 

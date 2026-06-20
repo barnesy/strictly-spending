@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDataStore } from '../dataStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Dialog,
   DialogTitle,
@@ -27,7 +28,7 @@ interface Props {
 }
 
 export default function RecategorizeDialog({ txn, onClose }: Props) {
-  const categories = useLiveQuery(() => db.categories.toArray(), []);
+  const categories = useDataStore(useShallow(s => s.categories));
   const [category, setCategory] = useState(txn.category);
   const [recurrenceOverride, setRecurrenceOverride] = useState<'recurring' | 'onetime' | 'default'>(
     txn.recurrenceOverride || 'default'

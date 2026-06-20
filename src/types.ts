@@ -301,7 +301,7 @@ export interface AppDocument {
   associatedChecklistId?: string;
   content?: string;
   createdAt: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DbChatMessage {
@@ -309,7 +309,7 @@ export interface DbChatMessage {
   threadId: string;
   role: 'system' | 'user' | 'assistant';
   content: string;
-  actionResult?: any;
+  actionResult?: Record<string, unknown>;
   createdAt: string;
   activeSkillId?: string;
   completedStages?: string[];
