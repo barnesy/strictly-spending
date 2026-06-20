@@ -539,56 +539,66 @@ export default function Merchants() {
       {/* Main View Container */}
       {viewTransactionsTarget ? (
         // Inner transaction ledger sub-view
-        <Paper sx={{ p: 3 }}>
-          <Stack spacing={2}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Button
-                startIcon={<ArrowBackIcon />}
-                onClick={() => setViewTransactionsTarget(null)}
-                variant="outlined"
-                size="small"
-                sx={{ textTransform: 'none' }}
-              >
-                Back to directory
-              </Button>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Transactions for "{viewTransactionsTarget.merchantKey}"
-              </Typography>
-            </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0, gap: 2.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Button
+              startIcon={<ArrowBackIcon />}
+              onClick={() => setViewTransactionsTarget(null)}
+              variant="outlined"
+              size="small"
+              sx={{ textTransform: 'none' }}
+            >
+              Back to directory
+            </Button>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Transactions for "{viewTransactionsTarget.merchantKey}"
+            </Typography>
+          </Box>
 
-            <TableContainer>
-              <Table sx={{ '& .MuiTableCell-root': { py: 1.5, px: 2 } }}>
-                <TableHead sx={{ bgcolor: 'action.hover' }}>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }} align="right">Amount</TableCell>
+          <DataTable stickyHeader size="small" sx={{ '& .MuiTableCell-root': { py: 1.5, px: 2 } }}>
+            <TableHead sx={{ bgcolor: 'action.hover' }}>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
+                <TableCell sx={{ fontWeight: 600 }} align="right">Amount</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {viewTransactions
+                .slice()
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map((t) => (
+                  <TableRow key={t.id} hover>
+                    <TableCell variant="body">{t.date}</TableCell>
+                    <TableCell variant="body" sx={{ fontFamily: 'monospace' }}>
+                      {t.description}
+                    </TableCell>
+                    <TableCell variant="body">
+                      <Chip label={t.category} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell variant="body" align="right" sx={{ fontWeight: 600, color: t.amount < 0 ? 'inherit' : 'success.main' }}>
+                      {usdCents.format(t.amount)}
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {viewTransactions
-                    .slice()
-                    .sort((a, b) => b.date.localeCompare(a.date))
-                    .map((t) => (
-                      <TableRow key={t.id} hover>
-                        <TableCell variant="body">{t.date}</TableCell>
-                        <TableCell variant="body" sx={{ fontFamily: 'monospace' }}>
-                          {t.description}
-                        </TableCell>
-                        <TableCell variant="body">
-                          <Chip label={t.category} size="small" variant="outlined" />
-                        </TableCell>
-                        <TableCell variant="body" align="right" sx={{ fontWeight: 600, color: t.amount < 0 ? 'inherit' : 'success.main' }}>
-                          {usdCents.format(t.amount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Stack>
-        </Paper>
+                ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={3}>
+                  <Typography variant="body2" color="text.secondary">
+                    Total Transactions: {viewTransactions.length}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: viewTransactions.reduce((a, t) => a + t.amount, 0) < 0 ? 'inherit' : 'success.main' }}>
+                    {usdCents.format(viewTransactions.reduce((a, t) => a + t.amount, 0))}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </DataTable>
+        </Box>
       ) : (
         // Main directory table
           <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0, gap: 2.5 }}>

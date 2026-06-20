@@ -585,7 +585,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
           />
 
           {/* Collapsible List Container */}
-          <Collapse in={logsExpanded}>
+          <Collapse in={logsExpanded} timeout="auto" unmountOnExit>
             <Paper
               variant="outlined"
               sx={{
@@ -597,6 +597,10 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 1,
+                overflowY: 'auto',
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                height: message.isStreaming ? 320 : 'auto',
+                maxHeight: 320,
               }}
             >
               {/* Steps List */}

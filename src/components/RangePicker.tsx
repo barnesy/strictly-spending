@@ -57,8 +57,8 @@ export default function RangePicker() {
   } as any);
   const label = formatDateRange(range.start, range.end);
   return (
-    <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" justifyContent="flex-end">
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+    <Stack direction="row" spacing={2} alignItems="flex-end" flexWrap="wrap" justifyContent="flex-end">
+      <Typography variant="caption" color="text.secondary" sx={{ height: 40, display: 'flex', alignItems: 'center', fontWeight: 500 }}>
         {label}
       </Typography>
       {preset !== 'custom' && (
@@ -68,6 +68,7 @@ export default function RangePicker() {
               size="small"
               onClick={() => shiftRange(-1)}
               aria-label="Shift date range earlier"
+              sx={{ height: 40, width: 40 }}
             >
               <ChevronLeftIcon fontSize="small" />
             </IconButton>
@@ -77,6 +78,12 @@ export default function RangePicker() {
             exclusive
             onChange={(_, v) => v && setPreset(v)}
             size="small"
+            sx={{
+              height: 40,
+              '& .MuiToggleButton-root': {
+                height: 40,
+              }
+            }}
           >
             {PRESETS.map((p) => (
               <ToggleButton key={p.value} value={p.value}>
@@ -89,6 +96,7 @@ export default function RangePicker() {
               size="small"
               onClick={() => shiftRange(1)}
               aria-label="Shift date range later"
+              sx={{ height: 40, width: 40 }}
             >
               <ChevronRightIcon fontSize="small" />
             </IconButton>
@@ -96,7 +104,7 @@ export default function RangePicker() {
         </Stack>
       )}
       {preset === 'custom' && (
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={1.5} alignItems="flex-end">
           <TextField
             type="date"
             size="small"
@@ -106,7 +114,10 @@ export default function RangePicker() {
             }
             label="Start"
             slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ width: 130 }}
+            sx={{
+              width: 130,
+              '& .MuiInputBase-root': { height: 40 },
+            }}
           />
           <TextField
             type="date"
@@ -117,7 +128,10 @@ export default function RangePicker() {
             }
             label="End"
             slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ width: 130 }}
+            sx={{
+              width: 130,
+              '& .MuiInputBase-root': { height: 40 },
+            }}
           />
           <Button
             size="small"
