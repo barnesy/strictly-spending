@@ -32,9 +32,7 @@ import {
 import PageLoader from '../components/PageLoader';
 import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import StopIcon from '@mui/icons-material/Stop';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 

@@ -18,7 +18,6 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import VisibilityIcon from '@mui/icons-material/Visibility';
 import type { AgentSkill } from '../../types';
 
 export interface SkillsDirectoryProps {
@@ -110,20 +109,18 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
                         size="small"
                         onClick={() => onEditSkill(skill)}
                         color="primary"
-                        title={skill.isBuiltIn ? "View Skill" : "Edit Skill"}
+                        title="Edit Skill"
                       >
-                        {skill.isBuiltIn ? <VisibilityIcon sx={{ fontSize: 18 }} /> : <EditIcon sx={{ fontSize: 18 }} />}
+                        <EditIcon sx={{ fontSize: 18 }} />
                       </IconButton>
-                      {!skill.isBuiltIn && (
-                        <IconButton
-                          size="small"
-                          onClick={() => onDeleteSkill(skill.id!)}
-                          color="error"
-                          title="Delete Skill"
-                        >
-                          <DeleteIcon sx={{ fontSize: 18 }} />
-                        </IconButton>
-                      )}
+                      <IconButton
+                        size="small"
+                        onClick={() => onDeleteSkill(skill.id!)}
+                        color="error"
+                        title="Delete Skill"
+                      >
+                        <DeleteIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
                     </Stack>
                   </TableCell>
                 </TableRow>

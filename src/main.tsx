@@ -20,6 +20,7 @@ if (typeof window !== 'undefined') {
 }
 import { BrowserRouter, HashRouter } from 'react-router-dom';
 import App from './App';
+import { ErrorBoundary } from './ErrorBoundary';
 import { seedAndMigrate } from './seed';
 import { hasDemoData, seedDemoData } from './demoData';
 import { useFilters } from './store';
@@ -55,8 +56,10 @@ const Router = DEMO_ONLY_BUILD ? HashRouter : BrowserRouter;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Router>
-      <App />
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <App />
+      </Router>
+    </ErrorBoundary>
   </StrictMode>
 );

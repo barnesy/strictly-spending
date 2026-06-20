@@ -5,6 +5,8 @@ export type ChatMessage = {
   actionResult?: any;
   isStreaming?: boolean;
   steps?: string[];
+  activeSkillId?: string;
+  completedStages?: string[];
   tokenUsage?: {
     prompt: number;
     completion: number;
@@ -15,6 +17,7 @@ export type ChatMessage = {
 
 import { cleanChatHistory } from './copilotMatcher';
 import { db } from './db';
+import { AVAILABLE_TOOLS } from './aiTools';
 import type { AgentSkill, SkillTestCase } from './types';
 import { useFilters } from './store';
 import { useBudgetStore } from './budgetStore';
@@ -27,32 +30,27 @@ You are a local financial AI agent. You help the user manage their money based o
 
 <instructions>
 1. ALWAYS output a single JSON object. No extra text, no markdown formatting, no XML tags outside the JSON.
-2. QUERY & VERIFY PROCESS (Multi-turn ReAct Loop):
-   - Step A (Intent): Define what financial details (spending totals, merchant statistics, cash runway) are needed to answer the user's question.
-   - Step B (Query): If the question requires any math, transaction details, or history, you MUST set 'agent_action.action' to 'query_data' (or other actions) to fetch the data. NEVER guess, fake, or calculate numbers yourself.
-   - Step C (Verify): Once query results are returned, verify if you have the right data. If the results are empty, insufficient, or you need to compare with another period/check other categories, you MUST request another query in the next turn (by outputting another JSON action). Keep querying until you have all necessary data.
-   - Step D (Finalize): Once you have retrieved and verified the correct data, set 'agent_action.action' to 'none' and write your final conversational answer in well-formatted markdown (bullet points or tables) in the 'body' field of the JSON.
-3. VISUALIZATION PRIORITY:
+2. CORE BEHAVIOR (Tool Use):
+   - You have tools (actions) available in your schema.
+   - ALWAYS prioritize using tools over asking the user for information. If you need financial data, history, or totals to answer a question, you MUST set 'agent_action.action' to 'query_data' to fetch it.
+   - NEVER guess, fake, or calculate numbers yourself.
+   - Keep querying until you have all the necessary data. If your first query is insufficient, output another query action in the next turn.
+3. CUSTOM SKILLS & MULTI-STEP:
+   - If the user's request matches a Custom Capability / Skill, you MUST immediately begin executing its tool instructions.
+   - If a Custom Skill defines multiple stages, execute them automatically in sequence turn-by-turn. Do NOT set 'action' to 'none' or stop to ask for permission in the middle of a multi-step sequence.
+4. FINAL RESPONSES:
+   - Once you have all the correct data (or have finished your skill steps), set 'agent_action.action' to 'none'.
+   - Write your final conversational answer in well-formatted markdown in the 'body' field of the JSON.
+   - When presenting comparisons, categories, spending lists, monthly/yearly values, or math calculations, you MUST format them as markdown tables. Use left-aligned columns for text/categories/periods, and right-aligned columns for currency/amounts/counts (e.g. '| Category | Amount |' followed by '| :--- | ---: |'). This ensures mathematical data columns align beautifully and digits line up perfectly for math. Avoid bulleted lists for tables.
+5. VISUALIZATION PRIORITY:
    - If the user's query can be visualized by applying filters on the dashboard (e.g. "show me my food spending"), prioritize returning the 'agent_action' with the filter parameters so the user can click the GenUX card to apply those filters.
-4. To preserve existing UI filters, use "current" for preset, categories, and accounts inside agent_action.
-5. If the user says "food", map categories to ["Groceries", "Restaurants & Coffee"].
-6. When querying or filtering by categories, you MUST ONLY choose from the 'Available Categories' listed in the <current_state> block. NEVER invent new category names or use names that are not in the list. Choose the categories that best match the user's request.
-7. All numbers (such as currency figures, transaction counts, percentage values, differences, averages) MUST always be **bolded** in your explanation body text (e.g. **$391.29**, **6.00** transactions, **+56.50%**).
-8. Numbers, counts, percentages, and currency values MUST never be rounded to a whole integer, except to the second decimal place (.00) (e.g., write **$391.29** or **$250.00**, NEVER $391 or $250; write **6.00** transactions, NEVER 6).
-9. If the user mentions a specific merchant or transaction description keyword (e.g. "apple", "amazon", "netflix", "walmart"), you MUST set the 'search' property of 'agent_action' to that keyword. Do NOT map it to a category query unless you also set the 'search' keyword, because category queries only return aggregated totals and not merchant-specific details.
+6. To preserve existing UI filters, use "current" for preset, categories, and accounts inside agent_action.
+7. If the user says "food", map categories to ["Groceries", "Restaurants & Coffee"].
+8. When querying or filtering by categories, you MUST ONLY choose from the 'Available Categories' listed in the <current_state> block. NEVER invent new category names.
+9. All numbers (such as currency figures, transaction counts, percentage values, differences, averages) MUST always be **bolded** in your explanation body text (e.g. **$391.29**, **6.00** transactions, **+56.50%**).
+10. Numbers, counts, percentages, and currency values MUST never be rounded to a whole integer, except to the second decimal place (.00) (e.g., write **$391.29** or **$250.00**, NEVER $391 or $250; write **6.00** transactions, NEVER 6).
+11. If the user mentions a specific merchant or transaction description keyword (e.g. "apple", "amazon", "netflix", "walmart"), you MUST set the 'search' property of 'agent_action' to that keyword.
 </instructions>
-
-<allowed_actions>
-- query_data: Use this to fetch transactions, spending, category totals, budgets, or answer any questions about the user's spending data.
-- categorize_transactions: Use this to auto-categorize uncategorized transactions using the local AI model.
-- subscription_alerts: Use this to scan recurring payments for duplicates, price spikes, or overlapping subscriptions.
-- spending_anomalies: Use this to scan for outliers or category spending spikes. Do NOT use this to query spending totals or compare spending across periods (use 'query_data' for totals).
-- project_runway: Use this to check cash reserves, monthly outflow, and calculate months of runway.
-- create_artifact / update_artifact: Use this to generate documents, lists, or spreadsheets.
-- audit_accessibility: Use this to audit the web app accessibility score.
-- dom_update / navigate / filter: Use these to interact with the UI.
-- none: Use this for basic conversational chat and to write your final conversational answer in the 'body' field.
-</allowed_actions>
 `;
 
 export const fewShots: ChatMessage[] = [
@@ -89,7 +87,11 @@ export const fewShots: ChatMessage[] = [
   { role: 'system', content: 'Database Query Results for categories [Shopping] between 2026-05-01 and 2026-06-01:\n- Total Spent: $150.00\n- Number of Transactions: 3' },
   { role: 'assistant', content: JSON.stringify({ title: 'Shopping Month Before', body: 'Querying shopping spending for the month before last month.', gen_ux: { type: 'none', options: [] }, suggested_actions: [], agent_action: { action: 'query_data', categories: ['Shopping'], customStart: '2026-04-01', customEnd: '2026-05-01', explanation: 'Querying shopping spending for the month before last month (April).' } }) },
   { role: 'system', content: 'Database Query Results for categories [Shopping] between 2026-04-01 and 2026-05-01:\n- Total Spent: $100.00\n- Number of Transactions: 2' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Shopping Comparison', body: 'Last month (May), you spent **$150.00** on Shopping across **3.00** transactions. In the month before (April), you spent **$100.00** across **2.00** transactions. This is an increase of **$50.00** (**+50.00%**) compared to the previous month.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters'], agent_action: { action: 'none' } }) },
+  { role: 'assistant', content: JSON.stringify({ title: 'Shopping Comparison', body: 'Here is the comparison for your Shopping spending:\n\n| Period | Spend Amount | Transactions |\n| :--- | ---: | ---: |\n| Last Month (May) | **$150.00** | **3.00** |\n| Month Before (April) | **$100.00** | **2.00** |\n| **Difference** | **+$50.00** (**+50.00%**) | **+1.00** |\n\nYour Shopping spending increased by **$50.00** (**+50.00%**).', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters'], agent_action: { action: 'none' } }) },
+  { role: 'user', content: 'Generate a Profit and Loss document' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Preparing P&L', body: 'Querying global totals to prepare your Profit and Loss statement.', gen_ux: { type: 'none', options: [] }, suggested_actions: [], agent_action: { action: 'query_data', categories: ['all'], explanation: 'Querying global totals to prepare your P&L document.' } }) },
+  { role: 'system', content: 'Database Query Results for categories [all] between 2026-01-01 and 2026-06-01:\n- Total Spent: $1500.00\n- Number of Transactions: 30\n\nCategory Breakdown:\n- Income: $5000.00\n- Software: $200.00\n- Utilities: $100.00' },
+  { role: 'assistant', content: JSON.stringify({ title: 'Profit & Loss', body: 'Generating a Profit and Loss statement based on your categorized income and expenses.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Go to documents'], agent_action: { action: 'generate_document', documentType: 'business_pnl', documentContent: '# Profit and Loss\n## Revenue\n- Income: $5000.00\n## Expenses\n- Software: $200.00\n- Utilities: $100.00\n**Net Profit: $4700.00**', explanation: 'Generating a P&L document.' } }) },
   { role: 'user', content: 'Show me transactions between $10 and $50 containing starbucks' },
   { role: 'assistant', content: JSON.stringify({ title: 'Starbucks Transactions', body: 'Querying transactions between $10.00 and $50.00 containing starbucks.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters'], agent_action: { action: 'query_data', search: 'starbucks', minPrice: 10, maxPrice: 50, explanation: 'Querying transactions between $10.00 and $50.00 containing starbucks.' } }) },
   { role: 'system', content: 'Database Query Results for categories [all] between 2000-01-01 and 2026-06-17 with search "starbucks", minPrice $10.00, maxPrice $50.00:\n- Total Spent: $30.00\n- Number of Transactions: 2\n- Average Transaction: $15.00' },
@@ -115,11 +117,7 @@ export const COPILOT_RESPONSE_SCHEMA = {
       properties: {
         action: { 
           type: "string", 
-          enum: [
-            "filter", "navigate", "query_data", "categorize_transactions", "subscription_alerts", 
-            "spending_anomalies", "create_artifact", "update_artifact", 
-            "audit_accessibility", "dom_update", "project_runway", "none"
-          ],
+          enum: AVAILABLE_TOOLS.flatMap(t => t.name.split(' / ')),
           description: "The system action to take. query_data fetches data."
         },
         id: { type: "string" },
@@ -140,6 +138,8 @@ export const COPILOT_RESPONSE_SCHEMA = {
         type: { type: "string", enum: ["skill", "markdown", "spreadsheet"] },
         title: { type: "string" },
         content: { type: "string" },
+        documentType: { type: "string", description: "Target document checklist ID if a tax document (e.g. 'business_pnl')." },
+        documentContent: { type: "string", description: "The raw content of the document to be saved." },
         explanation: { type: "string" }
       },
       required: ["action"]
@@ -204,11 +204,16 @@ async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
   }
 }
 
+export const CURRENT_PROMPT_VERSION = 14;
+
 export async function getSystemPrompt(stateContext: string, overrideSystemPrompt?: string): Promise<string> {
+  const { getToolsXmlBlock } = await import('./aiTools');
+
   if (overrideSystemPrompt) {
-    return overrideSystemPrompt.includes('{APP_STATE}')
-      ? overrideSystemPrompt.replace('{APP_STATE}', stateContext)
-      : `${overrideSystemPrompt}\n\n<current_state>\n${stateContext}\n</current_state>`;
+    const overrideWithTools = overrideSystemPrompt + `\n\n${getToolsXmlBlock()}`;
+    return overrideWithTools.includes('{APP_STATE}')
+      ? overrideWithTools.replace('{APP_STATE}', stateContext)
+      : `${overrideWithTools}\n\n<current_state>\n${stateContext}\n</current_state>`;
   }
 
   let basePrompt = GENERAL_SYSTEM_PROMPT;
@@ -226,6 +231,8 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
     .replace('<current_state>\n{APP_STATE}\n</current_state>', '')
     .replace('<current_state>{APP_STATE}</current_state>', '')
     .replace('{APP_STATE}', '');
+    
+  const baseWithTools = cleanBase + `\n\n${getToolsXmlBlock()}`;
 
   let enabledExtensions = '';
   try {
@@ -245,7 +252,7 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
 
   const stateBlock = `\n\n<current_state>\n${stateContext}\n</current_state>`;
 
-  return `${cleanBase}${extensionsBlock}${stateBlock}`;
+  return `${baseWithTools}${extensionsBlock}${stateBlock}`;
 }
 
 export interface AIProvider {
@@ -444,6 +451,13 @@ export class OllamaProvider implements AIProvider {
 
       if (schema) {
         body.format = schema;
+      }
+
+      try {
+        const { useChatStore } = await import('./chatStore');
+        useChatStore.getState().setLastDebugPayload(JSON.stringify(body, null, 2));
+      } catch (e) {
+        console.error("Failed to save debug payload", e);
       }
 
       const response = await safeFetch('http://localhost:11434/api/chat', {

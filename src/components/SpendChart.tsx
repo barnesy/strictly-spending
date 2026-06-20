@@ -1,31 +1,19 @@
 import { useMemo, useEffect, useState, useRef } from 'react';
 import { Box } from '@mui/material';
-import {
-  ResponsiveChartContainer,
-  BarPlot,
-  LinePlot,
-  MarkPlot,
-  ChartsXAxis,
-  ChartsYAxis,
-  ChartsTooltip,
-  useYScale,
-  useDrawingArea,
-} from '@mui/x-charts';
+import * as echarts from 'echarts';
 import { monthKey, monthLabel, usd } from '../lib';
 import { ACCOUNT_COLORS } from '../theme';
 import type { Account, Category, Transaction } from '../types';
 import type { GroupBy } from '../store';
 import type { RecurrenceInfo } from '../recurrence';
 import { isRecurring } from '../recurrence';
-import CustomAxisTooltipContent from './ChartTooltip';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useFilters } from '../store';
 import { useBudgetStore } from '../budgetStore';
 import { buildForecast } from '../forecast';
 
-/** Track a parent element's height via ResizeObserver so the chart fills
- *  its container exactly (instead of being capped at a fixed vh fraction). */
+/** Track a parent element's height via ResizeObserver */
 function useElementHeight(minHeight = 240) {
   const ref = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number>(minHeight);
@@ -33,7 +21,6 @@ function useElementHeight(minHeight = 240) {
     const el = ref.current;
     if (!el) return;
 
-    // Run an immediate synchronous measurement on mount to prevent the 240px layout jump
     const initialHeight = Math.max(minHeight, Math.floor(el.clientHeight));
     setHeight(initialHeight);
     
@@ -41,15 +28,10 @@ function useElementHeight(minHeight = 240) {
     let rAFId: number | null = null;
     
     const measure = () => {
-      if (timerId !== null) {
-        clearTimeout(timerId);
-      }
-      // Debounce by 60ms to prevent heavy redrawing on every drag frame
+      if (timerId !== null) clearTimeout(timerId);
       timerId = setTimeout(() => {
         timerId = null;
-        if (rAFId !== null) {
-          cancelAnimationFrame(rAFId);
-        }
+        if (rAFId !== null) cancelAnimationFrame(rAFId);
         rAFId = requestAnimationFrame(() => {
           rAFId = null;
           if (el) {
@@ -64,12 +46,8 @@ function useElementHeight(minHeight = 240) {
     ro.observe(el);
     return () => {
       ro.disconnect();
-      if (timerId !== null) {
-        clearTimeout(timerId);
-      }
-      if (rAFId !== null) {
-        cancelAnimationFrame(rAFId);
-      }
+      if (timerId !== null) clearTimeout(timerId);
+      if (rAFId !== null) cancelAnimationFrame(rAFId);
     };
   }, [minHeight]);
   return [ref, height] as const;
@@ -84,69 +62,6 @@ interface Props {
   recurrenceMap: Map<string, RecurrenceInfo>;
   onMonthClick?: (monthKey: string) => void;
   allTxns: Transaction[];
-}
-
-function CustomBudgetLine({ totalBudget }: { totalBudget: number }) {
-  const yScale = useYScale();
-  const { left, width } = useDrawingArea();
-
-  const y = yScale(totalBudget);
-  if (y == null || isNaN(y)) return null;
-
-  const labelText = `Monthly Budget (${usd.format(totalBudget)})`;
-  const rectWidth = 175;
-  const rectHeight = 20;
-  const rectX = left + width / 2 - rectWidth / 2;
-  const rectY = y - rectHeight / 2;
-
-  return (
-    <g className="custom-budget-line">
-      {/* Thinner solid black lines connecting to the chip */}
-      <line
-        x1={left}
-        y1={y}
-        x2={rectX}
-        y2={y}
-        stroke="#000000"
-        strokeWidth={1}
-      />
-      <line
-        x1={rectX + rectWidth}
-        y1={y}
-        x2={left + width}
-        y2={y}
-        stroke="#000000"
-        strokeWidth={1}
-      />
-      
-      {/* Pill-shaped chip container */}
-      <rect
-        x={rectX}
-        y={rectY}
-        width={rectWidth}
-        height={rectHeight}
-        rx={10}
-        ry={10}
-        fill="#ffffff"
-        stroke="#000000"
-        strokeWidth={1}
-      />
-      
-      {/* Centered label text */}
-      <text
-        x={left + width / 2}
-        y={y}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="#000000"
-        fontSize={10}
-        fontWeight={600}
-        style={{ userSelect: 'none' }}
-      >
-        {labelText}
-      </text>
-    </g>
-  );
 }
 
 export default function SpendChart({
@@ -282,7 +197,6 @@ export default function SpendChart({
       };
     }
 
-    // account
     const presentAccounts = new Set<number>();
     for (const t of transactions) {
       if (t.amount < 0) presentAccounts.add(t.accountId);
@@ -349,18 +263,15 @@ export default function SpendChart({
     const spendSeries = series.map((s) => ({
       ...s,
       type: 'bar' as const,
-      valueFormatter: (v: number | null) =>
-        v == null ? '' : usd.format(v),
+      id: s.label,
     }));
 
     const incomeSeries = {
       id: 'income',
       type: 'line' as const,
       label: 'Income',
-      color: '#2e7d32', // green
+      color: '#2e7d32',
       data: incomePerMonth,
-      valueFormatter: (v: number | null) =>
-        v == null ? '' : usd.format(v),
     };
 
     if (!showRunway || totalBudget <= 0 || startingCash <= 0 || monthList.length === 0) {
@@ -372,7 +283,6 @@ export default function SpendChart({
 
     const lastMonthStr = monthList[monthList.length - 1];
 
-    // Calculate current month's total spend from transaction data
     const currentMonthSpend = transactions
       .filter((t) => t.amount < 0 && monthKey(t.date) === lastMonthStr)
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
@@ -385,7 +295,7 @@ export default function SpendChart({
     const projectionData: number[] = [];
     const historicalNulls = monthList.slice(0, -1).map(() => null);
 
-    let [year, month] = lastMonthStr.split('-').map(Number); // 1-based month
+    let [year, month] = lastMonthStr.split('-').map(Number);
     let currentCash = startingCash - currentMonthRunway;
 
     while (currentCash > 0 && projectMonths.length < 24) {
@@ -398,34 +308,28 @@ export default function SpendChart({
       projectMonths.push(mStr);
       extendedLabels.push(monthLabel(mStr));
 
-      // The bar height is how much of this month's budget is funded by the remaining cash, capped at totalBudget
       const fundedAmount = Math.min(currentCash, totalBudget);
       projectionData.push(fundedAmount);
 
       currentCash -= totalBudget;
     }
 
-    // Pad existing spend series with nulls for projected months
     const paddedSpendSeries = spendSeries.map((s) => ({
       ...s,
       data: [...s.data, ...projectMonths.map(() => null)],
     }));
 
-    // Pad income series with nulls
     const paddedIncomeSeries = {
       ...incomeSeries,
       data: [...incomeSeries.data, ...projectMonths.map(() => null)],
     };
 
-    // Create Runway series
     const runwaySeries = {
       id: 'runway',
       type: 'bar' as const,
       label: 'Projected Cash',
-      color: '#90caf9', // soft blue
+      color: '#90caf9',
       stack: 'spend',
-      valueFormatter: (v: number | null) =>
-        v == null ? '' : usd.format(v),
       data: [...historicalNulls, currentMonthRunway, ...projectionData],
     };
 
@@ -439,9 +343,222 @@ export default function SpendChart({
       finalLabels: extendedLabels,
       finalSeries: finalSeriesList,
     };
-  }, [showRunway, spendOnly, totalBudget, startingCash, labels, series, incomePerMonth, monthList]);
+  }, [showRunway, spendOnly, totalBudget, startingCash, labels, series, incomePerMonth, monthList, transactions]);
 
   const [containerRef, chartHeight] = useElementHeight(240);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const chartInstanceRef = useRef<echarts.ECharts | null>(null);
+
+  // Initialize and dispose Echarts instance strictly to prevent memory leaks
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const chart = echarts.init(chartRef.current, undefined, { renderer: 'canvas' });
+    chartInstanceRef.current = chart;
+
+    const handleResize = () => chart.resize();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.dispose();
+      chartInstanceRef.current = null;
+    };
+  }, []);
+
+  // Update Echarts option when data or container size changes
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart) return;
+    
+    // Explicit resize when chartHeight changes since we observe height manually
+    chart.resize();
+
+    const option: echarts.EChartsOption = {
+      grid: { left: 70, right: 20, top: 40, bottom: 60 },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params: any) => {
+          if (!Array.isArray(params)) return '';
+          
+          const spendItems = params.filter(p => p.seriesId !== 'income' && p.seriesId !== 'runway');
+          const incomeItem = params.find(p => p.seriesId === 'income');
+          const runwayItem = params.find(p => p.seriesId === 'runway');
+          
+          const sorted = spendItems
+            .map(s => ({
+              seriesName: s.seriesName,
+              color: s.color,
+              value: (s.value as number) || 0
+            }))
+            .filter(s => s.value > 0)
+            .sort((a, b) => b.value - a.value);
+
+          const totalSpend = sorted.reduce((sum, s) => sum + s.value, 0);
+          const incomeValue = incomeItem ? (incomeItem.value as number) || 0 : 0;
+          const runwayValue = runwayItem ? (runwayItem.value as number) || 0 : 0;
+          const remaining = incomeValue - totalSpend;
+
+          let html = `<div style="min-width: 220px; max-width: 300px; padding: 4px;">`;
+          html += `<div style="font-weight: 600; margin-bottom: 8px; font-family: inherit;">${params[0].axisValueLabel}</div>`;
+          
+          if (sorted.length === 0 && incomeValue === 0 && runwayValue === 0) {
+            html += `<div style="color: #666; font-size: 12px; font-family: inherit;">No activity</div></div>`;
+            return html;
+          }
+
+          html += `<table style="width: 100%; border-collapse: collapse; font-family: inherit;"><tbody>`;
+          
+          sorted.forEach(s => {
+            html += `
+              <tr>
+                <td style="width: 12px; padding-right: 8px; vertical-align: middle;">
+                  <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${s.color};"></div>
+                </td>
+                <td style="padding: 2px 8px 2px 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px;">
+                  ${s.seriesName}
+                </td>
+                <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px;">
+                  ${usd.format(s.value)}
+                </td>
+              </tr>
+            `;
+          });
+
+          if (spendOnly) {
+            if (sorted.length > 0) {
+              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+              html += `
+                <tr>
+                  <td></td>
+                  <td style="padding: 2px 0; font-size: 13px; font-weight: 600;">Total Spend</td>
+                  <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700;">
+                    ${usd.format(totalSpend)}
+                  </td>
+                </tr>
+              `;
+            }
+          } else {
+            if (totalSpend > 0 || incomeValue > 0) {
+              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+              if (totalSpend > 0) {
+                html += `
+                  <tr>
+                    <td></td>
+                    <td style="padding: 2px 0; font-size: 13px; color: #666;">Total Spend</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: #666;">
+                      -${usd.format(totalSpend)}
+                    </td>
+                  </tr>
+                `;
+              }
+              if (incomeValue > 0) {
+                html += `
+                  <tr>
+                    <td style="width: 12px; padding-right: 8px; vertical-align: middle;">
+                      <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${incomeItem?.color || '#2e7d32'};"></div>
+                    </td>
+                    <td style="padding: 2px 0; font-size: 13px; color: #2e7d32;">Income</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: #2e7d32;">
+                      +${usd.format(incomeValue)}
+                    </td>
+                  </tr>
+                `;
+              }
+              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+              html += `
+                <tr>
+                  <td></td>
+                  <td style="padding: 2px 0; font-size: 13px; font-weight: 600;">Remaining</td>
+                  <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${remaining >= 0 ? '#2e7d32' : '#d32f2f'};">
+                    ${remaining >= 0 ? '+' : ''}${usd.format(remaining)}
+                  </td>
+                </tr>
+              `;
+            }
+          }
+
+          if (runwayValue > 0) {
+            if (sorted.length > 0 || incomeValue > 0) {
+               html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+            }
+            html += `
+              <tr>
+                <td style="width: 12px; padding-right: 8px; vertical-align: middle;">
+                  <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${runwayItem?.color || '#90caf9'};"></div>
+                </td>
+                <td style="padding: 2px 0; font-size: 13px; font-weight: 600; color: #1976d2;">Projected Cash</td>
+                <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: #1976d2;">
+                  ${usd.format(runwayValue)}
+                </td>
+              </tr>
+            `;
+          }
+
+          html += `</tbody></table></div>`;
+          return html;
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: finalLabels,
+        axisTick: { alignWithLabel: true }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { formatter: (v: number) => usd.format(v) }
+      },
+      series: finalSeries.map((s, i) => {
+        const base: any = {
+          id: s.id,
+          name: s.label,
+          type: s.type,
+          data: s.data,
+          stack: s.stack,
+          itemStyle: { color: s.color },
+          // Apply rounding to bars to match MUI aesthetics
+          ...(s.type === 'bar' ? { itemStyle: { color: s.color, borderRadius: [4, 4, 0, 0] } } : {})
+        };
+        
+        // Add markLine to the first series for the budget
+        if (showBudgetLine && i === 0) {
+           base.markLine = {
+               data: [{ yAxis: totalBudget, name: 'Monthly Budget' }],
+               label: { 
+                   show: true, 
+                   position: 'middle', 
+                   formatter: `Monthly Budget (${usd.format(totalBudget)})`,
+                   backgroundColor: '#ffffff',
+                   color: '#000000',
+                   borderColor: '#000000',
+                   borderWidth: 1,
+                   borderRadius: 10,
+                   padding: [4, 10],
+                   fontWeight: 600,
+               },
+               lineStyle: { color: '#000000', type: 'solid', width: 1 },
+               symbol: 'none',
+           };
+        }
+        return base;
+      }),
+      animation: false // Disabled for max performance with large data sets
+    };
+
+    chart.setOption(option, true); // true to merge properly
+    
+    // Setup click listener
+    chart.off('click'); // clear old listener
+    chart.on('click', (params) => {
+      if (onMonthClick && monthList.length > 1) {
+         const idx = params.dataIndex;
+         if (idx != null && idx >= 0 && idx < monthList.length) {
+           onMonthClick(monthList[idx]);
+         }
+      }
+    });
+    
+  }, [finalSeries, finalLabels, showBudgetLine, totalBudget, spendOnly, onMonthClick, monthList, chartHeight]);
 
   if (series.length === 0 || labels.length === 0) {
     return (
@@ -453,39 +570,14 @@ export default function SpendChart({
 
   return (
     <Box ref={containerRef} sx={{ width: '100%', height: '100%', minHeight: 240 }}>
-      <ResponsiveChartContainer
-        height={chartHeight}
-        xAxis={[{ data: finalLabels, scaleType: 'band' }]}
-        yAxis={[{ valueFormatter: (v: number) => usd.format(v) }]}
-        series={finalSeries}
-        margin={{ left: 70, right: 20, top: 20, bottom: 60 }}
-        sx={
-          onMonthClick && monthList.length > 1
-            ? { '& .MuiBarElement-root': { cursor: 'pointer' } }
-            : undefined
-        }
-      >
-        <BarPlot
-          borderRadius={4}
-          onItemClick={
-            onMonthClick && monthList.length > 1
-              ? (_, data) => {
-                  const idx = data?.dataIndex;
-                  if (idx != null && idx >= 0 && idx < monthList.length) {
-                    onMonthClick(monthList[idx]);
-                  }
-                }
-              : undefined
-          }
-        />
-        <LinePlot />
-        <MarkPlot />
-        <ChartsXAxis />
-        <ChartsYAxis />
-        <ChartsTooltip trigger="axis" slots={{ axisContent: CustomAxisTooltipContent }} />
-        {showBudgetLine && <CustomBudgetLine totalBudget={totalBudget} />}
-
-      </ResponsiveChartContainer>
+      <div 
+        ref={chartRef} 
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          cursor: (onMonthClick && monthList.length > 1) ? 'pointer' : 'default' 
+        }} 
+      />
     </Box>
   );
 }

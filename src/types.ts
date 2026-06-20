@@ -91,7 +91,8 @@ export type AppSetting =
         fontSize?: number;
         paletteName?: string;
       };
-    };
+    }
+  | { key: 'app:taxSettings'; value: TaxSettings };
 
 export type PostImportAction = 'leave' | 'move' | 'delete';
 
@@ -102,6 +103,88 @@ export interface WatchFolderConfig {
   connectedAt: string;
   postImportAction: PostImportAction;
   autoImport: boolean;
+}
+
+export interface TaxSettings {
+  // Business Basics & Financials
+  businessIdentity?: {
+    dba?: string;
+    address?: string;
+    einSsn?: string;
+  };
+  businessFinancials?: {
+    hasPnl?: boolean;
+    hasBalanceSheet?: boolean;
+    hasGeneralLedger?: boolean;
+  };
+
+  // Business Income & Tax Forms
+  businessIncome?: {
+    forms1099Total?: number;
+    grossSales?: number;
+    otherIncome?: number;
+  };
+
+  // Business Deductions & Expense Details
+  businessDeductions?: {
+    general?: {
+      advertising?: number;
+      software?: number;
+      professionalFees?: number;
+      insurance?: number;
+      officeSupplies?: number;
+      utilities?: number;
+      travel?: number;
+    };
+    vehicle?: {
+      businessMiles?: number;
+      personalMiles?: number;
+      datePlacedInService?: string;
+      actualExpenses?: number;
+    };
+    homeOffice?: {
+      sqFtOffice?: number;
+      sqFtHome?: number;
+      rent?: number;
+      propertyTax?: number;
+      insurance?: number;
+      utilities?: number;
+    };
+    assetPurchases?: number;
+    contractorsAndPayroll?: {
+      w2W3Total?: number;
+      forms1099Issued?: number;
+    };
+  };
+
+  // Personal Tax Information
+  personalInfo?: {
+    filingStatus?: 'single' | 'married_joint' | 'married_separate' | 'head_household';
+    dependents?: number;
+    hasPriorYearReturn?: boolean;
+    w2Income?: number;
+    w2Withheld?: number;
+    investment1099s?: number;
+    k1s?: number;
+    deductions?: {
+      iraContributions?: number;
+      healthInsurance?: number;
+      charitableDonations?: number;
+      studentLoanInterest?: number;
+    };
+  };
+
+  // Tax Payments Already Made
+  taxPayments?: {
+    estimatedPayments?: number;
+    stateLocalFees?: number;
+  };
+
+  // Shared / Top Level
+  hasBusiness: boolean;
+  taxYear: number;
+  checklist: Record<string, boolean>;
+  uploadedDocuments?: Record<string, { filename: string; type: string; uploadedAt: string }>;
 }
 
 export type RecurrenceKind = 'monthly' | 'biweekly' | 'weekly' | 'annual' | 'none';
@@ -171,6 +254,11 @@ export interface SkillTestCase {
   criteria: string;
 }
 
+export interface AgentSkillStage {
+  title: string;
+  requiredAction: string;
+}
+
 export interface AgentSkill {
   id: string;
   name: string;
@@ -179,6 +267,7 @@ export interface AgentSkill {
   enabled: boolean;
   isBuiltIn?: boolean;
   testCases?: SkillTestCase[];
+  stages?: AgentSkillStage[];
 }
 
 export interface ChatArtifact {
@@ -198,6 +287,18 @@ export interface ChatThread {
   updatedAt: string;
 }
 
+export interface AppDocument {
+  id: string;
+  name: string;
+  path: string;
+  type: string;
+  source: 'generated' | 'uploaded';
+  associatedChecklistId?: string;
+  content?: string;
+  createdAt: string;
+  metadata?: any;
+}
+
 export interface DbChatMessage {
   id?: number;
   threadId: string;
@@ -205,6 +306,8 @@ export interface DbChatMessage {
   content: string;
   actionResult?: any;
   createdAt: string;
+  activeSkillId?: string;
+  completedStages?: string[];
   steps?: string[];
   tokenUsage?: {
     prompt: number;

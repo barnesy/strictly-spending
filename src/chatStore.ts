@@ -42,7 +42,7 @@ interface ChatStore {
   startStreamingMessage: (initialSteps?: string[], purpose?: 'tool_select' | 'explanation') => void;
   appendStreamingToken: (token: string) => void;
   updateStreamingMetadata: (steps: string[], tokenUsage?: { prompt: number; completion: number; total: number }) => void;
-  finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: string[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation') => Promise<void>;
+  finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: string[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation', activeSkillId?: string, completedStages?: string[]) => Promise<void>;
   setMessages: (messages: ChatMessage[]) => void;
   clearMessages: () => void;
   checkAIStatus: () => Promise<void>;
@@ -66,6 +66,8 @@ interface ChatStore {
   deleteWorkspace: (id: string) => Promise<void>;
   activeArtifact: ChatArtifact | null;
   setActiveArtifact: (art: ChatArtifact | null) => void;
+  lastDebugPayload: string;
+  setLastDebugPayload: (payload: string) => void;
 }
 
 export const useChatStore = create<ChatStore>()(
@@ -159,7 +161,7 @@ export const useChatStore = create<ChatStore>()(
         });
       },
 
-      finalizeStreamingMessage: async (finalContent, actionResult, steps, tokenUsage, purpose) => {
+      finalizeStreamingMessage: async (finalContent, actionResult, steps, tokenUsage, purpose, activeSkillId, completedStages) => {
         set((state) => {
           const lastMsg = state.messages[state.messages.length - 1];
           if (lastMsg && lastMsg.role === 'assistant') {
@@ -170,7 +172,9 @@ export const useChatStore = create<ChatStore>()(
               actionResult,
               steps: steps || lastMsg.steps,
               tokenUsage: tokenUsage || lastMsg.tokenUsage,
-              purpose: purpose || lastMsg.purpose
+              purpose: purpose || lastMsg.purpose,
+              activeSkillId,
+              completedStages
             };
             return { messages: updated };
           }
@@ -188,6 +192,8 @@ export const useChatStore = create<ChatStore>()(
             steps: steps || lastMsg?.steps,
             tokenUsage: tokenUsage || lastMsg?.tokenUsage,
             purpose: purpose || lastMsg?.purpose,
+            activeSkillId,
+            completedStages,
             createdAt: new Date().toISOString()
           });
 
@@ -367,6 +373,8 @@ export const useChatStore = create<ChatStore>()(
       },
       activeArtifact: null,
       setActiveArtifact: (art) => set({ activeArtifact: art }),
+      lastDebugPayload: '',
+      setLastDebugPayload: (payload) => set({ lastDebugPayload: payload }),
       
       activeThreadId: null,
       threads: [],
@@ -383,6 +391,10 @@ export const useChatStore = create<ChatStore>()(
       loadThreads: async () => {
         const list = await db.threads.reverse().sortBy('createdAt');
         set({ threads: list });
+        const activeId = get().activeThreadId;
+        if (activeId && get().messages.length === 0) {
+          get().loadThreadMessages(activeId);
+        }
       },
 
       createThread: async (title) => {
@@ -426,7 +438,9 @@ export const useChatStore = create<ChatStore>()(
             actionResult: m.actionResult,
             steps: m.steps,
             tokenUsage: m.tokenUsage,
-            purpose: m.purpose
+            purpose: m.purpose,
+            activeSkillId: m.activeSkillId,
+            completedStages: m.completedStages
           };
         });
         set({ messages: formatted });

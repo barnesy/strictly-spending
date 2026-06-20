@@ -9,7 +9,7 @@
 //   - Keyboard shortcuts: Enter (suggested), 1-9 (grid), Cmd/Ctrl-Z (undo),
 //     S (skip), ? (help), Esc (close help).
 
-import React, { useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import PageLoader from '../components/PageLoader';
 import {
@@ -29,7 +29,6 @@ import {
   TextField,
 } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import CheckIcon from '@mui/icons-material/Check';
 import { db } from '../db';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 

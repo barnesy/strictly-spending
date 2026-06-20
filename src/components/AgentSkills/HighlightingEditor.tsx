@@ -2,6 +2,8 @@ import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react
 import { Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 
+import { AVAILABLE_TOOLS } from '../../aiTools';
+
 export const highlightKeywords = (text: string) => {
   if (!text) return '\n';
   
@@ -11,18 +13,10 @@ export const highlightKeywords = (text: string) => {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // Keywords to highlight
+  // Dynamically build keywords from available tools plus schema keywords
+  const tools = AVAILABLE_TOOLS.flatMap(t => t.name.split(' / '));
   const keywords = [
-    'query_data',
-    'subscription_alerts',
-    'spending_anomalies',
-    'audit_accessibility',
-    'create_artifact',
-    'update_artifact',
-    'dom_update',
-    'navigate',
-    'filter',
-    'none',
+    ...tools,
     'agent_action',
     'gen_ux',
     'choices',

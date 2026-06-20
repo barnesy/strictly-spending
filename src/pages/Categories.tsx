@@ -1,4 +1,4 @@
-import React, { useMemo, useDeferredValue } from 'react';
+import { useMemo, useDeferredValue } from 'react';
 import {
   Stack,
   Typography,

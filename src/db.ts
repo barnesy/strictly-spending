@@ -12,6 +12,7 @@ import type {
   ChatThread,
   DbChatMessage,
   CsvMapping,
+  AppDocument,
 } from './types';
 
 class SpendingDB extends Dexie {
@@ -27,6 +28,7 @@ class SpendingDB extends Dexie {
   threads!: Table<ChatThread, string>;
   messages!: Table<DbChatMessage, number>;
   csvMappings!: Table<CsvMapping, number>;
+  documents!: Table<AppDocument, string>;
 
   constructor() {
     super('spending-viz');
@@ -63,6 +65,9 @@ class SpendingDB extends Dexie {
     this.version(8).stores({
       transactions:
         '++id, accountId, date, category, source, merchantKey, &dedupKey, importBatchId, recurrence',
+    });
+    this.version(9).stores({
+      documents: 'id, associatedChecklistId, createdAt',
     });
   }
 }

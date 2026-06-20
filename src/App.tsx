@@ -9,10 +9,8 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PsychologyIcon from '@mui/icons-material/Psychology';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import TuneIcon from '@mui/icons-material/Tune';
 import BrushIcon from '@mui/icons-material/Brush';
-import BugReportIcon from '@mui/icons-material/BugReport';
 import {
   Group as PanelGroup,
   Panel,
@@ -32,6 +30,9 @@ import { AgentSkills } from './pages/AgentSkills';
 import Sort from './pages/Sort';
 import AnimationSettings from './pages/AnimationSettings';
 import Merchants from './pages/Merchants';
+import Taxes from './pages/Taxes';
+import Documents from './pages/Documents';
+import ToolsReference from './pages/ToolsReference';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
 import { db } from './db';
@@ -46,12 +47,15 @@ const PRIMARY_NAV = [
   { to: '/categories', label: 'Categories' },
   { to: '/rules', label: 'Rules' },
   { to: '/merchants', label: 'Merchants' },
+  { to: '/taxes', label: 'Taxes' },
+  { to: '/documents', label: 'Documents' },
 ];
 
 const MANAGE_NAV = [
   { to: '/import', label: 'Import', icon: <FileUploadIcon fontSize="small" /> },
   { to: '/local-model', label: 'Local Model', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>AI</Box> },
   { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
+  { to: '/tools-reference', label: 'Tools Reference', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>🛠️</Box> },
   { to: '/animation-playground', label: 'Animations', icon: <TuneIcon fontSize="small" /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
   { to: '/theme', label: 'Theme', icon: <BrushIcon fontSize="small" /> },
@@ -305,7 +309,6 @@ export default function App() {
               mr: 1,
               '&:hover': { color: 'text.primary', bgcolor: 'transparent' }
             }}
-            startIcon={<BugReportIcon fontSize="small" />}
           >
             Feedback
           </Button>
@@ -363,8 +366,11 @@ export default function App() {
               <Route path="/theme" element={<ThemeManager />} />
               <Route path="/local-model" element={<LocalModel />} />
               <Route path="/agent-skills" element={<AgentSkills />} />
+              <Route path="/tools-reference" element={<ToolsReference />} />
               <Route path="/animation-playground" element={<AnimationSettings />} />
               <Route path="/merchants" element={<Merchants />} />
+              <Route path="/taxes" element={<Taxes />} />
+              <Route path="/documents" element={<Documents />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </PageTransition>

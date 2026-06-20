@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useCallback } from 'react';
+import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import {
   Box,
   Typography,
@@ -12,6 +12,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DeleteIcon from '@mui/icons-material/Delete';
+import BugReportIcon from '@mui/icons-material/BugReport';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFilters } from '../store';
 import { useChatStore, formatModelName } from '../chatStore';
@@ -22,6 +23,7 @@ import { executeCopilotCommand } from '../copilotMatcher';
 import { useCopilotActionHandler } from './CopilotChat/useCopilotActionHandler';
 import { ChatInput } from './CopilotChat/ChatInput';
 import { ChatMessageItem } from './CopilotChat/ChatMessageItem';
+import { DebugPromptModal } from './CopilotChat/DebugPromptModal';
 import { CONTROL_HEIGHT } from '../theme';
 import AnimatedLogo from './AnimatedLogo';
 
@@ -75,6 +77,8 @@ export default function CopilotChat({
 
   const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
   const accounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
+
+  const [debugModalOpen, setDebugModalOpen] = useState(false);
 
   const { sendPromptText, stopPromptExecution, loading } = useCopilotActionHandler();
 
@@ -183,6 +187,9 @@ export default function CopilotChat({
           </Box>
         </Stack>
         <Stack direction="row" spacing={0.5}>
+          <IconButton onClick={() => setDebugModalOpen(true)} title="View System Context">
+            <BugReportIcon fontSize="small" />
+          </IconButton>
           {aiLoaded && (
             <IconButton onClick={clearMessages} title="Clear conversation history">
               <DeleteIcon />
@@ -356,6 +363,8 @@ export default function CopilotChat({
           />
         </>
       )}
+
+      <DebugPromptModal open={debugModalOpen} onClose={() => setDebugModalOpen(false)} />
     </Box>
   );
 }

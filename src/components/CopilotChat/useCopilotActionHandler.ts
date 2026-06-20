@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useFilters, resolveDateRange } from '../../store';
 import { useChatStore, formatModelName } from '../../chatStore';
-import { localAI, type ChatMessage, parseAIResponse, calculateGlobalRunwayData } from '../../ai';
+import { localAI, type ChatMessage, parseAIResponse, calculateGlobalRunwayData, COPILOT_RESPONSE_SCHEMA } from '../../ai';
 import { db } from '../../db';
 import { detectSubscriptionAlerts, detectSpendingAnomalies } from '../../copilotAnalytics';
 import { generateAccessibilityReport } from '../../accessibilityAuditor';
@@ -11,6 +11,61 @@ import { buildRecurrenceMap } from '../../recurrence';
 import { buildForecast } from '../../forecast';
 import { useBudgetStore } from '../../budgetStore';
 import type { ProposedCategorizationItem } from '../../types';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { generatePnlData } from '../../pnlGenerator';
+
+function findMatchingSkillForPrompt(prompt: string, skills: any[]): any | null {
+  const normPrompt = prompt.toLowerCase();
+  
+  if (
+    normPrompt.includes('p&l') || 
+    normPrompt.includes('profit and loss') || 
+    normPrompt.includes('profit & loss') || 
+    normPrompt.includes('income statement')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:pnl' || s.name.toLowerCase().includes('profit'));
+    if (matched) return matched;
+  }
+  
+  if (
+    normPrompt.includes('runway') || 
+    normPrompt.includes('rundown') || 
+    normPrompt.includes('reserves') || 
+    normPrompt.includes('cash projection')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:runway' || s.name.toLowerCase().includes('runway'));
+    if (matched) return matched;
+  }
+  
+  if (
+    normPrompt.includes('categorize') || 
+    normPrompt.includes('sort') || 
+    normPrompt.includes('classify') || 
+    normPrompt.includes('organize')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:categorization' || s.name.toLowerCase().includes('categoriz'));
+    if (matched) return matched;
+  }
+
+  for (const skill of skills) {
+    if (!skill.enabled) continue;
+    const normName = skill.name.toLowerCase();
+    if (normPrompt.includes(normName) || normName.includes(normPrompt)) {
+      return skill;
+    }
+    if (skill.testCases) {
+      for (const tc of skill.testCases) {
+        const normTc = tc.prompt.toLowerCase();
+        if (normPrompt.includes(normTc) || normTc.includes(normPrompt)) {
+          return skill;
+        }
+      }
+    }
+  }
+
+  return null;
+}
 
 export function useCopilotActionHandler() {
   const [loading, setLoading] = useState(false);
@@ -80,6 +135,9 @@ export function useCopilotActionHandler() {
     let totalPrompt = 0;
     let totalCompletion = 0;
     const currentSteps = ['Analyzing request intent...'];
+    
+    let currentSkillId: string | undefined;
+    let currentCompletedStages: string[] = [];
 
     try {
       if (!localAI.isLoaded) {
@@ -153,6 +211,28 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
       let currentResponse = '';
       const executedActions = new Set<string>();
 
+      // Multi-Step Skill Tracking
+      const allSkills = ((await db.settings.get('app:agentSkills'))?.value as any[]) || [];
+      const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant' && m.activeSkillId);
+      
+      const matchedSkill = findMatchingSkillForPrompt(textToSubmit, allSkills);
+      if (matchedSkill) {
+        currentSkillId = matchedSkill.id;
+        currentCompletedStages = [];
+      } else {
+        const activeSkill = allSkills.find(s => s.id === lastAssistantMsg?.activeSkillId);
+        if (activeSkill && lastAssistantMsg?.completedStages && lastAssistantMsg.completedStages.length < (activeSkill.stages?.length || 0)) {
+          currentSkillId = lastAssistantMsg.activeSkillId;
+          currentCompletedStages = lastAssistantMsg.completedStages || [];
+        } else {
+          currentSkillId = undefined;
+          currentCompletedStages = [];
+        }
+      }
+
+      let pnlReportMarkdown = '';
+      let pnlSpreadsheetCsv = '';
+      let pnlSpreadsheetDocId = '';
       while (loops < maxLoops) {
         if (signal.aborted) {
           throw new DOMException('aborted', 'AbortError');
@@ -185,11 +265,35 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             ]
           : cleanedHistory;
 
+        // Force next stage via System Enforcement if in a skill
+        let forcedNextStage: any = null;
+        const activeSkill = allSkills.find(s => s.id === currentSkillId);
+        if (activeSkill && activeSkill.stages && currentCompletedStages.length < activeSkill.stages.length) {
+          forcedNextStage = activeSkill.stages[currentCompletedStages.length];
+          activeHistory.push({
+            role: 'system',
+            content: `[SYSTEM ENFORCEMENT] You are currently executing the multi-step skill '${activeSkill.name}'. You have completed stages: [${currentCompletedStages.join(', ')}]. The REQUIRED next stage is '${forcedNextStage.title}'. You MUST output 'agent_action.action' = '${forcedNextStage.requiredAction}' in this turn. Do not skip stages.`
+          });
+        }
+
+        let customSchema: any = undefined;
+        if (isLastLoop) {
+          customSchema = JSON.parse(JSON.stringify(COPILOT_RESPONSE_SCHEMA));
+          if (customSchema.properties?.agent_action?.properties?.action) {
+            customSchema.properties.agent_action.properties.action.enum = ['none'];
+          }
+        } else if (forcedNextStage) {
+          customSchema = JSON.parse(JSON.stringify(COPILOT_RESPONSE_SCHEMA));
+          if (customSchema.properties?.agent_action?.properties?.action) {
+            customSchema.properties.agent_action.properties.action.enum = [forcedNextStage.requiredAction];
+          }
+        }
+
         currentResponse = await localAI.chatCopilot(
           activeHistory,
           stateContext,
           undefined,
-          undefined,
+          customSchema,
           (token, meta) => {
             if (meta) {
               totalPrompt += meta.promptTokens;
@@ -215,7 +319,9 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             null,
             currentSteps,
             { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            'explanation'
+            'explanation',
+            currentSkillId,
+            currentCompletedStages
           );
           break;
         }
@@ -224,6 +330,25 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
         let action = actionObj.action || 'none';
         if (isLastLoop) {
           action = 'none';
+        }
+
+        let feedbackError: string | null = null;
+
+        if (forcedNextStage && action !== forcedNextStage.requiredAction) {
+          console.warn(`Enforcement triggered: LLM tried ${action}, forced to ${forcedNextStage.requiredAction}`);
+          feedbackError = `[SYSTEM ENFORCEMENT ERROR] You attempted to use '${action}', but you are required to use '${forcedNextStage.requiredAction}' next for the '${activeSkill?.name}' skill. Please correct your action.`;
+          action = 'none'; // Prevent wrong action
+        } else if (forcedNextStage && action === forcedNextStage.requiredAction) {
+          currentCompletedStages = [...currentCompletedStages, action];
+        }
+
+        // Safety net: Force data query before P&L document generation
+        if (action === 'generate_document' && actionObj.documentType === 'business_pnl') {
+          if (!pnlReportMarkdown) {
+            console.warn("Safety net triggered: LLM tried to generate P&L document without querying data first.");
+            feedbackError = "Error: You cannot generate a Profit & Loss document without querying the transaction data first. You must first call 'query_data' with categories: ['all'] and preset: 'ytd' to fetch the real numbers.";
+            action = 'none';
+          }
         }
 
         const actionKey = `${action}:${JSON.stringify(actionObj.categories || [])}:${actionObj.customStart || ''}:${actionObj.customEnd || ''}:${actionObj.preset || ''}:${actionObj.search || ''}`;
@@ -237,7 +362,9 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             null,
             currentSteps,
             { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            'tool_select'
+            'tool_select',
+            currentSkillId,
+            currentCompletedStages
           );
 
           const assistantMsg: ChatMessage = {
@@ -245,7 +372,9 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             content: currentResponse,
             steps: [...currentSteps],
             tokenUsage: { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            purpose: 'tool_select'
+            purpose: 'tool_select',
+            activeSkillId: currentSkillId,
+            completedStages: currentCompletedStages
           };
           await addMessage(assistantMsg);
 
@@ -266,8 +395,6 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
         if (action !== 'none') {
           executedActions.add(actionKey);
         }
-
-        let feedbackError: string | null = null;
 
         if (action === 'query_data') {
           let queryCats = actionObj.categories || actionObj.category || [];
@@ -337,7 +464,9 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             null,
             currentSteps,
             { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            'tool_select'
+            'tool_select',
+            currentSkillId,
+            currentCompletedStages
           );
 
           const assistantMsg: ChatMessage = {
@@ -345,7 +474,9 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             content: currentResponse,
             steps: [...currentSteps],
             tokenUsage: { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            purpose: 'tool_select'
+            purpose: 'tool_select',
+            activeSkillId: currentSkillId,
+            completedStages: currentCompletedStages
           };
           await addMessage(assistantMsg);
 
@@ -370,7 +501,9 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             null,
             currentSteps,
             { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            'explanation'
+            'explanation',
+            currentSkillId,
+            currentCompletedStages
           );
           break;
         }
@@ -526,14 +659,61 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
               yearsMap.set(yKey, (yearsMap.get(yKey) || 0) + amt);
             }
 
-            breakdownText = `\n\nMonthly Spend Breakdown:\n${Array.from(monthsMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([mKey, amt]) => {
-              const formattedLabel = new Date(mKey + '-02').toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
-              return `- ${formattedLabel}: $${amt.toFixed(2)}`;
-            }).join('\n')}
+            const monthlyTable = [
+              '| Month | Spend Amount |',
+              '| :--- | ---: |',
+              ...Array.from(monthsMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([mKey, amt]) => {
+                const formattedLabel = new Date(mKey + '-02').toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+                return `| ${formattedLabel} | $${amt.toFixed(2)} |`;
+              })
+            ].join('\n');
 
-Yearly Spend Breakdown:\n${Array.from(yearsMap.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([yKey, amt]) => {
-              return `- ${yKey}: $${amt.toFixed(2)}`;
-            }).join('\n')}`;
+            const yearlyTable = [
+              '| Year | Spend Amount |',
+              '| :--- | ---: |',
+              ...Array.from(yearsMap.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([yKey, amt]) => {
+                return `| ${yKey} | $${amt.toFixed(2)} |`;
+              })
+            ].join('\n');
+
+            breakdownText = `\n\nMonthly Spend Breakdown:\n${monthlyTable}\n\nYearly Spend Breakdown:\n${yearlyTable}`;
+          }
+
+          const categorySpendMap = new Map<string, number>();
+          for (const t of matchedTxns) {
+            categorySpendMap.set(t.category, (categorySpendMap.get(t.category) || 0) + (t.category.toLowerCase() === 'income' ? t.amount : -t.amount));
+          }
+
+          if (resolvedCats.length > 1 || queryCats.includes('all') || queryCats.length === 0) {
+            const catTable = [
+              '| Category | Spend Amount |',
+              '| :--- | ---: |',
+              ...Array.from(categorySpendMap.entries())
+                .sort((a,b) => b[1] - a[1])
+                .map(([cat, amt]) => `| ${cat} | $${amt.toFixed(2)} |`)
+            ].join('\n');
+            breakdownText += `\n\nCategory Breakdown:\n${catTable}`;
+          }
+
+          // Pre-calculate a beautiful, structured P&L markdown statement in a table if we have global transaction details.
+          const hasIncome = resolvedCats.some(c => c.toLowerCase() === 'income');
+          const isGlobalQuery = queryCats.includes('all') || queryCats.length === 0;
+          if (hasIncome || isGlobalQuery) {
+            pnlSpreadsheetDocId = crypto.randomUUID();
+            const mdDocId = crypto.randomUUID();
+            const { pnlReportMarkdown: compiledMd, pnlSpreadsheetCsv: compiledCsv } = await generatePnlData({
+              start,
+              end,
+              resolvedCats,
+              resolvedAccts,
+              search: searchVal || undefined,
+              minPrice: minPriceVal,
+              maxPrice: maxPriceVal,
+              markdownDocId: mdDocId,
+              spreadsheetDocId: pnlSpreadsheetDocId
+            });
+            pnlReportMarkdown = compiledMd;
+            pnlSpreadsheetCsv = compiledCsv;
           }
 
           systemResultsMsg = {
@@ -544,7 +724,7 @@ Yearly Spend Breakdown:\n${Array.from(yearsMap.entries()).sort((a, b) => b[0].lo
 - Average Transaction: $${metrics.spendAverage.toFixed(2)}
 - Total Monthly Budget Limit: $${metrics.totalBudget.toFixed(2)}${breakdownText}
 
-If these results are sufficient to answer the user's question, explain them to the user in the 'body' field and set 'agent_action.action' to 'none'.
+If these results provide the data you need to fulfill the user's request, proceed with your final response (e.g. set 'action' to 'none') OR your next tool action (e.g. 'generate_document').
 Your final answer MUST be detailed and insightful, using the exact numbers returned above (dollar amounts, averages, transactions). Never use placeholders like $XXX or generalize. Explicitly compute differences and percentages when comparing periods.
 ALL numbers in your final answer MUST be bolded (e.g. **$391.29**, **6.00** transactions, **+56.50%**). Numbers, counts, percentages, and currency values MUST never be rounded to a whole integer, except to the second decimal place (.00) (e.g. write **$250.00**, NEVER $250; write **6.00** transactions, NEVER 6).
 If you still need more data (e.g. to compare with a different period), query it in your next turn.`
@@ -868,89 +1048,320 @@ Please summarize this accessibility report for the developer in the 'body' field
 
           currentSteps.push('Tool Call: audit_accessibility');
 
-        } else if (action === 'create_artifact') {
-          const artId = actionObj.id || `art-${Date.now()}`;
-          const newArtifact = {
-            id: artId,
-            type: actionObj.type || 'markdown',
-            title: actionObj.title || 'Untitled Artifact',
-            content: actionObj.content || '',
-            explanation: actionObj.explanation || '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          await db.artifacts.put(newArtifact);
-          useChatStore.getState().setActiveArtifact(newArtifact);
-
-          actionResult = {
-            action: 'create_artifact',
-            id: artId,
-            type: newArtifact.type,
-            title: newArtifact.title,
-          };
-
-          currentSteps.push(`Tool Call: create_artifact (${newArtifact.title})`);
-          await finalizeStreamingMessage(
-            currentResponse,
-            actionResult,
-            currentSteps,
-            { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            'explanation'
-          );
-          break;
-
-        } else if (action === 'update_artifact') {
-          const artId = actionObj.id;
-          if (artId) {
-            const existing = await db.artifacts.get(artId);
-            const updatedArtifact = {
-              id: artId,
-              type: actionObj.type || existing?.type || 'markdown',
-              title: actionObj.title || existing?.title || 'Untitled Artifact',
-              content: actionObj.content !== undefined ? actionObj.content : (existing?.content || ''),
-              explanation: actionObj.explanation || existing?.explanation || '',
-              createdAt: existing?.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            };
-            await db.artifacts.put(updatedArtifact);
-            useChatStore.getState().setActiveArtifact(updatedArtifact);
-
-            actionResult = {
-              action: 'update_artifact',
-              id: artId,
-              type: updatedArtifact.type,
-              title: updatedArtifact.title,
-            };
-            currentSteps.push(`Tool Call: update_artifact (${updatedArtifact.title})`);
+        } else if (action === 'update_tax_settings') {
+          const currentSettings = await db.settings.get('app:taxSettings');
+          const baseValue = (currentSettings?.value as any) || { checklist: {}, hasBusiness: false, taxYear: new Date().getFullYear() };
+          
+          if (actionObj.taxData) {
+            const merged = { ...baseValue };
+            for (const key of Object.keys(actionObj.taxData)) {
+              if (typeof actionObj.taxData[key] === 'object' && !Array.isArray(actionObj.taxData[key]) && actionObj.taxData[key] !== null) {
+                merged[key] = { ...(merged[key] || {}), ...actionObj.taxData[key] };
+              } else {
+                merged[key] = actionObj.taxData[key];
+              }
+            }
+            await db.settings.put({ key: 'app:taxSettings', value: merged });
           }
 
+          actionResult = { action: 'update_tax_settings', taxData: actionObj.taxData };
+          currentSteps.push(`Tool Call: update_tax_settings`);
+
           await finalizeStreamingMessage(
             currentResponse,
             actionResult,
             currentSteps,
             { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            'explanation'
+            'explanation',
+            currentSkillId,
+            currentCompletedStages
           );
           break;
+
+        } else if (action === 'generate_document') {
+          const docType = actionObj.documentType;
+          let content = actionObj.documentContent || '';
+
+          // Small model safety net: if documentContent is missing or malformed (e.g. "{" or "{""), fall back to pre-calculated P&L report
+          const isMalformed = !content || content.trim() === '{' || content.trim() === '"{' || content.length < 20;
+          if (docType === 'business_pnl' && isMalformed) {
+            if (pnlReportMarkdown) {
+              content = pnlReportMarkdown;
+            }
+          }
+
+          if (!docType || !content) {
+            systemResultsMsg = {
+              role: 'system',
+              content: `Error: 'documentType' and 'documentContent' are required to generate a tax document.`
+            };
+          } else {
+            try {
+              let filePath: string | null = null;
+              let csvFilePath: string | null = null;
+              const isTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
+              
+              const defaultMdFilename = `Tax_P&L_Statement_${new Date().getFullYear()}.md`;
+              const defaultCsvFilename = `Tax_P&L_Spreadsheet_${new Date().getFullYear()}.csv`;
+
+              if (docType === 'business_pnl') {
+                if (isTauri) {
+                  filePath = await save({
+                    filters: [{ name: 'Markdown Report', extensions: ['md'] }],
+                    defaultPath: defaultMdFilename
+                  });
+                  if (filePath) {
+                    await writeTextFile(filePath, content);
+                    csvFilePath = filePath.replace(/\.md$/i, '.csv');
+                    if (csvFilePath === filePath) {
+                      csvFilePath = filePath + '.csv';
+                    }
+                    await writeTextFile(csvFilePath, pnlSpreadsheetCsv);
+                  }
+                } else {
+                  // Web browser fallback
+                  const mdBlob = new Blob([content], { type: 'text/markdown' });
+                  const mdUrl = URL.createObjectURL(mdBlob);
+                  const aMd = document.createElement('a');
+                  aMd.href = mdUrl;
+                  aMd.download = defaultMdFilename;
+                  document.body.appendChild(aMd);
+                  aMd.click();
+                  document.body.removeChild(aMd);
+                  URL.revokeObjectURL(mdUrl);
+                  filePath = `~/Downloads/${defaultMdFilename}`;
+
+                  const csvBlob = new Blob([pnlSpreadsheetCsv], { type: 'text/csv' });
+                  const csvUrl = URL.createObjectURL(csvBlob);
+                  const aCsv = document.createElement('a');
+                  aCsv.href = csvUrl;
+                  aCsv.download = defaultCsvFilename;
+                  document.body.appendChild(aCsv);
+                  aCsv.click();
+                  document.body.removeChild(aCsv);
+                  URL.revokeObjectURL(csvUrl);
+                  csvFilePath = `~/Downloads/${defaultCsvFilename}`;
+                }
+
+                if (filePath) {
+                  const mdFilename = filePath.split(/[/\\]/).pop() || defaultMdFilename;
+                  const csvFilename = csvFilePath ? (csvFilePath.split(/[/\\]/).pop() || defaultCsvFilename) : defaultCsvFilename;
+                  
+                  const mdDocId = crypto.randomUUID();
+                  const csvDocId = pnlSpreadsheetDocId || crypto.randomUUID();
+
+                  const allCats = await db.categories.toArray();
+                  const allAccts = await db.accounts.toArray();
+                  const resolvedCats = allCats.map(c => c.name);
+                  const resolvedAccts = allAccts.map(a => a.id).filter((id): id is number => id !== undefined);
+
+                  const pnlMetadata = {
+                    start: `${new Date().getFullYear()}-01-01`,
+                    end: `${new Date().getFullYear()}-12-31`,
+                    resolvedCats,
+                    resolvedAccts,
+                    docType: 'business_pnl',
+                    markdownDocId: mdDocId,
+                    spreadsheetDocId: csvDocId
+                  };
+
+                  await db.documents.put({
+                    id: mdDocId,
+                    name: mdFilename,
+                    path: filePath,
+                    type: 'text/markdown',
+                    source: 'generated',
+                    associatedChecklistId: docType,
+                    content,
+                    createdAt: new Date().toISOString(),
+                    metadata: pnlMetadata
+                  });
+
+                  await db.documents.put({
+                    id: csvDocId,
+                    name: csvFilename,
+                    path: csvFilePath || `~/Downloads/${defaultCsvFilename}`,
+                    type: 'text/csv',
+                    source: 'generated',
+                    associatedChecklistId: docType,
+                    content: pnlSpreadsheetCsv,
+                    createdAt: new Date().toISOString(),
+                    metadata: pnlMetadata
+                  });
+
+                  const currentSettings = await db.settings.get('app:taxSettings');
+                  const taxSettings = (currentSettings?.value as any) || { checklist: {}, hasBusiness: false, taxYear: new Date().getFullYear() };
+                  taxSettings.checklist[docType] = true;
+                  await db.settings.put({ key: 'app:taxSettings', value: taxSettings });
+
+                  systemResultsMsg = {
+                    role: 'system',
+                    content: `Document successfully generated and saved to ${filePath}. The document has been automatically attached to the tax checklist item '${docType}' and stored in the Documents tab. Inform the user they can view it in Finder.`
+                  };
+
+                  actionResult = {
+                    action: 'generate_document',
+                    documentType: docType,
+                    documentId: mdDocId,
+                    documentName: mdFilename,
+                    content,
+                    path: filePath,
+                    companionDocumentId: csvDocId,
+                    companionDocumentName: csvFilename,
+                    companionPath: csvFilePath
+                  };
+                } else {
+                  systemResultsMsg = {
+                    role: 'system',
+                    content: `The user canceled the save dialog. The document was not generated.`
+                  };
+                }
+              } else {
+                // Non-P&L documents (existing logic)
+                const isCsv = content.trim().startsWith('Date') || content.trim().includes(',') || content.trim().startsWith('Category,');
+                const defaultExt = isCsv ? 'csv' : 'md';
+                const defaultFilename = `Tax_Document_${new Date().getFullYear()}.${defaultExt}`;
+                
+                if (isTauri) {
+                  filePath = await save({
+                    filters: [{ name: 'Document', extensions: [defaultExt] }],
+                    defaultPath: defaultFilename
+                  });
+                  if (filePath) {
+                    await writeTextFile(filePath, content);
+                  }
+                } else {
+                  const blob = new Blob([content], { type: isCsv ? 'text/csv' : 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = defaultFilename;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  filePath = `~/Downloads/${defaultFilename}`;
+                }
+
+                if (filePath) {
+                  const filename = filePath.split(/[/\\]/).pop() || 'Generated_Document';
+                  const newDocId = crypto.randomUUID();
+
+                  if (docType) {
+                    await db.documents.put({
+                      id: newDocId,
+                      name: filename,
+                      path: filePath,
+                      type: isCsv ? 'text/csv' : 'text/markdown',
+                      source: 'generated',
+                      associatedChecklistId: docType,
+                      content,
+                      createdAt: new Date().toISOString()
+                    });
+                    
+                    const currentSettings = await db.settings.get('app:taxSettings');
+                    const taxSettings = (currentSettings?.value as any) || { checklist: {}, hasBusiness: false, taxYear: new Date().getFullYear() };
+                    taxSettings.checklist[docType] = true;
+                    await db.settings.put({ key: 'app:taxSettings', value: taxSettings });
+
+                    systemResultsMsg = {
+                      role: 'system',
+                      content: `Document successfully generated and saved to ${filePath}. The document has been automatically attached to the tax checklist item '${docType}' and stored in the Documents tab. Inform the user they can view it in Finder.`
+                    };
+                  } else {
+                    await db.documents.put({
+                      id: newDocId,
+                      name: filename,
+                      path: filePath,
+                      type: isCsv ? 'text/csv' : 'text/markdown',
+                      source: 'generated',
+                      content,
+                      createdAt: new Date().toISOString()
+                    });
+
+                    systemResultsMsg = {
+                      role: 'system',
+                      content: `Document successfully generated and saved to ${filePath}. The document has been stored in the Documents tab. Inform the user they can view it in Finder.`
+                    };
+                  }
+
+                  actionResult = {
+                    action: 'generate_document',
+                    documentType: docType,
+                    documentId: newDocId,
+                    documentName: filename,
+                    content,
+                    path: filePath
+                  };
+                } else {
+                  systemResultsMsg = {
+                    role: 'system',
+                    content: `The user canceled the save dialog. The document was not generated.`
+                  };
+                }
+              }
+            } catch (err: any) {
+              systemResultsMsg = {
+                role: 'system',
+                content: `Failed to save document: ${err.message}`
+              };
+            }
+          }
+          currentSteps.push(`Tool Call: generate_document`);
+
+          await finalizeStreamingMessage(
+            currentResponse,
+            actionResult,
+            currentSteps,
+            { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
+            'explanation',
+            currentSkillId,
+            currentCompletedStages
+          );
+          break;
+
+        } else if (action === 'dom_update') {
+          executeCopilotCommand(actionObj, await getExecutorContext());
+          const selector = actionObj.domSelector;
+          let success = false;
+          let errorMessage = '';
+          if (selector) {
+            try {
+              const element = document.querySelector(selector) as HTMLElement;
+              if (element) {
+                element.click();
+                success = true;
+              } else {
+                errorMessage = `Element with selector "${selector}" not found.`;
+              }
+            } catch (e: any) {
+              errorMessage = e.message;
+            }
+          } else {
+            errorMessage = 'No domSelector provided.';
+          }
+
+          actionResult = {
+            action,
+            domSelector: selector,
+            success
+          };
+
+          currentSteps.push(`Tool Call: dom_update (${selector})`);
+
+          systemResultsMsg = {
+            role: 'system',
+            content: success
+              ? `Successfully clicked DOM element: "${selector}". The page state/UI has been updated. Please inspect the new state and provide your response or next action.`
+              : `Failed to click DOM element: "${selector}". Error: ${errorMessage}`
+          };
 
         } else if (
           action === 'navigate' ||
           action === 'search' ||
-          action === 'filter' ||
-          action === 'dom_update'
+          action === 'filter'
         ) {
           executeCopilotCommand(actionObj, await getExecutorContext());
-
-          if (action === 'dom_update' && actionObj.domSelector) {
-            try {
-              const element = document.querySelector(actionObj.domSelector) as HTMLElement;
-              if (element) {
-                element.click();
-              }
-            } catch (e) {
-              console.error('Failed to click element:', e);
-            }
-          }
 
           actionResult = {
             action,
@@ -967,7 +1378,9 @@ Please summarize this accessibility report for the developer in the 'body' field
             actionResult,
             currentSteps,
             { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-            'explanation'
+            'explanation',
+            currentSkillId,
+            currentCompletedStages
           );
           break;
         }
@@ -978,7 +1391,9 @@ Please summarize this accessibility report for the developer in the 'body' field
           actionResult,
           currentSteps,
           { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-          'tool_select'
+          'tool_select',
+          currentSkillId,
+          currentCompletedStages
         );
 
         const assistantMsg: ChatMessage = {
@@ -987,7 +1402,9 @@ Please summarize this accessibility report for the developer in the 'body' field
           actionResult,
           steps: [...currentSteps],
           tokenUsage: { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-          purpose: 'tool_select'
+          purpose: 'tool_select',
+          activeSkillId: currentSkillId,
+          completedStages: currentCompletedStages
         };
 
         if (systemResultsMsg) {
@@ -1010,7 +1427,9 @@ Please summarize this accessibility report for the developer in the 'body' field
           null,
           currentSteps,
           undefined,
-          'explanation'
+          'explanation',
+          currentSkillId,
+          currentCompletedStages
         );
       } else {
         currentSteps.push(`Error: ${err.message}`);
@@ -1019,7 +1438,9 @@ Please summarize this accessibility report for the developer in the 'body' field
           null,
           currentSteps,
           { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
-          'explanation'
+          'explanation',
+          currentSkillId,
+          currentCompletedStages
         );
       }
     } finally {

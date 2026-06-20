@@ -300,6 +300,44 @@ export const BaselinePromptEditor: React.FC<BaselinePromptEditorProps> = ({
                   ))}
                 </Stack>
               </Box>
+
+              {/* Multi-Step Skills Reference */}
+              <Box sx={{ borderTop: '1px solid rgba(0,0,0,0.06)', pt: 2.5, mt: 2.5 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: 700,
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: 1,
+                    fontSize: 10,
+                    mb: 1.5,
+                  }}
+                >
+                  Multi-Step Skills Reference
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: 11, lineHeight: 1.4 }}>
+                  How multi-step capabilities are enforced programmatically:
+                </Typography>
+
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.5,
+                    borderColor: 'divider',
+                    bgcolor: 'action.hover',
+                    fontSize: 10.5,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary', display: 'block', mb: 0.5 }}>
+                    Guaranteed Execution Flow
+                  </Typography>
+                  When a skill defines <strong>stages</strong> (e.g., Stage 1: <code>query_data</code>, Stage 2: <code>generate_document</code>), the chat engine appends a system enforcement instruction to the LLM. 
+                  <br /><br />
+                  If a smaller model attempts to bypass a stage (for example, going straight to generating a document without querying), the system automatically intercepts it and triggers a self-correction turn.
+                </Paper>
+              </Box>
             </Box>
           )}
 

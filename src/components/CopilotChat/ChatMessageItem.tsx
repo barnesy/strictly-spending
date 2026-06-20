@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Box,
   Paper,
@@ -7,10 +9,17 @@ import {
   Stack,
   Chip,
   Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  alpha,
 } from '@mui/material';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import {
   type ChatMessage,
   parseAIResponse,
@@ -88,9 +97,27 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
   onApplyFilters,
 }: ChatMessageItemProps) {
   const isUser = message.role === 'user';
+  const navigate = useNavigate();
   const [showInspector, setShowInspector] = useState(false);
   const [isLogsExpanded, setIsLogsExpanded] = useState<boolean | null>(null);
+  const [openPreview, setOpenPreview] = useState(false);
   const logsExpanded = isLogsExpanded !== null ? isLogsExpanded : !!message.isStreaming;
+
+  const handleChatMessageLinkClick = (url: string) => {
+    const match = url.match(/^doc:\/\/([^#]+)(?:#tab=(.+))?$/);
+    if (match) {
+      const docId = match[1];
+      const tabName = match[2] || 'All';
+      navigate(`/documents?previewId=${docId}&tab=${encodeURIComponent(tabName)}`);
+    }
+  };
+
+  const agentSkillsSetting = useLiveQuery(() => db.settings.get('app:agentSkills'));
+  const agentSkills = (agentSkillsSetting?.value as any[]) || [];
+  const activeSkill = useMemo(() => {
+    if (!message.activeSkillId) return null;
+    return agentSkills.find((s) => s.id === message.activeSkillId) || null;
+  }, [message.activeSkillId, agentSkills]);
 
   const updateMessageResult = async (targetMsg: ChatMessage, newResult: any) => {
     const currentMessages = useChatStore.getState().messages;
@@ -235,7 +262,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               {message.content}
             </Typography>
           ) : (
-            <SimpleMarkdown content={displayContent} />
+            <SimpleMarkdown content={displayContent} onLinkClick={handleChatMessageLinkClick} />
           )}
         </Paper>
       ) : (!displayContent && message.isStreaming && !isUser && !hasAgentAction) ? (
@@ -386,6 +413,106 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         />
       )}
 
+      {message.actionResult?.action === 'generate_document' && (
+        <Box sx={{ width: '85%', mt: 0.5 }}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              borderColor: 'divider',
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'grey.50',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ 
+                p: 1, 
+                borderRadius: 1.5, 
+                bgcolor: (theme) => alpha(theme.palette.success.main, 0.1),
+                color: 'success.main'
+              }}>
+                <InsertDriveFileIcon />
+              </Box>
+              <Box sx={{ overflow: 'hidden' }}>
+                <Typography variant="subtitle2" fontWeight="700" noWrap>
+                  {message.actionResult.documentName || 'Tax Document'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Generated Document
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {message.actionResult.content && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<VisibilityIcon />}
+                  onClick={() => setOpenPreview(true)}
+                  sx={{ textTransform: 'none', borderRadius: 1.5 }}
+                >
+                  View Content
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  const blob = new Blob([message.actionResult.content || ''], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = message.actionResult.documentName || 'Tax_Document.md';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }}
+                sx={{ textTransform: 'none', borderRadius: 1.5 }}
+              >
+                Download
+              </Button>
+            </Box>
+          </Paper>
+
+          {/* Document Preview Modal inside Chat */}
+          <Dialog
+            open={openPreview}
+            onClose={() => setOpenPreview(false)}
+            maxWidth="md"
+            fullWidth
+            PaperProps={{
+              sx: {
+                borderRadius: 3,
+                p: 1,
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+              }
+            }}
+          >
+            <DialogTitle sx={{ fontWeight: 800, pr: 6, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <InsertDriveFileIcon color="primary" />
+              {message.actionResult.documentName}
+            </DialogTitle>
+            <DialogContent dividers sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+              {message.actionResult.content && (
+                <SimpleMarkdown content={message.actionResult.content} onLinkClick={handleChatMessageLinkClick} />
+              )}
+            </DialogContent>
+            <DialogActions sx={{ p: 2, gap: 1 }}>
+              <Button variant="contained" size="small" onClick={() => setOpenPreview(false)}>
+                Close
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Box>
+      )}
+
       {isArtifact && message.actionResult && (
         <Box sx={{ width: '85%', mt: 0.5 }}>
           <Paper
@@ -428,6 +555,55 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               >
                 Open Artifact
               </Button>
+            </Stack>
+          </Paper>
+        </Box>
+      )}
+
+      {activeSkill && (
+        <Box sx={{ width: '85%', mt: 0.5 }}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 1.5,
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.05)' : 'rgba(25, 118, 210, 0.02)',
+              borderColor: 'primary.light',
+              borderRadius: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              ⚡ Executing: {activeSkill.name}
+            </Typography>
+            <Stack spacing={0.75} sx={{ mt: 0.5 }}>
+              {activeSkill.stages.map((stage: any, idx: number) => {
+                const isCompleted = message.completedStages?.includes(stage.requiredAction);
+                const isCurrent = !isCompleted && (idx === 0 || message.completedStages?.includes(activeSkill.stages[idx - 1].requiredAction));
+                return (
+                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1, opacity: isCompleted ? 0.6 : 1 }}>
+                    <Box sx={{ 
+                      width: 14, 
+                      height: 14, 
+                      borderRadius: '50%', 
+                      border: '2px solid', 
+                      borderColor: isCompleted ? 'success.main' : isCurrent ? 'primary.main' : 'divider', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      bgcolor: isCompleted ? 'success.main' : isCurrent && message.isStreaming ? 'primary.main' : 'transparent',
+                      transition: 'all 0.3s ease',
+                      animation: isCurrent && message.isStreaming ? 'pulse 1.5s infinite' : 'none'
+                    }}>
+                      {isCompleted && <Box sx={{ width: 6, height: 6, borderBottom: '2px solid white', borderRight: '2px solid white', transform: 'rotate(45deg) translate(-1px, -1px)' }} />}
+                    </Box>
+                    <Typography variant="caption" sx={{ fontWeight: isCurrent ? 600 : 400, color: isCompleted ? 'text.secondary' : isCurrent ? 'primary.main' : 'text.disabled' }}>
+                      {stage.title}
+                    </Typography>
+                  </Box>
+                );
+              })}
             </Stack>
           </Paper>
         </Box>

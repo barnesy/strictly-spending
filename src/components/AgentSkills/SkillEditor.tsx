@@ -13,6 +13,10 @@ import {
   TextField,
   Alert,
   Snackbar,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
@@ -25,11 +29,10 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CodeIcon from '@mui/icons-material/Code';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { HighlightingEditor } from './HighlightingEditor';
 import { AGENT_TOOLS, GEN_UX_COMPONENTS } from './constants';
-import type { AgentSkill } from '../../types';
+import type { AgentSkill, AgentSkillStage } from '../../types';
 import type { InspectDiagnosticData, DiagnosticResult } from './InspectDiagnosticModal';
 
 export interface SkillEditorProps {
@@ -40,6 +43,9 @@ export interface SkillEditorProps {
   skillFormDesc: string;
   setSkillFormDesc: (val: string) => void;
   skillFormPrompt: string;
+  setSkillFormPrompt: (val: string) => void;
+  skillFormStages: AgentSkillStage[];
+  setSkillFormStages: (val: AgentSkillStage[]) => void;
   skillFormError: string | null;
   handleSaveSkillForm: () => void;
   sidebarTab: number;
@@ -77,7 +83,12 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
   setSkillFormName,
   skillFormDesc,
   setSkillFormDesc,
+  // @ts-ignore
   skillFormPrompt,
+  // @ts-ignore
+  setSkillFormPrompt,
+  skillFormStages,
+  setSkillFormStages,
   skillFormError,
   handleSaveSkillForm,
   sidebarTab,
@@ -108,6 +119,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
   insertSelectedTool,
 }) => {
   const isBuiltIn = editorSkill.isBuiltIn;
+  const isReadOnly = false;
   const virtualFileName = editorSkill.id
     ? (isBuiltIn ? editorSkill.id.split(':')[1] : `${editorSkill.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`)
     : 'new_skill';
@@ -144,7 +156,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
           <Button variant="outlined" onClick={() => setEditorSkill(null)} sx={{ textTransform: 'none' }} size="small">
             Cancel
           </Button>
-          {!isBuiltIn && (
+          {!isReadOnly && (
             <Button
               variant="contained"
               startIcon={<SaveIcon />}
@@ -242,7 +254,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                     fullWidth
                     size="small"
                     required
-                    disabled={isBuiltIn}
+                    disabled={isReadOnly}
                     placeholder="e.g., Category Triage Guide"
                     slotProps={{
                       inputLabel: { shrink: true }
@@ -256,13 +268,108 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                     size="small"
                     multiline
                     rows={3}
-                    disabled={isBuiltIn}
+                    disabled={isReadOnly}
                     placeholder="e.g., Directs the model on how to detect and label subscription fee spikes..."
                     slotProps={{
                       inputLabel: { shrink: true }
                     }}
                   />
                 </Stack>
+              </Box>
+
+              {/* Multi-Step Stages */}
+              <Box sx={{ p: 2.5, borderBottom: '1px solid', borderBottomColor: 'divider' }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      fontWeight: 700,
+                      color: 'text.secondary',
+                      textTransform: 'uppercase',
+                      letterSpacing: 1,
+                      fontSize: 10,
+                    }}
+                  >
+                    Multi-Step Stages
+                  </Typography>
+                  {!isReadOnly && (
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={() => setSkillFormStages([...skillFormStages, { title: '', requiredAction: '' }])}
+                      sx={{ textTransform: 'none', fontSize: 11 }}
+                    >
+                      Add Stage
+                    </Button>
+                  )}
+                </Stack>
+                {skillFormStages.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: 11.5, fontStyle: 'italic' }}>
+                    No explicit stages defined. The agent will determine steps automatically based on the prompt.
+                  </Typography>
+                ) : (
+                  <Stack spacing={1.5}>
+                    {skillFormStages.map((stage, idx) => (
+                      <Paper key={idx} variant="outlined" sx={{ p: 1.5, borderColor: 'divider' }}>
+                        <Stack direction="row" spacing={1} alignItems="flex-start">
+                          <Typography variant="caption" sx={{ fontWeight: 700, mt: 1 }}>
+                            {idx + 1}.
+                          </Typography>
+                          <Stack spacing={1} flex={1}>
+                            <TextField
+                              label="Stage Title"
+                              value={stage.title}
+                              onChange={(e) => {
+                                const newStages = [...skillFormStages];
+                                newStages[idx].title = e.target.value;
+                                setSkillFormStages(newStages);
+                              }}
+                              size="small"
+                              fullWidth
+                              disabled={isReadOnly}
+                              placeholder="e.g. Query Database"
+                              InputProps={{ sx: { fontSize: 12 } }}
+                              InputLabelProps={{ sx: { fontSize: 12 } }}
+                            />
+                            <FormControl size="small" fullWidth disabled={isReadOnly}>
+                              <InputLabel sx={{ fontSize: 12 }}>Required Tool</InputLabel>
+                              <Select
+                                value={stage.requiredAction}
+                                label="Required Tool"
+                                onChange={(e) => {
+                                  const newStages = [...skillFormStages];
+                                  newStages[idx].requiredAction = e.target.value;
+                                  setSkillFormStages(newStages);
+                                }}
+                                sx={{ fontSize: 12 }}
+                              >
+                                {AGENT_TOOLS.map(t => (
+                                  <MenuItem key={t.name} value={t.name} sx={{ fontSize: 12 }}>{t.name}</MenuItem>
+                                ))}
+                                {GEN_UX_COMPONENTS.map(t => (
+                                  <MenuItem key={t.name} value={t.name} sx={{ fontSize: 12 }}>{t.name}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Stack>
+                          {!isReadOnly && (
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => {
+                                const newStages = [...skillFormStages];
+                                newStages.splice(idx, 1);
+                                setSkillFormStages(newStages);
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
+                )}
               </Box>
 
               {/* Guide & Interactive Variables */}
@@ -281,7 +388,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                   Live Prompt Variables
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: 11.5, lineHeight: 1.4 }}>
-                  {isBuiltIn
+                  {isReadOnly
                     ? 'Core instructions use variables linked to real transaction data:'
                     : 'Click a variable to insert it at your editor cursor position:'}
                 </Typography>
@@ -299,12 +406,12 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                       onClick={() => handleInsertVariable(item.code)}
                       sx={{
                         p: 1.5,
-                        cursor: isBuiltIn ? 'default' : 'pointer',
+                        cursor: isReadOnly ? 'default' : 'pointer',
                         borderColor: 'divider',
-                        bgcolor: isBuiltIn ? 'action.hover' : 'background.default',
+                        bgcolor: isReadOnly ? 'action.hover' : 'background.default',
                         transition: 'all 0.2s',
-                        opacity: isBuiltIn ? 0.85 : 1,
-                        '&:hover': isBuiltIn ? {} : {
+                        opacity: isReadOnly ? 0.85 : 1,
+                        '&:hover': isReadOnly ? {} : {
                           borderColor: 'primary.main',
                           bgcolor: 'action.hover',
                         }
@@ -314,7 +421,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary', fontSize: 11 }}>
                           {item.label}
                         </Typography>
-                        {!isBuiltIn && (
+                        {!isReadOnly && (
                           <ContentCopyIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
                         )}
                       </Stack>
@@ -360,7 +467,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                   Agent Tools & Actions
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: 11.5, lineHeight: 1.4 }}>
-                  {isBuiltIn
+                  {isReadOnly
                     ? 'The agent is equipped with these schema actions to manage filters, query data, or manipulate artifacts:'
                     : 'Click a tool to insert its system prompt template into the editor:'}
                 </Typography>
@@ -371,17 +478,17 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                       key={tool.name}
                       variant="outlined"
                       onClick={() => {
-                        if (isBuiltIn) return;
+                        if (isReadOnly) return;
                         insertTextAtCursor(tool.insertTemplate, false);
                       }}
                       sx={{
                         p: 1.5,
-                        cursor: isBuiltIn ? 'default' : 'pointer',
+                        cursor: isReadOnly ? 'default' : 'pointer',
                         borderColor: 'divider',
-                        bgcolor: isBuiltIn ? 'action.hover' : 'background.default',
+                        bgcolor: isReadOnly ? 'action.hover' : 'background.default',
                         transition: 'all 0.2s',
-                        opacity: isBuiltIn ? 0.85 : 1,
-                        '&:hover': isBuiltIn ? {} : {
+                        opacity: isReadOnly ? 0.85 : 1,
+                        '&:hover': isReadOnly ? {} : {
                           borderColor: 'primary.main',
                           bgcolor: 'action.hover',
                         }
@@ -391,7 +498,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary', fontSize: 11 }}>
                           {tool.label}
                         </Typography>
-                        {!isBuiltIn && (
+                        {!isReadOnly && (
                           <ContentCopyIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
                         )}
                       </Stack>
@@ -437,7 +544,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                   Gen UX Components
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: 11.5, lineHeight: 1.4 }}>
-                  {isBuiltIn
+                  {isReadOnly
                     ? 'The agent can invoke these interactive user interface components within the chat stream:'
                     : 'Click a component to insert its system prompt template into the editor:'}
                 </Typography>
@@ -448,17 +555,17 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                       key={comp.name}
                       variant="outlined"
                       onClick={() => {
-                        if (isBuiltIn) return;
+                        if (isReadOnly) return;
                         insertTextAtCursor(comp.insertTemplate, false);
                       }}
                       sx={{
                         p: 1.5,
-                        cursor: isBuiltIn ? 'default' : 'pointer',
+                        cursor: isReadOnly ? 'default' : 'pointer',
                         borderColor: 'divider',
-                        bgcolor: isBuiltIn ? 'action.hover' : 'background.default',
+                        bgcolor: isReadOnly ? 'action.hover' : 'background.default',
                         transition: 'all 0.2s',
-                        opacity: isBuiltIn ? 0.85 : 1,
-                        '&:hover': isBuiltIn ? {} : {
+                        opacity: isReadOnly ? 0.85 : 1,
+                        '&:hover': isReadOnly ? {} : {
                           borderColor: 'primary.main',
                           bgcolor: 'action.hover',
                         }
@@ -468,7 +575,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary', fontSize: 11 }}>
                           {comp.label}
                         </Typography>
-                        {!isBuiltIn && (
+                        {!isReadOnly && (
                           <ContentCopyIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
                         )}
                       </Stack>
@@ -553,7 +660,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
 
               <Box sx={{ borderBottom: '1px solid', borderBottomColor: 'divider', my: 1.5 }} />
 
-              {!isBuiltIn && (
+              {!isReadOnly && (
                 <Button
                   variant="outlined"
                   size="small"
@@ -694,7 +801,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                             </Box>
                           )}
 
-                          {!isBuiltIn && !isRunningSuite && (
+                          {!isReadOnly && !isRunningSuite && (
                             <Stack direction="row" spacing={0.5} justifyContent="flex-end" sx={{ mt: 0.5 }}>
                               <IconButton
                                 size="small"
@@ -769,17 +876,17 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
             </Box>
 
             <Chip
-              icon={isBuiltIn ? <LockIcon sx={{ fontSize: '13px !important', color: '#ff9800 !important' }} /> : <LockOpenIcon sx={{ fontSize: '13px !important', color: '#4caf50 !important' }} />}
-              label={isBuiltIn ? 'READ-ONLY CORE PROMPT' : 'EDITABLE PROMPT'}
+              icon={<LockOpenIcon sx={{ fontSize: '13px !important', color: isBuiltIn ? '#2196f3 !important' : '#4caf50 !important' }} />}
+              label={isBuiltIn ? 'CORE BUILT-IN PROMPT' : 'EDITABLE PROMPT'}
               size="small"
               variant="outlined"
               sx={{
                 height: 22,
                 fontSize: 9.5,
                 fontWeight: 600,
-                color: isBuiltIn ? '#ff9800' : '#4caf50',
-                borderColor: isBuiltIn ? 'rgba(255, 152, 0, 0.3)' : 'rgba(76, 175, 80, 0.3)',
-                bgcolor: isBuiltIn ? 'rgba(255, 152, 0, 0.04)' : 'rgba(76, 175, 80, 0.04)',
+                color: isBuiltIn ? '#2196f3' : '#4caf50',
+                borderColor: isBuiltIn ? 'rgba(33, 150, 243, 0.3)' : 'rgba(76, 175, 80, 0.3)',
+                bgcolor: isBuiltIn ? 'rgba(33, 150, 243, 0.04)' : 'rgba(76, 175, 80, 0.04)',
               }}
             />
           </Box>
@@ -789,14 +896,14 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
             <HighlightingEditor
               ref={textareaRef}
               placeholder={
-                isBuiltIn 
+                isReadOnly 
                   ? "# Core instruction is blank" 
                   : "# Enter prompt instructions here...\n- Direct the model to prioritize certain spend insights\n- Teach the model to identify specific anomalies"
               }
               value={skillFormPrompt}
               onChange={(e) => handleEditorChange(e, false)}
               onKeyDown={handleEditorKeyDown}
-              disabled={isBuiltIn}
+              disabled={isReadOnly}
             />
 
             {/* Autocomplete floating list */}

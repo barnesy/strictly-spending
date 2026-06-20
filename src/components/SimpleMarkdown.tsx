@@ -17,7 +17,7 @@ type MarkdownBlock =
   | { type: 'h3'; text: string }
   | { type: 'bullet'; text: string }
   | { type: 'divider' }
-  | { type: 'table'; headers: string[]; rows: string[][] }
+  | { type: 'table'; headers: string[]; rows: string[][]; alignments?: ('left' | 'center' | 'right')[] }
   | { type: 'text'; text: string }
   | { type: 'empty' };
 
@@ -52,16 +52,48 @@ function parseMarkdown(content: string): MarkdownBlock[] {
         });
 
         const headerRow = parsedRows[0];
+        
+        // Find separator row (contains only dashes, colons, spaces)
+        const separatorRow = parsedRows.slice(1).find((row) =>
+          row.every((cell) => /^[:\-\s]+$/.test(cell))
+        );
+
+        const alignments: ('left' | 'center' | 'right')[] = [];
+        if (separatorRow) {
+          separatorRow.forEach((cell) => {
+            const trimmed = cell.trim();
+            const startsWithColon = trimmed.startsWith(':');
+            const endsWithColon = trimmed.endsWith(':');
+            if (startsWithColon && endsWithColon) {
+              alignments.push('center');
+            } else if (endsWithColon) {
+              alignments.push('right');
+            } else {
+              alignments.push('left');
+            }
+          });
+        }
+
         const dataRows = parsedRows.slice(1).filter((row) => {
-          // A separator row only contains dashes, colons, and spaces
           const isSeparator = row.every((cell) => /^[:\-\s]+$/.test(cell));
           return !isSeparator;
+        }).map((row) => {
+          // Pad or truncate row to have the same number of columns as headers
+          const padded = [...row];
+          while (padded.length < headerRow.length) {
+            padded.push('');
+          }
+          if (padded.length > headerRow.length) {
+            return padded.slice(0, headerRow.length);
+          }
+          return padded;
         });
 
         blocks.push({
           type: 'table',
           headers: headerRow,
           rows: dataRows,
+          alignments: alignments,
         });
         continue;
       }
@@ -88,7 +120,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
   return blocks;
 }
 
-function renderInlineMarkdown(text: string): React.ReactNode[] {
+function renderInlineMarkdown(text: string, onLinkClick?: (url: string) => void): React.ReactNode[] {
   const regex = /(\*\*.*?\*\*|`.*?`|\*.*?\*|\[.*?\]\(.*?\))/g;
   const parts = text.split(regex);
   
@@ -120,13 +152,19 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
       const closingBracket = part.indexOf(']');
       const label = part.slice(1, closingBracket);
       const url = part.slice(closingBracket + 2, -1);
+      const isDocLink = url.startsWith('doc://');
+
       return (
         <a
           key={idx}
           href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: '#1976d2', textDecoration: 'underline', fontWeight: 500 }}
+          target={isDocLink ? undefined : "_blank"}
+          rel={isDocLink ? undefined : "noopener noreferrer"}
+          onClick={isDocLink && onLinkClick ? (e) => {
+            e.preventDefault();
+            onLinkClick(url);
+          } : undefined}
+          style={{ color: '#1976d2', textDecoration: 'underline', fontWeight: 500, cursor: 'pointer' }}
         >
           {label}
         </a>
@@ -136,7 +174,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
   });
 }
 
-export default function SimpleMarkdown({ content }: { content: string }) {
+export default function SimpleMarkdown({ content, onLinkClick }: { content: string; onLinkClick?: (url: string) => void }) {
   const blocks = parseMarkdown(content);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -155,7 +193,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                   color: 'text.primary',
                 }}
               >
-                {renderInlineMarkdown(block.text)}
+                {renderInlineMarkdown(block.text, onLinkClick)}
               </Typography>
             );
           case 'h2':
@@ -165,7 +203,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                 variant="subtitle1"
                 sx={{ fontWeight: 700, mt: 1, color: 'text.primary' }}
               >
-                {renderInlineMarkdown(block.text)}
+                {renderInlineMarkdown(block.text, onLinkClick)}
               </Typography>
             );
           case 'h3':
@@ -175,7 +213,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                 variant="subtitle2"
                 sx={{ fontWeight: 700, color: 'text.secondary', mt: 0.5 }}
               >
-                {renderInlineMarkdown(block.text)}
+                {renderInlineMarkdown(block.text, onLinkClick)}
               </Typography>
             );
           case 'bullet':
@@ -199,7 +237,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                   color="text.primary"
                   sx={{ fontSize: 13, lineHeight: 1.5 }}
                 >
-                  {renderInlineMarkdown(block.text)}
+                  {renderInlineMarkdown(block.text, onLinkClick)}
                 </Typography>
               </Box>
             );
@@ -214,48 +252,74 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                 component={Paper}
                 variant="outlined"
                 sx={{
-                  my: 1,
+                  my: 2,
                   overflowX: 'auto',
-                  borderRadius: 2,
-                  borderColor: 'rgba(0,0,0,0.08)',
+                  borderRadius: 2.5,
+                  borderColor: 'divider',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                 }}
               >
-                <Table size="small" sx={{ minWidth: 250 }}>
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
+                <Table size="small" sx={{ minWidth: 320 }}>
+                  <TableHead sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'grey.50' }}>
                     <TableRow>
-                      {block.headers.map((h, i) => (
-                        <TableCell
-                          key={i}
-                          sx={{
-                            fontWeight: 700,
-                            fontSize: '11px',
-                            py: 0.75,
-                            borderBottom: '2px solid rgba(0,0,0,0.08)',
-                          }}
-                        >
-                          {renderInlineMarkdown(h)}
-                        </TableCell>
-                      ))}
+                      {block.headers.map((h, i) => {
+                        const align = block.alignments && block.alignments[i] ? block.alignments[i] : 'left';
+                        return (
+                          <TableCell
+                            key={i}
+                            align={align}
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '12px',
+                              py: 1.25,
+                              px: 2,
+                              color: 'text.secondary',
+                              borderBottom: '2px solid',
+                              borderColor: 'divider',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px',
+                            }}
+                          >
+                            {renderInlineMarkdown(h, onLinkClick)}
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {block.rows.map((row, rIdx) => (
-                      <TableRow key={rIdx} hover>
+                      <TableRow key={rIdx} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
                         {row.map((cell, cIdx) => {
-                          const isNum = /^\$?\-?\d+(\.\d+)?%?$/.test(
-                            cell.trim().replace(/,/g, '')
-                          );
+                          let align: 'left' | 'center' | 'right' = 'left';
+                          if (block.alignments && block.alignments[cIdx]) {
+                            align = block.alignments[cIdx];
+                          } else {
+                            // Robust fallback check for numbers
+                            const cleanVal = cell.replace(/\*\*|\*|_/g, '').trim();
+                            const withoutParentheses = cleanVal.replace(/^\((.*)\)$/, '$1').trim();
+                            const finalVal = withoutParentheses.replace(/^\$/, '').replace(/,/g, '').replace(/%$/, '').trim();
+                            const isNum = finalVal !== '' && !isNaN(Number(finalVal));
+                            if (isNum) align = 'right';
+                          }
+
+                          const isBold = cell.trim().startsWith('**') && cell.trim().endsWith('**');
+
                           return (
                             <TableCell
                               key={cIdx}
-                              align={isNum ? 'right' : 'left'}
+                              align={align}
                               sx={{
-                                fontSize: '11px',
-                                py: 0.75,
+                                fontSize: '13px',
+                                py: 1.25,
+                                px: 2,
                                 color: 'text.primary',
+                                borderBottom: '1px solid',
+                                borderColor: 'divider',
+                                fontVariantNumeric: 'tabular-nums', // line up math digits!
+                                fontWeight: isBold ? 700 : 400,
                               }}
                             >
-                              {renderInlineMarkdown(cell)}
+                              {renderInlineMarkdown(cell, onLinkClick)}
                             </TableCell>
                           );
                         })}
@@ -274,7 +338,7 @@ export default function SimpleMarkdown({ content }: { content: string }) {
                 color="text.primary"
                 sx={{ fontSize: 13, lineHeight: 1.5 }}
               >
-                {renderInlineMarkdown(block.text)}
+                {renderInlineMarkdown(block.text, onLinkClick)}
               </Typography>
             );
         }
