@@ -7,7 +7,7 @@ import {
 } from 'react-resizable-panels';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDataStore } from '../dataStore';
 import {
   Box,
   Paper,
@@ -28,7 +28,14 @@ import {
   Tooltip,
   Alert,
   Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  MenuItem,
+  TextField,
 } from '@mui/material';
+import { SCHEDULE_C_CATEGORIES } from '../taxUtils';
 import PageLoader from '../components/PageLoader';
 import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -134,13 +141,11 @@ export default function Dashboard() {
     );
   });
 
-  const accountsAll = useLiveQuery(() => db.accounts.toArray(), []);
-  const categories = useLiveQuery(
-    () => db.categories.orderBy('sortOrder').toArray(),
-    []
-  );
-  const dbTxnCount = useLiveQuery(() => db.transactions.count(), []);
-  const dbAcctCount = useLiveQuery(() => db.accounts.count(), []);
+  const transactions = useDataStore((s) => s.transactions);
+  const accountsAll = useDataStore((s) => s.accounts);
+  const categories = useDataStore((s) => s.categories);
+  const dbTxnCount = transactions.length;
+  const dbAcctCount = accountsAll.length;
 
   const range = useMemo(() => {
     return resolveDateRange({
@@ -155,24 +160,20 @@ export default function Dashboard() {
   const startISO = useMemo(() => range.start.toISOString().slice(0, 10), [range.start]);
   const endISO = useMemo(() => range.end.toISOString().slice(0, 10), [range.end]);
 
-  const allTxnsAll = useLiveQuery(
-    () => db.transactions.where('date').between(startISO, endISO, true, true).toArray(),
-    [startISO, endISO]
-  );
+  const allTxnsAll = useMemo(() => {
+    return transactions.filter((t) => t.date >= startISO && t.date <= endISO);
+  }, [transactions, startISO, endISO]);
   const deferredAllTxnsAll = useDeferredValue(allTxnsAll);
 
-  const forecastTxnsAll = useLiveQuery(() => {
+  const forecastTxnsAll = useMemo(() => {
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - 24);
     const cutoffISO = cutoff.toISOString().slice(0, 10);
-    return db.transactions.where('date').aboveOrEqual(cutoffISO).toArray();
-  }, []);
+    return transactions.filter((t) => t.date >= cutoffISO);
+  }, [transactions]);
   const deferredForecastTxnsAll = useDeferredValue(forecastTxnsAll);
 
-  const merchantOverrides = useLiveQuery(
-    () => db.merchantOverrides.toArray(),
-    []
-  );
+  const merchantOverrides = useDataStore((s) => s.merchantOverrides);
 
   // Demo-mode filter: hide real accounts/transactions.
   const accounts = useMemo(
@@ -284,6 +285,11 @@ export default function Dashboard() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [editTxn, setEditTxn] = useState<Transaction | null>(null);
+  const [taxEditTxn, setTaxEditTxn] = useState<Transaction | null>(null);
+
+  const handleTaxClick = (t: Transaction) => {
+    setTaxEditTxn(t);
+  };
 
   const pageRows = useMemo(() => {
     return visibleTxns.slice(page * pageSize, page * pageSize + pageSize);
@@ -341,6 +347,7 @@ export default function Dashboard() {
               <TableCell>Account</TableCell>
               <TableCell>Description</TableCell>
               <TableCell>Category</TableCell>
+              <TableCell>Tax Deduction</TableCell>
               <TableCell align="right">Amount</TableCell>
               <TableCell width={40}></TableCell>
             </TableRow>
@@ -402,6 +409,42 @@ export default function Dashboard() {
                         : 'transparent',
                     }}
                   />
+                </TableCell>
+                <TableCell>
+                  {(() => {
+                    const isBus = t.isBusiness;
+                    const status = t.deductionStatus;
+                    const taxCatLabel = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.label || t.taxCategory) : '';
+                    
+                    let chipLabel = 'Personal';
+                    let chipColor: 'default' | 'success' | 'warning' | 'primary' = 'default';
+                    let chipVariant: 'outlined' | 'filled' = 'outlined';
+                    
+                    if (status === 'pending') {
+                      chipLabel = isBus ? `Pending: ${taxCatLabel}` : 'Pending Personal';
+                      chipColor = 'warning';
+                      chipVariant = 'outlined';
+                    } else if (isBus) {
+                      chipLabel = taxCatLabel || 'Business';
+                      chipColor = 'success';
+                      chipVariant = 'filled';
+                    }
+                    
+                    return (
+                      <Chip
+                        label={chipLabel}
+                        size="small"
+                        color={chipColor}
+                        variant={chipVariant}
+                        onClick={() => handleTaxClick(t)}
+                        sx={{
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '11px',
+                        }}
+                      />
+                    );
+                  })()}
                 </TableCell>
                 <TableCell
                   align="right"
@@ -715,6 +758,77 @@ export default function Dashboard() {
             txn={editTxn}
             onClose={() => setEditTxn(null)}
           />
+        )}
+
+        {taxEditTxn && (
+          <Dialog open={!!taxEditTxn} onClose={() => setTaxEditTxn(null)} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ fontWeight: 600 }}>Deduction Status</DialogTitle>
+            <DialogContent dividers sx={{ borderBottom: 'none' }}>
+              <Stack spacing={2} sx={{ pt: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  <strong>Description:</strong> {taxEditTxn.description}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  <strong>Amount:</strong> {usdCents.format(taxEditTxn.amount)}
+                </Typography>
+
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Classification"
+                  value={taxEditTxn.isBusiness === undefined ? 'unassigned' : (taxEditTxn.isBusiness ? 'business' : 'personal')}
+                  onChange={async (e) => {
+                    const val = e.target.value;
+                    const updates: Partial<Transaction> = {};
+                    if (val === 'personal') {
+                      updates.isBusiness = false;
+                      updates.taxCategory = undefined;
+                      updates.deductionStatus = 'confirmed';
+                    } else if (val === 'business') {
+                      updates.isBusiness = true;
+                      updates.taxCategory = taxEditTxn.taxCategory || 'other';
+                      updates.deductionStatus = 'confirmed';
+                    } else {
+                      updates.isBusiness = undefined;
+                      updates.taxCategory = undefined;
+                      updates.deductionStatus = 'pending';
+                    }
+                    await db.transactions.update(taxEditTxn.id!, updates);
+                    setTaxEditTxn(prev => prev ? { ...prev, ...updates } : null);
+                  }}
+                >
+                  <MenuItem value="unassigned">Review individually (Pending)</MenuItem>
+                  <MenuItem value="business">Business Expense</MenuItem>
+                  <MenuItem value="personal">Personal Expense</MenuItem>
+                </TextField>
+
+                {taxEditTxn.isBusiness && (
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Schedule C Category"
+                    value={taxEditTxn.taxCategory || 'other'}
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      await db.transactions.update(taxEditTxn.id!, { taxCategory: val });
+                      setTaxEditTxn(prev => prev ? { ...prev, taxCategory: val } : null);
+                    }}
+                  >
+                    {Object.values(SCHEDULE_C_CATEGORIES).map(sc => (
+                      <MenuItem key={sc.id} value={sc.id}>
+                        {sc.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
+              </Stack>
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+              <Button onClick={() => setTaxEditTxn(null)} variant="contained">Close</Button>
+            </DialogActions>
+          </Dialog>
         )}
       </Box>
     </PageLoader>

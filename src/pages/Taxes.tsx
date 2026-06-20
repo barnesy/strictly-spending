@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -14,16 +14,29 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Stack,
 } from '@mui/material';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import PersonIcon from '@mui/icons-material/Person';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import type { TaxSettings } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
+import { SCHEDULE_C_CATEGORIES, guessTaxFields } from '../taxUtils';
 
 const DEFAULT_TAX_SETTINGS: TaxSettings = {
   hasBusiness: false,
@@ -37,38 +50,44 @@ const DEFAULT_TAX_SETTINGS: TaxSettings = {
   taxPayments: {}
 };
 
-const REQUIRED_DOCUMENTS: Array<{ id: string; label: string; accept: 'pdf' | 'spreadsheet'; category: string }> = [
+const REQUIRED_DOCUMENTS: Array<{ 
+  id: string; 
+  label: string; 
+  accept: 'pdf' | 'spreadsheet'; 
+  category: string; 
+  aiStatus: 'supported' | 'coming_soon' | 'manual';
+}> = [
   // Business Basics
-  { id: 'business_pnl', label: 'Year-End Profit & Loss Statement (P&L)', accept: 'spreadsheet', category: 'business_basics' },
-  { id: 'business_balance_sheet', label: 'Balance Sheet', accept: 'spreadsheet', category: 'business_basics' },
-  { id: 'business_ledger', label: 'General Ledger / Bank Statements', accept: 'spreadsheet', category: 'business_basics' },
+  { id: 'business_pnl', label: 'Year-End Profit & Loss Statement (P&L)', accept: 'spreadsheet', category: 'business_basics', aiStatus: 'supported' },
+  { id: 'business_balance_sheet', label: 'Balance Sheet', accept: 'spreadsheet', category: 'business_basics', aiStatus: 'supported' },
+  { id: 'business_ledger', label: 'General Ledger / Bank Statements', accept: 'spreadsheet', category: 'business_basics', aiStatus: 'supported' },
   
   // Business Income
-  { id: 'income_1099k', label: 'Form 1099-K (Payment Processors)', accept: 'pdf', category: 'business_income' },
-  { id: 'income_1099nec', label: 'Form 1099-NEC (Clients)', accept: 'pdf', category: 'business_income' },
-  { id: 'income_1099misc', label: 'Form 1099-MISC', accept: 'pdf', category: 'business_income' },
+  { id: 'income_1099k', label: 'Form 1099-K (Payment Processors)', accept: 'pdf', category: 'business_income', aiStatus: 'manual' },
+  { id: 'income_1099nec', label: 'Form 1099-NEC (Clients)', accept: 'pdf', category: 'business_income', aiStatus: 'manual' },
+  { id: 'income_1099misc', label: 'Form 1099-MISC', accept: 'pdf', category: 'business_income', aiStatus: 'manual' },
   
   // Business Deductions
-  { id: 'deduction_expense_summary', label: 'Expense Summary by Category', accept: 'spreadsheet', category: 'business_deductions' },
-  { id: 'deduction_mileage_log', label: 'Mileage Log', accept: 'spreadsheet', category: 'business_deductions' },
-  { id: 'deduction_vehicle_expenses', label: 'Vehicle Expense Receipts', accept: 'pdf', category: 'business_deductions' },
-  { id: 'deduction_assets', label: 'Asset Purchases & Depreciation', accept: 'pdf', category: 'business_deductions' },
-  { id: 'deduction_w2_w3', label: 'W-2 / W-3 for Employees', accept: 'pdf', category: 'business_deductions' },
-  { id: 'deduction_1099_issued', label: '1099-NECs issued', accept: 'pdf', category: 'business_deductions' },
+  { id: 'deduction_expense_summary', label: 'Expense Summary by Category', accept: 'spreadsheet', category: 'business_deductions', aiStatus: 'supported' },
+  { id: 'deduction_mileage_log', label: 'Mileage Log', accept: 'spreadsheet', category: 'business_deductions', aiStatus: 'supported' },
+  { id: 'deduction_vehicle_expenses', label: 'Vehicle Expense Receipts', accept: 'pdf', category: 'business_deductions', aiStatus: 'manual' },
+  { id: 'deduction_assets', label: 'Asset Purchases & Depreciation', accept: 'pdf', category: 'business_deductions', aiStatus: 'supported' },
+  { id: 'deduction_w2_w3', label: 'W-2 / W-3 for Employees', accept: 'pdf', category: 'business_deductions', aiStatus: 'supported' },
+  { id: 'deduction_1099_issued', label: '1099-NECs issued', accept: 'pdf', category: 'business_deductions', aiStatus: 'supported' },
 
   // Personal Info
-  { id: 'personal_prior_return', label: 'Prior Year Tax Return', accept: 'pdf', category: 'personal_info' },
-  { id: 'personal_w2', label: 'Form W-2 (from employers)', accept: 'pdf', category: 'personal_info' },
-  { id: 'personal_1099', label: 'Form 1099-INT / 1099-DIV', accept: 'pdf', category: 'personal_info' },
-  { id: 'personal_k1', label: 'Schedule K-1', accept: 'pdf', category: 'personal_info' },
-  { id: 'personal_ira', label: 'IRA Contributions Documented', accept: 'pdf', category: 'personal_info' },
-  { id: 'personal_health', label: 'Health Insurance Info (Form 1095)', accept: 'pdf', category: 'personal_info' },
-  { id: 'personal_charity', label: 'Charitable Donations Receipts', accept: 'pdf', category: 'personal_info' },
-  { id: 'personal_student_loan', label: 'Student Loan Interest (Form 1098-E)', accept: 'pdf', category: 'personal_info' },
+  { id: 'personal_prior_return', label: 'Prior Year Tax Return', accept: 'pdf', category: 'personal_info', aiStatus: 'manual' },
+  { id: 'personal_w2', label: 'Form W-2 (from employers)', accept: 'pdf', category: 'personal_info', aiStatus: 'manual' },
+  { id: 'personal_1099', label: 'Form 1099-INT / 1099-DIV', accept: 'pdf', category: 'personal_info', aiStatus: 'manual' },
+  { id: 'personal_k1', label: 'Schedule K-1', accept: 'pdf', category: 'personal_info', aiStatus: 'manual' },
+  { id: 'personal_ira', label: 'IRA Contributions Documented', accept: 'pdf', category: 'personal_info', aiStatus: 'manual' },
+  { id: 'personal_health', label: 'Health Insurance Info (Form 1095)', accept: 'pdf', category: 'personal_info', aiStatus: 'manual' },
+  { id: 'personal_charity', label: 'Charitable Donations Receipts', accept: 'pdf', category: 'personal_info', aiStatus: 'manual' },
+  { id: 'personal_student_loan', label: 'Student Loan Interest (Form 1098-E)', accept: 'pdf', category: 'personal_info', aiStatus: 'manual' },
 
   // Payments
-  { id: 'payments_estimated', label: 'Estimated Tax Payments (1040-ES)', accept: 'pdf', category: 'tax_payments' },
-  { id: 'payments_state', label: 'State & Local Taxes / LLC Fees', accept: 'pdf', category: 'tax_payments' }
+  { id: 'payments_estimated', label: 'Estimated Tax Payments (1040-ES)', accept: 'pdf', category: 'tax_payments', aiStatus: 'supported' },
+  { id: 'payments_state', label: 'State & Local Taxes / LLC Fees', accept: 'pdf', category: 'tax_payments', aiStatus: 'manual' }
 ];
 
 export default function Taxes() {
@@ -83,6 +102,17 @@ export default function Taxes() {
     () => db.transactions.toArray(),
     []
   ) || [];
+
+  const accounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
+  const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
+
+  const [bulkPromptOpen, setBulkPromptOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<{
+    type: 'account' | 'category';
+    targetId: string | number;
+    targetName: string;
+    value: string;
+  } | null>(null);
 
   const handleUpdateSettings = async (updates: Partial<TaxSettings>) => {
     const newSettings = { ...taxSettings, ...updates };
@@ -99,6 +129,87 @@ export default function Taxes() {
         [field]: value
       }
     });
+  };
+
+  const handleAccountDefaultChange = (accountId: number, accountName: string, value: string) => {
+    setBulkAction({
+      type: 'account',
+      targetId: accountId,
+      targetName: accountName,
+      value,
+    });
+    setBulkPromptOpen(true);
+  };
+
+  const handleCategoryDefaultChange = (categoryName: string, value: string) => {
+    setBulkAction({
+      type: 'category',
+      targetId: categoryName,
+      targetName: categoryName,
+      value,
+    });
+    setBulkPromptOpen(true);
+  };
+
+  const handleBulkUpdateConfirm = async () => {
+    if (!bulkAction) return;
+    const { type, targetId, value } = bulkAction;
+    await db.transaction('rw', db.transactions, async () => {
+      if (type === 'account') {
+        if (value === 'business') {
+          const txns = await db.transactions.where('accountId').equals(targetId as number).toArray();
+          for (const t of txns) {
+            const guess = guessTaxFields(t.description, t.category);
+            await db.transactions.update(t.id!, {
+              isBusiness: true,
+              taxCategory: guess.taxCategory || 'other',
+              deductionStatus: 'confirmed',
+            });
+          }
+        } else if (value === 'personal') {
+          await db.transactions.where('accountId').equals(targetId as number).modify({
+            isBusiness: false,
+            taxCategory: undefined,
+            deductionStatus: 'confirmed',
+          });
+        } else if (value === 'unassigned') {
+          await db.transactions.where('accountId').equals(targetId as number).modify({
+            isBusiness: undefined,
+            taxCategory: undefined,
+            deductionStatus: 'pending',
+          });
+        }
+      } else if (type === 'category') {
+        if (value === 'personal') {
+          await db.transactions.where('category').equals(targetId as string).modify({
+            isBusiness: false,
+            taxCategory: undefined,
+            deductionStatus: 'confirmed',
+          });
+        } else {
+          await db.transactions.where('category').equals(targetId as string).modify({
+            isBusiness: true,
+            taxCategory: value,
+            deductionStatus: 'confirmed',
+          });
+        }
+      }
+    });
+
+    if (type === 'account') {
+      const currentMap = taxSettings.accountDefaults || {};
+      await handleUpdateSettings({
+        accountDefaults: { ...currentMap, [targetId]: value }
+      });
+    } else {
+      const currentMap = taxSettings.categoryDefaults || {};
+      await handleUpdateSettings({
+        categoryDefaults: { ...currentMap, [targetId]: value }
+      });
+    }
+
+    setBulkPromptOpen(false);
+    setBulkAction(null);
   };
 
   const handleDocumentUpload = async (documentId: string, fileInfo: { filename: string; type: string; path: string; uploadedAt: string }) => {
@@ -130,14 +241,15 @@ export default function Taxes() {
     let itemizedDeductions = 0;
 
     yearTransactions.forEach(t => {
-      if (t.amount < 0 || t.category.toLowerCase().includes('income')) {
+      if (t.category.toLowerCase() === 'income' || t.amount > 0) {
         totalIncome += Math.abs(t.amount);
       } else {
-        if (t.category.toLowerCase().match(/(business|software|office|advertising|contractor)/)) {
-          businessExpenses += t.amount;
+        if (t.isBusiness && t.deductionStatus === 'confirmed') {
+          const rate = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.deductionRate ?? 1.0) : 1.0;
+          businessExpenses += Math.abs(t.amount) * rate;
         }
-        if (t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/)) {
-          itemizedDeductions += t.amount;
+        if (!t.isBusiness && t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/)) {
+          itemizedDeductions += Math.abs(t.amount);
         }
       }
     });
@@ -272,11 +384,131 @@ export default function Taxes() {
                       documentId={item.id}
                       label={item.label}
                       accept={item.accept}
+                      aiStatus={item.aiStatus}
                       doc={documents.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
                     />
                   ))}
                 </Box>
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Default Tax Rules (Accounts & Categories) */}
+        <Accordion sx={{ mb: 2, borderRadius: 2, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(theme.palette.background.default, 0.5) }}>
+            <Typography variant="h6" fontWeight="700" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SettingsIcon color="action" /> Default Tax Deduction Rules
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={4}>
+              {/* Account-level defaults */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="subtitle1" fontWeight="600" sx={{ mb: 1 }}>
+                  Account-Level Defaults
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Set default rules for entire bank/credit accounts. Changing this can bulk update existing transactions in that account.
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Account</TableCell>
+                      <TableCell>Default Classification</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {accounts.map(acc => {
+                      const val = taxSettings.accountDefaults?.[acc.id!] || 'unassigned';
+                      return (
+                        <TableRow key={acc.id} hover>
+                          <TableCell sx={{ py: 1 }}>
+                            <Typography variant="body2" fontWeight="500">{acc.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{acc.institution}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              select
+                              size="small"
+                              fullWidth
+                              value={val}
+                              onChange={(e) => handleAccountDefaultChange(acc.id!, acc.name, e.target.value)}
+                            >
+                              <MenuItem value="unassigned">Review individually (Pending)</MenuItem>
+                              <MenuItem value="business">Business Deduction (Default)</MenuItem>
+                              <MenuItem value="personal">Personal Expense (Default)</MenuItem>
+                            </TextField>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {accounts.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={2} align="center" sx={{ color: 'text.secondary', py: 2 }}>
+                          No accounts defined yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </Grid>
+
+              {/* Category-level defaults */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="subtitle1" fontWeight="600" sx={{ mb: 1 }}>
+                  Category-Level Assignments
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Map standard spend categories to IRS Schedule C categories. Setting this triggers a bulk update of existing transactions.
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Spend Category</TableCell>
+                      <TableCell>Schedule C Category</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {categories.filter(c => c.type === 'spend' && c.name !== 'Uncategorized').map(cat => {
+                      const val = taxSettings.categoryDefaults?.[cat.name] || 'personal';
+                      return (
+                        <TableRow key={cat.id} hover>
+                          <TableCell sx={{ py: 1 }}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: cat.color }} />
+                              <Typography variant="body2" fontWeight="500">{cat.name}</Typography>
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              select
+                              size="small"
+                              fullWidth
+                              value={val}
+                              onChange={(e) => handleCategoryDefaultChange(cat.name, e.target.value)}
+                            >
+                              <MenuItem value="personal">Personal Expense (Non-Business)</MenuItem>
+                              {Object.values(SCHEDULE_C_CATEGORIES).map(sc => (
+                                <MenuItem key={sc.id} value={sc.id}>
+                                  {sc.label}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {categories.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={2} align="center" sx={{ color: 'text.secondary', py: 2 }}>
+                          No categories defined yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </Grid>
             </Grid>
           </AccordionDetails>
@@ -314,6 +546,7 @@ export default function Taxes() {
                         documentId={item.id}
                         label={item.label}
                         accept={item.accept}
+                        aiStatus={item.aiStatus}
                         doc={documents.find(d => d.associatedChecklistId === item.id)}
                         onUpload={handleDocumentUpload}
                       />
@@ -365,6 +598,7 @@ export default function Taxes() {
                         documentId={item.id}
                         label={item.label}
                         accept={item.accept}
+                        aiStatus={item.aiStatus}
                         doc={documents.find(d => d.associatedChecklistId === item.id)}
                         onUpload={handleDocumentUpload}
                       />
@@ -419,6 +653,7 @@ export default function Taxes() {
                       documentId={item.id}
                       label={item.label}
                       accept={item.accept}
+                      aiStatus={item.aiStatus}
                       doc={documents.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
                     />
@@ -457,6 +692,7 @@ export default function Taxes() {
                       documentId={item.id}
                       label={item.label}
                       accept={item.accept}
+                      aiStatus={item.aiStatus}
                       doc={documents.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
                     />
@@ -468,6 +704,45 @@ export default function Taxes() {
         </Accordion>
 
       </Box>
+
+      {/* Bulk Update Prompt Dialog */}
+      <Dialog open={bulkPromptOpen} onClose={() => setBulkPromptOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 600 }}>Bulk Update Transactions?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            You updated the default tax deduction mapping for <strong>{bulkAction?.targetName}</strong>. 
+            Do you want to apply this rule and bulk update all existing transactions in the database?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            variant="outlined" 
+            onClick={async () => {
+              if (bulkAction) {
+                const { type, targetId, value } = bulkAction;
+                if (type === 'account') {
+                  const currentMap = taxSettings.accountDefaults || {};
+                  await handleUpdateSettings({
+                    accountDefaults: { ...currentMap, [targetId]: value }
+                  });
+                } else {
+                  const currentMap = taxSettings.categoryDefaults || {};
+                  await handleUpdateSettings({
+                    categoryDefaults: { ...currentMap, [targetId]: value }
+                  });
+                }
+              }
+              setBulkPromptOpen(false);
+              setBulkAction(null);
+            }}
+          >
+            No, only future
+          </Button>
+          <Button variant="contained" onClick={handleBulkUpdateConfirm} autoFocus>
+            Yes, update all
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

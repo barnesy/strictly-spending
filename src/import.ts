@@ -8,6 +8,7 @@ import {
   inferTypeCategory,
 } from './categorize';
 import { localAI } from './ai';
+import { guessTaxFields } from './taxUtils';
 
 export interface ImportPreview {
   filename: string;
@@ -250,6 +251,7 @@ export async function commitPreview(preview: ImportPreview): Promise<{
       continue;
     }
     seenKeys.add(row.dedupKey);
+    const taxGuess = guessTaxFields(row.parsed.description, row.category);
     toInsert.push({
       accountId: accountIdByName.get(row.parsed.accountName)!,
       date: row.parsed.date,
@@ -263,6 +265,9 @@ export async function commitPreview(preview: ImportPreview): Promise<{
       dedupKey: row.dedupKey,
       importBatchId: batchId,
       recurrence: 'onetime',
+      isBusiness: taxGuess.isBusiness,
+      taxCategory: taxGuess.taxCategory,
+      deductionStatus: taxGuess.deductionStatus,
     });
   }
 

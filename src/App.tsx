@@ -37,6 +37,7 @@ import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
 import { db } from './db';
 import { useFilters } from './store';
+import { useDataStore } from './dataStore';
 import { PageTransition } from './components/PageTransition';
 import AnimatedLogo from './components/AnimatedLogo';
 
@@ -138,18 +139,29 @@ export default function App() {
   }, [isChatOpen, isDesktop]);
 
   const demoMode = useFilters((s) => s.demoMode);
-  // Find database date boundaries using the indexed 'date' field
-  const bounds = useLiveQuery(async () => {
-    if (demoMode) {
-      const earliestTxn = await db.transactions.orderBy('date').filter(t => t.source === 'demo').first();
-      const latestTxn = await db.transactions.orderBy('date').reverse().filter(t => t.source === 'demo').first();
-      return { earliest: earliestTxn?.date, latest: latestTxn?.date };
-    } else {
-      const earliestTxn = await db.transactions.orderBy('date').filter(t => t.source !== 'demo').first();
-      const latestTxn = await db.transactions.orderBy('date').reverse().filter(t => t.source !== 'demo').first();
-      return { earliest: earliestTxn?.date, latest: latestTxn?.date };
+  const initStore = useDataStore((s) => s.init);
+  useEffect(() => {
+    initStore();
+  }, [initStore]);
+
+  const transactions = useDataStore((s) => s.transactions);
+
+  // Find database date boundaries in memory using transactions store
+  const bounds = useMemo(() => {
+    const activeTxns = demoMode
+      ? transactions.filter((t) => t.source === 'demo')
+      : transactions.filter((t) => t.source !== 'demo');
+    if (activeTxns.length === 0) return { earliest: undefined, latest: undefined };
+
+    let earliest = activeTxns[0].date;
+    let latest = activeTxns[0].date;
+    for (let i = 1; i < activeTxns.length; i++) {
+      const d = activeTxns[i].date;
+      if (d < earliest) earliest = d;
+      if (d > latest) latest = d;
     }
-  }, [demoMode]);
+    return { earliest, latest };
+  }, [transactions, demoMode]);
 
   const setTransactionDataBounds = useFilters((s) => s.setTransactionDataBounds);
 
@@ -159,22 +171,14 @@ export default function App() {
     }
   }, [bounds, setTransactionDataBounds]);
 
-  // Live count of Uncategorized transactions for the nav badge, optimized via index counts
-  const uncategorizedCount = useLiveQuery(async () => {
-    if (demoMode) {
-      return await db.transactions
-        .where('category')
-        .equals('Uncategorized')
-        .filter(t => t.source === 'demo')
-        .count();
-    } else {
-      return await db.transactions
-        .where('category')
-        .equals('Uncategorized')
-        .filter(t => t.source !== 'demo')
-        .count();
-    }
-  }, [demoMode]) ?? 0;
+  // Live count of Uncategorized transactions for the nav badge, optimized in memory
+  const uncategorizedCount = useMemo(() => {
+    return transactions.filter(
+      (t) =>
+        t.category === 'Uncategorized' &&
+        (demoMode ? t.source === 'demo' : t.source !== 'demo')
+    ).length;
+  }, [transactions, demoMode]);
 
   const renderMainWindow = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>

@@ -1,0 +1,125 @@
+import { describe, it, expect } from 'vitest';
+import { guessTaxFields } from './taxUtils';
+
+describe('guessTaxFields', () => {
+  it('guesses strong merchant keywords correctly', () => {
+    // Commissions & Fees
+    expect(guessTaxFields('Stripe Payment Gateway', 'Uncategorized')).toEqual({
+      isBusiness: true,
+      taxCategory: 'commissions',
+      deductionStatus: 'pending',
+    });
+    expect(guessTaxFields('PAYPAL *MERCHANT', 'Uncategorized')).toEqual({
+      isBusiness: true,
+      taxCategory: 'commissions',
+      deductionStatus: 'pending',
+    });
+
+    // Office Expense & Software
+    expect(guessTaxFields('GitHub Co-pilot SaaS', 'Uncategorized')).toEqual({
+      isBusiness: true,
+      taxCategory: 'officeExpense',
+      deductionStatus: 'pending',
+    });
+    expect(guessTaxFields('AWS Web Hosting Services', 'Uncategorized')).toEqual({
+      isBusiness: true,
+      taxCategory: 'officeExpense',
+      deductionStatus: 'pending',
+    });
+
+    // Contract labor
+    expect(guessTaxFields('Upwork Freelancer Fee', 'Uncategorized')).toEqual({
+      isBusiness: true,
+      taxCategory: 'contractLabor',
+      deductionStatus: 'pending',
+    });
+
+    // Legal / professional
+    expect(guessTaxFields('TurboTax 2025 Home & Business', 'Uncategorized')).toEqual({
+      isBusiness: true,
+      taxCategory: 'legalProfessional',
+      deductionStatus: 'pending',
+    });
+  });
+
+  it('handles personal streaming subscriptions vs business officeExpense', () => {
+    // Standard streaming/gaming should be flagged personal and confirmed
+    expect(guessTaxFields('NETFLIX.COM US SUBS', 'Subscriptions')).toEqual({
+      isBusiness: false,
+      deductionStatus: 'confirmed',
+    });
+    expect(guessTaxFields('Spotify Premium', 'Subscriptions')).toEqual({
+      isBusiness: false,
+      deductionStatus: 'confirmed',
+    });
+
+    // Other subscriptions default to business officeExpense
+    expect(guessTaxFields('Vercel Hosting', 'Subscriptions')).toEqual({
+      isBusiness: true,
+      taxCategory: 'officeExpense',
+      deductionStatus: 'pending',
+    });
+    expect(guessTaxFields('Some Generic Tool Subscription', 'Subscriptions')).toEqual({
+      isBusiness: true,
+      taxCategory: 'officeExpense',
+      deductionStatus: 'pending',
+    });
+  });
+
+  it('cascades categories correctly for business travel, meals, and utilities', () => {
+    // Travel
+    expect(guessTaxFields('Uber Trip 12345', 'Travel')).toEqual({
+      isBusiness: true,
+      taxCategory: 'travel',
+      deductionStatus: 'pending',
+    });
+
+    // Restaurants & Coffee
+    expect(guessTaxFields('Starbucks Coffee #999', 'Restaurants & Coffee')).toEqual({
+      isBusiness: true,
+      taxCategory: 'meals',
+      deductionStatus: 'pending',
+    });
+
+    // Utilities - business phone/internet keywords
+    expect(guessTaxFields('Verizon Wireless', 'Utilities')).toEqual({
+      isBusiness: true,
+      taxCategory: 'utilities',
+      deductionStatus: 'pending',
+    });
+    // Other utilities should be personal
+    expect(guessTaxFields('PG&E Electric bill', 'Utilities')).toEqual({
+      isBusiness: false,
+      deductionStatus: 'confirmed',
+    });
+  });
+
+  it('categorizes personal spend categories as personal-confirmed', () => {
+    expect(guessTaxFields('Safeway Groceries', 'Groceries')).toEqual({
+      isBusiness: false,
+      deductionStatus: 'confirmed',
+    });
+    expect(guessTaxFields('Rent Payment', 'Housing')).toEqual({
+      isBusiness: false,
+      deductionStatus: 'confirmed',
+    });
+
+    // Special office supplies shopping check
+    expect(guessTaxFields('Staples office paper', 'Shopping')).toEqual({
+      isBusiness: true,
+      taxCategory: 'supplies',
+      deductionStatus: 'pending',
+    });
+    expect(guessTaxFields('Macy\'s clothes purchase', 'Shopping')).toEqual({
+      isBusiness: false,
+      deductionStatus: 'confirmed',
+    });
+  });
+
+  it('falls back to pending personal on unknown category', () => {
+    expect(guessTaxFields('Something weird', 'Uncategorized')).toEqual({
+      isBusiness: false,
+      deductionStatus: 'pending',
+    });
+  });
+});

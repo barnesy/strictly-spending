@@ -183,6 +183,7 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
           case 'h1':
             return (
               <Typography
+                id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
                 key={idx}
                 variant="h6"
                 sx={{
@@ -199,6 +200,7 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
           case 'h2':
             return (
               <Typography
+                id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
                 key={idx}
                 variant="subtitle1"
                 sx={{ fontWeight: 700, mt: 1, color: 'text.primary' }}
@@ -209,6 +211,7 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
           case 'h3':
             return (
               <Typography
+                id={block.text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}
                 key={idx}
                 variant="subtitle2"
                 sx={{ fontWeight: 700, color: 'text.secondary', mt: 0.5 }}

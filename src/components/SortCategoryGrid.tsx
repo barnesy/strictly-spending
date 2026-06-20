@@ -27,6 +27,7 @@ interface Props {
   spendOnly?: boolean;
   /** When true, indicates the suggestion is from the AI */
   isAiSuggested?: boolean;
+  hideNewCategory?: boolean;
 }
 
 const PALETTE = [
@@ -46,6 +47,7 @@ export default function SortCategoryGrid({
   onPick,
   spendOnly = false,
   isAiSuggested = false,
+  hideNewCategory = false,
 }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -65,7 +67,7 @@ export default function SortCategoryGrid({
     return sug ? [sug, ...rest] : rest;
   })();
 
-  const PRIMARY_COUNT = 9;
+  const PRIMARY_COUNT = hideNewCategory ? 999 : 9;
   const primary = visible.slice(0, PRIMARY_COUNT);
   const overflow = visible.slice(PRIMARY_COUNT);
 
@@ -188,7 +190,7 @@ export default function SortCategoryGrid({
         {primary.map((c, i) => renderButton(c, i))}
       </Stack>
 
-      {(overflow.length > 0 || true) && (
+      {!hideNewCategory && (overflow.length > 0 || true) && (
         <Stack direction="row" spacing={1} alignItems="center">
           {overflow.length > 0 && (
             <Button

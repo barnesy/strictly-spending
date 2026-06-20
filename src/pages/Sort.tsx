@@ -27,7 +27,10 @@ import {
   Chip,
   Switch,
   TextField,
+  Tabs,
+  Tab,
 } from '@mui/material';
+import { SCHEDULE_C_CATEGORIES, guessTaxFields } from '../taxUtils';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { db } from '../db';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
@@ -35,6 +38,7 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'reac
 import { useFilters } from '../store';
 import { buildRecurrenceMap, refreshRecurrenceAll } from '../recurrence';
 import { buildSortQueue, type SortCard as SortCardData } from '../sort';
+import type { Transaction } from '../types';
 
 import SortCard from '../components/SortCard';
 import SortCategoryGrid from '../components/SortCategoryGrid';
@@ -44,12 +48,19 @@ import { playThinkingSound, stopThinkingSound, playSuccessSound, playFailSound }
 
 export default function Sort() {
   const demoMode = useFilters((s) => s.demoMode);
+  const [mode, setMode] = useState<'categorize' | 'tax'>('categorize');
 
   const uncategorizedAll = useLiveQuery(
     () => db.transactions.where('category').equals('Uncategorized').toArray(),
     []
   );
   const deferredUncategorizedAll = useDeferredValue(uncategorizedAll);
+
+  const pendingTaxAll = useLiveQuery(
+    () => db.transactions.where('deductionStatus').equals('pending').toArray(),
+    []
+  );
+  const deferredPendingTaxAll = useDeferredValue(pendingTaxAll);
   
   const categories = useLiveQuery(
     () => db.categories.orderBy('sortOrder').toArray(),
@@ -58,9 +69,20 @@ export default function Sort() {
   const rules = useLiveQuery(() => db.rules.toArray(), []);
   const overrides = useLiveQuery(() => db.merchantOverrides.toArray(), []);
 
+  const pendingTax = useMemo(
+    () =>
+      deferredPendingTaxAll && demoMode
+        ? deferredPendingTaxAll.filter((t) => t.source === 'demo')
+        : deferredPendingTaxAll?.filter((t) => t.source !== 'demo') || [],
+    [deferredPendingTaxAll, demoMode]
+  );
+
   const merchantKeys = useMemo(() => {
-    return Array.from(new Set((uncategorizedAll || []).map((t) => t.merchantKey).filter(Boolean)));
-  }, [uncategorizedAll]);
+    const keys = new Set<string>();
+    for (const t of uncategorizedAll || []) if (t.merchantKey) keys.add(t.merchantKey);
+    for (const t of pendingTaxAll || []) if (t.merchantKey) keys.add(t.merchantKey);
+    return Array.from(keys);
+  }, [uncategorizedAll, pendingTaxAll]);
 
   const relevantTxnsAll = useLiveQuery(
     () =>
@@ -106,8 +128,63 @@ export default function Sort() {
     [uncategorized, recurrenceMap, categories, rules]
   );
 
+  const taxQueue = useMemo(() => {
+    if (mode !== 'tax') return [];
+    const byKey = new Map<string, Transaction[]>();
+    for (const t of pendingTax) {
+      const k = t.merchantKey || '';
+      const list = byKey.get(k);
+      if (list) list.push(t);
+      else byKey.set(k, [t]);
+    }
+
+    const cards: SortCardData[] = [];
+    for (const [merchantKey, txns] of byKey) {
+      if (txns.length === 0) continue;
+      const sorted = [...txns].sort((a, b) => b.date.localeCompare(a.date));
+      const sampleTxns = sorted.slice(0, 10);
+      const totalAbs = txns.reduce((s, t) => s + Math.abs(t.amount), 0);
+      const netSign = txns.reduce((s, t) => s + t.amount, 0) >= 0 ? 'income' : 'spend';
+
+      // Guess default tax fields
+      const guess = guessTaxFields(txns[0].description, txns[0].category);
+      const suggestedLabel = guess.isBusiness && guess.taxCategory
+        ? SCHEDULE_C_CATEGORIES[guess.taxCategory]?.label || 'Business Expense'
+        : 'Personal Expense (Non-Business)';
+
+      cards.push({
+        merchantKey,
+        txns,
+        totalAbs,
+        sampleTxns,
+        suggestedCategory: suggestedLabel,
+        amountSign: netSign,
+      });
+    }
+    cards.sort((a, b) => b.totalAbs - a.totalAbs);
+    return cards;
+  }, [pendingTax, mode]);
+
+  const taxCategoriesList = useMemo(() => {
+    const list = Object.values(SCHEDULE_C_CATEGORIES).map(cat => ({
+      name: cat.label,
+      color: '#4caf50',
+      type: 'spend' as const,
+      sortOrder: 10,
+    }));
+    return [
+      {
+        name: 'Personal Expense (Non-Business)',
+        color: '#757575',
+        type: 'spend' as const,
+        sortOrder: 0,
+      },
+      ...list
+    ];
+  }, []);
+
   const [currentIndex, setCurrentIndex] = useState(0);
-  const visibleQueue = queue;
+  const visibleQueue = mode === 'categorize' ? queue : taxQueue;
 
   useEffect(() => {
     if (visibleQueue.length > 0 && currentIndex >= visibleQueue.length) {
@@ -197,7 +274,7 @@ export default function Sort() {
   };
 
   useEffect(() => {
-    if (!aiSuggestEnabled || !currentCard) return;
+    if (!aiSuggestEnabled || !currentCard || mode === 'tax') return;
     const key = currentCard.merchantKey;
     if (aiSuggestions[key] || fetchingKeysRef.current.has(key)) return;
 
@@ -303,10 +380,14 @@ export default function Sort() {
 
   const lookupCategoryColor = useCallback(
     (name: string): string => {
+      if (mode === 'tax') {
+        const found = taxCategoriesList.find((cc) => cc.name === name);
+        return found?.color ?? '#4caf50';
+      }
       const c = (categories || []).find((cc) => cc.name === name);
       return c?.color ?? '#9e9e9e';
     },
-    [categories]
+    [categories, mode, taxCategoriesList]
   );
 
   const handleClearSelection = () => {
@@ -323,58 +404,98 @@ export default function Sort() {
     const selectionKeys = Object.keys(selections);
     if (selectionKeys.length === 0) return;
 
-    await db.transaction('rw', db.transactions, db.rules, async () => {
-      for (const key of selectionKeys) {
-        const sel = selections[key];
-        const card = queue.find(c => c.merchantKey === key);
-        if (!card) continue;
+    if (mode === 'categorize') {
+      await db.transaction('rw', db.transactions, db.rules, async () => {
+        for (const key of selectionKeys) {
+          const sel = selections[key];
+          const card = queue.find(c => c.merchantKey === key);
+          if (!card) continue;
 
-        const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
+          const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
 
-        await db.transactions.where('id').anyOf(txnIds).modify({
-          category: sel.category,
-          userOverridden: true,
-        });
-
-        const patternToSave = sel.rulePattern.trim();
-        if (sel.saveRule && patternToSave) {
-          await db.rules.add({
-            pattern: patternToSave,
+          await db.transactions.where('id').anyOf(txnIds).modify({
             category: sel.category,
-            priority: 1000,
-            createdAt: new Date().toISOString(),
+            userOverridden: true,
           });
+
+          const patternToSave = sel.rulePattern.trim();
+          if (sel.saveRule && patternToSave) {
+            await db.rules.add({
+              pattern: patternToSave,
+              category: sel.category,
+              priority: 1000,
+              createdAt: new Date().toISOString(),
+            });
+          }
         }
-      }
-    });
+      });
+    } else {
+      await db.transaction('rw', db.transactions, async () => {
+        for (const key of selectionKeys) {
+          const sel = selections[key];
+          const card = taxQueue.find(c => c.merchantKey === key);
+          if (!card) continue;
+
+          const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
+
+          if (sel.category === 'Personal Expense (Non-Business)') {
+            await db.transactions.where('id').anyOf(txnIds).modify({
+              isBusiness: false,
+              taxCategory: undefined,
+              deductionStatus: 'confirmed',
+            });
+          } else {
+            const sc = Object.values(SCHEDULE_C_CATEGORIES).find(c => c.label === sel.category);
+            const taxCategoryId = sc ? sc.id : 'other';
+            await db.transactions.where('id').anyOf(txnIds).modify({
+              isBusiness: true,
+              taxCategory: taxCategoryId,
+              deductionStatus: 'confirmed',
+            });
+          }
+        }
+      });
+    }
 
     setSelections({});
     setCurrentIndex(0);
     await refreshRecurrenceAll();
-  }, [selections, queue]);
+  }, [selections, queue, taxQueue, mode]);
 
   const onPick = useCallback(
     async (categoryName: string) => {
       if (!currentCard) return;
       const key = currentCard.merchantKey;
 
-      const activeAiCategory = aiSuggestions[key]?.category || null;
-      if (aiSuggestEnabled && activeAiCategory) {
-        const isCorrect = activeAiCategory === categoryName;
-        await updateScore(isCorrect);
+      if (mode === 'categorize') {
+        const activeAiCategory = aiSuggestions[key]?.category || null;
+        if (aiSuggestEnabled && activeAiCategory) {
+          const isCorrect = activeAiCategory === categoryName;
+          await updateScore(isCorrect);
+        }
+
+        // Set selection
+        setSelections(prev => ({
+          ...prev,
+          [key]: {
+            category: categoryName,
+            saveRule,
+            rulePattern: rulePattern || key,
+          }
+        }));
+      } else {
+        // Set tax selection
+        setSelections(prev => ({
+          ...prev,
+          [key]: {
+            category: categoryName,
+            saveRule: false,
+            rulePattern: '',
+          }
+        }));
       }
 
-      // Set selection
-      setSelections(prev => ({
-        ...prev,
-        [key]: {
-          category: categoryName,
-          saveRule,
-          rulePattern: rulePattern || key,
-        }
-      }));
-
-      // Auto-advance to the next uncategorized card immediately (animations play in background)
+      // Auto-advance to the next card immediately (animations play in background)
       const nextIndex = visibleQueue.findIndex((card, idx) => idx > currentIndex && !selections[card.merchantKey]?.category);
       if (nextIndex !== -1) {
         setCurrentIndex(nextIndex);
@@ -385,7 +506,7 @@ export default function Sort() {
         }
       }
     },
-    [currentCard, currentIndex, visibleQueue, selections, rulePattern, saveRule, aiSuggestEnabled, aiSuggestions, updateScore]
+    [currentCard, currentIndex, visibleQueue, selections, rulePattern, saveRule, aiSuggestEnabled, aiSuggestions, updateScore, mode]
   );
 
   // Keyboard handler — single global listener while the page is mounted.
@@ -395,13 +516,15 @@ export default function Sort() {
 
   useEffect(() => {
     // Compute the same ordering SortCategoryGrid uses, so number keys line up.
-    const cats = categories || [];
-    const filtered = cats.filter((c) => c.type === 'spend' && c.name !== 'Uncategorized');
+    const cats = mode === 'categorize' ? (categories || []) : taxCategoriesList;
+    const filtered = cats.filter((c) => (mode === 'tax' || c.type === 'spend') && c.name !== 'Uncategorized');
     const sug = filtered.find((c) => c.name === activeSuggestion);
     const rest = filtered.filter((c) => c.name !== activeSuggestion);
-    rest.sort((a, b) => a.sortOrder - b.sortOrder);
+    if (mode === 'categorize') {
+      rest.sort((a, b) => a.sortOrder - b.sortOrder);
+    }
     visibleGridOrderRef.current = (sug ? [sug, ...rest] : rest).map((c) => c.name);
-  }, [categories, activeSuggestion]);
+  }, [categories, activeSuggestion, mode, taxCategoriesList]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -479,22 +602,24 @@ export default function Sort() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={aiSuggestEnabled}
-                onChange={(e) => handleToggleAiSuggest(e.target.checked)}
-              />
-            }
-            label={
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                AI Auto-Suggest
-              </Typography>
-            }
-            sx={{ m: 0 }}
-          />
-          {score && score.totalCount > 0 && (
+          {mode === 'categorize' && (
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={aiSuggestEnabled}
+                  onChange={(e) => handleToggleAiSuggest(e.target.checked)}
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  AI Auto-Suggest
+                </Typography>
+              }
+              sx={{ m: 0 }}
+            />
+          )}
+          {mode === 'categorize' && score && score.totalCount > 0 && (
             <Chip
               size="small"
               label={`AI Accuracy: ${Math.round((score.correctCount / score.totalCount) * 100)}% (${score.correctCount}/${score.totalCount})`}
@@ -519,6 +644,19 @@ export default function Sort() {
           </Button>
         </Stack>
       </Stack>
+      
+      <Tabs
+        value={mode}
+        onChange={(_, val) => {
+          setMode(val);
+          setSelections({});
+          setCurrentIndex(0);
+        }}
+        sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
+      >
+        <Tab label={`Categorize Transactions (${uncategorized.length})`} value="categorize" sx={{ fontWeight: 600 }} />
+        <Tab label={`Review Tax Deductions (${pendingTax.length})`} value="tax" sx={{ fontWeight: 600 }} />
+      </Tabs>
 
       {/* Global Apply Bar */}
       {selectionsCount > 0 && (
@@ -670,6 +808,7 @@ export default function Sort() {
                           />
                         )}
                       </Stack>
+                    {mode === 'categorize' && (
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -685,31 +824,33 @@ export default function Sort() {
                         }
                         sx={{ m: 0 }}
                       />
-                    </Stack>
-                    {saveRule && (
-                      <Box sx={{ mt: 0.5, mb: 1 }}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          label="Rule Pattern"
-                          value={rulePattern}
-                          onChange={(e) => handlePatternChange(e.target.value)}
-                          placeholder="e.g. starbucks"
-                          helperText="Future imports matching this keyword will be auto-categorized."
-                          FormHelperTextProps={{
-                            sx: { mx: 1, my: 0.5 }
-                          }}
-                        />
-                      </Box>
                     )}
-                    <SortCategoryGrid
-                      categories={categories}
-                      suggested={activeSuggestion}
-                      selected={selections[currentCard.merchantKey]?.category || null}
-                      onPick={onPick}
-                      spendOnly={false}
-                      isAiSuggested={aiSuggestEnabled && (aiSuggestions[currentCard.merchantKey]?.category !== undefined)}
-                    />
+                  </Stack>
+                  {mode === 'categorize' && saveRule && (
+                    <Box sx={{ mt: 0.5, mb: 1 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Rule Pattern"
+                        value={rulePattern}
+                        onChange={(e) => handlePatternChange(e.target.value)}
+                        placeholder="e.g. starbucks"
+                        helperText="Future imports matching this keyword will be auto-categorized."
+                        FormHelperTextProps={{
+                          sx: { mx: 1, my: 0.5 }
+                        }}
+                      />
+                    </Box>
+                  )}
+                  <SortCategoryGrid
+                    categories={mode === 'categorize' ? (categories || []) : taxCategoriesList}
+                    suggested={activeSuggestion}
+                    selected={selections[currentCard.merchantKey]?.category || null}
+                    onPick={onPick}
+                    spendOnly={false}
+                    isAiSuggested={mode === 'categorize' ? (aiSuggestEnabled && (aiSuggestions[currentCard.merchantKey]?.category !== undefined)) : true}
+                    hideNewCategory={mode === 'tax'}
+                  />
                   </Stack>
                 </Paper>
 
@@ -789,9 +930,11 @@ export default function Sort() {
                   const sortedCards = [...visibleCards].sort((a, b) => b.stackIndex - a.stackIndex);
 
                   return sortedCards.map(({ card, stackIndex }) => {
-                    const cardSuggestion = aiSuggestEnabled
-                      ? (aiSuggestions[card.merchantKey]?.category || null)
-                      : card.suggestedCategory;
+                    const cardSuggestion = mode === 'tax'
+                      ? card.suggestedCategory
+                      : (aiSuggestEnabled
+                        ? (aiSuggestions[card.merchantKey]?.category || null)
+                        : card.suggestedCategory);
 
                     const selection = selections[card.merchantKey];
                     const chosenColor = selection ? lookupCategoryColor(selection.category) : undefined;
@@ -807,9 +950,9 @@ export default function Sort() {
                             : undefined
                         }
                         chosenColor={chosenColor}
-                        suggestedCategoryOverride={aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined}
-                        aiSuggesting={aiSuggesting[card.merchantKey] || false}
-                        aiError={aiErrors[card.merchantKey] || null}
+                        suggestedCategoryOverride={mode === 'tax' ? undefined : (aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined)}
+                        aiSuggesting={mode === 'tax' ? false : (aiSuggesting[card.merchantKey] || false)}
+                        aiError={mode === 'tax' ? null : (aiErrors[card.merchantKey] || null)}
                         stackIndex={stackIndex}
                         zipDirection={zipDirection}
                       />

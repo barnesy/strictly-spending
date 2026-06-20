@@ -1,6 +1,8 @@
-import { Box, Button, Typography, alpha, useTheme } from '@mui/material';
+import { Box, Button, Typography, alpha, useTheme, Chip, Stack } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
 import { open } from '@tauri-apps/plugin-dialog';
 import type { AppDocument } from '../types';
@@ -10,14 +12,20 @@ interface TaxDocumentUploadProps {
   label: string;
   accept: 'pdf' | 'spreadsheet';
   doc?: AppDocument;
+  aiStatus?: 'supported' | 'coming_soon' | 'manual';
   onUpload: (documentId: string, fileInfo: { filename: string; type: string; path: string; uploadedAt: string }) => void;
 }
 
-export default function TaxDocumentUpload({ documentId, label, accept, doc, onUpload }: TaxDocumentUploadProps) {
+export default function TaxDocumentUpload({ 
+  documentId, 
+  label, 
+  accept, 
+  doc, 
+  aiStatus = 'manual', 
+  onUpload 
+}: TaxDocumentUploadProps) {
   const theme = useTheme();
-
   const isUploaded = !!doc;
-
 
   const handleFileChange = async () => {
     try {
@@ -31,7 +39,7 @@ export default function TaxDocumentUpload({ documentId, label, accept, doc, onUp
 
       if (selectedPath && typeof selectedPath === 'string') {
         const filename = selectedPath.split(/[/\\]/).pop() || 'Unknown File';
-        const type = accept === 'pdf' ? 'application/pdf' : 'text/csv'; // Approximate type
+        const type = accept === 'pdf' ? 'application/pdf' : 'text/csv';
         onUpload(documentId, {
           filename,
           type,
@@ -44,30 +52,107 @@ export default function TaxDocumentUpload({ documentId, label, accept, doc, onUp
     }
   };
 
+  const getStatusChip = () => {
+    if (aiStatus === 'supported') {
+      return (
+        <Chip
+          label="AI Generator"
+          size="small"
+          icon={<AutoAwesomeIcon sx={{ fontSize: '12px !important' }} />}
+          sx={{
+            fontSize: '10px',
+            fontWeight: 700,
+            height: 20,
+            bgcolor: alpha(theme.palette.secondary.main, 0.1),
+            color: 'secondary.main',
+            border: `1px solid ${alpha(theme.palette.secondary.main, 0.25)}`,
+            '& .MuiChip-icon': { color: 'secondary.main' }
+          }}
+        />
+      );
+    } else if (aiStatus === 'coming_soon') {
+      return (
+        <Chip
+          label="AI Coming Soon"
+          size="small"
+          icon={<AccessTimeIcon sx={{ fontSize: '12px !important' }} />}
+          sx={{
+            fontSize: '10px',
+            fontWeight: 600,
+            height: 20,
+            bgcolor: alpha(theme.palette.info.main, 0.05),
+            color: 'info.main',
+            border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+            '& .MuiChip-icon': { color: 'info.main' }
+          }}
+        />
+      );
+    } else {
+      return (
+        <Chip
+          label="Upload Required"
+          size="small"
+          icon={<UploadFileIcon sx={{ fontSize: '12px !important' }} />}
+          sx={{
+            fontSize: '10px',
+            fontWeight: 600,
+            height: 20,
+            bgcolor: alpha(theme.palette.text.secondary, 0.05),
+            color: 'text.secondary',
+            border: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+            '& .MuiChip-icon': { color: 'text.secondary' }
+          }}
+        />
+      );
+    }
+  };
+
+  const getHelperText = () => {
+    if (isUploaded) {
+      return `Attached: ${doc.name}`;
+    }
+    if (aiStatus === 'supported') {
+      return "Ask the AI Copilot to generate this statement using your audited data.";
+    }
+    if (aiStatus === 'coming_soon') {
+      return "Future integration will generate this automatically from bank feeds.";
+    }
+    return `Upload the official ${accept.toUpperCase()} document issued to you.`;
+  };
+
   return (
-    <Box sx={{ mb: 2, p: 2, borderRadius: 2, border: '1px dashed', borderColor: isUploaded ? 'success.main' : 'divider', bgcolor: isUploaded ? alpha(theme.palette.success.main, 0.05) : 'background.paper', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+    <Box sx={{ 
+      mb: 2, 
+      p: 2, 
+      borderRadius: 2, 
+      border: '1px dashed', 
+      borderColor: isUploaded ? 'success.main' : 'divider', 
+      bgcolor: isUploaded ? alpha(theme.palette.success.main, 0.04) : 'background.paper', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'space-between', 
+      gap: 2 
+    }}>
       <Box sx={{ flex: 1, overflow: 'hidden' }}>
-        <Typography variant="body2" fontWeight="600" color={isUploaded ? 'success.main' : 'text.primary'} noWrap>
-          {label}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" display="block">
-          {accept === 'pdf' ? 'Requires PDF' : 'Requires Spreadsheet'}
-        </Typography>
-        {isUploaded && (
-          <Typography variant="caption" color="text.secondary" noWrap sx={{ mt: 0.5, display: 'block' }}>
-            Attached: {doc.name}
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5, flexWrap: 'wrap', gap: 1 }}>
+          <Typography variant="body2" fontWeight="600" color={isUploaded ? 'success.main' : 'text.primary'} sx={{ mr: 1 }}>
+            {label}
           </Typography>
-        )}
+          {getStatusChip()}
+        </Stack>
+        <Typography variant="caption" color="text.secondary" display="block">
+          {getHelperText()}
+        </Typography>
       </Box>
 
       <Box>
         <Button
           variant={isUploaded ? "text" : "outlined"}
-          color={isUploaded ? "success" : "primary"}
+          color={isUploaded ? "success" : (aiStatus === 'supported' ? "secondary" : "primary")}
           size="small"
           startIcon={isUploaded ? <CheckCircleIcon /> : <UploadFileIcon />}
           onClick={handleFileChange}
-          sx={{ whiteSpace: 'nowrap' }}
+          sx={{ whiteSpace: 'nowrap', textTransform: 'none', borderRadius: `${theme.shape.borderRadius}px` }}
         >
           {isUploaded ? 'Replace' : 'Upload'}
         </Button>

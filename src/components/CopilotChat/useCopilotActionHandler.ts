@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useFilters, resolveDateRange } from '../../store';
 import { useChatStore, formatModelName } from '../../chatStore';
+import { useDataStore } from '../../dataStore';
 import { localAI, type ChatMessage, parseAIResponse, calculateGlobalRunwayData, COPILOT_RESPONSE_SCHEMA } from '../../ai';
 import { db } from '../../db';
 import { detectSubscriptionAlerts, detectSpendingAnomalies } from '../../copilotAnalytics';
@@ -13,7 +14,7 @@ import { useBudgetStore } from '../../budgetStore';
 import type { ProposedCategorizationItem } from '../../types';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { generatePnlData } from '../../pnlGenerator';
+import { generatePnlData, generateBalanceSheetData, generateLedgerData, generateExpenseSummaryData } from '../../pnlGenerator';
 
 function findMatchingSkillForPrompt(prompt: string, skills: any[]): any | null {
   const normPrompt = prompt.toLowerCase();
@@ -45,6 +46,88 @@ function findMatchingSkillForPrompt(prompt: string, skills: any[]): any | null {
     normPrompt.includes('organize')
   ) {
     const matched = skills.find(s => s.id === 'builtin:categorization' || s.name.toLowerCase().includes('categoriz'));
+    if (matched) return matched;
+  }
+
+  if (
+    normPrompt.includes('balance sheet') || 
+    normPrompt.includes('assets liabilities') || 
+    normPrompt.includes('equity statement')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:balance_sheet');
+    if (matched) return matched;
+  }
+
+  if (
+    normPrompt.includes('ledger') || 
+    normPrompt.includes('general ledger') || 
+    normPrompt.includes('transaction log')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:ledger');
+    if (matched) return matched;
+  }
+
+  if (
+    normPrompt.includes('expense summary') || 
+    normPrompt.includes('expenses by category') || 
+    normPrompt.includes('schedule c category') ||
+    normPrompt.includes('schedule c categories')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:expense_summary');
+    if (matched) return matched;
+  }
+
+  if (
+    normPrompt.includes('mileage') || 
+    normPrompt.includes('travel log') || 
+    normPrompt.includes('mileage log') || 
+    normPrompt.includes('odometer')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:mileage_log');
+    if (matched) return matched;
+  }
+
+  if (
+    normPrompt.includes('asset log') || 
+    normPrompt.includes('asset purchase') || 
+    normPrompt.includes('asset purchases') || 
+    normPrompt.includes('equipment purchase') || 
+    normPrompt.includes('depreciation')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:assets');
+    if (matched) return matched;
+  }
+
+  if (
+    normPrompt.includes('estimated payment') || 
+    normPrompt.includes('estimated payments') || 
+    normPrompt.includes('estimated tax') || 
+    normPrompt.includes('1040-es') || 
+    normPrompt.includes('1040 es')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:payments_estimated');
+    if (matched) return matched;
+  }
+
+  if (
+    normPrompt.includes('w2') || 
+    normPrompt.includes('w-2') || 
+    normPrompt.includes('w3') || 
+    normPrompt.includes('w-3') || 
+    normPrompt.includes('employee summary') || 
+    normPrompt.includes('payroll summary')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:w2_w3');
+    if (matched) return matched;
+  }
+
+  if (
+    normPrompt.includes('1099 nec') || 
+    normPrompt.includes('1099-nec') || 
+    normPrompt.includes('1099 issued') || 
+    normPrompt.includes('issued 1099')
+  ) {
+    const matched = skills.find(s => s.id === 'builtin:1099_issued');
     if (matched) return matched;
   }
 
@@ -104,8 +187,9 @@ export function useCopilotActionHandler() {
   } = useChatStore();
 
   const getExecutorContext = async () => {
-    const categories = await db.categories.toArray();
-    const accounts = await db.accounts.toArray();
+    const store = useDataStore.getState();
+    const categories = store.categories;
+    const accounts = store.accounts;
     return {
       categories,
       accounts,
@@ -148,8 +232,9 @@ export function useCopilotActionHandler() {
         return;
       }
 
-      const categories = await db.categories.toArray();
-      const accounts = await db.accounts.toArray();
+      const store = useDataStore.getState();
+      const categories = store.categories;
+      const accounts = store.accounts;
       
       const enabledAccounts = accounts.filter((a) => a.enabled);
       let currentCash = enabledAccounts.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
@@ -161,7 +246,7 @@ export function useCopilotActionHandler() {
       let monthlyIncome = incomeSetting ? Number(incomeSetting.value) : 0;
 
       if (monthlyIncome === 0) {
-        const allTxns = await db.transactions.toArray();
+        const allTxns = store.transactions;
         const ninetyDaysAgo = new Date();
         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
         const ninetyDaysAgoISO = ninetyDaysAgo.toISOString().slice(0, 10);
@@ -233,6 +318,13 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
       let pnlReportMarkdown = '';
       let pnlSpreadsheetCsv = '';
       let pnlSpreadsheetDocId = '';
+      let lastQueryStart = '';
+      let lastQueryEnd = '';
+      let lastQueryCats: string[] = [];
+      let lastQueryAccts: number[] = [];
+      let lastQuerySearch = '';
+      let lastQueryMinPrice: number | undefined = undefined;
+      let lastQueryMaxPrice: number | undefined = undefined;
       while (loops < maxLoops) {
         if (signal.aborted) {
           throw new DOMException('aborted', 'AbortError');
@@ -402,8 +494,9 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
           if (!Array.isArray(queryCats)) queryCats = [queryCats];
           if (!Array.isArray(queryAccts)) queryAccts = [queryAccts];
 
-          const allCats = await db.categories.toArray();
-          const allAccts = await db.accounts.toArray();
+          const store = useDataStore.getState();
+          const allCats = store.categories;
+          const allAccts = store.accounts;
 
           const resolvedCats = queryCats.includes('all') || queryCats.length === 0
             ? allCats.map(c => c.name)
@@ -425,7 +518,7 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
           const currentFilters = useFilters.getState();
           let queryCats = actionObj.categories || actionObj.category || [];
           if (!Array.isArray(queryCats)) queryCats = [queryCats];
-          const allCats = await db.categories.toArray();
+          const allCats = useDataStore.getState().categories;
           let resolvedCats: string[];
           if (!queryCats || (queryCats.length === 1 && queryCats[0] === 'current')) {
             const disabledSet = new Set(currentFilters.disabledCategories);
@@ -531,9 +624,10 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
           if (!Array.isArray(queryCats)) queryCats = [queryCats];
           if (!Array.isArray(queryAccts)) queryAccts = [queryAccts];
 
-          const allCats = await db.categories.toArray();
-          const allAccts = await db.accounts.toArray();
-          const allTxns = await db.transactions.toArray();
+          const store = useDataStore.getState();
+          const allCats = store.categories;
+          const allAccts = store.accounts;
+          const allTxns = store.transactions;
 
           let resolvedCats: string[];
           if (!queryCats || (queryCats.length === 1 && queryCats[0] === 'current')) {
@@ -562,8 +656,8 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
             categoryTypes[c.name.toLowerCase()] = c.type;
           }
 
-          const budgets = await db.budgets.toArray();
-          const overrides = await db.merchantOverrides.toArray();
+          const budgets = store.budgets;
+          const overrides = store.merchantOverrides;
           const recurrenceMap = buildRecurrenceMap(allTxns, overrides);
           const forecast = buildForecast(allTxns, recurrenceMap, allCats);
           const recurring = forecast.filter((f) => f.kind === 'recurring');
@@ -742,6 +836,14 @@ If you still need more data (e.g. to compare with a different period), query it 
             metrics
           };
 
+          lastQueryStart = start;
+          lastQueryEnd = end;
+          lastQueryCats = resolvedCats;
+          lastQueryAccts = resolvedAccts;
+          lastQuerySearch = searchVal || '';
+          lastQueryMinPrice = minPriceVal;
+          lastQueryMaxPrice = maxPriceVal;
+
           currentSteps.push(`Tool Call: query_data (categories: ${resolvedCats.join(', ')})`);
 
         } else if (action === 'subscription_alerts') {
@@ -751,7 +853,8 @@ If you still need more data (e.g. to compare with a different period), query it 
           const maxPriceVal = currentFilters.maxPrice;
           const enabledSet = new Set(currentFilters.enabledAccountIds);
 
-          const allTxns = await db.transactions.toArray();
+          const store = useDataStore.getState();
+          const allTxns = store.transactions;
           const filteredTxns = allTxns.filter(t => {
             if (enabledSet.size > 0 && !enabledSet.has(t.accountId)) return false;
             if (searchVal) {
@@ -767,7 +870,7 @@ If you still need more data (e.g. to compare with a different period), query it 
             return true;
           });
 
-          const overrides = await db.merchantOverrides.toArray();
+          const overrides = store.merchantOverrides;
           const alerts = detectSubscriptionAlerts(filteredTxns, overrides);
 
           systemResultsMsg = {
@@ -827,7 +930,8 @@ If these results are sufficient to answer the user's question, explain them to t
           let queryCats = actionObj.categories || [];
           if (!Array.isArray(queryCats)) queryCats = [queryCats];
 
-          const allCats = await db.categories.toArray();
+          const store = useDataStore.getState();
+          const allCats = store.categories;
           let resolvedCats: string[];
           if (!queryCats || (queryCats.length === 1 && queryCats[0] === 'current')) {
             const disabledSet = new Set(currentFilters.disabledCategories);
@@ -843,7 +947,7 @@ If these results are sufficient to answer the user's question, explain them to t
           const maxPriceVal = currentFilters.maxPrice;
           const enabledSet = new Set(currentFilters.enabledAccountIds);
 
-          const allTxns = await db.transactions.toArray();
+          const allTxns = store.transactions;
           const filteredTxns = allTxns.filter(t => {
             if (enabledSet.size > 0 && !enabledSet.has(t.accountId)) return false;
             if (searchVal) {
@@ -859,7 +963,7 @@ If these results are sufficient to answer the user's question, explain them to t
             return true;
           });
 
-          const budgets = await db.budgets.toArray();
+          const budgets = store.budgets;
           const anomalies = detectSpendingAnomalies(filteredTxns, resolvedCats, start, end, budgets);
 
           systemResultsMsg = {
@@ -888,7 +992,8 @@ If these results are sufficient to answer the user's question, explain them to t
             feedbackError = "Error: A license key is required to use AI features. Please activate your license on the Local Model page first.";
           } else {
             const currentFilters = useFilters.getState();
-            const uncategorizedAll = await db.transactions.where('category').equals('Uncategorized').toArray();
+            const store = useDataStore.getState();
+            const uncategorizedAll = store.transactions.filter(t => t.category === 'Uncategorized');
             const uncategorized = currentFilters.demoMode
               ? uncategorizedAll.filter((t) => t.source === 'demo')
               : uncategorizedAll.filter((t) => t.source !== 'demo');
@@ -909,7 +1014,7 @@ Explain to the user that there are no uncategorized transactions to classify in 
               };
               currentSteps.push('Tool Call: categorize_transactions (0 transactions)');
             } else {
-              const allCats = await db.categories.toArray();
+              const allCats = store.categories;
               const catNames = allCats.map((c) => c.name);
               const chunkSize = 12;
               const chunksCount = Math.ceil(totalCount / chunkSize);
@@ -1078,16 +1183,144 @@ Please summarize this accessibility report for the developer in the 'body' field
           );
           break;
 
+        } else if (action === 'update_deduction_status') {
+          const isBusiness = actionObj.isBusiness;
+          const taxCategory = actionObj.taxCategory;
+          const deductionStatus = actionObj.deductionStatus || 'confirmed';
+          const filter = actionObj.filter || {};
+
+          let updatedCount = 0;
+          await db.transaction('rw', db.transactions, async () => {
+            const txns = await db.transactions.toArray();
+            const matched = txns.filter(t => {
+              if (filter.transactionId && t.id !== filter.transactionId) return false;
+              if (filter.accountId && t.accountId !== filter.accountId) return false;
+              if (filter.category && t.category !== filter.category) return false;
+              if (filter.search && !t.description.toLowerCase().includes(filter.search.toLowerCase())) return false;
+              return true;
+            });
+
+            const updates: Record<string, any> = {};
+            if (isBusiness !== undefined) updates.isBusiness = isBusiness;
+            if (taxCategory !== undefined) {
+              // If it's a label, normalize it to the Schedule C ID, otherwise keep as is
+              updates.taxCategory = taxCategory;
+            }
+            if (isBusiness === false) {
+              updates.taxCategory = null; // Clear category if not business
+            }
+            updates.deductionStatus = deductionStatus;
+
+            const matchedIds = matched.map(t => t.id!).filter(Boolean);
+            if (matchedIds.length > 0) {
+              await db.transactions.where('id').anyOf(matchedIds).modify(updates);
+              updatedCount = matchedIds.length;
+            }
+          });
+
+          actionResult = { action: 'update_deduction_status', updatedCount };
+          currentSteps.push(`Tool Call: update_deduction_status (updated ${updatedCount} transactions)`);
+
+          await finalizeStreamingMessage(
+            currentResponse,
+            actionResult,
+            currentSteps,
+            { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
+            'explanation',
+            currentSkillId,
+            currentCompletedStages
+          );
+          break;
+
         } else if (action === 'generate_document') {
-          const docType = actionObj.documentType;
+          const rawDocType = actionObj.documentType || '';
+          const isPnl =
+            currentSkillId === 'builtin:pnl' ||
+            rawDocType === 'business_pnl' ||
+            rawDocType === 'pnl' ||
+            rawDocType === 'profit_loss' ||
+            (rawDocType === '' && (
+              actionObj.documentContent?.toLowerCase().includes('profit & loss') ||
+              actionObj.documentContent?.toLowerCase().includes('profit and loss') ||
+              actionObj.documentContent?.toLowerCase().includes('profit &amp; loss') ||
+              actionObj.documentContent?.toLowerCase().includes('income statement') ||
+              (actionObj.documentContent?.toLowerCase().includes('income') && actionObj.documentContent?.toLowerCase().includes('total income')) ||
+              (actionObj.documentContent?.toLowerCase().includes('revenue') && actionObj.documentContent?.toLowerCase().includes('total revenue')) ||
+              actionObj.documentContent?.toLowerCase().includes('net income') ||
+              actionObj.documentContent?.toLowerCase().includes('net profit') ||
+              actionObj.documentContent?.toLowerCase().includes('operating expenses')
+            ));
+          const docType = isPnl ? 'business_pnl' : rawDocType;
           let content = actionObj.documentContent || '';
 
-          // Small model safety net: if documentContent is missing or malformed (e.g. "{" or "{""), fall back to pre-calculated P&L report
-          const isMalformed = !content || content.trim() === '{' || content.trim() === '"{' || content.length < 20;
-          if (docType === 'business_pnl' && isMalformed) {
-            if (pnlReportMarkdown) {
-              content = pnlReportMarkdown;
+          if (docType === 'business_pnl') {
+            if (!pnlReportMarkdown) {
+              const store = useDataStore.getState();
+              const allCats = store.categories;
+              const allAccts = store.accounts;
+              const resolvedCats = lastQueryCats.length > 0 ? lastQueryCats : allCats.map(c => c.name);
+              const resolvedAccts = lastQueryAccts.length > 0 ? lastQueryAccts : allAccts.map(a => a.id).filter((id): id is number => id !== undefined);
+              const start = actionObj.customStart || lastQueryStart || `${new Date().getFullYear()}-01-01`;
+              const end = actionObj.customEnd || lastQueryEnd || `${new Date().getFullYear()}-12-31`;
+              pnlSpreadsheetDocId = crypto.randomUUID();
+              const mdDocId = crypto.randomUUID();
+              const { pnlReportMarkdown: compiledMd, pnlSpreadsheetCsv: compiledCsv } = await generatePnlData({
+                start,
+                end,
+                resolvedCats,
+                resolvedAccts,
+                search: actionObj.search || lastQuerySearch || undefined,
+                minPrice: actionObj.minPrice !== undefined ? actionObj.minPrice : lastQueryMinPrice,
+                maxPrice: actionObj.maxPrice !== undefined ? actionObj.maxPrice : lastQueryMaxPrice,
+                markdownDocId: mdDocId,
+                spreadsheetDocId: pnlSpreadsheetDocId
+              });
+              pnlReportMarkdown = compiledMd;
+              pnlSpreadsheetCsv = compiledCsv;
             }
+            content = pnlReportMarkdown;
+          } else if (docType === 'business_balance_sheet') {
+            const store = useDataStore.getState();
+            const allAccts = store.accounts;
+            const resolvedAccts = lastQueryAccts.length > 0 ? lastQueryAccts : allAccts.map(a => a.id).filter((id): id is number => id !== undefined);
+            const start = actionObj.customStart || lastQueryStart || `${new Date().getFullYear()}-01-01`;
+            const end = actionObj.customEnd || lastQueryEnd || `${new Date().getFullYear()}-12-31`;
+            const { balanceSheetMarkdown } = await generateBalanceSheetData({
+              start,
+              end,
+              resolvedAccts,
+              markdownDocId: crypto.randomUUID(),
+              spreadsheetDocId: crypto.randomUUID()
+            });
+            content = balanceSheetMarkdown;
+          } else if (docType === 'business_ledger') {
+            const store = useDataStore.getState();
+            const allAccts = store.accounts;
+            const resolvedAccts = lastQueryAccts.length > 0 ? lastQueryAccts : allAccts.map(a => a.id).filter((id): id is number => id !== undefined);
+            const start = actionObj.customStart || lastQueryStart || `${new Date().getFullYear()}-01-01`;
+            const end = actionObj.customEnd || lastQueryEnd || `${new Date().getFullYear()}-12-31`;
+            const { ledgerMarkdown } = await generateLedgerData({
+              start,
+              end,
+              resolvedAccts,
+              markdownDocId: crypto.randomUUID(),
+              spreadsheetDocId: crypto.randomUUID()
+            });
+            content = ledgerMarkdown;
+          } else if (docType === 'deduction_expense_summary') {
+            const store = useDataStore.getState();
+            const allAccts = store.accounts;
+            const resolvedAccts = lastQueryAccts.length > 0 ? lastQueryAccts : allAccts.map(a => a.id).filter((id): id is number => id !== undefined);
+            const start = actionObj.customStart || lastQueryStart || `${new Date().getFullYear()}-01-01`;
+            const end = actionObj.customEnd || lastQueryEnd || `${new Date().getFullYear()}-12-31`;
+            const { summaryMarkdown } = await generateExpenseSummaryData({
+              start,
+              end,
+              resolvedAccts,
+              markdownDocId: crypto.randomUUID(),
+              spreadsheetDocId: crypto.randomUUID()
+            });
+            content = summaryMarkdown;
           }
 
           if (!docType || !content) {
@@ -1119,74 +1352,46 @@ Please summarize this accessibility report for the developer in the 'body' field
                     await writeTextFile(csvFilePath, pnlSpreadsheetCsv);
                   }
                 } else {
-                  // Web browser fallback
-                  const mdBlob = new Blob([content], { type: 'text/markdown' });
-                  const mdUrl = URL.createObjectURL(mdBlob);
-                  const aMd = document.createElement('a');
-                  aMd.href = mdUrl;
-                  aMd.download = defaultMdFilename;
-                  document.body.appendChild(aMd);
-                  aMd.click();
-                  document.body.removeChild(aMd);
-                  URL.revokeObjectURL(mdUrl);
+                  // Web browser fallback - just save to IndexedDB, do not download automatically
                   filePath = `~/Downloads/${defaultMdFilename}`;
-
-                  const csvBlob = new Blob([pnlSpreadsheetCsv], { type: 'text/csv' });
-                  const csvUrl = URL.createObjectURL(csvBlob);
-                  const aCsv = document.createElement('a');
-                  aCsv.href = csvUrl;
-                  aCsv.download = defaultCsvFilename;
-                  document.body.appendChild(aCsv);
-                  aCsv.click();
-                  document.body.removeChild(aCsv);
-                  URL.revokeObjectURL(csvUrl);
                   csvFilePath = `~/Downloads/${defaultCsvFilename}`;
                 }
 
                 if (filePath) {
-                  const mdFilename = filePath.split(/[/\\]/).pop() || defaultMdFilename;
-                  const csvFilename = csvFilePath ? (csvFilePath.split(/[/\\]/).pop() || defaultCsvFilename) : defaultCsvFilename;
-                  
-                  const mdDocId = crypto.randomUUID();
-                  const csvDocId = pnlSpreadsheetDocId || crypto.randomUUID();
+                  const filename = filePath.split(/[/\\]/).pop() || defaultMdFilename;
+                  const docId = crypto.randomUUID();
 
-                  const allCats = await db.categories.toArray();
-                  const allAccts = await db.accounts.toArray();
-                  const resolvedCats = allCats.map(c => c.name);
-                  const resolvedAccts = allAccts.map(a => a.id).filter((id): id is number => id !== undefined);
+                  const store = useDataStore.getState();
+                  const allCats = store.categories;
+                  const allAccts = store.accounts;
+                  const resolvedCats = lastQueryCats.length > 0 ? lastQueryCats : allCats.map(c => c.name);
+                  const resolvedAccts = lastQueryAccts.length > 0 ? lastQueryAccts : allAccts.map(a => a.id).filter((id): id is number => id !== undefined);
 
                   const pnlMetadata = {
-                    start: `${new Date().getFullYear()}-01-01`,
-                    end: `${new Date().getFullYear()}-12-31`,
+                    start: actionObj.customStart || lastQueryStart || `${new Date().getFullYear()}-01-01`,
+                    end: actionObj.customEnd || lastQueryEnd || `${new Date().getFullYear()}-12-31`,
                     resolvedCats,
                     resolvedAccts,
                     docType: 'business_pnl',
-                    markdownDocId: mdDocId,
-                    spreadsheetDocId: csvDocId
+                    search: actionObj.search || lastQuerySearch || undefined,
+                    minPrice: actionObj.minPrice !== undefined ? actionObj.minPrice : lastQueryMinPrice,
+                    maxPrice: actionObj.maxPrice !== undefined ? actionObj.maxPrice : lastQueryMaxPrice,
                   };
 
                   await db.documents.put({
-                    id: mdDocId,
-                    name: mdFilename,
+                    id: docId,
+                    name: filename,
                     path: filePath,
                     type: 'text/markdown',
                     source: 'generated',
                     associatedChecklistId: docType,
-                    content,
                     createdAt: new Date().toISOString(),
                     metadata: pnlMetadata
                   });
 
-                  await db.documents.put({
-                    id: csvDocId,
-                    name: csvFilename,
-                    path: csvFilePath || `~/Downloads/${defaultCsvFilename}`,
-                    type: 'text/csv',
-                    source: 'generated',
-                    associatedChecklistId: docType,
-                    content: pnlSpreadsheetCsv,
-                    createdAt: new Date().toISOString(),
-                    metadata: pnlMetadata
+                  await db.documentContents.put({
+                    id: docId,
+                    content
                   });
 
                   const currentSettings = await db.settings.get('app:taxSettings');
@@ -1202,13 +1407,10 @@ Please summarize this accessibility report for the developer in the 'body' field
                   actionResult = {
                     action: 'generate_document',
                     documentType: docType,
-                    documentId: mdDocId,
-                    documentName: mdFilename,
+                    documentId: docId,
+                    documentName: filename,
                     content,
-                    path: filePath,
-                    companionDocumentId: csvDocId,
-                    companionDocumentName: csvFilename,
-                    companionPath: csvFilePath
+                    path: filePath
                   };
                 } else {
                   systemResultsMsg = {
@@ -1220,7 +1422,25 @@ Please summarize this accessibility report for the developer in the 'body' field
                 // Non-P&L documents (existing logic)
                 const isCsv = content.trim().startsWith('Date') || content.trim().includes(',') || content.trim().startsWith('Category,');
                 const defaultExt = isCsv ? 'csv' : 'md';
-                const defaultFilename = `Tax_Document_${new Date().getFullYear()}.${defaultExt}`;
+                
+                let defaultFilename = `Tax_Document_${new Date().getFullYear()}.${defaultExt}`;
+                if (docType === 'business_balance_sheet') {
+                  defaultFilename = `Tax_Balance_Sheet_${new Date().getFullYear()}.${defaultExt}`;
+                } else if (docType === 'business_ledger') {
+                  defaultFilename = `Tax_General_Ledger_${new Date().getFullYear()}.${defaultExt}`;
+                } else if (docType === 'deduction_expense_summary') {
+                  defaultFilename = `Tax_Expense_Summary_${new Date().getFullYear()}.${defaultExt}`;
+                } else if (docType === 'deduction_mileage_log') {
+                  defaultFilename = `Tax_Mileage_Log_${new Date().getFullYear()}.${defaultExt}`;
+                } else if (docType === 'deduction_assets') {
+                  defaultFilename = `Tax_Asset_Log_${new Date().getFullYear()}.${defaultExt}`;
+                } else if (docType === 'payments_estimated') {
+                  defaultFilename = `Tax_Estimated_Payments_${new Date().getFullYear()}.${defaultExt}`;
+                } else if (docType === 'deduction_w2_w3') {
+                  defaultFilename = `Tax_W2_W3_Summary_${new Date().getFullYear()}.${defaultExt}`;
+                } else if (docType === 'deduction_1099_issued') {
+                  defaultFilename = `Tax_1099_NEC_Issued_${new Date().getFullYear()}.${defaultExt}`;
+                }
                 
                 if (isTauri) {
                   filePath = await save({
@@ -1231,15 +1451,7 @@ Please summarize this accessibility report for the developer in the 'body' field
                     await writeTextFile(filePath, content);
                   }
                 } else {
-                  const blob = new Blob([content], { type: isCsv ? 'text/csv' : 'text/markdown' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = defaultFilename;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
+                  // Web browser fallback - just save to IndexedDB, do not download automatically
                   filePath = `~/Downloads/${defaultFilename}`;
                 }
 
@@ -1255,8 +1467,12 @@ Please summarize this accessibility report for the developer in the 'body' field
                       type: isCsv ? 'text/csv' : 'text/markdown',
                       source: 'generated',
                       associatedChecklistId: docType,
-                      content,
                       createdAt: new Date().toISOString()
+                    });
+
+                    await db.documentContents.put({
+                      id: newDocId,
+                      content
                     });
                     
                     const currentSettings = await db.settings.get('app:taxSettings');
@@ -1275,8 +1491,12 @@ Please summarize this accessibility report for the developer in the 'body' field
                       path: filePath,
                       type: isCsv ? 'text/csv' : 'text/markdown',
                       source: 'generated',
-                      content,
                       createdAt: new Date().toISOString()
+                    });
+
+                    await db.documentContents.put({
+                      id: newDocId,
+                      content
                     });
 
                     systemResultsMsg = {

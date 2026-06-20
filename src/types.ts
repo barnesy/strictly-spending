@@ -30,6 +30,9 @@ export interface Transaction {
   importBatchId?: number;
   recurrence: 'recurring' | 'onetime';
   recurrenceOverride?: 'recurring' | 'onetime' | null;
+  isBusiness?: boolean;
+  taxCategory?: string;
+  deductionStatus?: 'pending' | 'confirmed' | 'rejected';
 }
 
 export interface CategoryRule {
@@ -185,6 +188,8 @@ export interface TaxSettings {
   taxYear: number;
   checklist: Record<string, boolean>;
   uploadedDocuments?: Record<string, { filename: string; type: string; uploadedAt: string }>;
+  accountDefaults?: Record<string, string>;
+  categoryDefaults?: Record<string, string>;
 }
 
 export type RecurrenceKind = 'monthly' | 'biweekly' | 'weekly' | 'annual' | 'none';

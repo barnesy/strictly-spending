@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { guessTaxFields } from './taxUtils';
 import type {
   Account,
   Transaction,
@@ -29,6 +30,7 @@ class SpendingDB extends Dexie {
   messages!: Table<DbChatMessage, number>;
   csvMappings!: Table<CsvMapping, number>;
   documents!: Table<AppDocument, string>;
+  documentContents!: Table<{ id: string; content: string }, string>;
 
   constructor() {
     super('spending-viz');
@@ -68,6 +70,20 @@ class SpendingDB extends Dexie {
     });
     this.version(9).stores({
       documents: 'id, associatedChecklistId, createdAt',
+    });
+    this.version(10).stores({
+      documentContents: 'id'
+    });
+    this.version(11).stores({
+      transactions:
+        '++id, accountId, date, category, source, merchantKey, &dedupKey, importBatchId, recurrence, isBusiness, deductionStatus',
+    }).upgrade(async (tx) => {
+      await tx.table('transactions').toCollection().modify((t) => {
+        const guess = guessTaxFields(t.description, t.category);
+        t.isBusiness = guess.isBusiness;
+        t.taxCategory = guess.taxCategory;
+        t.deductionStatus = guess.deductionStatus;
+      });
     });
   }
 }
