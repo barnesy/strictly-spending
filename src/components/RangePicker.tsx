@@ -60,31 +60,30 @@ export default function RangePicker() {
   const label = formatDateRange(range.start, range.end);
   return (
     <Stack direction="row" spacing={2} alignItems="flex-end" flexWrap="wrap" justifyContent="flex-end">
-      <Typography variant="caption" color="text.secondary" sx={{ height: 56, display: 'flex', alignItems: 'center', fontWeight: 500 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ height: 40, display: 'flex', alignItems: 'center', fontWeight: 500 }}>
         {label}
       </Typography>
       {preset !== 'custom' && (
         <Stack direction="row" spacing={0.5} alignItems="center">
           <Tooltip title="Shift earlier">
             <IconButton
-              size="medium"
+              size="small"
               onClick={() => shiftRange(-1)}
               aria-label="Shift date range earlier"
-              sx={{ height: 56, width: 56 }}
+              sx={{ height: 40, width: 40 }}
             >
-              <ChevronLeftIcon fontSize="medium" />
+              <ChevronLeftIcon fontSize="small" />
             </IconButton>
           </Tooltip>
           <ToggleButtonGroup
             value={preset}
             exclusive
             onChange={(_, v) => v && setPreset(v)}
-            size="medium"
+            size="small"
             sx={{
-              height: 56,
+              height: 40,
               '& .MuiToggleButton-root': {
-                height: 56,
-                px: 2,
+                height: 40,
               }
             }}
           >
@@ -96,12 +95,12 @@ export default function RangePicker() {
           </ToggleButtonGroup>
           <Tooltip title="Shift later">
             <IconButton
-              size="medium"
+              size="small"
               onClick={() => shiftRange(1)}
               aria-label="Shift date range later"
-              sx={{ height: 56, width: 56 }}
+              sx={{ height: 40, width: 40 }}
             >
-              <ChevronRightIcon fontSize="medium" />
+              <ChevronRightIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Stack>
@@ -149,11 +148,11 @@ export default function RangePicker() {
             }}
           />
           <Button
-            size="medium"
+            size="small"
             color="inherit"
             variant="outlined"
             onClick={() => setPreset('ytd')}
-            sx={{ textTransform: 'none', height: 56, px: 2.5 }}
+            sx={{ textTransform: 'none', height: 40 }}
           >
             Cancel
           </Button>

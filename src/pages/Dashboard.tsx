@@ -637,15 +637,15 @@ export default function Dashboard() {
             justifyContent={{ xs: 'space-between', md: 'flex-start' }}
           >
             <Stack direction="row" spacing={2} alignItems="flex-end">
-              <ToggleButtonGroup size="medium" sx={{ height: 56 }}>
+              <ToggleButtonGroup size="small" sx={{ height: 40 }}>
                 <ToggleButton
                   value="filters"
                   selected={filterVisible}
                   onClick={toggleFilters}
-                  sx={{ gap: 1, textTransform: 'none', px: 2, fontWeight: 600, height: 56 }}
+                  sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600, height: 40 }}
                   title="Toggle Filters Panel"
                 >
-                  <FilterListIcon fontSize="medium" />
+                  <FilterListIcon fontSize="small" />
                   Filters
                 </ToggleButton>
               </ToggleButtonGroup>
@@ -654,14 +654,13 @@ export default function Dashboard() {
                   onClick={() => useFilters.getState().reset()}
                   variant="outlined"
                   color="primary"
-                  size="medium"
-                  startIcon={<RestartAltIcon fontSize="medium" />}
+                  size="small"
+                  startIcon={<RestartAltIcon fontSize="small" />}
                   sx={{
                     textTransform: 'none',
                     borderRadius: (theme) => `${theme.shape.borderRadius}px`,
                     fontWeight: 600,
-                    height: 56,
-                    px: 2.5,
+                    height: 40,
                   }}
                 >
                   Reset Filters
@@ -671,15 +670,15 @@ export default function Dashboard() {
 
             {/* On mobile, show Merchants toggle on the far right of this first row */}
             <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-              <ToggleButtonGroup size="medium" sx={{ height: 56 }}>
+              <ToggleButtonGroup size="small" sx={{ height: 40 }}>
                 <ToggleButton
                   value="merchants"
                   selected={sidebarVisible}
                   onClick={toggleSidebar}
-                  sx={{ gap: 1, textTransform: 'none', px: 2, fontWeight: 600, height: 56 }}
+                  sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600, height: 40 }}
                   title="Toggle Top Merchants Panel"
                 >
-                  <StorefrontIcon fontSize="medium" />
+                  <StorefrontIcon fontSize="small" />
                   Merchants
                 </ToggleButton>
               </ToggleButtonGroup>
@@ -699,15 +698,15 @@ export default function Dashboard() {
 
           {/* Right Side: Merchants button (desktop only) */}
           <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-            <ToggleButtonGroup size="medium" sx={{ height: 56 }}>
+            <ToggleButtonGroup size="small" sx={{ height: 40 }}>
               <ToggleButton
                 value="merchants"
                 selected={sidebarVisible}
                 onClick={toggleSidebar}
-                sx={{ gap: 1, textTransform: 'none', px: 2, fontWeight: 600, height: 56 }}
+                sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600, height: 40 }}
                 title="Toggle Top Merchants Panel"
               >
-                <StorefrontIcon fontSize="medium" />
+                <StorefrontIcon fontSize="small" />
                 Merchants
               </ToggleButton>
             </ToggleButtonGroup>
