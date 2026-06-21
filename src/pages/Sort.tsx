@@ -203,6 +203,19 @@ export default function Sort() {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const visibleQueue = mode === 'categorize' ? queue : taxQueue;
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!scrollContainerRef.current) return;
+    const activeChild = scrollContainerRef.current.children[currentIndex] as HTMLElement | undefined;
+    if (activeChild) {
+      activeChild.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
+  }, [currentIndex, visibleQueue]);
 
   const [aiRunning, setAiRunning] = useState(false);
   const [aiProgress, setAiProgress] = useState(0);
@@ -866,6 +879,7 @@ export default function Sort() {
             {currentIndex + 1} of {visibleQueue.length} Merchants
           </Typography>
           <Paper
+            ref={scrollContainerRef}
             elevation={0}
             sx={{
               p: 1.5,
