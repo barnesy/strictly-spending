@@ -1,4 +1,4 @@
-import { normalizeForMatch } from './categorize';
+import { normalizeForMatch } from './lib';
 import type { TaxRule } from './types';
 
 export interface TaxGuess {

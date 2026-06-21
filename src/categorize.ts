@@ -1,6 +1,7 @@
 import type { CategoryRule, Source } from './types';
 import { db } from './db';
 import { refreshRecurrenceAll } from './recurrence';
+import { normalizeForMatch } from './lib';
 
 const SOURCE_CATEGORY_MAP: Record<string, string> = {
   // Chase top-level Categories
@@ -144,23 +145,7 @@ export interface CategorizeContext {
   rules: CategoryRule[];
 }
 
-export function normalizeForMatch(s: string): string {
-  return s
-    .toLowerCase()
-    // Strip BOA ACH label prefixes ("DES:", "ID:", "INDN:", "CO ID:", "REF:") but
-    // keep the value that follows — banks often encode the real merchant after
-    // the colon (e.g. "PAYPAL DES:INST XFER ID:HULU INDN:..." -> "PAYPAL INST
-    // XFER HULU ..."). We want rules like "HULU" to match those.
-    .replace(/\bco\s+id\s*:\s*/g, ' ')
-    .replace(/\b(des|id|indn|ref)\s*:\s*/g, ' ')
-    // Collapse common merchant-string punctuation to whitespace so rules
-    // written one way still match descriptions written another. For example
-    // "APPLE.COM/BILL" (Chase) and "APPLE.COM BILL" (Truist via PayPal) both
-    // normalize to "apple com bill". Same for "AT&T", "WAL-MART", etc.
-    .replace(/[*./&\-#]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+
 
 export function categorize(
   description: string,

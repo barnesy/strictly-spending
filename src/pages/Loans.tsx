@@ -41,6 +41,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Autocomplete,
 } from '@mui/material';
 import HomeIcon from '@mui/icons-material/Home';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
@@ -118,8 +119,22 @@ interface PaymentRow {
 export default function Loans() {
   const [activeLoanId, setActiveLoanId] = useState<number | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [addName, setAddName] = useState('');
   const [addType, setAddType] = useState<'house' | 'car'>('house');
+  const [addMerchant, setAddMerchant] = useState('');
+  const [addPrincipal, setAddPrincipal] = useState('450000');
+  const [addDownPayment, setAddDownPayment] = useState('50000');
+
+  useEffect(() => {
+    if (addType === 'house') {
+      setAddPrincipal('450000');
+      setAddDownPayment('50000');
+    } else {
+      setAddPrincipal('35000');
+      setAddDownPayment('5000');
+    }
+  }, [addType]);
 
   const panelIds = ['loan-parameters', 'loan-graph'];
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -131,18 +146,30 @@ export default function Loans() {
   // Settings DB Query
   const loans = useLiveQuery(() => db.loans.toArray(), []) || [];
 
+  const activeLoans = useMemo(() => {
+    return loans.filter((l) => l.enabled !== false);
+  }, [loans]);
+
+  const inactiveLoans = useMemo(() => {
+    return loans.filter((l) => l.enabled === false);
+  }, [loans]);
+
   const currentLoan = useMemo(() => {
-    return loans.find((l) => l.id === activeLoanId) || null;
-  }, [loans, activeLoanId]);
+    return activeLoans.find((l) => l.id === activeLoanId) || null;
+  }, [activeLoans, activeLoanId]);
 
   const currentConfig = currentLoan;
   const activeTab = currentConfig ? currentConfig.type : 'house';
 
   useEffect(() => {
-    if (activeLoanId === null && loans.length > 0 && loans[0].id !== undefined) {
-      setActiveLoanId(loans[0].id);
+    if (activeLoans.length > 0) {
+      if (activeLoanId === null || !activeLoans.some((l) => l.id === activeLoanId)) {
+        setActiveLoanId(activeLoans[0].id!);
+      }
+    } else {
+      setActiveLoanId(null);
     }
-  }, [loans, activeLoanId]);
+  }, [activeLoans, activeLoanId]);
 
   // Form State
   const [formName, setFormName] = useState('');
@@ -183,6 +210,16 @@ export default function Loans() {
     transactions: s.transactions,
     categories: s.categories,
   })));
+
+  const merchantOptions = useMemo(() => {
+    const keys = new Set<string>();
+    for (const t of transactions) {
+      if (t.merchantKey) {
+        keys.add(t.merchantKey);
+      }
+    }
+    return Array.from(keys).sort();
+  }, [transactions]);
 
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [showScheduleDetails, setShowScheduleDetails] = useState(false);
@@ -473,11 +510,28 @@ export default function Loans() {
       return;
     }
 
+    const principalVal = parseFloat(addPrincipal);
+    const downPaymentVal = parseFloat(addDownPayment);
+
+    if (isNaN(principalVal) || principalVal <= 0) {
+      alert('Please enter a valid original loan amount.');
+      return;
+    }
+
+    if (isNaN(downPaymentVal) || downPaymentVal < 0) {
+      alert('Please enter a valid down payment amount.');
+      return;
+    }
+
     const defaultVal = addType === 'house' ? DEFAULT_HOUSE_CONFIG : DEFAULT_CAR_CONFIG;
     const newLoan: Loan = {
       ...defaultVal,
       name: nameStr,
       type: addType,
+      principal: principalVal,
+      downPayment: downPaymentVal,
+      merchant: addMerchant.trim() || undefined,
+      enabled: true,
       createdAt: new Date().toISOString(),
     };
 
@@ -485,28 +539,196 @@ export default function Loans() {
     setActiveLoanId(newId);
     setAddDialogOpen(false);
     setAddName('');
+    setAddMerchant('');
+    setAddType('house');
+    setAddPrincipal('450000');
+    setAddDownPayment('50000');
     setSnackbarMsg(`Loan "${nameStr}" created successfully.`);
+  };
+
+  const handleRemoveLoan = async () => {
+    if (!currentConfig || currentConfig.id === undefined) return;
+    const updated = {
+      ...currentConfig,
+      enabled: false,
+    };
+    await db.loans.put(updated);
+    setSnackbarMsg(`Loan "${currentConfig.name}" removed from view.`);
+  };
+
+  const handleRestoreLoan = async (loan: Loan) => {
+    if (loan.id === undefined) return;
+    const updated = {
+      ...loan,
+      enabled: true,
+    };
+    await db.loans.put(updated);
+    setActiveLoanId(loan.id);
+    setSnackbarMsg(`Loan "${loan.name}" restored successfully.`);
+  };
+
+  const handleDeleteLoanById = async (id: number, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete the loan "${name}"? This action cannot be undone.`)) {
+      return;
+    }
+    await db.loans.delete(id);
+    setSnackbarMsg(`Loan "${name}" deleted permanently.`);
   };
 
   const handleDeleteLoan = async () => {
     if (!currentConfig || currentConfig.id === undefined) return;
-    if (!window.confirm(`Are you sure you want to delete the loan "${currentConfig.name}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    const idToDelete = currentConfig.id;
-    await db.loans.delete(idToDelete);
-
-    const remainingLoans = loans.filter((l) => l.id !== idToDelete);
-    if (remainingLoans.length > 0 && remainingLoans[0].id !== undefined) {
-      setActiveLoanId(remainingLoans[0].id);
-    } else {
-      setActiveLoanId(null);
-    }
-    setSnackbarMsg(`Loan "${currentConfig.name}" deleted.`);
+    await handleDeleteLoanById(currentConfig.id, currentConfig.name);
   };
 
-  if (loans.length === 0) {
+  const handleCloseAddDialog = () => {
+    setAddDialogOpen(false);
+    setAddName('');
+    setAddMerchant('');
+    setAddType('house');
+    setAddPrincipal('450000');
+    setAddDownPayment('50000');
+  };
+
+  const renderAddLoanDialog = () => (
+    <Dialog open={addDialogOpen} onClose={handleCloseAddDialog} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700 }}>Add New Loan</DialogTitle>
+      <DialogContent sx={{ pt: 1 }}>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField
+            fullWidth
+            size="small"
+            label="Loan Name"
+            value={addName}
+            onChange={(e) => setAddName(e.target.value)}
+            placeholder="e.g. Primary Residence or Tesla Model Y"
+          />
+          <FormControl fullWidth size="small">
+            <InputLabel id="add-loan-type-label">Loan Type</InputLabel>
+            <Select
+              labelId="add-loan-type-label"
+              value={addType}
+              onChange={(e) => setAddType(e.target.value as 'house' | 'car')}
+              label="Loan Type"
+            >
+              <MenuItem value="house">House Mortgage</MenuItem>
+              <MenuItem value="car">Car Loan / Lease</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            fullWidth
+            size="small"
+            label="Original Loan Amount"
+            value={addPrincipal}
+            onChange={(e) => setAddPrincipal(e.target.value)}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+            }}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            label="Down Payment"
+            value={addDownPayment}
+            onChange={(e) => setAddDownPayment(e.target.value)}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+            }}
+          />
+          <Autocomplete
+            freeSolo
+            options={merchantOptions}
+            value={addMerchant}
+            onChange={(_, newValue) => setAddMerchant(newValue || '')}
+            onInputChange={(_, newInputValue) => setAddMerchant(newInputValue || '')}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                size="small"
+                label="Linked Merchant (Optional)"
+                placeholder="e.g. TOYOTA FIN"
+                helperText="Select or type a merchant pattern to match payments."
+              />
+            )}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={handleCloseAddDialog} variant="outlined" color="inherit" size="small">
+          Cancel
+        </Button>
+        <Button onClick={handleAddLoanSubmit} variant="contained" color="primary" size="small">
+          Add Loan
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  const renderRestoreDialog = () => (
+    <Dialog open={restoreDialogOpen} onClose={() => setRestoreDialogOpen(false)} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700 }}>Restore Removed Loans</DialogTitle>
+      <DialogContent dividers>
+        {inactiveLoans.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No removed loans to restore.
+          </Typography>
+        ) : (
+          <TableContainer sx={{ maxHeight: 300 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {inactiveLoans.map((loan) => (
+                  <TableRow key={loan.id} hover>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18, color: 'primary.main' }} /> : <DirectionsCarIcon sx={{ fontSize: 18, color: 'secondary.main' }} />}
+                        <Typography variant="body2">{loan.name}</Typography>
+                      </Stack>
+                    </TableCell>
+                    <TableCell sx={{ textTransform: 'capitalize' }}>{loan.type}</TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          color="primary"
+                          onClick={() => handleRestoreLoan(loan)}
+                          sx={{ textTransform: 'none', py: 0.5 }}
+                        >
+                          Restore
+                        </Button>
+                        <Button
+                          variant="text"
+                          size="small"
+                          color="error"
+                          onClick={() => loan.id !== undefined && handleDeleteLoanById(loan.id, loan.name)}
+                          sx={{ textTransform: 'none', py: 0.5 }}
+                        >
+                          Delete
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={() => setRestoreDialogOpen(false)} variant="contained" color="primary" size="small">
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  if (activeLoans.length === 0) {
     return (
       <Stack spacing={3} sx={{ width: '100%', pb: 5 }}>
         {/* Header */}
@@ -519,14 +741,26 @@ export default function Loans() {
               Visualize your amortization schedules and match against transaction histories.
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => setAddDialogOpen(true)}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
-            + Add Loan
-          </Button>
+          <Stack direction="row" spacing={2} alignItems="center">
+            {inactiveLoans.length > 0 && (
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => setRestoreDialogOpen(true)}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                Restore Loans ({inactiveLoans.length})
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => setAddDialogOpen(true)}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              + Add Loan
+            </Button>
+          </Stack>
         </Stack>
 
         <Paper
@@ -542,57 +776,37 @@ export default function Loans() {
         >
           <HomeIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-            No Loans Tracked
+            No Active Loans
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
-            Get started by adding a house mortgage or auto loan to simulate payment schedules, extra payments, and match against actual bank transactions.
+            {inactiveLoans.length > 0
+              ? `You have ${inactiveLoans.length} removed loan(s). You can restore them or create a new active loan.`
+              : 'Get started by adding a house mortgage or auto loan to simulate payment schedules, extra payments, and match against actual bank transactions.'}
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => setAddDialogOpen(true)}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
-            Create Your First Loan
-          </Button>
+          <Stack direction="row" spacing={2} justifyContent="center">
+            {inactiveLoans.length > 0 && (
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => setRestoreDialogOpen(true)}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                Restore Removed Loans
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => setAddDialogOpen(true)}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Create New Loan
+            </Button>
+          </Stack>
         </Paper>
 
-        {/* Add Loan Dialog */}
-        <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="xs" fullWidth>
-          <DialogTitle sx={{ fontWeight: 700 }}>Add New Loan</DialogTitle>
-          <DialogContent sx={{ pt: 1 }}>
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Loan Name"
-                value={addName}
-                onChange={(e) => setAddName(e.target.value)}
-                placeholder="e.g. Primary Residence or Tesla Model Y"
-              />
-              <FormControl fullWidth size="small">
-                <InputLabel id="add-loan-type-label">Loan Type</InputLabel>
-                <Select
-                  labelId="add-loan-type-label"
-                  value={addType}
-                  onChange={(e) => setAddType(e.target.value as 'house' | 'car')}
-                  label="Loan Type"
-                >
-                  <MenuItem value="house">House Mortgage</MenuItem>
-                  <MenuItem value="car">Car Loan / Lease</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setAddDialogOpen(false)} variant="outlined" color="inherit" size="small">
-              Cancel
-            </Button>
-            <Button onClick={handleAddLoanSubmit} variant="contained" color="primary" size="small">
-              Add Loan
-            </Button>
-          </DialogActions>
-        </Dialog>
+        {renderAddLoanDialog()}
+        {renderRestoreDialog()}
       </Stack>
     );
   }
@@ -613,14 +827,26 @@ export default function Loans() {
             Visualize your amortization schedules and match against transaction histories.
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => setAddDialogOpen(true)}
-          sx={{ textTransform: 'none', fontWeight: 600 }}
-        >
-          + Add Loan
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          {inactiveLoans.length > 0 && (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => setRestoreDialogOpen(true)}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Restore Loans ({inactiveLoans.length})
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setAddDialogOpen(true)}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            + Add Loan
+          </Button>
+        </Stack>
       </Stack>
 
       {/* Tabs */}
@@ -635,7 +861,7 @@ export default function Loans() {
           scrollButtons="auto"
           sx={{ px: 2 }}
         >
-          {loans.map((loan) => (
+          {activeLoans.map((loan) => (
             <Tab
               key={loan.id}
               icon={loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18 }} /> : <DirectionsCarIcon sx={{ fontSize: 18 }} />}
@@ -829,20 +1055,21 @@ export default function Loans() {
           <Panel id="loan-parameters" defaultSize="30%" minSize="25%" maxSize="45%">
             <Paper
               sx={{
-                p: 3,
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
-                overflowY: 'auto',
                 border: '1px solid',
                 borderColor: 'divider',
+                overflow: 'hidden',
               }}
             >
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 3, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Loan Parameters
-              </Typography>
+              <Box sx={{ p: 3, pb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Loan Parameters
+                </Typography>
+              </Box>
               
-              <Box sx={{ flexGrow: 1 }}>
+              <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 3, pb: 3 }}>
                 <Stack spacing={2.5}>
                   <TextField
                     fullWidth
@@ -915,15 +1142,21 @@ export default function Loans() {
                       ))}
                     </Select>
                   </FormControl>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Linked Merchant Pattern (Optional)"
+                  <Autocomplete
+                    freeSolo
+                    options={merchantOptions}
                     value={formMerchant}
-                    onChange={(e) => setFormMerchant(e.target.value)}
-                    placeholder="e.g. TOYOTA FIN"
-                    helperText="If specified, matches transactions by merchant name instead of category."
-                    FormHelperTextProps={{ sx: { mx: 1 } }}
+                    onChange={(_, newValue) => setFormMerchant(newValue || '')}
+                    onInputChange={(_, newInputValue) => setFormMerchant(newInputValue || '')}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        size="small"
+                        label="Linked Merchant Pattern (Optional)"
+                        placeholder="e.g. TOYOTA FIN"
+                        helperText="If specified, matches transactions by merchant name instead of category."
+                      />
+                    )}
                   />
                   <TextField
                     fullWidth
@@ -1019,38 +1252,18 @@ export default function Loans() {
                 </Stack>
               </Box>
 
-              <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Box sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
                 <Button
-                  variant="text"
-                  size="small"
-                  color="error"
-                  onClick={handleDeleteLoan}
-                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                  variant="contained"
+                  fullWidth
+                  size="medium"
+                  color="primary"
+                  onClick={handleSaveSettings}
+                  sx={{ textTransform: 'none', fontWeight: 700, py: 1 }}
                 >
-                  Delete Loan
+                  Save Settings
                 </Button>
-                <Stack direction="row" spacing={1.5}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    color="inherit"
-                    onClick={handleResetDefaults}
-                    startIcon={<SettingsBackupRestoreIcon />}
-                    sx={{ textTransform: 'none', fontWeight: 600 }}
-                  >
-                    Reset
-                  </Button>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    color="primary"
-                    onClick={handleSaveSettings}
-                    sx={{ textTransform: 'none', fontWeight: 600, minWidth: 100 }}
-                  >
-                    Save
-                  </Button>
-                </Stack>
-              </Stack>
+              </Box>
             </Paper>
           </Panel>
 
@@ -1225,6 +1438,56 @@ export default function Loans() {
         </Collapse>
       </Paper>
 
+      {/* Danger Zone */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 3,
+          borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+          border: '1px dashed',
+          borderColor: 'error.main',
+          bgcolor: (theme) =>
+            theme.palette.mode === 'dark' ? 'rgba(211, 47, 47, 0.05)' : 'rgba(211, 47, 47, 0.02)',
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'error.main', mb: 1, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Danger Zone
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Destructive actions for this loan. Once deleted, all custom settings and matches for this loan configuration will be permanently discarded.
+        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <Button
+            variant="outlined"
+            size="small"
+            color="inherit"
+            onClick={handleResetDefaults}
+            startIcon={<SettingsBackupRestoreIcon />}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Reset to Default Values
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            color="warning"
+            onClick={handleRemoveLoan}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Remove Loan (Deactivate)
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            onClick={handleDeleteLoan}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Delete Loan (Permanently)
+          </Button>
+        </Stack>
+      </Paper>
+
       {/* Matched Transactions Dialog */}
       <Dialog
         open={activeTxDialogRows !== null}
@@ -1269,42 +1532,8 @@ export default function Loans() {
         </DialogActions>
       </Dialog>
 
-      {/* Add Loan Dialog */}
-      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Add New Loan</DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Loan Name"
-              value={addName}
-              onChange={(e) => setAddName(e.target.value)}
-              placeholder="e.g. Primary Residence or Tesla Model Y"
-            />
-            <FormControl fullWidth size="small">
-              <InputLabel id="add-loan-type-label">Loan Type</InputLabel>
-              <Select
-                labelId="add-loan-type-label"
-                value={addType}
-                onChange={(e) => setAddType(e.target.value as 'house' | 'car')}
-                label="Loan Type"
-              >
-                <MenuItem value="house">House Mortgage</MenuItem>
-                <MenuItem value="car">Car Loan / Lease</MenuItem>
-              </Select>
-            </FormControl>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setAddDialogOpen(false)} variant="outlined" color="inherit" size="small">
-            Cancel
-          </Button>
-          <Button onClick={handleAddLoanSubmit} variant="contained" color="primary" size="small">
-            Add Loan
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {renderAddLoanDialog()}
+      {renderRestoreDialog()}
 
       {/* Snackbar */}
       <Snackbar

@@ -42,7 +42,7 @@ import {
 import { subtleScrollSx } from '../styles';
 import { db } from '../db';
 import type { CategoryRule, Transaction } from '../types';
-import { normalizeForMatch } from '../categorize';
+import { normalizeForMatch } from '../lib';
 
 function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
   return (

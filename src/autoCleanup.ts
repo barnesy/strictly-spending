@@ -1,7 +1,8 @@
 import { db } from './db';
-import { categorize, inferTypeCategory, normalizeForMatch } from './categorize';
+import { categorize, inferTypeCategory } from './categorize';
 import type { CategorizeContext } from './categorize';
 import { refreshRecurrenceAll } from './recurrence';
+import { normalizeForMatch } from './lib';
 
 export interface TransactionPreview {
   id: number;

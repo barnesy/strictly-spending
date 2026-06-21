@@ -385,6 +385,7 @@ export interface Loan {
   extraOneTimePayment?: number;
   extraOneTimeMonth?: number;
   createdAt: string;
+  enabled?: boolean;
 }
 
 

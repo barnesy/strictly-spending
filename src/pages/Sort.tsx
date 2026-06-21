@@ -69,6 +69,8 @@ export default function Sort() {
     globalDemoRecurrenceMap: s.demoRecurrenceMap,
   })));
 
+  const taxRules = useLiveQuery(() => db.taxRules.toArray(), []) || [];
+
   const uncategorizedAll = useMemo(
     () => allTransactions.filter((t) => t.category === 'Uncategorized'),
     [allTransactions]
@@ -367,7 +369,6 @@ export default function Sort() {
 
   const scoreSetting = useLiveQuery(() => db.settings.get('app:aiGuessScore'), []);
   const score = scoreSetting?.value as { correctCount: number; totalCount: number } | undefined;
-  const taxRules = useLiveQuery(() => db.taxRules.toArray(), []) || [];
 
   const updateScore = useCallback(async (correct: boolean) => {
     await db.transaction('rw', db.settings, async () => {
