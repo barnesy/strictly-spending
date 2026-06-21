@@ -13,6 +13,9 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import TuneIcon from '@mui/icons-material/Tune';
 import BrushIcon from '@mui/icons-material/Brush';
+import CategoryIcon from '@mui/icons-material/Category';
+import RuleIcon from '@mui/icons-material/Rule';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import {
   Group as PanelGroup,
   Panel,
@@ -48,21 +51,27 @@ const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/budget', label: 'Budget' },
   { to: '/sort', label: 'Sort', badge: 'uncategorized' as const },
-  { to: '/categories', label: 'Categories' },
-  { to: '/rules', label: 'Rules' },
-  { to: '/merchants', label: 'Merchants' },
+  { to: '/import', label: 'Import' },
   { to: '/taxes', label: 'Taxes' },
   { to: '/loans', label: 'Loans' },
   { to: '/documents', label: 'Documents' },
 ];
 
-const MANAGE_NAV = [
-  { to: '/import', label: 'Import', icon: <FileUploadIcon fontSize="small" /> },
+const ORGANIZE_NAV = [
+  { to: '/categories', label: 'Categories', icon: <CategoryIcon fontSize="small" /> },
+  { to: '/rules', label: 'Rules', icon: <RuleIcon fontSize="small" /> },
+  { to: '/merchants', label: 'Merchants', icon: <StorefrontIcon fontSize="small" /> },
+];
+
+const AI_NAV = [
   { to: '/local-model', label: 'Local Model', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>AI</Box> },
   { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
-  { to: '/tools-reference', label: 'Tools Reference', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>🛠️</Box> },
-  { to: '/animation-playground', label: 'Animations', icon: <TuneIcon fontSize="small" /> },
+  { to: '/tools-reference', label: 'Tool Reference', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>🛠️</Box> },
+];
+
+const SETTINGS_NAV = [
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
+  { to: '/animation-playground', label: 'Animations', icon: <TuneIcon fontSize="small" /> },
   { to: '/theme', label: 'Theme', icon: <BrushIcon fontSize="small" /> },
 ];
 
@@ -98,16 +107,38 @@ export default function App() {
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const layoutPages = ['/', '/transactions', '/documents', '/categories', '/rules', '/merchants'];
   const isLayoutPage = layoutPages.includes(location.pathname) && isDesktop;
-  const [manageAnchorEl, setManageAnchorEl] = useState<null | HTMLElement>(null);
-  const isManageOpen = Boolean(manageAnchorEl);
-  const handleManageClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    setManageAnchorEl(event.currentTarget);
+  const [organizeAnchorEl, setOrganizeAnchorEl] = useState<null | HTMLElement>(null);
+  const [aiToolsAnchorEl, setAiToolsAnchorEl] = useState<null | HTMLElement>(null);
+  const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(null);
+
+  const isOrganizeOpen = Boolean(organizeAnchorEl);
+  const isAiToolsOpen = Boolean(aiToolsAnchorEl);
+  const isSettingsOpen = Boolean(settingsAnchorEl);
+
+  const handleOrganizeClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setOrganizeAnchorEl(event.currentTarget);
   };
-  const handleManageClose = () => {
-    setManageAnchorEl(null);
+  const handleOrganizeClose = () => {
+    setOrganizeAnchorEl(null);
   };
 
-  const isManageActive = ['/import', '/settings', '/theme', '/local-model', '/agent-skills', '/animation-playground'].includes(location.pathname);
+  const handleAiToolsClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAiToolsAnchorEl(event.currentTarget);
+  };
+  const handleAiToolsClose = () => {
+    setAiToolsAnchorEl(null);
+  };
+
+  const handleSettingsClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setSettingsAnchorEl(event.currentTarget);
+  };
+  const handleSettingsClose = () => {
+    setSettingsAnchorEl(null);
+  };
+
+  const isOrganizeActive = ['/categories', '/rules', '/merchants'].includes(location.pathname);
+  const isAiToolsActive = ['/local-model', '/agent-skills', '/tools-reference'].includes(location.pathname);
+  const isSettingsActive = ['/settings', '/animation-playground', '/theme'].includes(location.pathname);
 
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);
   useEffect(() => {
@@ -252,27 +283,90 @@ export default function App() {
               );
             })}
 
+            {/* Organize Menu */}
             <Button
-              id="manage-nav-button"
-              onClick={handleManageClick}
+              id="organize-nav-button"
+              onClick={handleOrganizeClick}
               endIcon={<KeyboardArrowDownIcon />}
               sx={{
-                color: isManageActive ? 'primary.main' : 'text.secondary',
+                color: isOrganizeActive ? 'primary.main' : 'text.secondary',
                 textTransform: 'none',
-                fontWeight: isManageActive ? 600 : 500,
+                fontWeight: isOrganizeActive ? 600 : 500,
                 gap: 0.75,
               }}
             >
-              Manage
+              Organize
             </Button>
-            {isManageOpen && (
+            {isOrganizeOpen && (
               <Menu
-                anchorEl={manageAnchorEl}
-                open={isManageOpen}
-                onClose={handleManageClose}
+                anchorEl={organizeAnchorEl}
+                open={isOrganizeOpen}
+                onClose={handleOrganizeClose}
                 transitionDuration={0}
                 MenuListProps={{
-                  'aria-labelledby': 'manage-nav-button',
+                  'aria-labelledby': 'organize-nav-button',
+                }}
+                sx={{
+                  '& .MuiPaper-root': {
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                    minWidth: 160,
+                    mt: 0.5,
+                  }
+                }}
+              >
+                {ORGANIZE_NAV.map((item) => {
+                  const isItemActive = location.pathname === item.to;
+                  return (
+                    <MenuItem
+                      key={item.to}
+                      component={NavLink}
+                      to={item.to}
+                      onClick={handleOrganizeClose}
+                      sx={{
+                        color: isItemActive ? 'primary.main' : 'text.primary',
+                        fontWeight: isItemActive ? 600 : 400,
+                        gap: 1.5,
+                        py: 1,
+                        px: 2,
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        }
+                      }}
+                    >
+                      {item.icon}
+                      <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
+                        {item.label}
+                      </Typography>
+                    </MenuItem>
+                  );
+                })}
+              </Menu>
+            )}
+
+            {/* AI Tools Menu */}
+            <Button
+              id="aitools-nav-button"
+              onClick={handleAiToolsClick}
+              endIcon={<KeyboardArrowDownIcon />}
+              sx={{
+                color: isAiToolsActive ? 'primary.main' : 'text.secondary',
+                textTransform: 'none',
+                fontWeight: isAiToolsActive ? 600 : 500,
+                gap: 0.75,
+              }}
+            >
+              AI Tools
+            </Button>
+            {isAiToolsOpen && (
+              <Menu
+                anchorEl={aiToolsAnchorEl}
+                open={isAiToolsOpen}
+                onClose={handleAiToolsClose}
+                transitionDuration={0}
+                MenuListProps={{
+                  'aria-labelledby': 'aitools-nav-button',
                 }}
                 sx={{
                   '& .MuiPaper-root': {
@@ -284,14 +378,76 @@ export default function App() {
                   }
                 }}
               >
-                {MANAGE_NAV.map((item) => {
+                {AI_NAV.map((item) => {
                   const isItemActive = location.pathname === item.to;
                   return (
                     <MenuItem
                       key={item.to}
                       component={NavLink}
                       to={item.to}
-                      onClick={handleManageClose}
+                      onClick={handleAiToolsClose}
+                      sx={{
+                        color: isItemActive ? 'primary.main' : 'text.primary',
+                        fontWeight: isItemActive ? 600 : 400,
+                        gap: 1.5,
+                        py: 1,
+                        px: 2,
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        }
+                      }}
+                    >
+                      {item.icon}
+                      <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
+                        {item.label}
+                      </Typography>
+                    </MenuItem>
+                  );
+                })}
+              </Menu>
+            )}
+
+            {/* Settings Menu */}
+            <Button
+              id="settings-nav-button"
+              onClick={handleSettingsClick}
+              endIcon={<KeyboardArrowDownIcon />}
+              sx={{
+                color: isSettingsActive ? 'primary.main' : 'text.secondary',
+                textTransform: 'none',
+                fontWeight: isSettingsActive ? 600 : 500,
+                gap: 0.75,
+              }}
+            >
+              Settings
+            </Button>
+            {isSettingsOpen && (
+              <Menu
+                anchorEl={settingsAnchorEl}
+                open={isSettingsOpen}
+                onClose={handleSettingsClose}
+                transitionDuration={0}
+                MenuListProps={{
+                  'aria-labelledby': 'settings-nav-button',
+                }}
+                sx={{
+                  '& .MuiPaper-root': {
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                    minWidth: 160,
+                    mt: 0.5,
+                  }
+                }}
+              >
+                {SETTINGS_NAV.map((item) => {
+                  const isItemActive = location.pathname === item.to;
+                  return (
+                    <MenuItem
+                      key={item.to}
+                      component={NavLink}
+                      to={item.to}
+                      onClick={handleSettingsClose}
                       sx={{
                         color: isItemActive ? 'primary.main' : 'text.primary',
                         fontWeight: isItemActive ? 600 : 400,
