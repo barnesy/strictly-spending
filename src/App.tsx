@@ -16,6 +16,9 @@ import BrushIcon from '@mui/icons-material/Brush';
 import CategoryIcon from '@mui/icons-material/Category';
 import RuleIcon from '@mui/icons-material/Rule';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import PercentIcon from '@mui/icons-material/Percent';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import DescriptionIcon from '@mui/icons-material/Description';
 import {
   Group as PanelGroup,
   Panel,
@@ -51,10 +54,12 @@ const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/budget', label: 'Budget' },
   { to: '/sort', label: 'Sort', badge: 'uncategorized' as const },
-  { to: '/import', label: 'Import' },
-  { to: '/taxes', label: 'Taxes' },
-  { to: '/loans', label: 'Loans' },
-  { to: '/documents', label: 'Documents' },
+];
+
+const PLANNING_NAV = [
+  { to: '/loans', label: 'Loans', icon: <AccountBalanceIcon fontSize="small" /> },
+  { to: '/taxes', label: 'Taxes', icon: <PercentIcon fontSize="small" /> },
+  { to: '/documents', label: 'Documents', icon: <DescriptionIcon fontSize="small" /> },
 ];
 
 const ORGANIZE_NAV = [
@@ -70,6 +75,7 @@ const AI_NAV = [
 ];
 
 const SETTINGS_NAV = [
+  { to: '/import', label: 'Import', icon: <FileUploadIcon fontSize="small" /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
   { to: '/animation-playground', label: 'Animations', icon: <TuneIcon fontSize="small" /> },
   { to: '/theme', label: 'Theme', icon: <BrushIcon fontSize="small" /> },
@@ -107,13 +113,22 @@ export default function App() {
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const layoutPages = ['/', '/transactions', '/documents', '/categories', '/rules', '/merchants'];
   const isLayoutPage = layoutPages.includes(location.pathname) && isDesktop;
+  const [planningAnchorEl, setPlanningAnchorEl] = useState<null | HTMLElement>(null);
   const [organizeAnchorEl, setOrganizeAnchorEl] = useState<null | HTMLElement>(null);
   const [aiToolsAnchorEl, setAiToolsAnchorEl] = useState<null | HTMLElement>(null);
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(null);
 
+  const isPlanningOpen = Boolean(planningAnchorEl);
   const isOrganizeOpen = Boolean(organizeAnchorEl);
   const isAiToolsOpen = Boolean(aiToolsAnchorEl);
   const isSettingsOpen = Boolean(settingsAnchorEl);
+
+  const handlePlanningClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setPlanningAnchorEl(event.currentTarget);
+  };
+  const handlePlanningClose = () => {
+    setPlanningAnchorEl(null);
+  };
 
   const handleOrganizeClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setOrganizeAnchorEl(event.currentTarget);
@@ -136,9 +151,10 @@ export default function App() {
     setSettingsAnchorEl(null);
   };
 
+  const isPlanningActive = ['/loans', '/taxes', '/documents'].includes(location.pathname);
   const isOrganizeActive = ['/categories', '/rules', '/merchants'].includes(location.pathname);
   const isAiToolsActive = ['/local-model', '/agent-skills', '/tools-reference'].includes(location.pathname);
-  const isSettingsActive = ['/settings', '/animation-playground', '/theme'].includes(location.pathname);
+  const isSettingsActive = ['/import', '/settings', '/animation-playground', '/theme'].includes(location.pathname);
 
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);
   useEffect(() => {
@@ -282,6 +298,68 @@ export default function App() {
                 </Button>
               );
             })}
+
+            {/* Planning Menu */}
+            <Button
+              id="planning-nav-button"
+              onClick={handlePlanningClick}
+              endIcon={<KeyboardArrowDownIcon />}
+              sx={{
+                color: isPlanningActive ? 'primary.main' : 'text.secondary',
+                textTransform: 'none',
+                fontWeight: isPlanningActive ? 600 : 500,
+                gap: 0.75,
+              }}
+            >
+              Planning
+            </Button>
+            {isPlanningOpen && (
+              <Menu
+                anchorEl={planningAnchorEl}
+                open={isPlanningOpen}
+                onClose={handlePlanningClose}
+                transitionDuration={0}
+                MenuListProps={{
+                  'aria-labelledby': 'planning-nav-button',
+                }}
+                sx={{
+                  '& .MuiPaper-root': {
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                    minWidth: 160,
+                    mt: 0.5,
+                  }
+                }}
+              >
+                {PLANNING_NAV.map((item) => {
+                  const isItemActive = location.pathname === item.to;
+                  return (
+                    <MenuItem
+                      key={item.to}
+                      component={NavLink}
+                      to={item.to}
+                      onClick={handlePlanningClose}
+                      sx={{
+                        color: isItemActive ? 'primary.main' : 'text.primary',
+                        fontWeight: isItemActive ? 600 : 400,
+                        gap: 1.5,
+                        py: 1,
+                        px: 2,
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        }
+                      }}
+                    >
+                      {item.icon}
+                      <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
+                        {item.label}
+                      </Typography>
+                    </MenuItem>
+                  );
+                })}
+              </Menu>
+            )}
 
             {/* Organize Menu */}
             <Button
