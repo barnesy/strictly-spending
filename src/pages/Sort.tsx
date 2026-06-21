@@ -431,7 +431,15 @@ export default function Sort() {
           const result = results[0];
           if (result) {
             console.log('[Sort.tsx] Setting AI suggestion for key:', key, result);
-            playSuccessSound();
+            const isPersonalTax = mode === 'tax' && (
+              result.isBusiness === false ||
+              result.taxCategory === 'Personal Expense (Non-Business)'
+            );
+            if (isPersonalTax) {
+              playFailSound();
+            } else {
+              playSuccessSound();
+            }
             setAiSuggestions(prev => ({ ...prev, [key]: result }));
           } else {
             console.log('[Sort.tsx] Suggestion invalid:', result);
