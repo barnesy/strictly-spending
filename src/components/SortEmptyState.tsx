@@ -23,7 +23,7 @@ export default function SortEmptyState() {
     <Paper
       sx={{
         p: 6,
-        borderRadius: 3,
+        borderRadius: (theme) => `${theme.shape.borderRadius}px`,
         textAlign: 'center',
         position: 'relative',
         overflow: 'hidden',
@@ -55,7 +55,7 @@ export default function SortEmptyState() {
             sx={{
               mt: 3,
               p: 2,
-              borderRadius: 2,
+              borderRadius: (theme) => `${theme.shape.borderRadius}px`,
               bgcolor: 'action.hover',
               minWidth: 320,
             }}
