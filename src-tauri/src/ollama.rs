@@ -131,11 +131,12 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
             
             let zip_path = app_data.join("ollama.zip");
             
-            // Download using powershell Invoke-WebRequest
+            // Download using powershell WebClient to avoid memory buffering and force TLS 1.2
             let status = std::process::Command::new("powershell")
                 .arg("-Command")
                 .arg(format!(
-                    "Invoke-WebRequest -Uri 'https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip' -OutFile '{}'",
+                    "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; \
+                     (New-Object System.Net.WebClient).DownloadFile('https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip', '{}')",
                     zip_path.to_string_lossy()
                 ))
                 .status()
