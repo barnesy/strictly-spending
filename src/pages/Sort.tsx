@@ -700,7 +700,6 @@ export default function Sort() {
     return () => window.removeEventListener('keydown', onKey);
   }, [onPick, isInteractive, helpOpen, activeSuggestion, visibleQueue.length]);
 
-  const remaining = visibleQueue.length;
 
   const isLoading = isDataLoading || allTransactions === undefined || categories === undefined;
   const shouldRender = useDeferredRender();
@@ -867,7 +866,7 @@ export default function Sort() {
             color="text.secondary"
             sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, display: 'block', mb: 0.5 }}
           >
-            Triage Queue ({remaining} merchants remaining)
+            {currentIndex + 1} of {visibleQueue.length} Merchants
           </Typography>
           <Paper
             elevation={0}
