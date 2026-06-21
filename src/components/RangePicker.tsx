@@ -118,11 +118,11 @@ export default function RangePicker() {
             }}
             slotProps={{
               textField: {
-                size: 'medium',
+                size: 'small',
                 placeholder: 'Start Date',
                 sx: {
-                  width: 170,
-                  '& .MuiInputBase-root': { height: 56 },
+                  width: 150,
+                  '& .MuiInputBase-root': { height: 40 },
                 },
               },
             }}
@@ -138,11 +138,11 @@ export default function RangePicker() {
             }}
             slotProps={{
               textField: {
-                size: 'medium',
+                size: 'small',
                 placeholder: 'End Date',
                 sx: {
-                  width: 170,
-                  '& .MuiInputBase-root': { height: 56 },
+                  width: 150,
+                  '& .MuiInputBase-root': { height: 40 },
                 },
               },
             }}
