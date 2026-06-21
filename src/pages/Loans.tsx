@@ -882,6 +882,9 @@ export default function Loans() {
           <Card
             elevation={0}
             sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
               border: '1px solid',
               borderColor: 'divider',
               background: (theme) =>
@@ -890,27 +893,31 @@ export default function Loans() {
                   : 'linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(25, 118, 210, 0.01) 100%)',
             }}
           >
-            <CardContent>
-              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                Remaining Balance
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
-                {usdCents.format(scheduleData.actualBalance)}
-              </Typography>
-              <Stack direction="row" justifyContent="space-between" sx={{ mt: 2, mb: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {scheduleData.percentPaid.toFixed(1)}% paid
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+                  Remaining Balance
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Original Loan: {usdCents.format(currentConfig.principal - (currentConfig.downPayment || 0))}
+                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  {usdCents.format(scheduleData.actualBalance)}
                 </Typography>
-              </Stack>
-              <LinearProgress
-                variant="determinate"
-                value={scheduleData.percentPaid}
-                color="primary"
-                sx={{ height: 6, borderRadius: 3 }}
-              />
+              </Box>
+              <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {scheduleData.percentPaid.toFixed(1)}% paid
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Original Loan: {usdCents.format(currentConfig.principal - (currentConfig.downPayment || 0))}
+                  </Typography>
+                </Stack>
+                <LinearProgress
+                  variant="determinate"
+                  value={scheduleData.percentPaid}
+                  color="primary"
+                  sx={{ height: 6, borderRadius: 3 }}
+                />
+              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -921,6 +928,9 @@ export default function Loans() {
             <Card
               elevation={0}
               sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
                 border: '1px solid',
                 borderColor: 'divider',
                 background: (theme) =>
@@ -929,31 +939,77 @@ export default function Loans() {
                     : 'linear-gradient(135deg, rgba(156, 39, 176, 0.05) 0%, rgba(156, 39, 176, 0.01) 100%)',
               }}
             >
-              <CardContent>
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+                    {activeTab === 'house' ? 'Estimated Home Equity' : 'Estimated Vehicle Equity'}
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums', color: 'secondary.main' }}>
+                    {usdCents.format(Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance))}
+                  </Typography>
+                </Box>
+                <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {currentConfig.propertyValue && currentConfig.propertyValue > 0 
+                        ? `${((Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance) / currentConfig.propertyValue) * 100).toFixed(1)}% equity`
+                        : '0.0% equity'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Value: {usdCents.format(currentConfig.propertyValue || 0)}
+                    </Typography>
+                  </Stack>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(100, (Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance) / (currentConfig.propertyValue || 1)) * 100)}
+                    color="secondary"
+                    sx={{ height: 6, borderRadius: 3, mb: currentConfig.downPayment && currentConfig.downPayment > 0 ? 1 : 0 }}
+                  />
+                  {currentConfig.downPayment !== undefined && currentConfig.downPayment > 0 && (
+                    <Stack direction="row" justifyContent="space-between">
+                      <Typography variant="caption" color="text.secondary">
+                        Down Payment
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                        {usdCents.format(currentConfig.downPayment)}
+                      </Typography>
+                    </Stack>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Card 3: Amount Paid / Payments (Progress to Date) */}
+        <Grid item xs={12} sm={6} md={cardWidth}>
+          <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
+              <Box sx={{ flexGrow: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                  {activeTab === 'house' ? 'Estimated Home Equity' : 'Estimated Vehicle Equity'}
+                  Payments to Date
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums', color: 'secondary.main' }}>
-                  {usdCents.format(Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance))}
+                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  {usdCents.format(scheduleData.amountPaidUpToToday)}
                 </Typography>
-                <Stack direction="row" justifyContent="space-between" sx={{ mt: 2, mb: 0.5 }}>
+              </Box>
+              <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
                   <Typography variant="caption" color="text.secondary">
-                    {currentConfig.propertyValue && currentConfig.propertyValue > 0 
-                      ? `${((Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance) / currentConfig.propertyValue) * 100).toFixed(1)}% equity`
-                      : '0.0% equity'}
+                    {((scheduleData.paymentsCountUpToToday / (currentConfig.termYears * 12)) * 100).toFixed(1)}% elapsed
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Value: {usdCents.format(currentConfig.propertyValue || 0)}
+                    {scheduleData.paymentsCountUpToToday} / {currentConfig.termYears * 12} pmts
                   </Typography>
                 </Stack>
                 <LinearProgress
                   variant="determinate"
-                  value={Math.min(100, (Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance) / currentConfig.propertyValue) * 100)}
-                  color="secondary"
-                  sx={{ height: 6, borderRadius: 3 }}
+                  value={Math.min(100, (scheduleData.paymentsCountUpToToday / (currentConfig.termYears * 12)) * 100)}
+                  color="info"
+                  sx={{ height: 6, borderRadius: 3, mb: currentConfig.downPayment && currentConfig.downPayment > 0 ? 1 : 0 }}
                 />
                 {currentConfig.downPayment !== undefined && currentConfig.downPayment > 0 && (
-                  <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
+                  <Stack direction="row" justifyContent="space-between">
                     <Typography variant="caption" color="text.secondary">
                       Down Payment
                     </Typography>
@@ -962,55 +1018,31 @@ export default function Loans() {
                     </Typography>
                   </Stack>
                 )}
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {/* Card 3: Amount Paid / Payments (Progress to Date) */}
-        <Grid item xs={12} sm={6} md={cardWidth}>
-          <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                Payments to Date
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
-                {usdCents.format(scheduleData.amountPaidUpToToday)}
-              </Typography>
-              <Stack direction="row" justifyContent="space-between" sx={{ mt: 2, mb: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {((scheduleData.paymentsCountUpToToday / (currentConfig.termYears * 12)) * 100).toFixed(1)}% elapsed
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {scheduleData.paymentsCountUpToToday} / {currentConfig.termYears * 12} pmts
-                </Typography>
-              </Stack>
-              <LinearProgress
-                variant="determinate"
-                value={Math.min(100, (scheduleData.paymentsCountUpToToday / (currentConfig.termYears * 12)) * 100)}
-                color="info"
-                sx={{ height: 6, borderRadius: 3 }}
-              />
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
         {/* Card 4: Monthly Payment Details */}
         <Grid item xs={12} sm={6} md={cardWidth}>
-          <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                Monthly Payment Details
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
-                {usdCents.format(scheduleData.scheduledMonthlyPayment)}
-              </Typography>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
-                <CalendarMonthIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="body2" color="text.secondary">
-                  <strong>{scheduleData.monthsRemaining}</strong> months remaining
+          <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+                  Monthly Payment Details
                 </Typography>
-              </Stack>
+                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  {usdCents.format(scheduleData.scheduledMonthlyPayment)}
+                </Typography>
+              </Box>
+              <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CalendarMonthIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>{scheduleData.monthsRemaining}</strong> months remaining
+                  </Typography>
+                </Stack>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -1020,6 +1052,9 @@ export default function Loans() {
           <Card
             elevation={0}
             sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
               border: '1px solid',
               borderColor: 'divider',
               background: (theme) =>
@@ -1028,19 +1063,23 @@ export default function Loans() {
                   : 'linear-gradient(135deg, rgba(76, 175, 80, 0.05) 0%, rgba(76, 175, 80, 0.01) 100%)',
             }}
           >
-            <CardContent>
-              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                Interest Saved & Matching
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 800, my: 1, color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
-                {usdCents.format(scheduleData.interestSaved)}
-              </Typography>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
-                <CheckCircleOutlineIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                <Typography variant="body2" color="text.secondary">
-                  <strong>{scheduleData.matchedPaymentsCount}</strong> payments matched
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+                  Interest Saved & Matching
                 </Typography>
-              </Stack>
+                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
+                  {usdCents.format(scheduleData.interestSaved)}
+                </Typography>
+              </Box>
+              <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CheckCircleOutlineIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>{scheduleData.matchedPaymentsCount}</strong> payments matched
+                  </Typography>
+                </Stack>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
