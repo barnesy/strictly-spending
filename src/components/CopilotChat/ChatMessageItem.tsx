@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
+// removed useLiveQuery
 import {
   Box,
   Paper,
@@ -8,18 +8,13 @@ import {
   Button,
   Stack,
   Chip,
-  Collapse,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  alpha,
+  Collapse
 } from '@mui/material';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
+// removed InsertDriveFileIcon
 import {
   type ChatMessage,
   parseAIResponse,

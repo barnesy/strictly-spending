@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { guessTaxFields, resolveTaxDeduction } from '../taxUtils';
+import { resolveTaxDeduction } from '../taxUtils';
 import {
   Box,
   Paper,
@@ -10,12 +10,10 @@ import {
   Typography,
   Button,
   TextField,
-  Table,
   TableHead,
   TableRow,
   TableCell,
   TableBody,
-  TableContainer,
   TableFooter,
   Checkbox,
   IconButton,

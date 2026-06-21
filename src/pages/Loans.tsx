@@ -878,7 +878,7 @@ export default function Loans() {
       {/* Summary Cards */}
       <Grid container spacing={3}>
         {/* Card 1: Remaining Balance */}
-        <Grid item xs={12} sm={6} md={cardWidth}>
+        <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
           <Card
             elevation={0}
             sx={{
@@ -924,7 +924,7 @@ export default function Loans() {
 
         {/* Card 2: Equity (rendered dynamically when Property Value is available) */}
         {!!currentConfig.propertyValue && (
-          <Grid item xs={12} sm={6} md={cardWidth}>
+          <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
             <Card
               elevation={0}
               sx={{
@@ -982,7 +982,7 @@ export default function Loans() {
         )}
 
         {/* Card 3: Amount Paid / Payments (Progress to Date) */}
-        <Grid item xs={12} sm={6} md={cardWidth}>
+        <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
           <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider' }}>
             <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
               <Box sx={{ flexGrow: 1 }}>
@@ -1024,7 +1024,7 @@ export default function Loans() {
         </Grid>
 
         {/* Card 4: Monthly Payment Details */}
-        <Grid item xs={12} sm={6} md={cardWidth}>
+        <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
           <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider' }}>
             <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
               <Box sx={{ flexGrow: 1 }}>
@@ -1048,7 +1048,7 @@ export default function Loans() {
         </Grid>
 
         {/* Card 5: Interest Saved & Matching */}
-        <Grid item xs={12} sm={6} md={cardWidth}>
+        <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
           <Card
             elevation={0}
             sx={{

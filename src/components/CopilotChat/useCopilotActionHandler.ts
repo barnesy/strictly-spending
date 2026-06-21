@@ -415,6 +415,7 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
       let lastQuerySearch = '';
       let lastQueryMinPrice: number | undefined = undefined;
       let lastQueryMaxPrice: number | undefined = undefined;
+      let lastQueryAll = false;
       while (loops < maxLoops) {
         if (signal.aborted) {
           throw new DOMException('aborted', 'AbortError');

@@ -31,6 +31,7 @@ import Taxes from './pages/Taxes';
 import Loans from './pages/Loans';
 import Documents from './pages/Documents';
 import ToolsReference from './pages/ToolsReference';
+import Landing from './pages/Landing';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
 import { db } from './db';
@@ -38,6 +39,7 @@ import { useFilters } from './store';
 import { useDataStore } from './dataStore';
 import { PageTransition } from './components/PageTransition';
 import AnimatedLogo from './components/AnimatedLogo';
+import { DEMO_ONLY_BUILD } from './env';
 
 const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', end: true },
@@ -144,6 +146,8 @@ export default function App() {
   const isOrganizeActive = ['/categories', '/rules', '/merchants'].includes(location.pathname);
   const isAiToolsActive = ['/local-model', '/agent-skills', '/tools-reference'].includes(location.pathname);
   const isSettingsActive = ['/import', '/settings', '/animation-playground', '/theme'].includes(location.pathname);
+
+  const isLandingPage = DEMO_ONLY_BUILD && location.pathname === '/';
 
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);
   useEffect(() => {
@@ -256,11 +260,12 @@ export default function App() {
             {PRIMARY_NAV.map((n) => {
               const showBadge =
                 n.badge === 'uncategorized' && uncategorizedCount > 0;
+              const targetRoute = (n.to === '/' && DEMO_ONLY_BUILD) ? '/dashboard' : n.to;
               return (
                 <Button
                   key={n.to}
                   component={NavLink}
-                  to={n.to}
+                  to={targetRoute}
                   end={(n as { end?: boolean }).end}
                   sx={{
                     color: 'text.secondary',
@@ -638,9 +643,10 @@ export default function App() {
               : {}),
           }}
         >
-          <PageTransition transitionKey={location.pathname === '/' || location.pathname === '/transactions' ? 'dashboard' : location.pathname}>
+          <PageTransition transitionKey={location.pathname === '/' || location.pathname === '/dashboard' || location.pathname === '/transactions' ? 'dashboard' : location.pathname}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/sort" element={<Sort />} />
               <Route path="/budget" element={<Budget />} />
               <Route path="/transactions" element={<Dashboard />} />
@@ -671,7 +677,9 @@ export default function App() {
         <CssBaseline />
         <DynamicAnimationStyles />
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
-          {isDesktop ? (
+          {isLandingPage ? (
+            <Landing />
+          ) : isDesktop ? (
             <PanelGroup
               orientation="horizontal"
               className={isTransitioning ? 'transitioning-panels' : ''}
