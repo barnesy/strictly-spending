@@ -750,8 +750,11 @@ export async function seedAndMigrate(): Promise<void> {
 
     DEFAULT_SKILLS.forEach(skill => upsertBuiltInSkill(skill));
 
-    if (hasChanges || updatedSkills.length !== currentSkills.length) {
-      await db.settings.put({ key: 'app:agentSkills', value: updatedSkills });
+    const defaultIds = new Set(DEFAULT_SKILLS.map(s => s.id));
+    const filteredSkills = updatedSkills.filter(s => !s.isBuiltIn || defaultIds.has(s.id));
+
+    if (hasChanges || filteredSkills.length !== currentSkills.length) {
+      await db.settings.put({ key: 'app:agentSkills', value: filteredSkills });
     }
   } catch (err) {
     console.error('Failed to seed agent skills globally:', err);

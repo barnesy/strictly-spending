@@ -100,7 +100,6 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
   const navigate = useNavigate();
   const [showInspector, setShowInspector] = useState(false);
   const [isLogsExpanded, setIsLogsExpanded] = useState<boolean | null>(null);
-  const [openPreview, setOpenPreview] = useState(false);
   const logsExpanded = isLogsExpanded !== null ? isLogsExpanded : !!message.isStreaming;
 
   const handleChatMessageLinkClick = (url: string) => {
@@ -422,23 +421,13 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               gap: 1.5
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Box sx={{ 
-                p: 1, 
-                borderRadius: 1.5, 
-                bgcolor: (theme) => alpha(theme.palette.success.main, 0.1),
-                color: 'success.main'
-              }}>
-                <InsertDriveFileIcon />
-              </Box>
-              <Box sx={{ overflow: 'hidden' }}>
-                <Typography variant="subtitle2" fontWeight="700" noWrap>
-                  {message.actionResult.documentName || 'Tax Document'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  Generated Document
-                </Typography>
-              </Box>
+            <Box sx={{ overflow: 'hidden' }}>
+              <Typography variant="subtitle2" fontWeight="700" noWrap>
+                {message.actionResult.documentName || 'Tax Document'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Generated Document
+              </Typography>
             </Box>
 
             <Box sx={{ display: 'flex', gap: 1 }}>
@@ -447,8 +436,11 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                   variant="contained"
                   size="small"
                   startIcon={<VisibilityIcon />}
-                  onClick={() => setOpenPreview(true)}
-                  sx={{ textTransform: 'none', borderRadius: 1.5 }}
+                  onClick={() => {
+                    const docId = message.actionResult.documentId || message.actionResult.id || '';
+                    navigate(`/documents?previewId=${docId}`);
+                  }}
+                  sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}
                 >
                   View Content
                 </Button>
@@ -467,44 +459,12 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                   document.body.removeChild(a);
                   URL.revokeObjectURL(url);
                 }}
-                sx={{ textTransform: 'none', borderRadius: 1.5 }}
+                sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}
               >
                 Download
               </Button>
             </Box>
           </Paper>
-
-          {/* Document Preview Modal inside Chat */}
-          <Dialog
-            open={openPreview}
-            onClose={() => setOpenPreview(false)}
-            maxWidth="md"
-            fullWidth
-            PaperProps={{
-              sx: {
-                borderRadius: 3,
-                p: 1,
-                maxHeight: '90vh',
-                display: 'flex',
-                flexDirection: 'column',
-              }
-            }}
-          >
-            <DialogTitle sx={{ fontWeight: 800, pr: 6, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <InsertDriveFileIcon color="primary" />
-              {message.actionResult.documentName}
-            </DialogTitle>
-            <DialogContent dividers sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
-              {message.actionResult.content && (
-                <SimpleMarkdown content={message.actionResult.content} onLinkClick={handleChatMessageLinkClick} />
-              )}
-            </DialogContent>
-            <DialogActions sx={{ p: 2, gap: 1 }}>
-              <Button variant="contained" size="small" onClick={() => setOpenPreview(false)}>
-                Close
-              </Button>
-            </DialogActions>
-          </Dialog>
         </Box>
       )}
 

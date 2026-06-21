@@ -224,8 +224,11 @@ export const AgentSkills: React.FC = () => {
 
       DEFAULT_SKILLS.forEach(skill => upsertBuiltInSkill(skill));
 
-      if (hasChanges || updatedSkills.length !== currentSkills.length) {
-        await db.settings.put({ key: 'app:agentSkills', value: updatedSkills });
+      const defaultIds = new Set(DEFAULT_SKILLS.map(s => s.id));
+      const filteredSkills = updatedSkills.filter(s => !s.isBuiltIn || defaultIds.has(s.id));
+
+      if (hasChanges || filteredSkills.length !== currentSkills.length) {
+        await db.settings.put({ key: 'app:agentSkills', value: filteredSkills });
       }
 
       const systemPromptVersionDb = await db.settings.get('app:systemPromptVersion');
@@ -259,6 +262,12 @@ export const AgentSkills: React.FC = () => {
   };
 
   const handleDeleteSkill = async (skillId: string) => {
+    // Guard against deleting built-in skills
+    const isBuiltIn = skillId.startsWith('builtin:');
+    if (isBuiltIn) {
+      console.warn("Prevented deletion of built-in skill:", skillId);
+      return;
+    }
     const setting = await db.settings.get('app:agentSkills');
     const currentSkills = (setting?.value as AgentSkill[]) || [];
     const updated = currentSkills.filter(s => s.id !== skillId);

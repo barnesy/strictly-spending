@@ -150,6 +150,57 @@ function findMatchingSkillForPrompt(prompt: string, skills: any[]): any | null {
   return null;
 }
 
+function getDocumentBaseName(docType: string): string {
+  switch (docType) {
+    case 'business_pnl':
+      return 'Profit_and_loss';
+    case 'business_balance_sheet':
+      return 'Balance_sheet';
+    case 'business_ledger':
+      return 'General_ledger';
+    case 'deduction_expense_summary':
+      return 'Expense_summary';
+    case 'deduction_mileage_log':
+      return 'Mileage_log';
+    case 'deduction_vehicle_expenses':
+      return 'Vehicle_expenses';
+    case 'deduction_assets':
+      return 'Asset_log';
+    case 'deduction_w2_w3':
+      return 'W2_W3_summary';
+    case 'deduction_1099_issued':
+      return '1099_issued';
+    case 'income_1099k':
+      return '1099_K_statement';
+    case 'income_1099nec':
+      return '1099_NEC_statement';
+    case 'income_1099misc':
+      return '1099_MISC_statement';
+    case 'personal_prior_return':
+      return 'Prior_year_return';
+    case 'personal_w2':
+      return 'W2_statement';
+    case 'personal_1099':
+      return '1099_statement';
+    case 'personal_k1':
+      return 'K1_statement';
+    case 'personal_ira':
+      return 'IRA_contributions';
+    case 'personal_health':
+      return 'Health_insurance_1095';
+    case 'personal_charity':
+      return 'Charitable_donations';
+    case 'personal_student_loan':
+      return 'Student_loan_1098E';
+    case 'payments_estimated':
+      return 'Estimated_payments';
+    case 'payments_state':
+      return 'State_tax_payments';
+    default:
+      return 'Document';
+  }
+}
+
 export function useCopilotActionHandler() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -474,12 +525,26 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
           }
         }
 
-        // Safety net: Force data query before P&L document generation
-        if (action === 'generate_document' && actionObj.documentType === 'business_pnl') {
-          if (!pnlReportMarkdown) {
-            console.warn("Safety net triggered: LLM tried to generate P&L document without querying data first.");
-            feedbackError = "Error: You cannot generate a Profit & Loss document without querying the transaction data first. You must first call 'query_data' with categories: ['all'] and preset: 'ytd' to fetch the real numbers.";
-            action = 'none';
+        // Safety net: Force data query before P&L, Balance Sheet, or General Ledger document generation
+        if (action === 'generate_document') {
+          if (actionObj.documentType === 'business_pnl' || currentSkillId === 'builtin:pnl') {
+            if (!pnlReportMarkdown) {
+              console.warn("Safety net triggered: LLM tried to generate P&L document without querying data first.");
+              feedbackError = "Error: You cannot generate a Profit & Loss document without querying the transaction data first. You must first call 'query_data' with categories: ['all'] and preset: 'ytd' to fetch the real numbers.";
+              action = 'none';
+            }
+          } else if (actionObj.documentType === 'business_balance_sheet' || currentSkillId === 'builtin:balance_sheet') {
+            if (lastQueryAccts.length === 0 && !lastQueryAll) {
+              console.warn("Safety net triggered: LLM tried to generate Balance Sheet without querying data first.");
+              feedbackError = "Error: You cannot generate a Balance Sheet without querying the transaction data first. You must first call 'query_data' with categories: ['all'] and preset: 'ytd' to fetch the real numbers.";
+              action = 'none';
+            }
+          } else if (actionObj.documentType === 'business_ledger' || currentSkillId === 'builtin:ledger') {
+            if (lastQueryAccts.length === 0 && !lastQueryAll) {
+              console.warn("Safety net triggered: LLM tried to generate General Ledger without querying data first.");
+              feedbackError = "Error: You cannot generate a General Ledger without querying the transaction data first. You must first call 'query_data' with categories: ['all'] and preset: 'ytd' to fetch the real numbers.";
+              action = 'none';
+            }
           }
         }
 
@@ -1290,7 +1355,25 @@ Please summarize this accessibility report for the developer in the 'body' field
               actionObj.documentContent?.toLowerCase().includes('net profit') ||
               actionObj.documentContent?.toLowerCase().includes('operating expenses')
             ));
-          const docType = isPnl ? 'business_pnl' : rawDocType;
+
+          const isBalanceSheet =
+            currentSkillId === 'builtin:balance_sheet' ||
+            rawDocType === 'business_balance_sheet' ||
+            rawDocType === 'balance_sheet' ||
+            (rawDocType === '' && (
+              actionObj.documentContent?.toLowerCase().includes('balance sheet')
+            ));
+
+          const isLedger =
+            currentSkillId === 'builtin:ledger' ||
+            rawDocType === 'business_ledger' ||
+            rawDocType === 'ledger' ||
+            (rawDocType === '' && (
+              actionObj.documentContent?.toLowerCase().includes('general ledger') ||
+              actionObj.documentContent?.toLowerCase().includes('business ledger')
+            ));
+
+          const docType = isPnl ? 'business_pnl' : (isBalanceSheet ? 'business_balance_sheet' : (isLedger ? 'business_ledger' : rawDocType));
           let content = actionObj.documentContent || '';
 
           
@@ -1369,13 +1452,10 @@ Please summarize this accessibility report for the developer in the 'body' field
             try {
               let filePath: string | null = null;
               if (isNativeDualFormat && generatedCsv) {
-                let baseName = 'Document';
-                if (docType === 'business_pnl') baseName = 'P&L_Statement';
-                if (docType === 'business_balance_sheet') baseName = 'Balance_Sheet';
-                if (docType === 'business_ledger') baseName = 'General_Ledger';
-                if (docType === 'deduction_expense_summary') baseName = 'Expense_Summary';
+                const baseName = getDocumentBaseName(docType);
 
-                const defaultMdFilename = `Tax_${baseName}_${new Date().getFullYear()}.md`;
+                const dateStr = `${new Date().getMonth() + 1}_${new Date().getDate()}_${new Date().getFullYear()}`;
+                const defaultMdFilename = `${baseName}_${dateStr}.md`;
 
                 filePath = `~/Documents/${defaultMdFilename}`;
 
@@ -1439,24 +1519,15 @@ Please summarize this accessibility report for the developer in the 'body' field
                 // Non-P&L / fallback documents
                 const isCsv = content.trim().startsWith('Date') || content.trim().includes(',') || content.trim().startsWith('Category,');
                 const defaultExt = isCsv ? 'csv' : 'md';
+                const dateStr = `${new Date().getMonth() + 1}_${new Date().getDate()}_${new Date().getFullYear()}`;
                 
-                let defaultFilename = `Tax_Document_${new Date().getFullYear()}.${defaultExt}`;
-                if (docType === 'deduction_mileage_log') {
-                  defaultFilename = `Tax_Mileage_Log_${new Date().getFullYear()}.${defaultExt}`;
-                } else if (docType === 'deduction_assets') {
-                  defaultFilename = `Tax_Asset_Log_${new Date().getFullYear()}.${defaultExt}`;
-                } else if (docType === 'payments_estimated') {
-                  defaultFilename = `Tax_Estimated_Payments_${new Date().getFullYear()}.${defaultExt}`;
-                } else if (docType === 'deduction_w2_w3') {
-                  defaultFilename = `Tax_W2_W3_Summary_${new Date().getFullYear()}.${defaultExt}`;
-                } else if (docType === 'deduction_1099_issued') {
-                  defaultFilename = `Tax_1099_NEC_Issued_${new Date().getFullYear()}.${defaultExt}`;
-                }
+                const baseName = getDocumentBaseName(docType);
                 
+                const defaultFilename = `${baseName}_${dateStr}.${defaultExt}`;
                 filePath = `~/Documents/${defaultFilename}`;
 
                 if (filePath) {
-                  const filename = filePath.split(/[\\/]/).pop() || 'Generated_Document';
+                  const filename = filePath.split(/[\\/]/).pop() || defaultFilename;
                   const newDocId = crypto.randomUUID();
 
                   if (docType) {

@@ -105,8 +105,18 @@ export default function CopilotChat({
         sendPromptText("Please auto-categorize all uncategorized items");
       }
     };
+    const handleRunPrompt = (e: Event) => {
+      const customEvent = e as CustomEvent<{ prompt: string }>;
+      if (!loading && customEvent.detail?.prompt) {
+        sendPromptText(customEvent.detail.prompt);
+      }
+    };
     window.addEventListener('app:run-ai-categorization', handleRunAiCategorization);
-    return () => window.removeEventListener('app:run-ai-categorization', handleRunAiCategorization);
+    window.addEventListener('app:run-prompt', handleRunPrompt as EventListener);
+    return () => {
+      window.removeEventListener('app:run-ai-categorization', handleRunAiCategorization);
+      window.removeEventListener('app:run-prompt', handleRunPrompt as EventListener);
+    };
   }, [sendPromptText, loading]);
 
   const visibleMessages = useMemo(() => {

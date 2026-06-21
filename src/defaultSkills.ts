@@ -26,29 +26,6 @@ export const DEFAULT_SKILLS: AgentSkill[] = [
     ]
   },
   {
-    id: 'builtin:categorization',
-    name: 'Manual Transaction Categorization',
-    description: 'Uses local AI to auto-categorize uncategorized transactions chunk-by-chunk.',
-    systemPromptExtension: `- When asked to auto-categorize, sort, organize, classify, or run AI review/categorization on remaining, new, or uncategorized transactions (e.g. phrases like "auto-categorize", "auto categorize", "AI categorize", "sort transactions using AI", "classify remaining transactions", "run categorization"):
-  1. Stage 1: You MUST set 'agent_action.action' to 'categorize_transactions'. Do NOT explain results, suggest rules, or do math in the body field during Stage 1.
-  2. Stage 2: Once the database updates are completed and the system returns the count of processed transactions, summarize the categorization results clearly in the body. Cite the exact count of categorized transactions.`,
-    enabled: true,
-    isBuiltIn: true,
-    stages: [
-      { title: 'Categorize Transactions', requiredAction: 'categorize_transactions' }
-    ],
-    testCases: [
-      {
-        prompt: "AI categorize remaining transactions",
-        criteria: "Must call the categorize_transactions action in Stage 1."
-      },
-      {
-        prompt: "please auto-categorize all uncategorized items",
-        criteria: "Must call categorize_transactions to initiate the AI review."
-      }
-    ]
-  },
-  {
     id: 'builtin:pnl',
     name: 'Generate Profit & Loss Statement',
     description: 'Queries financial data and generates a business Profit and Loss statement, saving it to the Documents tab.',
@@ -128,140 +105,21 @@ For each category, list the transactions in a table:
   {
     id: 'builtin:ledger',
     name: 'Generate General Ledger',
-    description: 'Generates a chronological report of all transactions for tax auditing.',
-    systemPromptExtension: `- To generate a General Ledger statement:
-  1. Stage 1: You MUST immediately set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd".
-  2. Stage 2: Set 'agent_action.action' to 'generate_document', specify 'documentType' as "business_ledger", and format the transactions chronologically as a markdown table in 'documentContent'.`,
+    description: 'Queries financial accounts and generates a detailed Schedule C Business General Ledger.',
+    systemPromptExtension: `- To generate a business General Ledger document:
+  1. Stage 1: You MUST immediately set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd". Fetch the raw transactions list to compile the ledger entries.
+  2. Stage 2: Once data is returned, set 'agent_action.action' to 'generate_document', specify 'documentType' as "business_ledger", and write the General Ledger inside 'documentContent' as a structured markdown table.
+- Set 'body' to a brief summary explaining you generated the General Ledger.`,
     enabled: true,
     isBuiltIn: true,
     stages: [
       { title: 'Query transactions', requiredAction: 'query_data' },
-      { title: 'Generate Ledger', requiredAction: 'generate_document' }
+      { title: 'Generate General Ledger', requiredAction: 'generate_document' }
     ],
     testCases: [
       {
-        prompt: "make a general ledger for this year",
+        prompt: "generate general ledger for tax",
         criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'business_ledger'."
-      }
-    ]
-  },
-  {
-    id: 'builtin:expense_summary',
-    name: 'Generate Expense Summary',
-    description: 'Generates a detailed summary of business expenses grouped by standard spend and Schedule C category.',
-    systemPromptExtension: `- To generate a business Expense Summary:
-  1. Stage 1: You MUST immediately set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd".
-  2. Stage 2: Set 'agent_action.action' to 'generate_document', specify 'documentType' as "deduction_expense_summary", and format the summary of expenses grouped by category in 'documentContent'.`,
-    enabled: true,
-    isBuiltIn: true,
-    stages: [
-      { title: 'Query transactions', requiredAction: 'query_data' },
-      { title: 'Generate Expense Summary', requiredAction: 'generate_document' }
-    ],
-    testCases: [
-      {
-        prompt: "generate an expense summary",
-        criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'deduction_expense_summary'."
-      }
-    ]
-  },
-  {
-    id: 'builtin:mileage_log',
-    name: 'Generate Mileage Log',
-    description: 'Compiles a travel and mileage log from vehicle and business trip transactions.',
-    systemPromptExtension: `- To generate a Mileage Log:
-  1. Stage 1: You MUST set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd" (or filter for Car & Truck / Travel).
-  2. Stage 2: Set 'agent_action.action' to 'generate_document', specify 'documentType' as "deduction_mileage_log", and format the business travel logs as a markdown table in 'documentContent'.`,
-    enabled: true,
-    isBuiltIn: true,
-    stages: [
-      { title: 'Query travel data', requiredAction: 'query_data' },
-      { title: 'Generate Mileage Log', requiredAction: 'generate_document' }
-    ],
-    testCases: [
-      {
-        prompt: "compile a mileage log",
-        criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'deduction_mileage_log'."
-      }
-    ]
-  },
-  {
-    id: 'builtin:assets',
-    name: 'Generate Asset & Depreciation Log',
-    description: 'Creates a log of high-value purchases and equipment depreciations.',
-    systemPromptExtension: `- To generate an Asset & Depreciation Log:
-  1. Stage 1: You MUST set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd".
-  2. Stage 2: Set 'agent_action.action' to 'generate_document', specify 'documentType' as "deduction_assets", and format the assets and equipment list as a table in 'documentContent'.`,
-    enabled: true,
-    isBuiltIn: true,
-    stages: [
-      { title: 'Query equipment transactions', requiredAction: 'query_data' },
-      { title: 'Generate Asset Log', requiredAction: 'generate_document' }
-    ],
-    testCases: [
-      {
-        prompt: "generate asset purchases log",
-        criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'deduction_assets'."
-      }
-    ]
-  },
-  {
-    id: 'builtin:payments_estimated',
-    name: 'Generate Estimated Tax Payments Voucher',
-    description: 'Calculates business earnings and builds an Estimated Tax Payments reference voucher (1040-ES).',
-    systemPromptExtension: `- To generate an Estimated Tax Payments (1040-ES) reference voucher:
-  1. Stage 1: You MUST set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd" to analyze net profit/loss.
-  2. Stage 2: Set 'agent_action.action' to 'generate_document', specify 'documentType' as "payments_estimated", and calculate self-employment estimated tax payments, formatting the voucher in 'documentContent'.`,
-    enabled: true,
-    isBuiltIn: true,
-    stages: [
-      { title: 'Query earnings data', requiredAction: 'query_data' },
-      { title: 'Generate Estimated Tax Voucher', requiredAction: 'generate_document' }
-    ],
-    testCases: [
-      {
-        prompt: "create estimated tax payments voucher",
-        criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'payments_estimated'."
-      }
-    ]
-  },
-  {
-    id: 'builtin:w2_w3',
-    name: 'Generate W-2/W-3 Employee Payroll Summary',
-    description: 'Compiles employee wage payments and withholding transactions.',
-    systemPromptExtension: `- To generate a W-2/W-3 Employee Payroll Summary:
-  1. Stage 1: You MUST set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd".
-  2. Stage 2: Set 'agent_action.action' to 'generate_document', specify 'documentType' as "deduction_w2_w3", and format the employee payroll wages and deductions in 'documentContent'.`,
-    enabled: true,
-    isBuiltIn: true,
-    stages: [
-      { title: 'Query payroll transactions', requiredAction: 'query_data' },
-      { title: 'Generate W-2/W-3 Summary', requiredAction: 'generate_document' }
-    ],
-    testCases: [
-      {
-        prompt: "create W-2 employee summary",
-        criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'deduction_w2_w3'."
-      }
-    ]
-  },
-  {
-    id: 'builtin:1099_issued',
-    name: 'Generate 1099-NEC Issued Log',
-    description: 'Queries independent contractor payments exceeding $600 to compile a 1099-NEC filing log.',
-    systemPromptExtension: `- To generate a 1099-NEC Issued Log:
-  1. Stage 1: You MUST set 'agent_action.action' to 'query_data' with 'categories' set to ["all"] and 'preset' set to "ytd" (or filter for contractLabor).
-  2. Stage 2: Set 'agent_action.action' to 'generate_document', specify 'documentType' as "deduction_1099_issued", and format independent contractors who were paid over $600 in 'documentContent'.`,
-    enabled: true,
-    isBuiltIn: true,
-    stages: [
-      { title: 'Query contractor payments', requiredAction: 'query_data' },
-      { title: 'Generate 1099 Issued Log', requiredAction: 'generate_document' }
-    ],
-    testCases: [
-      {
-        prompt: "generate 1099-NEC issued log",
-        criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'deduction_1099_issued'."
       }
     ]
   }

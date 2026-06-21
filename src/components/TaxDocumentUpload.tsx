@@ -3,6 +3,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 import { open } from '@tauri-apps/plugin-dialog';
 import type { AppDocument } from '../types';
@@ -14,6 +15,8 @@ interface TaxDocumentUploadProps {
   doc?: AppDocument;
   aiStatus?: 'supported' | 'coming_soon' | 'manual';
   onUpload: (documentId: string, fileInfo: { filename: string; type: string; path: string; uploadedAt: string }) => void;
+  onRemove?: (documentId: string) => void;
+  onGenerateAi?: (documentId: string, label: string) => void;
 }
 
 export default function TaxDocumentUpload({ 
@@ -22,7 +25,9 @@ export default function TaxDocumentUpload({
   accept, 
   doc, 
   aiStatus = 'manual', 
-  onUpload 
+  onUpload,
+  onRemove,
+  onGenerateAi
 }: TaxDocumentUploadProps) {
   const theme = useTheme();
   const isUploaded = !!doc;
@@ -146,16 +151,57 @@ export default function TaxDocumentUpload({
       </Box>
 
       <Box>
-        <Button
-          variant={isUploaded ? "text" : "outlined"}
-          color={isUploaded ? "success" : (aiStatus === 'supported' ? "secondary" : "primary")}
-          size="small"
-          startIcon={isUploaded ? <CheckCircleIcon /> : <UploadFileIcon />}
-          onClick={handleFileChange}
-          sx={{ whiteSpace: 'nowrap', textTransform: 'none', borderRadius: `${theme.shape.borderRadius}px` }}
-        >
-          {isUploaded ? 'Replace' : 'Upload'}
-        </Button>
+        {isUploaded ? (
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="text"
+              color="success"
+              size="small"
+              startIcon={<CheckCircleIcon />}
+              onClick={handleFileChange}
+              sx={{ whiteSpace: 'nowrap', textTransform: 'none', borderRadius: `${theme.shape.borderRadius}px` }}
+            >
+              Replace
+            </Button>
+            {onRemove && (
+              <Button
+                variant="text"
+                color="error"
+                size="small"
+                startIcon={<DeleteIcon />}
+                onClick={() => onRemove(documentId)}
+                sx={{ whiteSpace: 'nowrap', textTransform: 'none', borderRadius: `${theme.shape.borderRadius}px` }}
+              >
+                Remove
+              </Button>
+            )}
+          </Stack>
+        ) : (
+          <Stack direction="row" spacing={1}>
+            {aiStatus === 'supported' && onGenerateAi && (
+              <Button
+                variant="contained"
+                color="secondary"
+                size="small"
+                startIcon={<AutoAwesomeIcon />}
+                onClick={() => onGenerateAi(documentId, label)}
+                sx={{ whiteSpace: 'nowrap', textTransform: 'none', borderRadius: `${theme.shape.borderRadius}px`, fontWeight: 600 }}
+              >
+                Generate with AI
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              color={aiStatus === 'supported' ? "secondary" : "primary"}
+              size="small"
+              startIcon={<UploadFileIcon />}
+              onClick={handleFileChange}
+              sx={{ whiteSpace: 'nowrap', textTransform: 'none', borderRadius: `${theme.shape.borderRadius}px` }}
+            >
+              Upload
+            </Button>
+          </Stack>
+        )}
       </Box>
     </Box>
   );

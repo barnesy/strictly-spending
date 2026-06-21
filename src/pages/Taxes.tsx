@@ -27,6 +27,8 @@ import {
   Stack,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import DownloadIcon from '@mui/icons-material/Download';
+import Papa from 'papaparse';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useDataStore } from '../dataStore';
@@ -106,6 +108,10 @@ export default function Taxes() {
     targetName: string;
     value: string;
   } | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [compilationProgress, setCompilationProgress] = useState(0);
+  const [compilationStepText, setCompilationStepText] = useState('');
 
   const handleUpdateSettings = async (updates: Partial<TaxSettings>) => {
     const newSettings = { ...taxSettings, ...updates };
@@ -225,6 +231,27 @@ export default function Taxes() {
     });
   };
 
+  const handleDocumentRemove = async (documentId: string) => {
+    const docToRemove = documents.find((d) => d.associatedChecklistId === documentId);
+    if (docToRemove) {
+      await db.documents.delete(docToRemove.id);
+      await db.documentContents.delete(docToRemove.id);
+    }
+    
+    const checklistCopy = { ...(taxSettings.checklist || {}) };
+    delete checklistCopy[documentId];
+
+    await handleUpdateSettings({
+      checklist: checklistCopy
+    });
+  };
+
+  const handleDocumentGenerateAi = (documentId: string, label: string) => {
+    const promptText = `Please generate ${label} for the tax year ${taxSettings.taxYear}`;
+    window.dispatchEvent(new CustomEvent('app:run-prompt', { detail: { prompt: promptText } }));
+    window.dispatchEvent(new CustomEvent('app:open-chat'));
+  };
+
   // Automated Insights
   const taxYearStats = useMemo(() => {
     const yearTransactions = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
@@ -254,8 +281,413 @@ export default function Taxes() {
   const totalChecklist = activeDocuments.length;
   const completedChecklist = activeDocuments.filter(i => documents.some(d => d.associatedChecklistId === i.id)).length;
   const progressPercent = totalChecklist === 0 ? 0 : (completedChecklist / totalChecklist) * 100;
+  const downloadFile = async (content: string | Uint8Array, filename: string, contentType: string) => {
+    const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    
+    if (isTauri) {
+      try {
+        const { save } = await import('@tauri-apps/plugin-dialog');
+        const { writeTextFile, writeFile } = await import('@tauri-apps/plugin-fs');
+        
+        const extension = filename.split('.').pop() || '';
+        const filters = [];
+        if (extension === 'csv') {
+          filters.push({ name: 'CSV Spreadsheet', extensions: ['csv'] });
+        } else if (extension === 'md') {
+          filters.push({ name: 'Markdown Document', extensions: ['md'] });
+        } else if (extension === 'zip') {
+          filters.push({ name: 'ZIP Archive', extensions: ['zip'] });
+        }
+        
+        const filePath = await save({
+          defaultPath: filename,
+          filters
+        });
+        
+        if (filePath) {
+          if (content instanceof Uint8Array) {
+            await writeFile(filePath, content);
+          } else {
+            await writeTextFile(filePath, content);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to save file via Tauri:', err);
+      }
+    } else {
+      const blob = new Blob([content], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const getBusinessCsvContent = () => {
+    const yearTxns = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
+    const businessTxns = yearTxns.filter(t => t.isBusiness && t.deductionStatus === 'confirmed');
+
+    const csvData = businessTxns.map(t => {
+      const rate = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.deductionRate ?? 1.0) : 1.0;
+      const deductible = Math.abs(t.amount) * rate;
+      const catLabel = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.label ?? 'Other') : 'Other';
+      const acc = accounts.find(a => a.id === t.accountId);
+      
+      return {
+        Date: t.date,
+        Account: acc ? acc.name : 'Unknown',
+        Institution: acc ? acc.institution : 'Unknown',
+        Description: t.description,
+        'IRS Schedule C Category': catLabel,
+        'Gross Amount': Math.abs(t.amount),
+        'Deduction Rate': `${rate * 100}%`,
+        'Deductible Amount': deductible
+      };
+    });
+
+    return Papa.unparse(csvData);
+  };
+
+  const getPersonalCsvContent = () => {
+    const yearTxns = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
+    const personalTxns = yearTxns.filter(t => !t.isBusiness && t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/));
+
+    const csvData = personalTxns.map(t => {
+      const acc = accounts.find(a => a.id === t.accountId);
+      return {
+        Date: t.date,
+        Account: acc ? acc.name : 'Unknown',
+        Institution: acc ? acc.institution : 'Unknown',
+        Description: t.description,
+        Category: t.category,
+        Amount: Math.abs(t.amount)
+      };
+    });
+
+    return Papa.unparse(csvData);
+  };
+
+  const getMarkdownContent = () => {
+    const yearTxns = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
+    const businessTxns = yearTxns.filter(t => t.isBusiness && t.deductionStatus === 'confirmed');
+    const personalTxns = yearTxns.filter(t => !t.isBusiness && t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/));
+
+    const filerStatusLabel = {
+      single: 'Single',
+      married_joint: 'Married Filing Jointly',
+      married_separate: 'Married Filing Separately',
+      head_household: 'Head of Household'
+    }[taxSettings.personalInfo?.filingStatus || 'single'] || 'Single';
+
+    const checklistItems = activeDocuments.map(item => {
+      const doc = documents.find(d => d.associatedChecklistId === item.id);
+      return {
+        label: item.label,
+        status: doc ? 'Uploaded' : 'Missing',
+        filename: doc ? doc.name : 'N/A'
+      };
+    });
+
+    const formatCurrency = (val: number | undefined) => 
+      (val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    let md = `# Tax Summary Report - ${taxSettings.taxYear}\n\n`;
+    md += `**Exported:** ${new Date().toLocaleDateString()}\n`;
+    md += `**Source:** Local Database (strictly spending)\n\n`;
+
+    md += `## Tax Financial Overview\n\n`;
+    md += `### Income & Estimations\n`;
+    md += `- **Gross Personal / W-2 Income:** $${formatCurrency(taxSettings.personalInfo?.w2Income)}\n`;
+    if (taxSettings.hasBusiness) {
+      md += `- **Gross Business Income:** $${formatCurrency(taxSettings.businessIncome?.grossSales || taxSettings.businessIncome?.forms1099Total || 0)}\n`;
+    }
+    md += `- **Estimated Tax Payments Paid:** $${formatCurrency(taxSettings.taxPayments?.estimatedPayments)}\n`;
+    md += `- **State / LLC Fees Paid:** $${formatCurrency(taxSettings.taxPayments?.stateLocalFees)}\n\n`;
+
+    md += `### Mapped Deductions\n`;
+    md += `- **Personal Itemized Deductions:** $${formatCurrency(taxYearStats.itemizedDeductions)}\n`;
+    if (taxSettings.hasBusiness) {
+      md += `- **Business Schedule C Expenses:** $${formatCurrency(taxYearStats.businessExpenses)}\n`;
+      md += `- **Net Business Income:** $${formatCurrency((taxSettings.businessIncome?.grossSales || 0) - taxYearStats.businessExpenses)}\n`;
+    }
+    md += `\n`;
+
+    md += `## Filer & Entity Profile\n\n`;
+    md += `### Personal Profile\n`;
+    md += `- **Filing Status:** ${filerStatusLabel}\n`;
+    md += `- **Dependents:** ${taxSettings.personalInfo?.dependents || 0}\n\n`;
+
+    if (taxSettings.hasBusiness) {
+      md += `### Business / LLC Profile\n`;
+      md += `- **DBA / Legal Name:** ${taxSettings.businessIdentity?.dba || 'N/A'}\n`;
+      md += `- **Address:** ${taxSettings.businessIdentity?.address || 'N/A'}\n`;
+      md += `- **EIN or SSN:** ${taxSettings.businessIdentity?.einSsn || 'N/A'}\n\n`;
+    }
+
+    if (taxSettings.hasBusiness && (taxSettings.businessDeductions?.homeOffice || taxSettings.businessDeductions?.vehicle)) {
+      md += `## Home Office & Vehicle Declarations\n\n`;
+      if (taxSettings.businessDeductions?.homeOffice) {
+        const sqFtOffice = taxSettings.businessDeductions.homeOffice.sqFtOffice || 0;
+        const sqFtHome = taxSettings.businessDeductions.homeOffice.sqFtHome || 0;
+        const ratio = sqFtHome ? ((sqFtOffice / sqFtHome) * 100).toFixed(1) : '0.0';
+        md += `### Home Office\n`;
+        md += `- **Dedicated Office Area:** ${sqFtOffice} sq ft\n`;
+        md += `- **Total Home Area:** ${sqFtHome} sq ft\n`;
+        md += `- **Home Office Ratio:** ${ratio}%\n\n`;
+      }
+      if (taxSettings.businessDeductions?.vehicle) {
+        const busMiles = taxSettings.businessDeductions.vehicle.businessMiles || 0;
+        const persMiles = taxSettings.businessDeductions.vehicle.personalMiles || 0;
+        const ratio = (busMiles + persMiles) ? ((busMiles / (busMiles + persMiles)) * 100).toFixed(1) : '0.0';
+        md += `### Vehicle Mileage\n`;
+        md += `- **Business Miles Logged:** ${busMiles.toLocaleString()} mi\n`;
+        md += `- **Personal Miles Logged:** ${persMiles.toLocaleString()} mi\n`;
+        md += `- **Business Use Percentage:** ${ratio}%\n\n`;
+      }
+    }
+
+    md += `## Document Audit Checklist\n\n`;
+    md += `| Document Description | Status | File Name |\n`;
+    md += `| :--- | :--- | :--- |\n`;
+    checklistItems.forEach(item => {
+      md += `| ${item.label} | ${item.status} | \`${item.filename}\` |\n`;
+    });
+    md += `\n`;
+
+    if (taxSettings.hasBusiness) {
+      md += `## Schedule C Business Deductions Ledger (${businessTxns.length} records)\n\n`;
+      md += `| Date | Account | Description | IRS Category | Gross Amount | Rate | Deductible |\n`;
+      md += `| :--- | :--- | :--- | :--- | ---: | ---: | ---: |\n`;
+      businessTxns.forEach(t => {
+        const rate = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.deductionRate ?? 1.0) : 1.0;
+        const deductible = Math.abs(t.amount) * rate;
+        const catLabel = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.label ?? 'Other') : 'Other';
+        const acc = accounts.find(a => a.id === t.accountId);
+        md += `| ${t.date} | ${acc ? acc.name : 'Unknown'} | ${t.description} | ${catLabel} | $${Math.abs(t.amount).toFixed(2)} | ${(rate * 100)}% | $${deductible.toFixed(2)} |\n`;
+      });
+      md += `| **TOTAL** | | | | **$${businessTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0).toFixed(2)}** | | **$${taxYearStats.businessExpenses.toFixed(2)}** |\n\n`;
+    }
+
+    md += `## Itemized Personal Deductions Ledger (${personalTxns.length} records)\n\n`;
+    md += `| Date | Account | Description | Spend Category | Amount |\n`;
+    md += `| :--- | :--- | :--- | :--- | ---: |\n`;
+    personalTxns.forEach(t => {
+      const acc = accounts.find(a => a.id === t.accountId);
+      md += `| ${t.date} | ${acc ? acc.name : 'Unknown'} | ${t.description} | ${t.category} | $${Math.abs(t.amount).toFixed(2)} |\n`;
+    });
+    md += `| **TOTAL** | | | | **$${taxYearStats.itemizedDeductions.toFixed(2)}** |\n`;
+
+    return md;
+  };
+
+  const getComprehensiveCsvContent = () => {
+    const yearTxns = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
+    const businessTxns = yearTxns.filter(t => t.isBusiness && t.deductionStatus === 'confirmed');
+    const personalTxns = yearTxns.filter(t => !t.isBusiness && t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/));
+
+    const filerStatusLabel = {
+      single: 'Single',
+      married_joint: 'Married Filing Jointly',
+      married_separate: 'Married Filing Separately',
+      head_household: 'Head of Household'
+    }[taxSettings.personalInfo?.filingStatus || 'single'] || 'Single';
+
+    const lines: string[][] = [
+      ['--- TAX PACKAGE GENERAL PROFILE ---'],
+      ['Tax Year', String(taxSettings.taxYear)],
+      ['Filing Status', filerStatusLabel],
+      ['Number of Dependents', String(taxSettings.personalInfo?.dependents || 0)],
+      ['Gross Personal / W-2 Income', String(taxSettings.personalInfo?.w2Income || 0)],
+      ['Estimated Tax Payments Paid', String(taxSettings.taxPayments?.estimatedPayments || 0)],
+      ['State / LLC Fees Paid', String(taxSettings.taxPayments?.stateLocalFees || 0)],
+      [],
+    ];
+
+    if (taxSettings.hasBusiness) {
+      lines.push(
+        ['--- BUSINESS LLC PROFILE ---'],
+        ['DBA / Legal Name', taxSettings.businessIdentity?.dba || 'N/A'],
+        ['Business Address', taxSettings.businessIdentity?.address || 'N/A'],
+        ['EIN or SSN', taxSettings.businessIdentity?.einSsn || 'N/A'],
+        ['Gross Sales / Receipts', String(taxSettings.businessIncome?.grossSales || 0)],
+        ['Forms 1099 Total', String(taxSettings.businessIncome?.forms1099Total || 0)],
+        ['Other Income', String(taxSettings.businessIncome?.otherIncome || 0)],
+        ['Home Office sq ft', String(taxSettings.businessDeductions?.homeOffice?.sqFtOffice || 0)],
+        ['Total Home sq ft', String(taxSettings.businessDeductions?.homeOffice?.sqFtHome || 0)],
+        ['Vehicle Business Miles', String(taxSettings.businessDeductions?.vehicle?.businessMiles || 0)],
+        ['Vehicle Personal Miles', String(taxSettings.businessDeductions?.vehicle?.personalMiles || 0)],
+        []
+      );
+    }
+
+    lines.push(
+      ['--- DOCUMENT AUDIT CHECKLIST STATUS ---'],
+      ['Document Title', 'Status', 'File Name']
+    );
+
+    activeDocuments.forEach(item => {
+      const doc = documents.find(d => d.associatedChecklistId === item.id);
+      lines.push([item.label, doc ? 'Uploaded' : 'Missing', doc ? doc.name : 'N/A']);
+    });
+    lines.push([]);
+
+    lines.push(
+      ['--- COMPILED DEDUCTIONS LEDGER ---'],
+      ['Ledger Type', 'Date', 'Account', 'Merchant/Description', 'IRS or Spend Category', 'Gross Amount', 'Rate', 'Deductible Amount']
+    );
+
+    businessTxns.forEach(t => {
+      const rate = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.deductionRate ?? 1.0) : 1.0;
+      const deductible = Math.abs(t.amount) * rate;
+      const catLabel = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.label ?? 'Other') : 'Other';
+      const acc = accounts.find(a => a.id === t.accountId);
+      lines.push([
+        'Business Schedule C',
+        t.date,
+        acc ? acc.name : 'Unknown',
+        t.description,
+        catLabel,
+        String(Math.abs(t.amount)),
+        `${rate * 100}%`,
+        String(deductible)
+      ]);
+    });
+
+    personalTxns.forEach(t => {
+      const acc = accounts.find(a => a.id === t.accountId);
+      lines.push([
+        'Personal Itemized',
+        t.date,
+        acc ? acc.name : 'Unknown',
+        t.description,
+        t.category,
+        String(Math.abs(t.amount)),
+        '100%',
+        String(Math.abs(t.amount))
+      ]);
+    });
+
+    return Papa.unparse(lines);
+  };
 
 
+  const handleExportBusinessCsv = async () => {
+    const content = getBusinessCsvContent();
+    const dateStr = `${new Date().getMonth() + 1}_${new Date().getDate()}_${new Date().getFullYear()}`;
+    await downloadFile(content, `Tax_package_business_expenses_${dateStr}.csv`, 'text/csv');
+  };
+
+  const handleExportPersonalCsv = async () => {
+    const content = getPersonalCsvContent();
+    const dateStr = `${new Date().getMonth() + 1}_${new Date().getDate()}_${new Date().getFullYear()}`;
+    await downloadFile(content, `Tax_package_personal_deductions_${dateStr}.csv`, 'text/csv');
+  };
+
+  const handleExportMarkdown = async () => {
+    const content = getMarkdownContent();
+    const dateStr = `${new Date().getMonth() + 1}_${new Date().getDate()}_${new Date().getFullYear()}`;
+    await downloadFile(content, `Tax_package_summary_${dateStr}.md`, 'text/markdown');
+  };
+
+  const handleExportComprehensiveCsv = async () => {
+    const content = getComprehensiveCsvContent();
+    const dateStr = `${new Date().getMonth() + 1}_${new Date().getDate()}_${new Date().getFullYear()}`;
+    await downloadFile(content, `Tax_package_comprehensive_${dateStr}.csv`, 'text/csv');
+  };
+
+  const handleExportAll = async () => {
+    setExportDialogOpen(false);
+    setIsCompiling(true);
+    setCompilationProgress(0);
+    setCompilationStepText('Initializing compilation engine...');
+
+    const steps = [
+      { progress: 15, text: 'Extracting personal and filing declarations...' },
+      { progress: 35, text: 'Formatting W-2 income & tax payment receipts...' },
+      { progress: 55, text: 'Analyzing Business Schedule C operating deductions...' },
+      { progress: 75, text: 'Compiling ledger transactions and itemizing personal deductions...' },
+      { progress: 90, text: 'Building final consolidated reports (CSVs & Markdown)...' },
+      { progress: 100, text: 'Success! Packaging all documents into ZIP...' }
+    ];
+
+    for (const step of steps) {
+      setCompilationProgress(step.progress);
+      setCompilationStepText(step.text);
+      await new Promise(resolve => setTimeout(resolve, 400));
+    }
+
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      
+      const dateStr = `${new Date().getMonth() + 1}_${new Date().getDate()}_${new Date().getFullYear()}`;
+
+      // 1. Comprehensive Consolidated CSV
+      const compCsv = getComprehensiveCsvContent();
+      zip.file(`Tax_package_comprehensive_${dateStr}.csv`, compCsv);
+
+      // 2. Summary Markdown
+      const summaryMd = getMarkdownContent();
+      zip.file(`Tax_package_summary_${dateStr}.md`, summaryMd);
+
+      // 3. Business CSV
+      if (taxSettings.hasBusiness) {
+        const busCsv = getBusinessCsvContent();
+        zip.file(`Tax_package_business_expenses_${dateStr}.csv`, busCsv);
+      }
+
+      // 4. Personal CSV
+      const persCsv = getPersonalCsvContent();
+      zip.file(`Tax_package_personal_deductions_${dateStr}.csv`, persCsv);
+
+      // 5. Checklist Documents
+      for (const item of activeDocuments) {
+        const doc = documents.find(d => d.associatedChecklistId === item.id);
+        if (doc) {
+          try {
+            if (doc.source === 'generated') {
+              const contentRecord = await db.documentContents.get(doc.id);
+              const docContent = contentRecord ? contentRecord.content : doc.content || '';
+              if (docContent) {
+                zip.file(doc.name, docContent);
+              }
+            } else if (doc.source === 'uploaded') {
+              const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+              if (isTauri) {
+                try {
+                  const { readFile } = await import('@tauri-apps/plugin-fs');
+                  const fileBytes = await readFile(doc.path);
+                  zip.file(doc.name, fileBytes);
+                } catch (fsErr) {
+                  console.error(`Could not read uploaded file at ${doc.path}:`, fsErr);
+                }
+              }
+            }
+          } catch (docErr) {
+            console.error(`Error adding document ${doc.name} to zip:`, docErr);
+          }
+        }
+      }
+
+      // Generate Zip content
+      const zipData = await zip.generateAsync({ type: 'uint8array' });
+
+      // Save Zip
+      await downloadFile(
+        zipData, 
+        `Tax_package_${taxSettings.taxYear}_${dateStr}.zip`, 
+        'application/zip'
+      );
+    } catch (err) {
+      console.error('Failed to generate ZIP package:', err);
+    }
+
+    setIsCompiling(false);
+  };
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, md: 0 } }}>
@@ -268,7 +700,16 @@ export default function Taxes() {
             Manage your personal and business taxes, upload required documents, and stay organized.
           </Typography>
         </Box>
-        <Box>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<DownloadIcon />}
+            onClick={() => setExportDialogOpen(true)}
+            sx={{ fontWeight: '600' }}
+          >
+            Export Tax Package
+          </Button>
           <TextField
             select
             size="small"
@@ -282,7 +723,7 @@ export default function Taxes() {
               return <MenuItem key={year} value={year}>{year}</MenuItem>;
             })}
           </TextField>
-        </Box>
+        </Stack>
       </Box>
 
       {/* Overview Cards */}
@@ -379,6 +820,8 @@ export default function Taxes() {
                       aiStatus={item.aiStatus}
                       doc={documents.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
+                      onRemove={handleDocumentRemove}
+                      onGenerateAi={handleDocumentGenerateAi}
                     />
                   ))}
                 </Box>
@@ -541,6 +984,8 @@ export default function Taxes() {
                         aiStatus={item.aiStatus}
                         doc={documents.find(d => d.associatedChecklistId === item.id)}
                         onUpload={handleDocumentUpload}
+                        onRemove={handleDocumentRemove}
+                        onGenerateAi={handleDocumentGenerateAi}
                       />
                     ))}
                   </Box>
@@ -593,6 +1038,8 @@ export default function Taxes() {
                         aiStatus={item.aiStatus}
                         doc={documents.find(d => d.associatedChecklistId === item.id)}
                         onUpload={handleDocumentUpload}
+                        onRemove={handleDocumentRemove}
+                        onGenerateAi={handleDocumentGenerateAi}
                       />
                     ))}
                   </Box>
@@ -648,6 +1095,8 @@ export default function Taxes() {
                       aiStatus={item.aiStatus}
                       doc={documents.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
+                      onRemove={handleDocumentRemove}
+                      onGenerateAi={handleDocumentGenerateAi}
                     />
                   ))}
                 </Box>
@@ -687,6 +1136,8 @@ export default function Taxes() {
                       aiStatus={item.aiStatus}
                       doc={documents.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
+                      onRemove={handleDocumentRemove}
+                      onGenerateAi={handleDocumentGenerateAi}
                     />
                   ))}
                 </Box>
@@ -734,6 +1185,109 @@ export default function Taxes() {
             Yes, update all
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Export Tax Package Dialog */}
+      <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Export Tax Package ({taxSettings.taxYear})</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Compile and download your complete tax documentation package for the {taxSettings.taxYear} tax year. 
+            You can export the consolidated profile and ledger, printable summary report, individual spreadsheets, or download the full package.
+          </Typography>
+          <Stack spacing={2}>
+            <Paper variant="outlined" sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
+              <Box sx={{ pr: 2 }}>
+                <Typography variant="subtitle2" fontWeight="700">Comprehensive Consolidated Spreadsheet (CSV)</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Complete package combining general filer profile, entity status, checklist audit, and unified ledger of all deductions.</Typography>
+              </Box>
+              <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExportComprehensiveCsv} sx={{ minWidth: '120px' }}>
+                Export CSV
+              </Button>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
+              <Box sx={{ pr: 2 }}>
+                <Typography variant="subtitle2" fontWeight="700">Tax Summary Report (Markdown)</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Complete demographics, financials checklist, and formatted transaction tables in Markdown format.</Typography>
+              </Box>
+              <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExportMarkdown} sx={{ minWidth: '120px' }}>
+                Export MD
+              </Button>
+            </Paper>
+
+            {taxSettings.hasBusiness && (
+              <Paper variant="outlined" sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
+                <Box sx={{ pr: 2 }}>
+                  <Typography variant="subtitle2" fontWeight="700">Business Expenses Spreadsheet (CSV)</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Schedule C deductible business transactions (gross, rate, and net deductible amounts) for spreadsheet analysis.</Typography>
+                </Box>
+                <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExportBusinessCsv} sx={{ minWidth: '120px' }}>
+                  Export CSV
+                </Button>
+              </Paper>
+            )}
+
+            <Paper variant="outlined" sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
+              <Box sx={{ pr: 2 }}>
+                <Typography variant="subtitle2" fontWeight="700">Personal Deductions Spreadsheet (CSV)</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Itemized personal tax-deductible items (charity, medical, etc.) formatted for Excel or tax prep software.</Typography>
+              </Box>
+              <Button variant="outlined" size="small" startIcon={<DownloadIcon />} onClick={handleExportPersonalCsv} sx={{ minWidth: '120px' }}>
+                Export CSV
+              </Button>
+            </Paper>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1, justifyContent: 'space-between' }}>
+          <Button variant="contained" color="primary" onClick={handleExportAll} startIcon={<DownloadIcon />}>
+            Download Complete Package
+          </Button>
+          <Button variant="outlined" onClick={() => setExportDialogOpen(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Premium Compiling Progress Dialog Overlay */}
+      <Dialog 
+        open={isCompiling} 
+        disableEscapeKeyDown
+        PaperProps={{
+          sx: {
+            p: 3,
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+            maxWidth: 400,
+            width: '100%',
+            textAlign: 'center'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Compiling Tax Package</DialogTitle>
+        <DialogContent>
+          <Box sx={{ py: 2 }}>
+            <LinearProgress 
+              variant="determinate" 
+              value={compilationProgress} 
+              sx={{ 
+                height: 8, 
+                borderRadius: 4, 
+                mb: 2,
+                background: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                '& .MuiLinearProgress-bar': {
+                  borderRadius: 4,
+                  background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`
+                }
+              }} 
+            />
+            <Typography variant="body2" fontWeight="600" color="text.secondary" sx={{ minHeight: 20 }}>
+              {compilationStepText}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              {compilationProgress}% completed
+            </Typography>
+          </Box>
+        </DialogContent>
       </Dialog>
     </Box>
   );

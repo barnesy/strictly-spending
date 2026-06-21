@@ -10,7 +10,12 @@ import {
   DialogActions,
   Button,
   Snackbar,
+  IconButton,
+  TextField,
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 import { open } from '@tauri-apps/plugin-shell';
@@ -38,6 +43,26 @@ export default function Documents() {
   const [auditSearchQuery, setAuditSearchQuery] = useState('');
   const [auditPage, setAuditPage] = useState(0);
   const [auditPageSize, setAuditPageSize] = useState(25);
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+
+  const handleSaveName = async () => {
+    if (!derivedPreviewDoc) return;
+    const trimmed = editNameValue.trim();
+    if (!trimmed) {
+      setSnackbarMessage('Name cannot be empty.');
+      return;
+    }
+    try {
+      await db.documents.update(derivedPreviewDoc.id, { name: trimmed });
+      setIsEditingName(false);
+      setSnackbarMessage('Document renamed successfully.');
+    } catch (err) {
+      console.error('Failed to rename document:', err);
+      setSnackbarMessage('Failed to rename document.');
+    }
+  };
 
   const documents = useLiveQuery(() => db.documents?.orderBy('createdAt').reverse().toArray(), []) || [];
   const categoriesList = useLiveQuery(() => db.categories.toArray(), []) || [];
@@ -100,6 +125,7 @@ export default function Documents() {
     setSelectedAuditCat('All');
     setAuditSearchQuery('');
     setAuditPage(0);
+    setIsEditingName(false);
   };
 
   const handleDeleteClick = (id: string) => {
@@ -160,9 +186,59 @@ export default function Documents() {
               Back to list
             </Button>
             <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="h6" fontWeight="700">
-                {derivedPreviewDoc.name}
-              </Typography>
+              {isEditingName ? (
+                <>
+                  <TextField
+                    size="small"
+                    value={editNameValue}
+                    onChange={(e) => setEditNameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSaveName();
+                      } else if (e.key === 'Escape') {
+                        setIsEditingName(false);
+                      }
+                    }}
+                    autoFocus
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        fontWeight: 700,
+                        fontSize: '1.25rem',
+                        py: 0.5,
+                      }
+                    }}
+                  />
+                  <IconButton 
+                    size="small" 
+                    color="primary"
+                    onClick={handleSaveName}
+                  >
+                    <CheckIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton 
+                    size="small" 
+                    color="error"
+                    onClick={() => setIsEditingName(false)}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </>
+              ) : (
+                <>
+                  <Typography variant="h6" fontWeight="700">
+                    {derivedPreviewDoc.name}
+                  </Typography>
+                  <IconButton 
+                    size="small" 
+                    onClick={() => {
+                      setEditNameValue(derivedPreviewDoc.name);
+                      setIsEditingName(true);
+                    }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </>
+              )}
             </Box>
           </Box>
 

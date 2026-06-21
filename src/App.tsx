@@ -8,17 +8,6 @@ import { useTheme } from '@mui/material/styles';
 import { getAppTheme } from './theme';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import FileUploadIcon from '@mui/icons-material/FileUpload';
-import SettingsIcon from '@mui/icons-material/Settings';
-import PsychologyIcon from '@mui/icons-material/Psychology';
-import TuneIcon from '@mui/icons-material/Tune';
-import BrushIcon from '@mui/icons-material/Brush';
-import CategoryIcon from '@mui/icons-material/Category';
-import RuleIcon from '@mui/icons-material/Rule';
-import StorefrontIcon from '@mui/icons-material/Storefront';
-import PercentIcon from '@mui/icons-material/Percent';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import DescriptionIcon from '@mui/icons-material/Description';
 import {
   Group as PanelGroup,
   Panel,
@@ -57,28 +46,28 @@ const PRIMARY_NAV = [
 ];
 
 const PLANNING_NAV = [
-  { to: '/loans', label: 'Loans', icon: <AccountBalanceIcon fontSize="small" /> },
-  { to: '/taxes', label: 'Taxes', icon: <PercentIcon fontSize="small" /> },
-  { to: '/documents', label: 'Documents', icon: <DescriptionIcon fontSize="small" /> },
+  { to: '/loans', label: 'Loans' },
+  { to: '/taxes', label: 'Taxes' },
+  { to: '/documents', label: 'Documents' },
 ];
 
 const ORGANIZE_NAV = [
-  { to: '/categories', label: 'Categories', icon: <CategoryIcon fontSize="small" /> },
-  { to: '/rules', label: 'Rules', icon: <RuleIcon fontSize="small" /> },
-  { to: '/merchants', label: 'Merchants', icon: <StorefrontIcon fontSize="small" /> },
+  { to: '/categories', label: 'Categories' },
+  { to: '/rules', label: 'Rules' },
+  { to: '/merchants', label: 'Merchants' },
 ];
 
 const AI_NAV = [
-  { to: '/local-model', label: 'Local Model', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>AI</Box> },
-  { to: '/agent-skills', label: 'Agent Skills', icon: <PsychologyIcon fontSize="small" /> },
-  { to: '/tools-reference', label: 'Tool Reference', icon: <Box component="span" sx={{ fontWeight: 900, fontSize: 11, minWidth: 20, display: 'inline-block', color: 'primary.main', textShadow: '0 0 0.5px currentColor' }}>🛠️</Box> },
+  { to: '/local-model', label: 'Local Model' },
+  { to: '/agent-skills', label: 'Agent Skills' },
+  { to: '/tools-reference', label: 'Tool Reference' },
 ];
 
 const SETTINGS_NAV = [
-  { to: '/import', label: 'Import', icon: <FileUploadIcon fontSize="small" /> },
-  { to: '/settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
-  { to: '/animation-playground', label: 'Animations', icon: <TuneIcon fontSize="small" /> },
-  { to: '/theme', label: 'Theme', icon: <BrushIcon fontSize="small" /> },
+  { to: '/import', label: 'Import' },
+  { to: '/settings', label: 'Settings' },
+  { to: '/animation-playground', label: 'Animations' },
+  { to: '/theme', label: 'Theme' },
 ];
 
 export default function App() {
@@ -343,7 +332,6 @@ export default function App() {
                       sx={{
                         color: isItemActive ? 'primary.main' : 'text.primary',
                         fontWeight: isItemActive ? 600 : 400,
-                        gap: 1.5,
                         py: 1,
                         px: 2,
                         '&:hover': {
@@ -351,7 +339,6 @@ export default function App() {
                         }
                       }}
                     >
-                      {item.icon}
                       <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
                         {item.label}
                       </Typography>
@@ -405,7 +392,6 @@ export default function App() {
                       sx={{
                         color: isItemActive ? 'primary.main' : 'text.primary',
                         fontWeight: isItemActive ? 600 : 400,
-                        gap: 1.5,
                         py: 1,
                         px: 2,
                         '&:hover': {
@@ -413,7 +399,6 @@ export default function App() {
                         }
                       }}
                     >
-                      {item.icon}
                       <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
                         {item.label}
                       </Typography>
@@ -467,7 +452,6 @@ export default function App() {
                       sx={{
                         color: isItemActive ? 'primary.main' : 'text.primary',
                         fontWeight: isItemActive ? 600 : 400,
-                        gap: 1.5,
                         py: 1,
                         px: 2,
                         '&:hover': {
@@ -475,7 +459,6 @@ export default function App() {
                         }
                       }}
                     >
-                      {item.icon}
                       <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
                         {item.label}
                       </Typography>
@@ -529,7 +512,6 @@ export default function App() {
                       sx={{
                         color: isItemActive ? 'primary.main' : 'text.primary',
                         fontWeight: isItemActive ? 600 : 400,
-                        gap: 1.5,
                         py: 1,
                         px: 2,
                         '&:hover': {
@@ -537,7 +519,6 @@ export default function App() {
                         }
                       }}
                     >
-                      {item.icon}
                       <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
                         {item.label}
                       </Typography>

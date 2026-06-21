@@ -123,14 +123,16 @@ export const SkillsDirectory: React.FC<SkillsDirectoryProps> = ({
                       >
                         <EditIcon sx={{ fontSize: 18 }} />
                       </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => onDeleteSkill(skill.id!)}
-                        color="error"
-                        title="Delete Skill"
-                      >
-                        <DeleteIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
+                      {!skill.isBuiltIn && (
+                        <IconButton
+                          size="small"
+                          onClick={() => onDeleteSkill(skill.id!)}
+                          color="error"
+                          title="Delete Skill"
+                        >
+                          <DeleteIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      )}
                     </Stack>
                   </TableCell>
                 </TableRow>
