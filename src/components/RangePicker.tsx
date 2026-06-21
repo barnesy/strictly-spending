@@ -15,6 +15,8 @@ import {
   resolveDateRange,
   type DateRangePreset,
 } from '../store';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { parseISO, format } from 'date-fns';
 
 const PRESETS: { value: DateRangePreset; label: string }[] = [
   { value: 'ytd', label: 'YTD' },
@@ -58,30 +60,31 @@ export default function RangePicker() {
   const label = formatDateRange(range.start, range.end);
   return (
     <Stack direction="row" spacing={2} alignItems="flex-end" flexWrap="wrap" justifyContent="flex-end">
-      <Typography variant="caption" color="text.secondary" sx={{ height: 40, display: 'flex', alignItems: 'center', fontWeight: 500 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ height: 56, display: 'flex', alignItems: 'center', fontWeight: 500 }}>
         {label}
       </Typography>
       {preset !== 'custom' && (
         <Stack direction="row" spacing={0.5} alignItems="center">
           <Tooltip title="Shift earlier">
             <IconButton
-              size="small"
+              size="medium"
               onClick={() => shiftRange(-1)}
               aria-label="Shift date range earlier"
-              sx={{ height: 40, width: 40 }}
+              sx={{ height: 56, width: 56 }}
             >
-              <ChevronLeftIcon fontSize="small" />
+              <ChevronLeftIcon fontSize="medium" />
             </IconButton>
           </Tooltip>
           <ToggleButtonGroup
             value={preset}
             exclusive
             onChange={(_, v) => v && setPreset(v)}
-            size="small"
+            size="medium"
             sx={{
-              height: 40,
+              height: 56,
               '& .MuiToggleButton-root': {
-                height: 40,
+                height: 56,
+                px: 2,
               }
             }}
           >
@@ -93,52 +96,64 @@ export default function RangePicker() {
           </ToggleButtonGroup>
           <Tooltip title="Shift later">
             <IconButton
-              size="small"
+              size="medium"
               onClick={() => shiftRange(1)}
               aria-label="Shift date range later"
-              sx={{ height: 40, width: 40 }}
+              sx={{ height: 56, width: 56 }}
             >
-              <ChevronRightIcon fontSize="small" />
+              <ChevronRightIcon fontSize="medium" />
             </IconButton>
           </Tooltip>
         </Stack>
       )}
       {preset === 'custom' && (
         <Stack direction="row" spacing={1.5} alignItems="flex-end">
-          <TextField
-            type="date"
-            size="small"
-            value={customStart || ''}
-            onChange={(e) =>
-              setCustomRange(e.target.value, customEnd)
-            }
+          <DatePicker
             label="Start"
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{
-              width: 130,
-              '& .MuiInputBase-root': { height: 40 },
+            value={customStart ? parseISO(customStart) : null}
+            onChange={(newVal) => {
+              if (newVal && !isNaN(newVal.getTime())) {
+                setCustomRange(format(newVal, 'yyyy-MM-dd'), customEnd);
+              } else if (!newVal) {
+                setCustomRange('', customEnd);
+              }
+            }}
+            slotProps={{
+              textField: {
+                size: 'medium',
+                sx: {
+                  width: 170,
+                  '& .MuiInputBase-root': { height: 56 },
+                },
+              },
             }}
           />
-          <TextField
-            type="date"
-            size="small"
-            value={customEnd || ''}
-            onChange={(e) =>
-              setCustomRange(customStart, e.target.value)
-            }
+          <DatePicker
             label="End"
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{
-              width: 130,
-              '& .MuiInputBase-root': { height: 40 },
+            value={customEnd ? parseISO(customEnd) : null}
+            onChange={(newVal) => {
+              if (newVal && !isNaN(newVal.getTime())) {
+                setCustomRange(customStart, format(newVal, 'yyyy-MM-dd'));
+              } else if (!newVal) {
+                setCustomRange(customStart, '');
+              }
+            }}
+            slotProps={{
+              textField: {
+                size: 'medium',
+                sx: {
+                  width: 170,
+                  '& .MuiInputBase-root': { height: 56 },
+                },
+              },
             }}
           />
           <Button
-            size="small"
+            size="medium"
             color="inherit"
             variant="outlined"
             onClick={() => setPreset('ytd')}
-            sx={{ textTransform: 'none', height: 40 }}
+            sx={{ textTransform: 'none', height: 56, px: 2.5 }}
           >
             Cancel
           </Button>

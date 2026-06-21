@@ -2,6 +2,8 @@ import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer } from '@mui/material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { useTheme } from '@mui/material/styles';
 import { getAppTheme } from './theme';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -386,96 +388,98 @@ export default function App() {
 
   return (
     <ThemeProvider theme={dynamicTheme}>
-      <CssBaseline />
-      <DynamicAnimationStyles />
-      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
-        {isDesktop ? (
-          <PanelGroup
-            orientation="horizontal"
-            className={isTransitioning ? 'transitioning-panels' : ''}
-            style={{ flex: 1, minHeight: 0 }}
-          >
-            <Panel id="main-content" minSize="360px" groupResizeBehavior="preserve-relative-size">
-              {renderMainWindow()}
-            </Panel>
-
-            <PanelResizeHandle
-              disabled={!isChatOpen}
-              style={{
-                width: 24,
-                position: 'relative',
-                display: isChatOpen ? 'block' : 'none'
-              }}
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <CssBaseline />
+        <DynamicAnimationStyles />
+        <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
+          {isDesktop ? (
+            <PanelGroup
+              orientation="horizontal"
+              className={isTransitioning ? 'transitioning-panels' : ''}
+              style={{ flex: 1, minHeight: 0 }}
             >
-              <Box
-                sx={{
-                  position: 'absolute',
-                  inset: 0,
-                  margin: '0 auto',
-                  width: 2,
-                  bgcolor: 'divider',
-                  borderRadius: 1,
-                  transition: 'background-color 120ms ease',
-                  '[data-resize-handle-active] &, &:hover': {
-                    bgcolor: 'primary.main',
-                    width: 3,
-                  },
+              <Panel id="main-content" minSize="360px" groupResizeBehavior="preserve-relative-size">
+                {renderMainWindow()}
+              </Panel>
+
+              <PanelResizeHandle
+                disabled={!isChatOpen}
+                style={{
+                  width: 24,
+                  position: 'relative',
+                  display: isChatOpen ? 'block' : 'none'
                 }}
-              />
-            </PanelResizeHandle>
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    margin: '0 auto',
+                    width: 2,
+                    bgcolor: 'divider',
+                    borderRadius: 1,
+                    transition: 'background-color 120ms ease',
+                    '[data-resize-handle-active] &, &:hover': {
+                      bgcolor: 'primary.main',
+                      width: 3,
+                    },
+                  }}
+                />
+              </PanelResizeHandle>
 
-            <Panel
-              panelRef={chatPanelRef}
-              id="copilot-chat"
-              minSize="360px"
-              defaultSize={isChatOpen ? "480px" : "0px"}
-              collapsible={true}
-              groupResizeBehavior="preserve-pixel-size"
-              onResize={(size, _, prevSize) => {
-                if (size.inPixels === 0 && prevSize && prevSize.inPixels > 0) {
-                  setIsChatOpen(false);
-                }
-              }}
-            >
-              <Slide direction="left" in={isChatOpen} mountOnEnter unmountOnExit>
-                <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 360 }}>
+              <Panel
+                panelRef={chatPanelRef}
+                id="copilot-chat"
+                minSize="360px"
+                defaultSize={isChatOpen ? "480px" : "0px"}
+                collapsible={true}
+                groupResizeBehavior="preserve-pixel-size"
+                onResize={(size, _, prevSize) => {
+                  if (size.inPixels === 0 && prevSize && prevSize.inPixels > 0) {
+                    setIsChatOpen(false);
+                  }
+                }}
+              >
+                <Slide direction="left" in={isChatOpen} mountOnEnter unmountOnExit>
+                  <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minWidth: 360 }}>
+                    <CopilotChat
+                      onClose={() => setIsChatOpen(false)}
+                      showCloseButton={true}
+                      isEmbedded={true}
+                    />
+                  </Box>
+                </Slide>
+              </Panel>
+            </PanelGroup>
+          ) : (
+            <>
+              <Box sx={{ flex: 1, minHeight: 0 }}>
+                {renderMainWindow()}
+              </Box>
+              <Drawer
+                anchor="right"
+                open={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                PaperProps={{
+                  sx: {
+                    width: { xs: '100%', sm: 400 },
+                    border: 'none',
+                    boxShadow: 'none',
+                  }
+                }}
+              >
+                <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <CopilotChat
                     onClose={() => setIsChatOpen(false)}
                     showCloseButton={true}
                     isEmbedded={true}
                   />
                 </Box>
-              </Slide>
-            </Panel>
-          </PanelGroup>
-        ) : (
-          <>
-            <Box sx={{ flex: 1, minHeight: 0 }}>
-              {renderMainWindow()}
-            </Box>
-            <Drawer
-              anchor="right"
-              open={isChatOpen}
-              onClose={() => setIsChatOpen(false)}
-              PaperProps={{
-                sx: {
-                  width: { xs: '100%', sm: 400 },
-                  border: 'none',
-                  boxShadow: 'none',
-                }
-              }}
-            >
-              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CopilotChat
-                  onClose={() => setIsChatOpen(false)}
-                  showCloseButton={true}
-                  isEmbedded={true}
-                />
-              </Box>
-            </Drawer>
-          </>
-        )}
-      </Box>
+              </Drawer>
+            </>
+          )}
+        </Box>
+      </LocalizationProvider>
     </ThemeProvider>
   );
 }
