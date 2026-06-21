@@ -234,7 +234,7 @@ pub async fn start_ollama(app: AppHandle) -> Result<(), String> {
             
             if target_exe.to_string_lossy() == "ollama" || target_exe.file_name().unwrap_or_default() == "ollama.exe" {
                 if target_exe.exists() && target_exe.parent().map_or(false, |p| {
-                    let p_str = p.to_string_lossy().toLowerCase();
+                    let p_str = p.to_string_lossy().to_lowercase();
                     p_str.contains("programs\\ollama") || p_str.contains("program files\\ollama")
                 }) {
                     // Start the tray app directly
