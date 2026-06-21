@@ -829,9 +829,6 @@ export default function Sort() {
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 Selections Ready to Apply
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                You have categorized **{selectionsCount}** merchant(s) in this session.
-              </Typography>
             </Box>
             <Stack direction="row" spacing={2} alignItems="center">
               <Button
