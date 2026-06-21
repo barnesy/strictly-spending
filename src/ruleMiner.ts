@@ -6,7 +6,6 @@ export interface RuleSuggestion {
   overridesCount: number;
   sampleDescription: string;
 }
-
 export async function mineRuleSuggestions(): Promise<RuleSuggestion[]> {
   // 1. Fetch all rules and overridden transactions
   const rules = await db.rules.toArray();

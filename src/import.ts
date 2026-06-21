@@ -8,7 +8,7 @@ import {
   inferTypeCategory,
 } from './categorize';
 import { localAI } from './ai';
-import { guessTaxFields, resolveTaxDeduction } from './taxUtils';
+import { resolveTaxDeduction } from './taxUtils';
 
 export interface ImportPreview {
   filename: string;

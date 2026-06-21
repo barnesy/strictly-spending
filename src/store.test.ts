@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolveDateRange, type FiltersState } from './store';
 
 describe('resolveDateRange - allTime scoping', () => {
@@ -810,6 +810,14 @@ describe('parseAIResponse & cleanJSONString', () => {
 });
 
 describe('runSkillTestCase', () => {
+  beforeEach(() => {
+    localAI.isLoaded = true;
+  });
+
+  afterEach(() => {
+    localAI.isLoaded = false;
+  });
+
   it('correctly runs execution and evaluation flow on success', async () => {
     const chatCopilotSpy = vi.spyOn(localAI, 'chatCopilot')
       .mockResolvedValueOnce('Assistant output for Netflix duplicates.')

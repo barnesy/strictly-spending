@@ -415,6 +415,7 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
       let lastQuerySearch = '';
       let lastQueryMinPrice: number | undefined = undefined;
       let lastQueryMaxPrice: number | undefined = undefined;
+      let lastQueryAll = false;
       while (loops < maxLoops) {
         if (signal.aborted) {
           throw new DOMException('aborted', 'AbortError');
@@ -948,6 +949,7 @@ If you still need more data (e.g. to compare with a different period), query it 
           lastQuerySearch = searchVal || '';
           lastQueryMinPrice = minPriceVal;
           lastQueryMaxPrice = maxPriceVal;
+          lastQueryAll = queryCats.includes('all') || queryCats.length === 0;
 
           currentSteps.push(`Tool Call: query_data (categories: ${resolvedCats.join(', ')})`);
 

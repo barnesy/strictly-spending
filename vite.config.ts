@@ -11,5 +11,10 @@ export default defineConfig({
       '@emotion/react',
       '@emotion/styled',
     ]
-  }
+  },
+  server: {
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
+  },
 })

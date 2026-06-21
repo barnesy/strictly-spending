@@ -34,7 +34,7 @@ import { db } from '../db';
 import { useDataStore } from '../dataStore';
 import type { TaxSettings } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
-import { SCHEDULE_C_CATEGORIES, guessTaxFields, resolveTaxDeduction } from '../taxUtils';
+import { SCHEDULE_C_CATEGORIES, resolveTaxDeduction } from '../taxUtils';
 
 const DEFAULT_TAX_SETTINGS: TaxSettings = {
   hasBusiness: false,
@@ -246,7 +246,7 @@ export default function Taxes() {
     });
   };
 
-  const handleDocumentGenerateAi = (documentId: string, label: string) => {
+  const handleDocumentGenerateAi = (_documentId: string, label: string) => {
     const promptText = `Please generate ${label} for the tax year ${taxSettings.taxYear}`;
     window.dispatchEvent(new CustomEvent('app:run-prompt', { detail: { prompt: promptText } }));
     window.dispatchEvent(new CustomEvent('app:open-chat'));
