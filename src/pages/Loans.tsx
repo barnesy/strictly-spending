@@ -58,21 +58,11 @@ import { db } from '../db';
 import { useDataStore } from '../dataStore';
 import { usdCents } from '../lib';
 
-interface LoanConfig {
-  principal: number;
-  rate: number;
-  termYears: number;
-  startDate: string;
-  category: string;
-  monthlyPayment?: number;
-  propertyValue?: number;
-  downPayment?: number;
-  extraMonthlyPayment?: number;
-  extraOneTimePayment?: number;
-  extraOneTimeMonth?: number;
-}
+import type { Loan } from '../types';
 
-const DEFAULT_HOUSE_CONFIG: LoanConfig = {
+const DEFAULT_HOUSE_CONFIG: Omit<Loan, 'id' | 'createdAt'> = {
+  name: 'Primary Residence',
+  type: 'house',
   principal: 450000,
   rate: 6.5,
   termYears: 30,
@@ -86,7 +76,9 @@ const DEFAULT_HOUSE_CONFIG: LoanConfig = {
   extraOneTimeMonth: undefined,
 };
 
-const DEFAULT_CAR_CONFIG: LoanConfig = {
+const DEFAULT_CAR_CONFIG: Omit<Loan, 'id' | 'createdAt'> = {
+  name: 'Car Loan',
+  type: 'car',
   principal: 35000,
   rate: 5.5,
   termYears: 5,
@@ -124,35 +116,42 @@ interface PaymentRow {
 }
 
 export default function Loans() {
-  const [activeTab, setActiveTab] = useState<'house' | 'car'>('house');
-  
+  const [activeLoanId, setActiveLoanId] = useState<number | null>(null);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addType, setAddType] = useState<'house' | 'car'>('house');
+
   const panelIds = ['loan-parameters', 'loan-graph'];
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `loans-layout-v1-${panelIds.join('-')}`,
     panelIds,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   });
-  
+
   // Settings DB Query
-  const houseSetting = useLiveQuery(() => db.settings.get('app:loan:house'), []);
-  const carSetting = useLiveQuery(() => db.settings.get('app:loan:car'), []);
+  const loans = useLiveQuery(() => db.loans.toArray(), []) || [];
 
-  const houseConfig = useMemo(() => {
-    return (houseSetting?.value as LoanConfig) || DEFAULT_HOUSE_CONFIG;
-  }, [houseSetting]);
+  const currentLoan = useMemo(() => {
+    return loans.find((l) => l.id === activeLoanId) || null;
+  }, [loans, activeLoanId]);
 
-  const carConfig = useMemo(() => {
-    return (carSetting?.value as LoanConfig) || DEFAULT_CAR_CONFIG;
-  }, [carSetting]);
+  const currentConfig = currentLoan;
+  const activeTab = currentConfig ? currentConfig.type : 'house';
 
-  const currentConfig = activeTab === 'house' ? houseConfig : carConfig;
+  useEffect(() => {
+    if (activeLoanId === null && loans.length > 0 && loans[0].id !== undefined) {
+      setActiveLoanId(loans[0].id);
+    }
+  }, [loans, activeLoanId]);
 
   // Form State
+  const [formName, setFormName] = useState('');
   const [formPrincipal, setFormPrincipal] = useState('');
   const [formRate, setFormRate] = useState('');
   const [formTerm, setFormTerm] = useState('');
   const [formStartDate, setFormStartDate] = useState('');
   const [formCategory, setFormCategory] = useState('');
+  const [formMerchant, setFormMerchant] = useState('');
   const [formMonthlyPayment, setFormMonthlyPayment] = useState('');
   const [formPropertyValue, setFormPropertyValue] = useState('');
   const [formDownPayment, setFormDownPayment] = useState('');
@@ -163,11 +162,13 @@ export default function Loans() {
   // Sync Form with config
   useEffect(() => {
     if (currentConfig) {
+      setFormName(currentConfig.name);
       setFormPrincipal(String(currentConfig.principal));
       setFormRate(String(currentConfig.rate));
       setFormTerm(String(currentConfig.termYears));
       setFormStartDate(currentConfig.startDate);
       setFormCategory(currentConfig.category);
+      setFormMerchant(currentConfig.merchant || '');
       setFormMonthlyPayment(String(currentConfig.monthlyPayment ?? ''));
       setFormPropertyValue(currentConfig.propertyValue ? String(currentConfig.propertyValue) : '');
       setFormDownPayment(currentConfig.downPayment ? String(currentConfig.downPayment) : '');
@@ -175,7 +176,7 @@ export default function Loans() {
       setFormExtraOneTimePayment(currentConfig.extraOneTimePayment ? String(currentConfig.extraOneTimePayment) : '');
       setFormExtraOneTimeMonth(currentConfig.extraOneTimeMonth ? String(currentConfig.extraOneTimeMonth) : '');
     }
-  }, [currentConfig, activeTab]);
+  }, [currentConfig, activeLoanId]);
 
   // Global Categories and Transactions
   const { transactions, categories } = useDataStore(useShallow((s) => ({
@@ -236,7 +237,17 @@ export default function Loans() {
     // Filter and group transactions by calendar month (YYYY-MM)
     const txByMonth = new Map<string, any[]>();
     for (const t of transactions) {
-      if (t.category === currentConfig.category) {
+      let isMatch = false;
+      if (currentConfig.merchant) {
+        const normMerchant = currentConfig.merchant.toLowerCase().trim();
+        const normDesc = t.description.toLowerCase();
+        const normKey = (t.merchantKey || '').toLowerCase();
+        isMatch = normDesc.includes(normMerchant) || normKey.includes(normMerchant);
+      } else {
+        isMatch = t.category === currentConfig.category;
+      }
+
+      if (isMatch) {
         const monthKeyStr = t.date.substring(0, 7); // YYYY-MM
         const list = txByMonth.get(monthKeyStr) || [];
         list.push(t);
@@ -397,48 +408,194 @@ export default function Loans() {
     const EOTP = parseFloat(formExtraOneTimePayment);
     const EOTM = parseInt(formExtraOneTimeMonth, 10);
     
-    if (isNaN(P) || P <= 0 || isNaN(R) || R < 0 || isNaN(T) || T <= 0 || !formStartDate) {
-      setSnackbarMsg('Please fill out all settings with valid positive numbers.');
+    if (isNaN(P) || P <= 0 || isNaN(R) || R < 0 || isNaN(T) || T <= 0 || !formStartDate || !formName.trim()) {
+      setSnackbarMsg('Please fill out all settings with valid positive numbers and a loan name.');
       return;
     }
 
-    const updatedConfig: LoanConfig = {
+    const updatedConfig: Loan = {
+      id: currentConfig?.id,
+      name: formName.trim(),
+      type: currentConfig?.type || 'house',
       principal: P,
       rate: R,
       termYears: T,
       startDate: formStartDate,
       category: formCategory,
+      merchant: formMerchant.trim() || undefined,
       monthlyPayment: isNaN(MP) || MP <= 0 ? undefined : MP,
       propertyValue: isNaN(PV) || PV <= 0 ? undefined : PV,
       downPayment: isNaN(DP) || DP < 0 ? undefined : DP,
       extraMonthlyPayment: isNaN(EMP) || EMP <= 0 ? undefined : EMP,
       extraOneTimePayment: isNaN(EOTP) || EOTP <= 0 ? undefined : EOTP,
       extraOneTimeMonth: isNaN(EOTM) || EOTM <= 0 ? undefined : EOTM,
+      createdAt: currentConfig?.createdAt || new Date().toISOString(),
     };
 
-    const settingKey = activeTab === 'house' ? 'app:loan:house' : 'app:loan:car';
-    await db.settings.put({ key: settingKey, value: updatedConfig });
-    setSnackbarMsg('Loan settings saved successfully!');
+    if (currentConfig && currentConfig.id !== undefined) {
+      await db.loans.put(updatedConfig);
+      setSnackbarMsg('Loan settings saved successfully!');
+    }
   };
 
   const handleResetDefaults = async () => {
-    const defaultVal = activeTab === 'house' ? DEFAULT_HOUSE_CONFIG : DEFAULT_CAR_CONFIG;
-    setFormPrincipal(String(defaultVal.principal));
-    setFormRate(String(defaultVal.rate));
-    setFormTerm(String(defaultVal.termYears));
-    setFormStartDate(defaultVal.startDate);
-    setFormCategory(defaultVal.category);
-    setFormMonthlyPayment(String(defaultVal.monthlyPayment ?? ''));
-    setFormPropertyValue(defaultVal.propertyValue ? String(defaultVal.propertyValue) : '');
-    setFormDownPayment(defaultVal.downPayment ? String(defaultVal.downPayment) : '');
-    setFormExtraMonthlyPayment(defaultVal.extraMonthlyPayment ? String(defaultVal.extraMonthlyPayment ?? '') : '');
-    setFormExtraOneTimePayment(defaultVal.extraOneTimePayment ? String(defaultVal.extraOneTimePayment ?? '') : '');
-    setFormExtraOneTimeMonth(defaultVal.extraOneTimeMonth ? String(defaultVal.extraOneTimeMonth ?? '') : '');
+    if (currentConfig && currentConfig.id !== undefined) {
+      const defaultVal = currentConfig.type === 'house' ? DEFAULT_HOUSE_CONFIG : DEFAULT_CAR_CONFIG;
+      const resetLoan = {
+        ...currentConfig,
+        ...defaultVal,
+        name: currentConfig.name,
+        type: currentConfig.type,
+      };
 
-    const settingKey = activeTab === 'house' ? 'app:loan:house' : 'app:loan:car';
-    await db.settings.put({ key: settingKey, value: defaultVal });
-    setSnackbarMsg('Reset to default values.');
+      setFormPrincipal(String(resetLoan.principal));
+      setFormRate(String(resetLoan.rate));
+      setFormTerm(String(resetLoan.termYears));
+      setFormStartDate(resetLoan.startDate);
+      setFormCategory(resetLoan.category);
+      setFormMerchant(resetLoan.merchant || '');
+      setFormMonthlyPayment(String(resetLoan.monthlyPayment ?? ''));
+      setFormPropertyValue(resetLoan.propertyValue ? String(resetLoan.propertyValue) : '');
+      setFormDownPayment(resetLoan.downPayment ? String(resetLoan.downPayment) : '');
+      setFormExtraMonthlyPayment(resetLoan.extraMonthlyPayment ? String(resetLoan.extraMonthlyPayment ?? '') : '');
+      setFormExtraOneTimePayment(resetLoan.extraOneTimePayment ? String(resetLoan.extraOneTimePayment ?? '') : '');
+      setFormExtraOneTimeMonth(resetLoan.extraOneTimeMonth ? String(resetLoan.extraOneTimeMonth ?? '') : '');
+
+      await db.loans.put(resetLoan);
+      setSnackbarMsg('Reset to default values.');
+    }
   };
+
+  const handleAddLoanSubmit = async () => {
+    const nameStr = addName.trim();
+    if (!nameStr) {
+      alert('Please enter a loan name.');
+      return;
+    }
+
+    const defaultVal = addType === 'house' ? DEFAULT_HOUSE_CONFIG : DEFAULT_CAR_CONFIG;
+    const newLoan: Loan = {
+      ...defaultVal,
+      name: nameStr,
+      type: addType,
+      createdAt: new Date().toISOString(),
+    };
+
+    const newId = await db.loans.add(newLoan);
+    setActiveLoanId(newId);
+    setAddDialogOpen(false);
+    setAddName('');
+    setSnackbarMsg(`Loan "${nameStr}" created successfully.`);
+  };
+
+  const handleDeleteLoan = async () => {
+    if (!currentConfig || currentConfig.id === undefined) return;
+    if (!window.confirm(`Are you sure you want to delete the loan "${currentConfig.name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    const idToDelete = currentConfig.id;
+    await db.loans.delete(idToDelete);
+
+    const remainingLoans = loans.filter((l) => l.id !== idToDelete);
+    if (remainingLoans.length > 0 && remainingLoans[0].id !== undefined) {
+      setActiveLoanId(remainingLoans[0].id);
+    } else {
+      setActiveLoanId(null);
+    }
+    setSnackbarMsg(`Loan "${currentConfig.name}" deleted.`);
+  };
+
+  if (loans.length === 0) {
+    return (
+      <Stack spacing={3} sx={{ width: '100%', pb: 5 }}>
+        {/* Header */}
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              Loans Tracker
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Visualize your amortization schedules and match against transaction histories.
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setAddDialogOpen(true)}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            + Add Loan
+          </Button>
+        </Stack>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 6,
+            border: '1px dashed',
+            borderColor: 'divider',
+            borderRadius: 2,
+            textAlign: 'center',
+            bgcolor: 'background.default'
+          }}
+        >
+          <HomeIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+            No Loans Tracked
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
+            Get started by adding a house mortgage or auto loan to simulate payment schedules, extra payments, and match against actual bank transactions.
+          </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setAddDialogOpen(true)}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Create Your First Loan
+          </Button>
+        </Paper>
+
+        {/* Add Loan Dialog */}
+        <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>Add New Loan</DialogTitle>
+          <DialogContent sx={{ pt: 1 }}>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Loan Name"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                placeholder="e.g. Primary Residence or Tesla Model Y"
+              />
+              <FormControl fullWidth size="small">
+                <InputLabel id="add-loan-type-label">Loan Type</InputLabel>
+                <Select
+                  labelId="add-loan-type-label"
+                  value={addType}
+                  onChange={(e) => setAddType(e.target.value as 'house' | 'car')}
+                  label="Loan Type"
+                >
+                  <MenuItem value="house">House Mortgage</MenuItem>
+                  <MenuItem value="car">Car Loan / Lease</MenuItem>
+                </Select>
+              </FormControl>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setAddDialogOpen(false)} variant="outlined" color="inherit" size="small">
+              Cancel
+            </Button>
+            <Button onClick={handleAddLoanSubmit} variant="contained" color="primary" size="small">
+              Add Loan
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Stack>
+    );
+  }
 
   if (!scheduleData || !currentConfig) return null;
 
@@ -456,32 +613,38 @@ export default function Loans() {
             Visualize your amortization schedules and match against transaction histories.
           </Typography>
         </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => setAddDialogOpen(true)}
+          sx={{ textTransform: 'none', fontWeight: 600 }}
+        >
+          + Add Loan
+        </Button>
       </Stack>
 
       {/* Tabs */}
       <Paper sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs
-          value={activeTab}
+          value={activeLoanId}
           onChange={(_, val) => {
-            setActiveTab(val);
+            setActiveLoanId(val);
             setShowScheduleDetails(false);
           }}
+          variant="scrollable"
+          scrollButtons="auto"
           sx={{ px: 2 }}
         >
-          <Tab
-            icon={<HomeIcon sx={{ fontSize: 18 }} />}
-            iconPosition="start"
-            label="House Mortgage"
-            value="house"
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
-          <Tab
-            icon={<DirectionsCarIcon sx={{ fontSize: 18 }} />}
-            iconPosition="start"
-            label="Car Loan"
-            value="car"
-            sx={{ fontWeight: 600, minHeight: 48 }}
-          />
+          {loans.map((loan) => (
+            <Tab
+              key={loan.id}
+              icon={loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18 }} /> : <DirectionsCarIcon sx={{ fontSize: 18 }} />}
+              iconPosition="start"
+              label={loan.name}
+              value={loan.id}
+              sx={{ fontWeight: 600, minHeight: 48 }}
+            />
+          ))}
         </Tabs>
       </Paper>
 
@@ -684,6 +847,13 @@ export default function Loans() {
                   <TextField
                     fullWidth
                     size="small"
+                    label="Loan Name"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
                     label="Original Loan Amount"
                     value={formPrincipal}
                     onChange={(e) => setFormPrincipal(e.target.value)}
@@ -745,6 +915,16 @@ export default function Loans() {
                       ))}
                     </Select>
                   </FormControl>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Linked Merchant Pattern (Optional)"
+                    value={formMerchant}
+                    onChange={(e) => setFormMerchant(e.target.value)}
+                    placeholder="e.g. TOYOTA FIN"
+                    helperText="If specified, matches transactions by merchant name instead of category."
+                    FormHelperTextProps={{ sx: { mx: 1 } }}
+                  />
                   <TextField
                     fullWidth
                     size="small"
@@ -839,26 +1019,37 @@ export default function Loans() {
                 </Stack>
               </Box>
 
-              <Stack direction="row" spacing={1.5} justifyContent="flex-end" sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                 <Button
-                  variant="outlined"
+                  variant="text"
                   size="small"
-                  color="inherit"
-                  onClick={handleResetDefaults}
-                  startIcon={<SettingsBackupRestoreIcon />}
-                  sx={{ textTransform: 'none', fontWeight: 600, minWidth: 80 }}
+                  color="error"
+                  onClick={handleDeleteLoan}
+                  sx={{ textTransform: 'none', fontWeight: 600 }}
                 >
-                  Reset
+                  Delete Loan
                 </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  color="primary"
-                  onClick={handleSaveSettings}
-                  sx={{ textTransform: 'none', fontWeight: 600, minWidth: 120 }}
-                >
-                  Save
-                </Button>
+                <Stack direction="row" spacing={1.5}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="inherit"
+                    onClick={handleResetDefaults}
+                    startIcon={<SettingsBackupRestoreIcon />}
+                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    color="primary"
+                    onClick={handleSaveSettings}
+                    sx={{ textTransform: 'none', fontWeight: 600, minWidth: 100 }}
+                  >
+                    Save
+                  </Button>
+                </Stack>
               </Stack>
             </Paper>
           </Panel>
@@ -1074,6 +1265,43 @@ export default function Loans() {
         <DialogActions sx={{ px: 3, py: 1.5 }}>
           <Button onClick={() => setActiveTxDialogRows(null)} variant="outlined" color="inherit" size="small">
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Loan Dialog */}
+      <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Add New Loan</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Loan Name"
+              value={addName}
+              onChange={(e) => setAddName(e.target.value)}
+              placeholder="e.g. Primary Residence or Tesla Model Y"
+            />
+            <FormControl fullWidth size="small">
+              <InputLabel id="add-loan-type-label">Loan Type</InputLabel>
+              <Select
+                labelId="add-loan-type-label"
+                value={addType}
+                onChange={(e) => setAddType(e.target.value as 'house' | 'car')}
+                label="Loan Type"
+              >
+                <MenuItem value="house">House Mortgage</MenuItem>
+                <MenuItem value="car">Car Loan / Lease</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setAddDialogOpen(false)} variant="outlined" color="inherit" size="small">
+            Cancel
+          </Button>
+          <Button onClick={handleAddLoanSubmit} variant="contained" color="primary" size="small">
+            Add Loan
           </Button>
         </DialogActions>
       </Dialog>

@@ -15,6 +15,7 @@ import type {
   CsvMapping,
   AppDocument,
   TaxRule,
+  Loan,
 } from './types';
 
 class SpendingDB extends Dexie {
@@ -33,6 +34,7 @@ class SpendingDB extends Dexie {
   documents!: Table<AppDocument, string>;
   documentContents!: Table<{ id: string; content: string }, string>;
   taxRules!: Table<TaxRule, number>;
+  loans!: Table<Loan, number>;
 
   constructor() {
     super('spending-viz');
@@ -89,6 +91,59 @@ class SpendingDB extends Dexie {
     });
     this.version(12).stores({
       taxRules: '++id, pattern, priority',
+    });
+    this.version(13).stores({
+      loans: '++id, name, type',
+    }).upgrade(async (tx) => {
+      const settingsTable = tx.table('settings');
+      const loansTable = tx.table('loans');
+
+      const houseSetting = await settingsTable.get('app:loan:house');
+      if (houseSetting && houseSetting.value) {
+        await loansTable.add({
+          ...houseSetting.value,
+          name: 'Primary Residence',
+          type: 'house',
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        await loansTable.add({
+          name: 'Primary Residence',
+          type: 'house',
+          principal: 450000,
+          rate: 6.5,
+          termYears: 30,
+          startDate: '2024-01-15',
+          category: 'Mortgage',
+          propertyValue: 500000,
+          downPayment: 50000,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      const carSetting = await settingsTable.get('app:loan:car');
+      if (carSetting && carSetting.value) {
+        await loansTable.add({
+          ...carSetting.value,
+          name: 'Car Loan',
+          type: 'car',
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        await loansTable.add({
+          name: 'Car Loan',
+          type: 'car',
+          principal: 35000,
+          rate: 5.5,
+          termYears: 5,
+          startDate: '2024-06-15',
+          category: 'Auto Loan',
+          monthlyPayment: 389,
+          propertyValue: 40000,
+          downPayment: 5000,
+          createdAt: new Date().toISOString(),
+        });
+      }
     });
   }
 }

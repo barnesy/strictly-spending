@@ -368,4 +368,23 @@ export interface ProposedCategorizationReport {
   items: ProposedCategorizationItem[];
 }
 
+export interface Loan {
+  id?: number;
+  name: string;
+  type: 'house' | 'car';
+  principal: number;
+  rate: number;
+  termYears: number;
+  startDate: string;
+  category: string;
+  merchant?: string;
+  monthlyPayment?: number;
+  propertyValue?: number;
+  downPayment?: number;
+  extraMonthlyPayment?: number;
+  extraOneTimePayment?: number;
+  extraOneTimeMonth?: number;
+  createdAt: string;
+}
+
 
