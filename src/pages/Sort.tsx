@@ -53,6 +53,13 @@ export default function Sort() {
   const demoMode = useFilters((s) => s.demoMode);
   const [mode, setMode] = useState<'categorize' | 'tax'>('categorize');
 
+  const [aiSuggestEnabled, setAiSuggestEnabled] = useState(() => {
+    return localStorage.getItem('app:aiSuggestEnabled') === 'true';
+  });
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { category: string; pattern: string; isBusiness?: boolean; taxCategory?: string }>>({});
+  const [aiSuggesting, setAiSuggesting] = useState<Record<string, boolean>>({});
+  const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
+
   const { allTransactions, categories, rules, isDataLoading, globalRecurrenceMap, globalDemoRecurrenceMap } = useDataStore(useShallow((s) => ({
     allTransactions: s.transactions,
     categories: s.categories,
@@ -68,10 +75,23 @@ export default function Sort() {
   );
   const deferredUncategorizedAll = useDeferredValue(uncategorizedAll);
 
-  const pendingTaxAll = useMemo(
-    () => allTransactions.filter((t) => t.deductionStatus === 'pending'),
-    [allTransactions]
-  );
+  const pendingTaxAll = useMemo(() => {
+    const potentialTaxCategories = [
+      'Subscriptions',
+      'Travel',
+      'Restaurants & Coffee',
+      'Insurance',
+      'Utilities',
+      'Shopping',
+      'Fees & Interest',
+      'Taxes',
+      'Transportation',
+      'Uncategorized'
+    ];
+    return allTransactions.filter(
+      (t) => t.deductionStatus === 'pending' && potentialTaxCategories.includes(t.category)
+    );
+  }, [allTransactions]);
   const deferredPendingTaxAll = useDeferredValue(pendingTaxAll);
 
   const pendingTax = useMemo(
@@ -120,7 +140,6 @@ export default function Sort() {
   );
 
   const taxQueue = useMemo(() => {
-    if (mode !== 'tax') return [];
     const byKey = new Map<string, Transaction[]>();
     for (const t of pendingTax) {
       const k = t.merchantKey || '';
@@ -139,6 +158,10 @@ export default function Sort() {
 
       // Guess default tax fields
       const guess = guessTaxFields(txns[0].description, txns[0].category);
+
+      // Only show card if the initial guess suggests a business expense
+      if (!guess.isBusiness) continue;
+
       const suggestedLabel = guess.isBusiness && guess.taxCategory
         ? SCHEDULE_C_CATEGORIES[guess.taxCategory]?.label || 'Business Expense'
         : 'Personal Expense (Non-Business)';
@@ -154,7 +177,11 @@ export default function Sort() {
     }
     cards.sort((a, b) => b.totalAbs - a.totalAbs);
     return cards;
-  }, [pendingTax, mode]);
+  }, [pendingTax]);
+
+  const filteredPendingTaxCount = useMemo(() => {
+    return taxQueue.reduce((acc, card) => acc + card.txns.length, 0);
+  }, [taxQueue]);
 
   const taxCategoriesList = useMemo(() => {
     const list = Object.values(SCHEDULE_C_CATEGORIES).map(cat => ({
@@ -177,6 +204,93 @@ export default function Sort() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const visibleQueue = mode === 'categorize' ? queue : taxQueue;
 
+  const [aiRunning, setAiRunning] = useState(false);
+  const [aiProgress, setAiProgress] = useState(0);
+  const bulkAbortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelAi = () => {
+    if (bulkAbortControllerRef.current) {
+      bulkAbortControllerRef.current.abort();
+    }
+  };
+
+  const handleStartBulkAi = async () => {
+    const cardsToProcess = visibleQueue.filter(card => !selections[card.merchantKey]?.category);
+    if (cardsToProcess.length === 0) return;
+
+    setAiRunning(true);
+    setAiProgress(0);
+    const controller = new AbortController();
+    bulkAbortControllerRef.current = controller;
+
+    try {
+      if (!localAI.isLoaded) {
+        await localAI.init();
+      }
+
+      const chunkSize = 10;
+      const total = cardsToProcess.length;
+      let processed = 0;
+      const newSelections = { ...selections };
+      const newSuggestions = { ...aiSuggestions };
+
+      for (let i = 0; i < total; i += chunkSize) {
+        if (controller.signal.aborted) break;
+
+        const chunk = cardsToProcess.slice(i, i + chunkSize);
+        const toReview = chunk.map(card => ({
+          desc: card.txns[0]?.description || card.merchantKey || '',
+          ruleCategory: mode === 'categorize' ? (card.suggestedCategory || 'Uncategorized') : 'Uncategorized',
+        }));
+
+        const catNames = (categories || [])
+          .map((c) => c.name)
+          .filter((name) => name !== 'Uncategorized');
+        const taxCatNames = taxCategoriesList.map(c => c.name);
+
+        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal, taxCatNames);
+        results.forEach((res, idx) => {
+          const card = chunk[idx];
+          if (card && res) {
+            newSuggestions[card.merchantKey] = res;
+            if (mode === 'categorize') {
+              if (res.category && res.category !== 'Uncategorized' && catNames.includes(res.category)) {
+                newSelections[card.merchantKey] = {
+                  category: res.category,
+                  saveRule: true,
+                  rulePattern: res.pattern || card.merchantKey,
+                };
+              }
+            } else {
+              if (res.taxCategory && taxCatNames.includes(res.taxCategory)) {
+                newSelections[card.merchantKey] = {
+                  category: res.taxCategory,
+                  saveRule: false,
+                  rulePattern: '',
+                };
+              }
+            }
+          }
+        });
+
+        processed += chunk.length;
+        setAiProgress(Math.round((processed / total) * 100));
+        setAiSuggestions({ ...newSuggestions });
+        setSelections({ ...newSelections });
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log('AI Auto-categorization aborted by user');
+      } else {
+        console.error('AI Auto-categorization failed:', err);
+        alert('AI Auto-categorization failed: ' + err.message);
+      }
+    } finally {
+      setAiRunning(false);
+      bulkAbortControllerRef.current = null;
+    }
+  };
+
   useEffect(() => {
     if (visibleQueue.length > 0 && currentIndex >= visibleQueue.length) {
       setCurrentIndex(Math.max(0, visibleQueue.length - 1));
@@ -190,12 +304,6 @@ export default function Sort() {
   const [saveRule, setSaveRule] = useState(true);
   const [rulePattern, setRulePattern] = useState('');
 
-  const [aiSuggestEnabled, setAiSuggestEnabled] = useState(() => {
-    return localStorage.getItem('app:aiSuggestEnabled') === 'true';
-  });
-  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { category: string; pattern: string }>>({});
-  const [aiSuggesting, setAiSuggesting] = useState<Record<string, boolean>>({});
-  const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
   const fetchingKeysRef = useRef<Set<string>>(new Set());
 
   const [helpOpen, setHelpOpen] = useState(false);
@@ -265,7 +373,7 @@ export default function Sort() {
   };
 
   useEffect(() => {
-    if (!aiSuggestEnabled || !currentCard || mode === 'tax') return;
+    if (!aiSuggestEnabled || !currentCard) return;
     const key = currentCard.merchantKey;
     if (aiSuggestions[key] || fetchingKeysRef.current.has(key)) return;
 
@@ -301,16 +409,18 @@ export default function Sort() {
           .map((c) => c.name)
           .filter((name) => name !== 'Uncategorized');
 
+        const taxCatNames = taxCategoriesList.map((c) => c.name);
+
         const desc = currentCard.txns[0]?.description || key || '';
         const toReview = [
           {
             desc,
-            ruleCategory: currentCard.suggestedCategory || 'Uncategorized',
+            ruleCategory: mode === 'categorize' ? (currentCard.suggestedCategory || 'Uncategorized') : 'Uncategorized',
           },
         ];
 
         console.log('[Sort.tsx] Calling localAI.reviewTransactionsWithRules with desc:', desc);
-        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal);
+        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal, taxCatNames);
         console.log('[Sort.tsx] localAI.reviewTransactionsWithRules results:', results);
 
         if (!active) {
@@ -319,12 +429,12 @@ export default function Sort() {
         }
         if (results && results.length > 0) {
           const result = results[0];
-          if (result && result.category && result.category !== 'Uncategorized' && catNames.includes(result.category)) {
+          if (result) {
             console.log('[Sort.tsx] Setting AI suggestion for key:', key, result);
             playSuccessSound();
             setAiSuggestions(prev => ({ ...prev, [key]: result }));
           } else {
-            console.log('[Sort.tsx] Suggestion category invalid or Uncategorized:', result);
+            console.log('[Sort.tsx] Suggestion invalid:', result);
             playFailSound();
           }
         } else {
@@ -358,16 +468,21 @@ export default function Sort() {
       controller.abort();
       stopThinkingSound();
     };
-  }, [currentCard, aiSuggestEnabled, categories, mode, aiSuggestions]);
+  }, [currentCard, aiSuggestEnabled, categories, mode, aiSuggestions, taxCategoriesList]);
 
   const isInteractive = !!currentCard;
 
   const activeSuggestion = useMemo(() => {
     if (!currentCard) return undefined;
     const key = currentCard.merchantKey;
-    const activeAiCategory = aiSuggestions[key]?.category || null;
-    return aiSuggestEnabled ? activeAiCategory : currentCard.suggestedCategory;
-  }, [currentCard, aiSuggestions, aiSuggestEnabled]);
+    if (mode === 'tax') {
+      const activeAiTaxCategory = aiSuggestions[key]?.taxCategory || null;
+      return (aiSuggestEnabled && activeAiTaxCategory) ? activeAiTaxCategory : currentCard.suggestedCategory;
+    } else {
+      const activeAiCategory = aiSuggestions[key]?.category || null;
+      return (aiSuggestEnabled && activeAiCategory) ? activeAiCategory : currentCard.suggestedCategory;
+    }
+  }, [currentCard, aiSuggestions, aiSuggestEnabled, mode]);
 
   const lookupCategoryColor = useCallback(
     (name: string): string => {
@@ -404,10 +519,17 @@ export default function Sort() {
 
           const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
 
-          await db.transactions.where('id').anyOf(txnIds).modify({
-            category: sel.category,
-            userOverridden: true,
-          });
+          const txs = await db.transactions.where('id').anyOf(txnIds).toArray();
+          for (const t of txs) {
+            const taxGuess = guessTaxFields(t.description, sel.category);
+            await db.transactions.update(t.id!, {
+              category: sel.category,
+              userOverridden: true,
+              isBusiness: taxGuess.isBusiness,
+              taxCategory: taxGuess.taxCategory,
+              deductionStatus: taxGuess.deductionStatus,
+            });
+          }
 
           const patternToSave = sel.rulePattern.trim();
           if (sel.saveRule && patternToSave) {
@@ -458,40 +580,42 @@ export default function Sort() {
       if (!currentCard) return;
       const key = currentCard.merchantKey;
 
+      const nextSelection = mode === 'categorize'
+        ? {
+            category: categoryName,
+            saveRule,
+            rulePattern: rulePattern || key,
+          }
+        : {
+            category: categoryName,
+            saveRule: false,
+            rulePattern: '',
+          };
+
       if (mode === 'categorize') {
         const activeAiCategory = aiSuggestions[key]?.category || null;
         if (aiSuggestEnabled && activeAiCategory) {
           const isCorrect = activeAiCategory === categoryName;
           await updateScore(isCorrect);
         }
-
-        // Set selection
-        setSelections(prev => ({
-          ...prev,
-          [key]: {
-            category: categoryName,
-            saveRule,
-            rulePattern: rulePattern || key,
-          }
-        }));
-      } else {
-        // Set tax selection
-        setSelections(prev => ({
-          ...prev,
-          [key]: {
-            category: categoryName,
-            saveRule: false,
-            rulePattern: '',
-          }
-        }));
       }
 
+      setSelections(prev => ({
+        ...prev,
+        [key]: nextSelection
+      }));
+
+      const tempSelections = {
+        ...selections,
+        [key]: nextSelection
+      };
+
       // Auto-advance to the next card immediately (animations play in background)
-      const nextIndex = visibleQueue.findIndex((card, idx) => idx > currentIndex && !selections[card.merchantKey]?.category);
+      const nextIndex = visibleQueue.findIndex((card, idx) => idx > currentIndex && !tempSelections[card.merchantKey]?.category);
       if (nextIndex !== -1) {
         setCurrentIndex(nextIndex);
       } else {
-        const firstUnselected = visibleQueue.findIndex((card) => !selections[card.merchantKey]?.category);
+        const firstUnselected = visibleQueue.findIndex((card) => !tempSelections[card.merchantKey]?.category);
         if (firstUnselected !== -1) {
           setCurrentIndex(firstUnselected);
         }
@@ -595,23 +719,35 @@ export default function Sort() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
-          {mode === 'categorize' && (
-            <FormControlLabel
-              control={
-                <Switch
-                  size="small"
-                  checked={aiSuggestEnabled}
-                  onChange={(e) => handleToggleAiSuggest(e.target.checked)}
-                />
-              }
-              label={
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  AI Auto-Suggest
-                </Typography>
-              }
-              sx={{ m: 0 }}
-            />
+          {/* AI Bulk Auto-Categorize Button */}
+          {visibleQueue.length > 0 && (
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              onClick={aiRunning ? handleCancelAi : handleStartBulkAi}
+              disabled={aiRunning && !bulkAbortControllerRef.current}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              {aiRunning ? `Stop AI (${aiProgress}%)` : (mode === 'categorize' ? 'Auto-Categorize All (AI)' : 'Auto-Assign Taxes (AI)')}
+            </Button>
           )}
+
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={aiSuggestEnabled}
+                onChange={(e) => handleToggleAiSuggest(e.target.checked)}
+              />
+            }
+            label={
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                AI Auto-Suggest
+              </Typography>
+            }
+            sx={{ m: 0 }}
+          />
           {mode === 'categorize' && score && score.totalCount > 0 && (
             <Chip
               size="small"
@@ -638,18 +774,35 @@ export default function Sort() {
         </Stack>
       </Stack>
       
-      <Tabs
-        value={mode}
-        onChange={(_, val) => {
-          setMode(val);
-          setSelections({});
-          setCurrentIndex(0);
-        }}
-        sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}
-      >
-        <Tab label={`Categorize Transactions (${uncategorized.length})`} value="categorize" sx={{ fontWeight: 600 }} />
-        <Tab label={`Review Tax Deductions (${pendingTax.length})`} value="tax" sx={{ fontWeight: 600 }} />
-      </Tabs>
+      <Paper sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}>
+        <Tabs
+          value={mode}
+          onChange={(_, val) => {
+            handleCancelAi();
+            setMode(val);
+            setSelections({});
+            setCurrentIndex(0);
+          }}
+          sx={{ px: 2 }}
+        >
+          <Tab label={`Categorize Transactions (${uncategorized.length})`} value="categorize" sx={{ fontWeight: 600 }} />
+          <Tab label={`Review Tax Deductions (${filteredPendingTaxCount})`} value="tax" sx={{ fontWeight: 600 }} />
+        </Tabs>
+      </Paper>
+
+      {/* Bulk AI Progress Alert */}
+      {aiRunning && (
+        <Alert severity="info" variant="outlined" sx={{ mb: 1, alignItems: 'center' }}>
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+              AI Auto-Categorization in progress: {aiProgress}% completed. Choices will appear in the queue as they load.
+            </Typography>
+            <Button size="small" color="error" variant="outlined" onClick={handleCancelAi}>
+              Stop
+            </Button>
+          </Stack>
+        </Alert>
+      )}
 
       {/* Global Apply Bar */}
       {selectionsCount > 0 && (
@@ -866,25 +1019,24 @@ export default function Sort() {
 
           {/* Separator / Drag Handle */}
           <PanelResizeHandle
+            aria-label="Resize panels"
             style={{
-              width: 12,
+              width: 16,
               position: 'relative',
-              cursor: 'col-resize',
             }}
           >
             <Box
               sx={{
                 position: 'absolute',
-                top: 0,
-                bottom: 0,
-                left: 'calc(50% - 1px)',
-                width: 1,
+                inset: 0,
+                margin: '0 auto',
+                width: 2,
                 bgcolor: 'divider',
-                transition: 'background-color 120ms ease, width 120ms ease, left 120ms ease',
-                '&:hover, &[data-resize-handle-active]': {
+                borderRadius: 1,
+                transition: 'background-color 120ms ease',
+                '[data-resize-handle-active] &, &:hover': {
                   bgcolor: 'primary.main',
-                  width: 4,
-                  left: 'calc(50% - 2px)',
+                  width: 3,
                 },
               }}
             />
@@ -924,7 +1076,9 @@ export default function Sort() {
 
                   return sortedCards.map(({ card, stackIndex }) => {
                     const cardSuggestion = mode === 'tax'
-                      ? card.suggestedCategory
+                      ? (aiSuggestEnabled
+                        ? (aiSuggestions[card.merchantKey]?.taxCategory || card.suggestedCategory)
+                        : card.suggestedCategory)
                       : (aiSuggestEnabled
                         ? (aiSuggestions[card.merchantKey]?.category || null)
                         : card.suggestedCategory);
@@ -943,9 +1097,13 @@ export default function Sort() {
                             : undefined
                         }
                         chosenColor={chosenColor}
-                        suggestedCategoryOverride={mode === 'tax' ? undefined : (aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined)}
-                        aiSuggesting={mode === 'tax' ? false : (aiSuggesting[card.merchantKey] || false)}
-                        aiError={mode === 'tax' ? null : (aiErrors[card.merchantKey] || null)}
+                        suggestedCategoryOverride={
+                          mode === 'tax'
+                            ? (aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.taxCategory || undefined) : undefined)
+                            : (aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined)
+                        }
+                        aiSuggesting={aiSuggesting[card.merchantKey] || false}
+                        aiError={aiErrors[card.merchantKey] || null}
                         stackIndex={stackIndex}
                         zipDirection={zipDirection}
                       />

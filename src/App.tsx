@@ -33,6 +33,7 @@ import Sort from './pages/Sort';
 import AnimationSettings from './pages/AnimationSettings';
 import Merchants from './pages/Merchants';
 import Taxes from './pages/Taxes';
+import Loans from './pages/Loans';
 import Documents from './pages/Documents';
 import ToolsReference from './pages/ToolsReference';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
@@ -51,6 +52,7 @@ const PRIMARY_NAV = [
   { to: '/rules', label: 'Rules' },
   { to: '/merchants', label: 'Merchants' },
   { to: '/taxes', label: 'Taxes' },
+  { to: '/loans', label: 'Loans' },
   { to: '/documents', label: 'Documents' },
 ];
 
@@ -438,6 +440,7 @@ export default function App() {
               <Route path="/animation-playground" element={<AnimationSettings />} />
               <Route path="/merchants" element={<Merchants />} />
               <Route path="/taxes" element={<Taxes />} />
+              <Route path="/loans" element={<Loans />} />
               <Route path="/documents" element={<Documents />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

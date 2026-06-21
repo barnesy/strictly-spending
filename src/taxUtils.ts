@@ -115,6 +115,18 @@ export function guessTaxFields(description: string, category: string): TaxGuess 
     return { isBusiness: true, taxCategory: 'meals', deductionStatus: 'pending' };
   }
 
+  if (category === 'Transportation') {
+    return { isBusiness: true, taxCategory: 'carTruck', deductionStatus: 'pending' };
+  }
+
+  if (category === 'Fees & Interest') {
+    return { isBusiness: true, taxCategory: 'interest', deductionStatus: 'pending' };
+  }
+
+  if (category === 'Taxes') {
+    return { isBusiness: true, taxCategory: 'taxesLicenses', deductionStatus: 'pending' };
+  }
+
   if (category === 'Insurance') {
     // Guess business insurance if keywords match, otherwise personal
     if (desc.includes('business') || desc.includes('liability') || desc.includes('indemnity') || desc.includes('commercial')) {

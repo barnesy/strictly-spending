@@ -139,7 +139,8 @@ export default function AnimatedCard({
           : theme.palette.mode === 'dark'
           ? '0 1px 0 #242424, 0 2px 0 #1c1c1c, 0 10px 20px -5px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)'
           : '0 1px 0 #dbdbdb, 0 2px 0 #d1d1d1, 0 10px 20px -5px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.03)',
-        bgcolor: chosenColor ? chosenColor + '22' : 'background.paper',
+        backgroundColor: 'background.paper',
+        backgroundImage: chosenColor ? `linear-gradient(${chosenColor}22, ${chosenColor}22)` : 'none',
         position: 'absolute',
         top: 0,
         left: 0,

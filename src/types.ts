@@ -95,7 +95,9 @@ export type AppSetting =
         paletteName?: string;
       };
     }
-  | { key: 'app:taxSettings'; value: TaxSettings };
+  | { key: 'app:taxSettings'; value: TaxSettings }
+  | { key: 'app:loan:house'; value: any }
+  | { key: 'app:loan:car'; value: any };
 
 export type PostImportAction = 'leave' | 'move' | 'delete';
 

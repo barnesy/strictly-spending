@@ -92,6 +92,27 @@ describe('guessTaxFields', () => {
       isBusiness: false,
       deductionStatus: 'confirmed',
     });
+
+    // Transportation
+    expect(guessTaxFields('Taxi Cab Co', 'Transportation')).toEqual({
+      isBusiness: true,
+      taxCategory: 'carTruck',
+      deductionStatus: 'pending',
+    });
+
+    // Fees & Interest
+    expect(guessTaxFields('Bank Fee', 'Fees & Interest')).toEqual({
+      isBusiness: true,
+      taxCategory: 'interest',
+      deductionStatus: 'pending',
+    });
+
+    // Taxes
+    expect(guessTaxFields('State Tax License', 'Taxes')).toEqual({
+      isBusiness: true,
+      taxCategory: 'taxesLicenses',
+      deductionStatus: 'pending',
+    });
   });
 
   it('categorizes personal spend categories as personal-confirmed', () => {

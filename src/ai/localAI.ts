@@ -79,10 +79,11 @@ export class LocalAI implements AIProvider {
   async reviewTransactionsWithRules(
     transactions: any[],
     availableCategories: string[],
-    signal?: AbortSignal
-  ): Promise<{ category: string; pattern: string }[]> {
+    signal?: AbortSignal,
+    taxCategories?: string[]
+  ): Promise<{ category: string; pattern: string; isBusiness?: boolean; taxCategory?: string }[]> {
     this.syncActiveProvider();
-    return this.activeProvider.reviewTransactionsWithRules(transactions, availableCategories, signal);
+    return this.activeProvider.reviewTransactionsWithRules(transactions, availableCategories, signal, taxCategories);
   }
 
   async pullModel(progressCallback?: (progress: number, status: string) => void): Promise<void> {
