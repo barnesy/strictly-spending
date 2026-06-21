@@ -33,7 +33,7 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
-import { SCHEDULE_C_CATEGORIES, guessTaxFields } from '../taxUtils';
+import { SCHEDULE_C_CATEGORIES, guessTaxFields, resolveTaxDeduction } from '../taxUtils';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { db } from '../db';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
@@ -156,8 +156,8 @@ export default function Sort() {
       const totalAbs = txns.reduce((s, t) => s + Math.abs(t.amount), 0);
       const netSign = txns.reduce((s, t) => s + t.amount, 0) >= 0 ? 'income' : 'spend';
 
-      // Guess default tax fields
-      const guess = guessTaxFields(txns[0].description, txns[0].category);
+      // Guess default tax fields or match rule
+      const guess = resolveTaxDeduction(txns[0].description, txns[0].category, txns[0].merchantKey, taxRules);
 
       // Only show card if the initial guess suggests a business expense
       if (!guess.isBusiness) continue;
@@ -177,7 +177,7 @@ export default function Sort() {
     }
     cards.sort((a, b) => b.totalAbs - a.totalAbs);
     return cards;
-  }, [pendingTax]);
+  }, [pendingTax, taxRules]);
 
   const filteredPendingTaxCount = useMemo(() => {
     return taxQueue.reduce((acc, card) => acc + card.txns.length, 0);
@@ -367,6 +367,7 @@ export default function Sort() {
 
   const scoreSetting = useLiveQuery(() => db.settings.get('app:aiGuessScore'), []);
   const score = scoreSetting?.value as { correctCount: number; totalCount: number } | undefined;
+  const taxRules = useLiveQuery(() => db.taxRules.toArray(), []) || [];
 
   const updateScore = useCallback(async (correct: boolean) => {
     await db.transaction('rw', db.settings, async () => {
@@ -564,7 +565,7 @@ export default function Sort() {
         }
       });
     } else {
-      await db.transaction('rw', db.transactions, async () => {
+      await db.transaction('rw', db.transactions, db.taxRules, async () => {
         for (const key of selectionKeys) {
           const sel = selections[key];
           const card = taxQueue.find(c => c.merchantKey === key);
@@ -572,7 +573,11 @@ export default function Sort() {
 
           const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
 
+          let isBusiness = true;
+          let taxCategoryId: string | undefined = undefined;
+
           if (sel.category === 'Personal Expense (Non-Business)') {
+            isBusiness = false;
             await db.transactions.where('id').anyOf(txnIds).modify({
               isBusiness: false,
               taxCategory: undefined,
@@ -580,11 +585,22 @@ export default function Sort() {
             });
           } else {
             const sc = Object.values(SCHEDULE_C_CATEGORIES).find(c => c.label === sel.category);
-            const taxCategoryId = sc ? sc.id : 'other';
+            taxCategoryId = sc ? sc.id : 'other';
             await db.transactions.where('id').anyOf(txnIds).modify({
               isBusiness: true,
               taxCategory: taxCategoryId,
               deductionStatus: 'confirmed',
+            });
+          }
+
+          const patternToSave = sel.rulePattern?.trim();
+          if (sel.saveRule && patternToSave) {
+            await db.taxRules.add({
+              pattern: patternToSave,
+              isBusiness,
+              taxCategory: taxCategoryId,
+              priority: 1000,
+              createdAt: new Date().toISOString(),
             });
           }
         }
@@ -601,17 +617,11 @@ export default function Sort() {
       if (!currentCard) return;
       const key = currentCard.merchantKey;
 
-      const nextSelection = mode === 'categorize'
-        ? {
-            category: categoryName,
-            saveRule,
-            rulePattern: rulePattern || key,
-          }
-        : {
-            category: categoryName,
-            saveRule: false,
-            rulePattern: '',
-          };
+      const nextSelection = {
+        category: categoryName,
+        saveRule,
+        rulePattern: rulePattern || key,
+      };
 
       if (mode === 'categorize') {
         const activeAiCategory = aiSuggestions[key]?.category || null;
@@ -972,25 +982,23 @@ export default function Sort() {
                           />
                         )}
                       </Stack>
-                    {mode === 'categorize' && (
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={saveRule}
-                            onChange={(e) => handleSaveRuleChange(e.target.checked)}
-                          />
-                        }
-                        label={
-                          <Typography variant="caption" color="text.secondary">
-                            Save as rule (catches future imports)
-                          </Typography>
-                        }
-                        sx={{ m: 0 }}
-                      />
-                    )}
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={saveRule}
+                          onChange={(e) => handleSaveRuleChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" color="text.secondary">
+                          Save as rule (catches future imports)
+                        </Typography>
+                      }
+                      sx={{ m: 0 }}
+                    />
                   </Stack>
-                  {mode === 'categorize' && saveRule && (
+                  {saveRule && (
                     <Box sx={{ mt: 0.5, mb: 1 }}>
                       <TextField
                         fullWidth
@@ -999,7 +1007,11 @@ export default function Sort() {
                         value={rulePattern}
                         onChange={(e) => handlePatternChange(e.target.value)}
                         placeholder="e.g. starbucks"
-                        helperText="Future imports matching this keyword will be auto-categorized."
+                        helperText={
+                          mode === 'tax'
+                            ? "Future imports matching this keyword will be auto-classified for tax deductions."
+                            : "Future imports matching this keyword will be auto-categorized."
+                        }
                         FormHelperTextProps={{
                           sx: { mx: 1, my: 0.5 }
                         }}

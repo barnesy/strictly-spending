@@ -14,6 +14,7 @@ import type {
   DbChatMessage,
   CsvMapping,
   AppDocument,
+  TaxRule,
 } from './types';
 
 class SpendingDB extends Dexie {
@@ -31,6 +32,7 @@ class SpendingDB extends Dexie {
   csvMappings!: Table<CsvMapping, number>;
   documents!: Table<AppDocument, string>;
   documentContents!: Table<{ id: string; content: string }, string>;
+  taxRules!: Table<TaxRule, number>;
 
   constructor() {
     super('spending-viz');
@@ -84,6 +86,9 @@ class SpendingDB extends Dexie {
         t.taxCategory = guess.taxCategory;
         t.deductionStatus = guess.deductionStatus;
       });
+    });
+    this.version(12).stores({
+      taxRules: '++id, pattern, priority',
     });
   }
 }

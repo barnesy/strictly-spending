@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
-import { guessTaxFields } from '../taxUtils';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { guessTaxFields, resolveTaxDeduction } from '../taxUtils';
 import {
   Box,
   Paper,
@@ -102,6 +103,7 @@ export default function Merchants() {
     isDataLoading: s.isLoading,
   })));
   const deferredAllTransactions = useDeferredValue(allTransactions);
+  const taxRules = useLiveQuery(() => db.taxRules.toArray(), []) || [];
 
   const isLoading = isDataLoading || allTransactions === undefined;
 
@@ -321,7 +323,7 @@ export default function Merchants() {
     try {
       const txs = await db.transactions.where('merchantKey').equals(recategorizeTarget.merchantKey).toArray();
       for (const t of txs) {
-        const taxGuess = guessTaxFields(t.description, selectedCategory);
+        const taxGuess = resolveTaxDeduction(t.description, selectedCategory, t.merchantKey, taxRules);
         await db.transactions.update(t.id!, {
           category: selectedCategory,
           isBusiness: taxGuess.isBusiness,

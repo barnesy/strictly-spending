@@ -17,6 +17,9 @@ vi.mock('./db', () => {
       rules: {
         toArray: async () => [...rulesData],
       },
+      taxRules: {
+        toArray: async () => [],
+      },
       transactions: {
         toArray: async () => [...transactionsData],
         bulkAdd: async (txns: any[]) => {

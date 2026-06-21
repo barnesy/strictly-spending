@@ -43,6 +43,15 @@ export interface CategoryRule {
   createdAt: string;
 }
 
+export interface TaxRule {
+  id?: number;
+  pattern: string;
+  isBusiness: boolean;
+  taxCategory?: string;
+  priority: number;
+  createdAt: string;
+}
+
 export interface Category {
   id?: number;
   name: string;

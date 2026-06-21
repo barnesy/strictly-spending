@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { guessTaxFields } from './taxUtils';
+import { guessTaxFields, matchTaxRules, resolveTaxDeduction } from './taxUtils';
 
 describe('guessTaxFields', () => {
   it('guesses strong merchant keywords correctly', () => {
@@ -140,6 +140,68 @@ describe('guessTaxFields', () => {
   it('falls back to pending personal on unknown category', () => {
     expect(guessTaxFields('Something weird', 'Uncategorized')).toEqual({
       isBusiness: false,
+      deductionStatus: 'pending',
+    });
+  });
+});
+
+describe('matchTaxRules and resolveTaxDeduction', () => {
+  const dummyRules = [
+    {
+      id: 1,
+      pattern: 'my-business-host',
+      isBusiness: true,
+      taxCategory: 'officeExpense',
+      priority: 100,
+      createdAt: '2026-06-20T00:00:00Z',
+    },
+    {
+      id: 2,
+      pattern: 'personal-gaming',
+      isBusiness: false,
+      priority: 100,
+      createdAt: '2026-06-20T00:00:00Z',
+    },
+    {
+      id: 3,
+      pattern: 'specific-starbucks',
+      isBusiness: true,
+      taxCategory: 'meals',
+      priority: 1000,
+      createdAt: '2026-06-20T00:00:00Z',
+    },
+  ];
+
+  it('matches rules by pattern in description or merchant key', () => {
+    // Description matching
+    expect(matchTaxRules('Subscription for my-business-host website', undefined, dummyRules)).toEqual(dummyRules[0]);
+    // Merchant key matching
+    expect(matchTaxRules('Subscription payment', 'my-business-host', dummyRules)).toEqual(dummyRules[0]);
+    // Case insensitivity & normalization
+    expect(matchTaxRules('MY-BUSINESS-HOST', undefined, dummyRules)).toEqual(dummyRules[0]);
+    // No match returns null
+    expect(matchTaxRules('random description', undefined, dummyRules)).toBeNull();
+  });
+
+  it('resolves tax deduction with rules having higher priority than heuristics', () => {
+    // matching rule overrides normal heuristic
+    expect(resolveTaxDeduction('Purchase at specific-starbucks-coffee', 'Restaurants & Coffee', undefined, dummyRules)).toEqual({
+      isBusiness: true,
+      taxCategory: 'meals',
+      deductionStatus: 'confirmed',
+    });
+
+    // matching personal rule overrides normal heuristic
+    expect(resolveTaxDeduction('personal-gaming monthly payment', 'Shopping', undefined, dummyRules)).toEqual({
+      isBusiness: false,
+      taxCategory: undefined,
+      deductionStatus: 'confirmed',
+    });
+
+    // fallback to heuristic if no rule matches
+    expect(resolveTaxDeduction('Starbucks Coffee', 'Restaurants & Coffee', undefined, dummyRules)).toEqual({
+      isBusiness: true,
+      taxCategory: 'meals',
       deductionStatus: 'pending',
     });
   });

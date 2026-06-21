@@ -8,7 +8,7 @@ import {
   inferTypeCategory,
 } from './categorize';
 import { localAI } from './ai';
-import { guessTaxFields } from './taxUtils';
+import { guessTaxFields, resolveTaxDeduction } from './taxUtils';
 
 export interface ImportPreview {
   filename: string;
@@ -240,6 +240,7 @@ export async function commitPreview(preview: ImportPreview): Promise<{
   const toInsert: Omit<Transaction, 'id'>[] = [];
   let skippedDuplicates = 0;
   const seenKeys = new Set<string>();
+  const taxRules = await db.taxRules.toArray();
   for (const row of preview.rows) {
     if (row.duplicate) {
       skippedDuplicates++;
@@ -251,7 +252,7 @@ export async function commitPreview(preview: ImportPreview): Promise<{
       continue;
     }
     seenKeys.add(row.dedupKey);
-    const taxGuess = guessTaxFields(row.parsed.description, row.category);
+    const taxGuess = resolveTaxDeduction(row.parsed.description, row.category, row.merchantKey, taxRules);
     toInsert.push({
       accountId: accountIdByName.get(row.parsed.accountName)!,
       date: row.parsed.date,

@@ -32,7 +32,7 @@ import { db } from '../db';
 import { useDataStore } from '../dataStore';
 import type { TaxSettings } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
-import { SCHEDULE_C_CATEGORIES, guessTaxFields } from '../taxUtils';
+import { SCHEDULE_C_CATEGORIES, guessTaxFields, resolveTaxDeduction } from '../taxUtils';
 
 const DEFAULT_TAX_SETTINGS: TaxSettings = {
   hasBusiness: false,
@@ -93,6 +93,7 @@ export default function Taxes() {
   const taxSettings: TaxSettings = (rawSettings?.value as TaxSettings) || DEFAULT_TAX_SETTINGS;
 
   const documents = useLiveQuery(() => db.documents?.toArray(), []) || [];
+  const taxRules = useLiveQuery(() => db.taxRules.toArray(), []) || [];
 
   const transactions = useDataStore((s) => s.transactions);
   const accounts = useDataStore((s) => s.accounts);
@@ -151,7 +152,7 @@ export default function Taxes() {
         if (value === 'business') {
           const txns = await db.transactions.where('accountId').equals(targetId as number).toArray();
           for (const t of txns) {
-            const guess = guessTaxFields(t.description, t.category);
+            const guess = resolveTaxDeduction(t.description, t.category, t.merchantKey, taxRules);
             await db.transactions.update(t.id!, {
               isBusiness: true,
               taxCategory: guess.taxCategory || 'other',

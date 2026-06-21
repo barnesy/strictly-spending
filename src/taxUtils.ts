@@ -1,3 +1,6 @@
+import { normalizeForMatch } from './categorize';
+import type { TaxRule } from './types';
+
 export interface TaxGuess {
   isBusiness: boolean;
   taxCategory?: string;
@@ -169,4 +172,42 @@ export function guessTaxFields(description: string, category: string): TaxGuess 
 
   // Default fallback for anything else (e.g. Uncategorized)
   return { isBusiness: false, deductionStatus: 'pending' };
+}
+
+export function matchTaxRules(
+  description: string,
+  merchantKey: string | undefined,
+  taxRules: TaxRule[]
+): TaxRule | null {
+  const desc = normalizeForMatch(description);
+  const mkey = merchantKey ? normalizeForMatch(merchantKey) : '';
+  let best: TaxRule | null = null;
+  for (const rule of taxRules) {
+    if (!rule.pattern) continue;
+    const pattern = normalizeForMatch(rule.pattern);
+    if (!pattern) continue;
+    if (desc.includes(pattern) || (mkey && mkey.includes(pattern))) {
+      if (!best || rule.priority > best.priority) {
+        best = rule;
+      }
+    }
+  }
+  return best;
+}
+
+export function resolveTaxDeduction(
+  description: string,
+  category: string,
+  merchantKey: string | undefined,
+  taxRules: TaxRule[]
+): TaxGuess {
+  const matchedRule = matchTaxRules(description, merchantKey, taxRules);
+  if (matchedRule) {
+    return {
+      isBusiness: matchedRule.isBusiness,
+      taxCategory: matchedRule.taxCategory,
+      deductionStatus: 'confirmed',
+    };
+  }
+  return guessTaxFields(description, category);
 }
