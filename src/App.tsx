@@ -1,7 +1,7 @@
 import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer, Tooltip } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { useTheme } from '@mui/material/styles';
@@ -106,6 +106,22 @@ export default function App() {
   };
 
   const isManageActive = ['/import', '/settings', '/theme', '/local-model', '/agent-skills', '/animation-playground'].includes(location.pathname);
+
+  const [mem, setMem] = useState<{ used: number; total: number } | null>(null);
+  useEffect(() => {
+    const updateMem = () => {
+      const memory = (performance as any).memory;
+      if (memory) {
+        setMem({
+          used: Math.round(memory.usedJSHeapSize / 1024 / 1024),
+          total: Math.round(memory.totalJSHeapSize / 1024 / 1024),
+        });
+      }
+    };
+    updateMem();
+    const interval = setInterval(updateMem, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Persist the open state of the side-car across page navigations and reloads.
   const initialChatOpen = useMemo(() => {
@@ -295,6 +311,51 @@ export default function App() {
               </Menu>
             )}
           </Box>
+          {mem && (
+            <Tooltip title={`JS Heap: ${mem.used}MB used / ${mem.total}MB total`}>
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  px: 1,
+                  py: 0.5,
+                  borderRadius: 1,
+                  bgcolor: 'action.hover',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  color: 'text.secondary',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  mr: 1,
+                  userSelect: 'none',
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    bgcolor: mem.used / mem.total > 0.85 ? 'error.main' : 'success.main',
+                    boxShadow: (theme) => `0 0 0 0 ${mem.used / mem.total > 0.85 ? theme.palette.error.main : theme.palette.success.main}bb`,
+                    animation: 'memPulse 2s infinite',
+                    '@keyframes memPulse': {
+                      '0%': {
+                        boxShadow: '0 0 0 0 rgba(76, 175, 80, 0.5)',
+                      },
+                      '70%': {
+                        boxShadow: '0 0 0 5px rgba(76, 175, 80, 0)',
+                      },
+                      '100%': {
+                        boxShadow: '0 0 0 0 rgba(76, 175, 80, 0)',
+                      },
+                    },
+                  }}
+                />
+                {mem.used} MB
+              </Box>
+            </Tooltip>
+          )}
           <Button
             onClick={async () => {
               const url = "https://github.com/barnesy/strictly-spending/issues/new";
