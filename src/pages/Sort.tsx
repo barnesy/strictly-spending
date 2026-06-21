@@ -720,7 +720,7 @@ export default function Sort() {
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
           {/* AI Bulk Auto-Categorize Button */}
-          {visibleQueue.length > 0 && (
+          {visibleQueue.length > 0 && mode === 'categorize' && (
             <Button
               variant="contained"
               color="primary"
@@ -729,7 +729,7 @@ export default function Sort() {
               disabled={aiRunning && !bulkAbortControllerRef.current}
               sx={{ textTransform: 'none', fontWeight: 600 }}
             >
-              {aiRunning ? `Stop AI (${aiProgress}%)` : (mode === 'categorize' ? 'Auto-Categorize All (AI)' : 'Auto-Assign Taxes (AI)')}
+              {aiRunning ? `Stop AI (${aiProgress}%)` : 'Auto-Categorize All (AI)'}
             </Button>
           )}
 
