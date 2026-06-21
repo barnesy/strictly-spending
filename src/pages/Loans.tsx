@@ -256,7 +256,7 @@ export default function Loans() {
   // Amortization engine calculation
   const scheduleData = useMemo(() => {
     if (!currentConfig) return null;
-    const P = currentConfig.principal;
+    const P = currentConfig.principal - (currentConfig.downPayment || 0);
     const r = (currentConfig.rate / 100) / 12;
     const n = currentConfig.termYears * 12;
     const startDate = new Date(currentConfig.startDate + 'T00:00:00');
@@ -514,7 +514,7 @@ export default function Loans() {
     const downPaymentVal = parseFloat(addDownPayment);
 
     if (isNaN(principalVal) || principalVal <= 0) {
-      alert('Please enter a valid original loan amount.');
+      alert('Please enter a valid purchase price.');
       return;
     }
 
@@ -530,7 +530,7 @@ export default function Loans() {
       type: addType,
       principal: principalVal,
       downPayment: downPaymentVal,
-      propertyValue: principalVal + downPaymentVal,
+      propertyValue: principalVal,
       merchant: addMerchant.trim() || undefined,
       enabled: true,
       createdAt: new Date().toISOString(),
@@ -618,7 +618,7 @@ export default function Loans() {
           <TextField
             fullWidth
             size="small"
-            label="Original Loan Amount"
+            label="Purchase Price"
             value={addPrincipal}
             onChange={(e) => setAddPrincipal(e.target.value)}
             InputProps={{
@@ -902,7 +902,7 @@ export default function Loans() {
                   {scheduleData.percentPaid.toFixed(1)}% paid
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Original: {usdCents.format(currentConfig.principal)}
+                  Original Loan: {usdCents.format(currentConfig.principal - (currentConfig.downPayment || 0))}
                 </Typography>
               </Stack>
               <LinearProgress
@@ -938,10 +938,12 @@ export default function Loans() {
                 </Typography>
                 <Stack direction="row" justifyContent="space-between" sx={{ mt: 2, mb: 0.5 }}>
                   <Typography variant="caption" color="text.secondary">
-                    {((Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance) / currentConfig.propertyValue) * 100).toFixed(1)}% equity
+                    {currentConfig.propertyValue && currentConfig.propertyValue > 0 
+                      ? `${((Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance) / currentConfig.propertyValue) * 100).toFixed(1)}% equity`
+                      : '0.0% equity'}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Value: {usdCents.format(currentConfig.propertyValue)}
+                    Value: {usdCents.format(currentConfig.propertyValue || 0)}
                   </Typography>
                 </Stack>
                 <LinearProgress
@@ -1082,7 +1084,7 @@ export default function Loans() {
                   <TextField
                     fullWidth
                     size="small"
-                    label="Original Loan Amount"
+                    label="Purchase Price"
                     value={formPrincipal}
                     onChange={(e) => setFormPrincipal(e.target.value)}
                     InputProps={{
@@ -1173,7 +1175,7 @@ export default function Loans() {
                   <TextField
                     fullWidth
                     size="small"
-                    label={activeTab === 'house' ? "Selling Price (Home Value)" : "Estimated Resale Value"}
+                    label={activeTab === 'house' ? "Current Home Value" : "Estimated Resale Value"}
                     value={formPropertyValue}
                     onChange={(e) => setFormPropertyValue(e.target.value)}
                     helperText={activeTab === 'house' ? "Estimated resale value of the house for equity tracking" : "Estimated resale value of the car for equity tracking"}
@@ -1305,7 +1307,7 @@ export default function Loans() {
               <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%' }}>
                 <LoanChart 
                   rows={scheduleData.rows} 
-                  originalPrincipal={currentConfig.principal} 
+                  originalPrincipal={currentConfig.principal - (currentConfig.downPayment || 0)} 
                 />
               </Box>
             </Paper>
