@@ -256,7 +256,7 @@ export default function Loans() {
   // Amortization engine calculation
   const scheduleData = useMemo(() => {
     if (!currentConfig) return null;
-    const P = currentConfig.principal - (currentConfig.downPayment || 0);
+    const P = currentConfig.principal;
     const r = (currentConfig.rate / 100) / 12;
     const n = currentConfig.termYears * 12;
     const startDate = new Date(currentConfig.startDate + 'T00:00:00');
@@ -530,6 +530,7 @@ export default function Loans() {
       type: addType,
       principal: principalVal,
       downPayment: downPaymentVal,
+      propertyValue: principalVal + downPaymentVal,
       merchant: addMerchant.trim() || undefined,
       enabled: true,
       createdAt: new Date().toISOString(),
@@ -901,7 +902,7 @@ export default function Loans() {
                   {scheduleData.percentPaid.toFixed(1)}% paid
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Original: {usdCents.format(currentConfig.principal - (currentConfig.downPayment || 0))}
+                  Original: {usdCents.format(currentConfig.principal)}
                 </Typography>
               </Stack>
               <LinearProgress
@@ -1304,7 +1305,7 @@ export default function Loans() {
               <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%' }}>
                 <LoanChart 
                   rows={scheduleData.rows} 
-                  originalPrincipal={currentConfig.principal - (currentConfig.downPayment || 0)} 
+                  originalPrincipal={currentConfig.principal} 
                 />
               </Box>
             </Paper>
