@@ -106,9 +106,8 @@ export default function RangePicker() {
         </Stack>
       )}
       {preset === 'custom' && (
-        <Stack direction="row" spacing={1.5} alignItems="flex-end">
+        <Stack direction="row" spacing={2.5} alignItems="flex-end">
           <DatePicker
-            label="Start"
             value={customStart ? parseISO(customStart) : null}
             onChange={(newVal) => {
               if (newVal && !isNaN(newVal.getTime())) {
@@ -120,6 +119,7 @@ export default function RangePicker() {
             slotProps={{
               textField: {
                 size: 'medium',
+                placeholder: 'Start Date',
                 sx: {
                   width: 170,
                   '& .MuiInputBase-root': { height: 56 },
@@ -128,7 +128,6 @@ export default function RangePicker() {
             }}
           />
           <DatePicker
-            label="End"
             value={customEnd ? parseISO(customEnd) : null}
             onChange={(newVal) => {
               if (newVal && !isNaN(newVal.getTime())) {
@@ -140,6 +139,7 @@ export default function RangePicker() {
             slotProps={{
               textField: {
                 size: 'medium',
+                placeholder: 'End Date',
                 sx: {
                   width: 170,
                   '& .MuiInputBase-root': { height: 56 },
