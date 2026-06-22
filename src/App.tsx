@@ -102,7 +102,7 @@ export default function App() {
   const location = useLocation();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-  const layoutPages = ['/', '/transactions', '/documents', '/categories', '/rules', '/merchants'];
+  const layoutPages = ['/', '/dashboard', '/transactions', '/documents', '/categories', '/rules', '/merchants'];
   const isLayoutPage = layoutPages.includes(location.pathname) && isDesktop;
   const [planningAnchorEl, setPlanningAnchorEl] = useState<null | HTMLElement>(null);
   const [organizeAnchorEl, setOrganizeAnchorEl] = useState<null | HTMLElement>(null);
@@ -240,6 +240,17 @@ export default function App() {
         (demoMode ? t.source === 'demo' : t.source !== 'demo')
     ).length;
   }, [transactions, demoMode]);
+
+  if (DEMO_ONLY_BUILD) {
+    return (
+      <ThemeProvider theme={dynamicTheme}>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <CssBaseline />
+          <Landing />
+        </LocalizationProvider>
+      </ThemeProvider>
+    );
+  }
 
   const renderMainWindow = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
