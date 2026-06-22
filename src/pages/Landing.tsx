@@ -11,6 +11,30 @@ import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
 import AnimatedLogo from '../components/AnimatedLogo';
 
 export default function Landing() {
+  const handleDownload = async (platform: 'mac' | 'windows') => {
+    try {
+      const response = await fetch('https://api.github.com/repos/barnesy/strictly-spending/releases/latest');
+      if (!response.ok) throw new Error('Failed to fetch release');
+      const data = await response.json();
+      
+      let asset;
+      if (platform === 'mac') {
+        asset = data.assets.find((a: any) => a.name.endsWith('.dmg') || a.name.endsWith('.app.tar.gz'));
+      } else if (platform === 'windows') {
+        asset = data.assets.find((a: any) => a.name.endsWith('.exe') || a.name.endsWith('.msi'));
+      }
+
+      if (asset && asset.browser_download_url) {
+        window.location.href = asset.browser_download_url;
+      } else {
+        window.open('https://github.com/barnesy/strictly-spending/releases/latest', '_blank');
+      }
+    } catch (error) {
+      console.error('Failed to fetch release info:', error);
+      window.open('https://github.com/barnesy/strictly-spending/releases/latest', '_blank');
+    }
+  };
+
   return (
     <Box sx={{ 
       minHeight: '100vh', 
@@ -70,8 +94,7 @@ export default function Landing() {
             variant="contained" 
             size="large" 
             startIcon={<AppleIcon />}
-            href="https://github.com/barnesy/strictly-spending/releases/latest"
-            target="_blank"
+            onClick={() => handleDownload('mac')}
             sx={{ 
               borderRadius: '8px', 
               py: 3.5, 
@@ -91,8 +114,7 @@ export default function Landing() {
             variant="contained" 
             size="large" 
             startIcon={<WindowIcon />}
-            href="https://github.com/barnesy/strictly-spending/releases/latest"
-            target="_blank"
+            onClick={() => handleDownload('windows')}
             sx={{ 
               borderRadius: '8px', 
               py: 3.5, 
