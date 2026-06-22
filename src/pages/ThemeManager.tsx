@@ -1,5 +1,8 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import React, { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../hooks/useDbQuery';
 import {
   Stack,
   Typography,
@@ -15,7 +18,7 @@ import {
   ToggleButton,
   Divider,
 } from '@mui/material';
-import { db } from '../db';
+
 
 const THEME_PALETTES = [
   {
@@ -81,7 +84,7 @@ const FONTS = [
 ];
 
 export default function ThemeManager() {
-  const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
+  const themeSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'themeConfig')))[0], []);
   const config = (themeSetting?.value as Record<string, unknown>) || {};
 
   const mode = (config.mode as string) || 'light';
@@ -106,7 +109,7 @@ export default function ThemeManager() {
       }
     }
 
-    await db.settings.put({ key: 'themeConfig', value: nextConfig });
+    await db.insert(schema.settings).values({ key: 'themeConfig', value: nextConfig }).onConflictDoNothing();
   };
 
   const [localRadius, setLocalRadius] = useState(borderRadius);

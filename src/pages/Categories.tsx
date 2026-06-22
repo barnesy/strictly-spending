@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import {
   Stack,
@@ -18,7 +21,7 @@ import {
 } from '@mui/material';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
-import { db } from '../db';
+
 import { refreshRecurrenceAll } from '../recurrence';
 import PageLoader from '../components/PageLoader';
 import DataTable from '../components/DataTable';
@@ -115,7 +118,7 @@ export default function Categories() {
   }, [categories, searchQuery, categoryType, recurrenceFilter]);
 
   const handleRecurrenceChange = async (categoryId: number, value: 'recurring' | 'onetime') => {
-    await db.categories.update(categoryId, { defaultRecurrence: value });
+    await db.update(schema.categories).set({ defaultRecurrence: value }).where(eq(schema.categories.id, categoryId));
     await refreshRecurrenceAll();
   };
 

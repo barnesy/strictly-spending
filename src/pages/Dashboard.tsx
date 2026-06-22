@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { useMemo, useEffect, useState, useDeferredValue } from 'react';
 import {
   Group as PanelGroup,
@@ -43,7 +46,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 
-import { db } from '../db';
+
 import {
   useFilters,
   resolveDateRange,
@@ -802,7 +805,7 @@ export default function Dashboard() {
                       updates.taxCategory = undefined;
                       updates.deductionStatus = 'pending';
                     }
-                    await db.transactions.update(taxEditTxn.id!, updates);
+                    await db.update(schema.transactions).set(updates).where(eq(schema.transactions.id, taxEditTxn.id!));
                     setTaxEditTxn(prev => prev ? { ...prev, ...updates } : null);
                   }}
                 >
@@ -820,7 +823,7 @@ export default function Dashboard() {
                     value={taxEditTxn.taxCategory || 'other'}
                     onChange={async (e) => {
                       const val = e.target.value;
-                      await db.transactions.update(taxEditTxn.id!, { taxCategory: val });
+                      await db.update(schema.transactions).set({ taxCategory: val }).where(eq(schema.transactions.id, taxEditTxn.id!));
                       setTaxEditTxn(prev => prev ? { ...prev, taxCategory: val } : null);
                     }}
                   >

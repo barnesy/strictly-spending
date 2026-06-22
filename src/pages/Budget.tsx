@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import { useMemo, useState, useEffect, useDeferredValue } from 'react';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -21,7 +24,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { db } from '../db';
+
 import { usd, usdCents } from '../lib';
 import { recurrenceLabel } from '../recurrence';
 import {
@@ -104,7 +107,7 @@ export default function Budget() {
       });
     }
     if (toAdd.length > 0) {
-      db.budgets.bulkPut(toAdd);
+      db.insert(schema.budgets).values(toAdd).onConflictDoNothing();
     }
   }, [budgets, categories, trailingAvgByCategory]);
 
@@ -553,10 +556,11 @@ function BudgetAmountInput({
     setValue(initialAmount.toFixed(2));
   }, [initialAmount]);
 
-  const saveToDb = (val: string) => {
+  const saveToDb = async (val: string) => {
     const cleaned = val.replace(/[^0-9.]/g, '');
     const amount = Number(cleaned) || 0;
-    db.budgets.put({ category, monthlyAmount: amount, userSet: true });
+    await db.delete(schema.budgets).where(eq(schema.budgets.category, category));
+    await db.insert(schema.budgets).values({ category, monthlyAmount: amount, userSet: true });
     setValue(amount.toFixed(2));
   };
 
@@ -615,9 +619,10 @@ function BudgetCard({
     [budgets]
   );
 
-  const onResetRow = (category: string) => {
+  const onResetRow = async (category: string) => {
     const avg = trailingAvgByCategory.get(category) || 0;
-    db.budgets.put({
+    await db.delete(schema.budgets).where(eq(schema.budgets.category, category));
+    await db.insert(schema.budgets).values({
       category,
       monthlyAmount: Math.round(avg * 100) / 100,
       userSet: false,
@@ -632,7 +637,10 @@ function BudgetCard({
         Math.round((trailingAvgByCategory.get(b.category) || 0) * 100) / 100,
       userSet: false,
     }));
-    await db.budgets.bulkPut(next);
+    await db.delete(schema.budgets);
+    if (next.length > 0) {
+      await db.insert(schema.budgets).values(next);
+    }
   };
 
   return (

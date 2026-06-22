@@ -7,7 +7,7 @@ import {
   recategorizeAll,
   categorizeBatch,
 } from './categorize';
-import { db } from './db';
+import { api } from './api';
 
 const rulesData: any[] = [];
 const transactionsData: any[] = [];

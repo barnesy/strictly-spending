@@ -14,7 +14,8 @@ import {
   Chip,
 } from '@mui/material';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
-import { db } from '../db';
+import { db } from '../db/drizzle';
+import * as schema from '../db/schema';
 import { usd } from '../lib';
 import {
   isRecurring,
@@ -75,10 +76,10 @@ export default function RecurringBurnCard({
     categories.find((c) => c.name === name)?.color || '#bdbdbd';
 
   const onMarkOneTime = async (merchantKey: string) => {
-    await db.merchantOverrides.put({
+    await db.insert(schema.merchantOverrides).values({
       merchantKey,
       recurrence: 'none',
-    });
+    }).onConflictDoNothing();
   };
 
   return (

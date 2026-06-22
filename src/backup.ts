@@ -1,4 +1,7 @@
-import { db } from './db';
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+
 import type {
   Account,
   Transaction,
@@ -50,13 +53,13 @@ export async function exportToJson(
 ): Promise<{ json: string; suggestedFilename: string; counts: BackupCounts }> {
   const [accounts, transactions, categories, rules, merchantOverrides, budgets, imports] =
     await Promise.all([
-      db.accounts.toArray(),
-      db.transactions.toArray(),
-      db.categories.toArray(),
-      db.rules.toArray(),
-      db.merchantOverrides.toArray(),
-      db.budgets.toArray(),
-      db.imports.toArray(),
+      db.select().from(schema.accounts),
+      db.select().from(schema.transactions),
+      db.select().from(schema.categories),
+      db.select().from(schema.rules),
+      db.select().from(schema.merchantOverrides),
+      db.select().from(schema.budgets),
+      db.select().from(schema.imports),
     ]);
 
   const counts: BackupCounts = {
@@ -147,40 +150,28 @@ export function parseAndValidate(json: string): BackupFile {
 export async function importFromJson(json: string): Promise<RestoreReport> {
   const file = parseAndValidate(json);
 
-  await db.transaction(
-    'rw',
-    [
-      db.accounts,
-      db.transactions,
-      db.categories,
-      db.rules,
-      db.merchantOverrides,
-      db.budgets,
-      db.imports,
-    ],
-    async () => {
-      // Wipe in dependency-safe order (children before parents).
-      await db.transactions.clear();
-      await db.imports.clear();
-      await db.merchantOverrides.clear();
-      await db.budgets.clear();
-      await db.rules.clear();
-      await db.categories.clear();
-      await db.accounts.clear();
+  await db.transaction(async (tx) => {
+    // Wipe in dependency-safe order (children before parents).
+    await tx.delete(schema.transactions);
+    await tx.delete(schema.imports);
+    await tx.delete(schema.merchantOverrides);
+    await tx.delete(schema.budgets);
+    await tx.delete(schema.rules);
+    await tx.delete(schema.categories);
+    await tx.delete(schema.accounts);
 
-      // Restore. bulkAdd preserves explicit primary keys (including
-      // auto-incremented `id` fields, since Dexie respects supplied IDs).
-      if (file.data.accounts.length > 0) await db.accounts.bulkAdd(file.data.accounts);
-      if (file.data.categories.length > 0) await db.categories.bulkAdd(file.data.categories);
-      if (file.data.rules.length > 0) await db.rules.bulkAdd(file.data.rules);
-      if (file.data.merchantOverrides.length > 0)
-        await db.merchantOverrides.bulkAdd(file.data.merchantOverrides);
-      if (file.data.budgets.length > 0) await db.budgets.bulkAdd(file.data.budgets);
-      if (file.data.imports.length > 0) await db.imports.bulkAdd(file.data.imports);
-      if (file.data.transactions.length > 0)
-        await db.transactions.bulkAdd(file.data.transactions);
-    }
-  );
+    // Restore. bulkAdd preserves explicit primary keys (including
+    // auto-incremented `id` fields, since Dexie respects supplied IDs).
+    if (file.data.accounts.length > 0) await tx.insert(schema.accounts).values(file.data.accounts as any);
+    if (file.data.categories.length > 0) await tx.insert(schema.categories).values(file.data.categories as any);
+    if (file.data.rules.length > 0) await tx.insert(schema.rules).values(file.data.rules as any);
+    if (file.data.merchantOverrides.length > 0)
+      await tx.insert(schema.merchantOverrides).values(file.data.merchantOverrides as any);
+    if (file.data.budgets.length > 0) await tx.insert(schema.budgets).values(file.data.budgets as any);
+    if (file.data.imports.length > 0) await tx.insert(schema.imports).values(file.data.imports as any);
+    if (file.data.transactions.length > 0)
+      await tx.insert(schema.transactions).values(file.data.transactions as any);
+  });
 
   // Carry forward the seed version so seedAndMigrate doesn't re-run
   // recategorizeAll on the next load.

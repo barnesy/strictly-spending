@@ -1,3 +1,6 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Default category taxonomy + a comprehensive US-household starter rule pack.
 //
@@ -11,7 +14,7 @@
 // app's Sort / Rules UI) or in an OPTIONAL local file `src/seed.local.ts`
 // which is gitignored. See `src/seed.local.example.ts` for the template.
 
-import { db } from './db';
+
 import { recategorizeAll } from './categorize';
 import { refreshRecurrenceAll } from './recurrence';
 import type { Category, CategoryRule } from './types';
@@ -671,35 +674,35 @@ const DEFAULT_RULES: StarterRule[] = [...STARTER_RULES, ...LOCAL_RULES];
 export async function seedAndMigrate(): Promise<void> {
   // Ensure all default categories exist (by name)
   const existingCategoryNames = new Set(
-    (await db.categories.toArray()).map((c) => c.name)
+    (await db.select().from(schema.categories)).map((c) => c.name)
   );
   const newCategories = DEFAULT_CATEGORIES.filter(
     (c) => !existingCategoryNames.has(c.name)
   );
   if (newCategories.length > 0) {
-    await db.categories.bulkAdd(newCategories);
+    await db.insert(schema.categories).values(newCategories);
   }
 
   // Ensure all default rules exist (by pattern)
   const existingPatterns = new Set(
-    (await db.rules.toArray()).map((r) => r.pattern)
+    (await db.select().from(schema.rules)).map((r) => r.pattern)
   );
   const now = new Date().toISOString();
   const newRules = DEFAULT_RULES.filter(
     (r) => !existingPatterns.has(r.pattern)
   ).map((r) => ({ ...r, createdAt: now }));
   if (newRules.length > 0) {
-    await db.rules.bulkAdd(newRules);
+    await db.insert(schema.rules).values(newRules);
   }
 
   // Update recurrence defaults for existing categories
-  const allDbCategories = await db.categories.toArray();
+  const allDbCategories = await db.select().from(schema.categories);
   for (const dbCat of allDbCategories) {
     const defaultCat = DEFAULT_CATEGORIES.find((c) => c.name === dbCat.name);
     if (defaultCat && dbCat.defaultRecurrence !== defaultCat.defaultRecurrence) {
-      await db.categories.update(dbCat.id!, {
+      await db.update(schema.categories).set({
         defaultRecurrence: defaultCat.defaultRecurrence,
-      });
+      }).where(eq(schema.categories.id, dbCat.id!));
     }
   }
 
@@ -708,7 +711,7 @@ export async function seedAndMigrate(): Promise<void> {
   // retroactively re-bucket existing transactions.
   const storedVersion = Number(localStorage.getItem('seed_version') || '0');
   if (storedVersion < SEED_VERSION) {
-    const hasTransactions = (await db.transactions.count()) > 0;
+    const hasTransactions = (await (await db.select().from(schema.transactions)).length) > 0;
     if (hasTransactions) {
       await recategorizeAll();
       await refreshRecurrenceAll();
@@ -718,7 +721,7 @@ export async function seedAndMigrate(): Promise<void> {
 
   // Ensure default agent skills are seeded globally on bootstrap
   try {
-    const setting = await db.settings.get('app:agentSkills');
+    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
     const currentSkills = (setting?.value as any[]) || [];
     
     let hasChanges = false;
@@ -754,7 +757,7 @@ export async function seedAndMigrate(): Promise<void> {
     const filteredSkills = updatedSkills.filter(s => !s.isBuiltIn || defaultIds.has(s.id));
 
     if (hasChanges || filteredSkills.length !== currentSkills.length) {
-      await db.settings.put({ key: 'app:agentSkills', value: filteredSkills });
+      await db.insert(schema.settings).values({ key: 'app:agentSkills', value: filteredSkills }).onConflictDoNothing();
     }
   } catch (err) {
     console.error('Failed to seed agent skills globally:', err);

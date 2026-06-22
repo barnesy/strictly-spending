@@ -13,11 +13,27 @@
     "dialog:default",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "http://localhost:11434/*" }, { "url": "http://127.0.0.1:11434/*" }]
+      "allow": [
+        {
+          "url": "http://localhost:11434/*"
+        },
+        {
+          "url": "http://127.0.0.1:11434/*"
+        }
+      ]
     },
     {
       "identifier": "shell:allow-open",
-      "allow": [{ "url": "https://github.com/barnesy/strictly-spending/issues/new" }]
-    }
+      "allow": [
+        {
+          "url": "https://github.com/barnesy/strictly-spending/issues/new"
+        }
+      ]
+    },
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-close",
+    "playwright:default"
   ]
 }

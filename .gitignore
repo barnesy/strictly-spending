@@ -58,3 +58,27 @@ coverage/
 # Misc OS files
 Thumbs.db
 ehthumbs.db
+
+# Scratch and helper scripts
+fix*
+patch*
+revert*
+refactor*
+rm_*
+test.js
+test.ts
+test_drizzle_proxy.js
+benchmark.js
+final_fixes.py
+lint_output.txt
+tsc_output.txt
+strip_mode.cjs
+update_capabilities*
+update_db.patch
+manual_fixes.patch
+lighthouse-report.json
+test-results/
+src-tauri/generate_extra.py
+src-tauri/handlers.txt
+src-tauri/src/bulk_add.patch
+src-tauri/test_rust.rs

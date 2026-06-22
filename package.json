@@ -13,7 +13,7 @@
     "deploy:demo": "npm run build:demo && DEST=${BARNESY_NEW:-../../projects/barnesy-new}/strictly-spending && rm -rf \"$DEST\" && cp -r dist-demo \"$DEST\" && echo Deployed to $DEST",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run src",
     "tauri": "tauri"
   },
   "keywords": [
@@ -40,9 +40,11 @@
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-shell": "^2.3.5",
+    "@tauri-apps/plugin-sql": "^2.4.0",
     "date-fns": "^4.3.0",
     "dexie": "^4.4.2",
     "dexie-react-hooks": "^4.4.0",
+    "drizzle-orm": "^0.45.2",
     "echarts": "^6.1.0",
     "jszip": "^3.10.1",
     "papaparse": "^5.5.3",
@@ -54,6 +56,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.0",
+    "@srsholmes/tauri-playwright": "^0.4.1",
     "@tauri-apps/cli": "^2.11.2",
     "@types/jszip": "^3.4.0",
     "@types/node": "^24.12.3",
@@ -61,6 +65,8 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.9",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",

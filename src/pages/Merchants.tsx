@@ -1,7 +1,10 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../hooks/useDbQuery';
 import { resolveTaxDeduction } from '../taxUtils';
 import {
   Box,
@@ -49,7 +52,7 @@ import {
   useDefaultLayout,
 } from 'react-resizable-panels';
 
-import { db } from '../db';
+
 import { usd, usdCents } from '../lib';
 import PageLoader from '../components/PageLoader';
 import AnimatedLogo from '../components/AnimatedLogo';
@@ -101,7 +104,7 @@ export default function Merchants() {
     isDataLoading: s.isLoading,
   })));
   const deferredAllTransactions = useDeferredValue(allTransactions);
-  const taxRules = useLiveQuery(() => db.taxRules.toArray(), []) || [];
+  const taxRules = useDbQuery(async () => db.select().from(schema.taxRules), []) || [];
 
   const isLoading = isDataLoading || allTransactions === undefined;
 
@@ -299,7 +302,7 @@ export default function Merchants() {
     }
 
     try {
-      await db.transactions.where('merchantKey').equals(renameTarget.merchantKey).modify({ merchantKey: trimmedName });
+      await db.update(schema.transactions).set({ merchantKey: trimmedName }).where(eq(schema.transactions.merchantKey, renameTarget.merchantKey));
       setSnackbarMessage(`Successfully renamed "${renameTarget.merchantKey}" to "${trimmedName}".`);
     } catch (e: unknown) {
       console.error(e);
@@ -319,15 +322,15 @@ export default function Merchants() {
     if (!recategorizeTarget || !selectedCategory) return;
 
     try {
-      const txs = await db.transactions.where('merchantKey').equals(recategorizeTarget.merchantKey).toArray();
+      const txs = await db.select().from(schema.transactions).where(eq(schema.transactions.merchantKey, recategorizeTarget.merchantKey));
       for (const t of txs) {
         const taxGuess = resolveTaxDeduction(t.description, selectedCategory, t.merchantKey, taxRules);
-        await db.transactions.update(t.id!, {
+        await db.update(schema.transactions).set({
           category: selectedCategory,
           isBusiness: taxGuess.isBusiness,
           taxCategory: taxGuess.taxCategory,
           deductionStatus: taxGuess.deductionStatus,
-        });
+        }).where(eq(schema.transactions.id, t.id!));
       }
       setSnackbarMessage(`Successfully recategorized transactions under "${recategorizeTarget.merchantKey}" to "${selectedCategory}".`);
     } catch (e: unknown) {
@@ -353,7 +356,7 @@ export default function Merchants() {
 
     try {
       if (sourceKeys.length > 0) {
-        await db.transactions.where('merchantKey').anyOf(sourceKeys).modify({ merchantKey: finalName });
+        await db.update(schema.transactions).set({ merchantKey: finalName }).where(inArray(schema.transactions.merchantKey, sourceKeys));
       }
       setSnackbarMessage(`Merged ${selectedKeys.length} merchants into "${finalName}".`);
       setSelectedKeys([]);
@@ -501,7 +504,7 @@ export default function Merchants() {
         changes.category = selectedCat;
       }
 
-      await db.transactions.where('merchantKey').anyOf(allKeys).modify(changes);
+      await db.update(schema.transactions).set(changes).where(inArray(schema.transactions.merchantKey, allKeys));
 
       setSnackbarMessage(`Merged duplicate set into "${trimmedName}".`);
       setDuplicateGroups((prev) => prev.filter((g) => g.primarySuggest !== primarySuggest));

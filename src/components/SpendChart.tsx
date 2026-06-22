@@ -153,9 +153,9 @@ export default function SpendChart({
         mTotals.set(m, (mTotals.get(m) || 0) + Math.abs(t.amount));
       }
 
-      const orderedCats = categories
+      const orderedCats = Array.from(new Set(categories
         .filter((c) => presentCats.has(c.name))
-        .map((c) => c.name);
+        .map((c) => c.name)));
 
       const series = orderedCats.map((catName) => {
         const cat = categories.find((c) => c.name === catName);

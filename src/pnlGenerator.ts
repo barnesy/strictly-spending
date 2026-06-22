@@ -1,4 +1,7 @@
-import { db } from './db';
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+
 import { useDataStore } from './dataStore';
 import { SCHEDULE_C_CATEGORIES } from './taxUtils';
 import type { Transaction } from './types';
@@ -28,11 +31,11 @@ export async function generatePnlData(params: PnlParams) {
   } = params;
 
   const store = useDataStore.getState();
-  const allCats = store.isInitialized ? store.categories : await db.categories.toArray();
-  const allAccts = store.isInitialized ? store.accounts : await db.accounts.toArray();
-  const allTxns = store.isInitialized ? store.transactions : await db.transactions.toArray();
+  const allCats = store.isInitialized ? store.categories : await db.select().from(schema.categories);
+  const allAccts = store.isInitialized ? store.accounts : await db.select().from(schema.accounts);
+  const allTxns = store.isInitialized ? store.transactions : await db.select().from(schema.transactions);
 
-  const rawSettings = await db.settings.get('app:taxSettings');
+  const rawSettings = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')))[0];
   const taxSettings = (rawSettings?.value as { hasBusiness?: boolean }) || { hasBusiness: false };
   const hasBusinessMode = !!taxSettings.hasBusiness;
 
@@ -291,10 +294,10 @@ export async function generateBalanceSheetData(params: BalanceSheetParams) {
   } = params;
 
   const store = useDataStore.getState();
-  const allAccts = store.isInitialized ? store.accounts : await db.accounts.toArray();
-  const allTxns = store.isInitialized ? store.transactions : await db.transactions.toArray();
+  const allAccts = store.isInitialized ? store.accounts : await db.select().from(schema.accounts);
+  const allTxns = store.isInitialized ? store.transactions : await db.select().from(schema.transactions);
 
-  const rawSettings = await db.settings.get('app:taxSettings');
+  const rawSettings = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')))[0];
   const taxSettings = (rawSettings?.value as { hasBusiness?: boolean }) || { hasBusiness: false };
   const hasBusinessMode = !!taxSettings.hasBusiness;
 
@@ -416,8 +419,8 @@ export async function generateLedgerData(params: LedgerParams) {
   } = params;
 
   const store = useDataStore.getState();
-  const allAccts = store.isInitialized ? store.accounts : await db.accounts.toArray();
-  const allTxns = store.isInitialized ? store.transactions : await db.transactions.toArray();
+  const allAccts = store.isInitialized ? store.accounts : await db.select().from(schema.accounts);
+  const allTxns = store.isInitialized ? store.transactions : await db.select().from(schema.transactions);
 
   const accountNameMap: Record<number, string> = {};
   for (const a of allAccts) {
@@ -486,7 +489,7 @@ export async function generateExpenseSummaryData(params: LedgerParams) {
   } = params;
 
   const store = useDataStore.getState();
-  const allTxns = store.isInitialized ? store.transactions : await db.transactions.toArray();
+  const allTxns = store.isInitialized ? store.transactions : await db.select().from(schema.transactions);
 
   const matchedTxns = allTxns.filter(t => {
     if (t.date < start || t.date > end) return false;

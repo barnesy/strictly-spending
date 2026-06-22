@@ -93,11 +93,10 @@ export interface AIProvider {
   ): Promise<string>;
   reviewTransactions(transactions: { desc: string; ruleCategory: string }[], availableCategories: string[], signal?: AbortSignal): Promise<string[]>;
   reviewTransactionsWithRules(
-    transactions: { desc: string; ruleCategory: string }[],
+    transactions: { desc: string; ruleCategory: string; localRecurrence?: string }[],
     availableCategories: string[],
-    signal?: AbortSignal,
-    taxCategories?: string[]
-  ): Promise<{ category: string; pattern: string; isBusiness?: boolean; taxCategory?: string }[]>;
+    signal?: AbortSignal
+  ): Promise<{ category: string; pattern: string; recurrence: "recurring" | "onetime" }[]>;
   pullModel?(progressCallback?: (progress: number, status: string) => void): Promise<void>;
   abortPull?(): void;
 }

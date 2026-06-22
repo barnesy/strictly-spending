@@ -1,4 +1,5 @@
 mod ollama;
+mod migrations;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -7,6 +8,12 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_playwright::init())
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:spending-viz.sqlite", migrations::get_migrations())
+                .build()
+        )
         .invoke_handler(tauri::generate_handler![
             ollama::check_ollama_status,
             ollama::install_ollama,

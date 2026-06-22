@@ -1,5 +1,8 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from './hooks/useDbQuery';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer, Tooltip } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -34,7 +37,7 @@ import ToolsReference from './pages/ToolsReference';
 import Landing from './pages/Landing';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
-import { db } from './db';
+
 import { useFilters } from './store';
 import { useDataStore } from './dataStore';
 import { PageTransition } from './components/PageTransition';
@@ -73,7 +76,7 @@ const SETTINGS_NAV = [
 ];
 
 export default function App() {
-  const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
+  const themeSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'themeConfig')))[0], []);
   const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string; backgroundColor?: string; paperColor?: string; textColor?: string; borderRadius?: number; fontFamily?: string; fontSize?: number } | undefined;
 
   const fontSize = themeConfig?.fontSize ?? 14;

@@ -27,6 +27,8 @@ tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-http = "2.5.9"
 tauri-plugin-shell = "2"
+tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
+tauri-plugin-playwright = "0.4.1"
 
 [profile.release]
 opt-level = "z"

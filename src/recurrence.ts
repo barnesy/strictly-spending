@@ -1,5 +1,8 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq } from 'drizzle-orm';
 import type { RecurrenceKind, Transaction, MerchantOverride, Category } from './types';
-import { db } from './db';
+
 
 export interface RecurrenceInfo {
   kind: RecurrenceKind;
@@ -185,7 +188,7 @@ export function recurrenceLabel(kind: RecurrenceKind): string {
 export function resolveRecurrenceForTransaction(
   txn: Omit<Transaction, 'id' | 'recurrence'> & { recurrenceOverride?: 'recurring' | 'onetime' | null },
   categoryMap: Map<string, Category>,
-  merchantOverrideMap: Map<string, MerchantOverride>,
+  merchantOverrideMap: Map<string, any>,
   autoRecurringMerchantKeys: Set<string>
 ): 'recurring' | 'onetime' {
   // 1. Transaction override
@@ -197,7 +200,7 @@ export function resolveRecurrenceForTransaction(
   if (mkey) {
     const override = merchantOverrideMap.get(mkey);
     if (override) {
-      return override.recurrence === 'none' ? 'onetime' : 'recurring';
+      return override.recurrence === 'none' || override.recurrence === 'onetime' ? 'onetime' : 'recurring';
     }
   }
 
@@ -216,9 +219,9 @@ export function resolveRecurrenceForTransaction(
 }
 
 export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
-  const categories = await db.categories.toArray();
-  const overrides = await db.merchantOverrides.toArray();
-  const allTxns = await db.transactions.toArray();
+  const categories = await db.select().from(schema.categories);
+  const overrides = await db.select().from(schema.merchantOverrides);
+  const allTxns = await db.select().from(schema.transactions);
 
   const categoryMap = new Map(categories.map((c) => [c.name, c]));
   const merchantOverrideMap = new Map(overrides.map((o) => [o.merchantKey, o]));
@@ -241,7 +244,7 @@ export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
   }
 
   let updated = 0;
-  await db.transaction('rw', db.transactions, async () => {
+  await (async () => {
     for (const t of allTxns) {
       const resolved = resolveRecurrenceForTransaction(
         t,
@@ -250,7 +253,7 @@ export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
         autoRecurringMerchantKeys
       );
       if (t.recurrence !== resolved) {
-        await db.transactions.update(t.id!, { recurrence: resolved });
+        await db.update(schema.transactions).set({ recurrence: resolved }).where(eq(schema.transactions.id, t.id!));
         updated++;
       }
     }

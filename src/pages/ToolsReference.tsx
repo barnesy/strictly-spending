@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { useState } from 'react';
 import { Box, Typography, Card, CardContent, Grid, Stack, Chip, Divider, useTheme, Tabs, Tab, Paper } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
@@ -50,11 +53,11 @@ const TOOLS = [
     description: 'Updates your tax settings and autofills form fields based on conversational input.',
     prompts: ['I am an LLC filing in California', 'Update my tax status to married filing jointly'],
     code: `} else if (action === 'update_tax_settings') {
-  const currentSettings = await db.settings.get('app:taxSettings');
+  const currentSettings = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')))[0];
   const baseValue = currentSettings?.value || { checklist: {}, hasBusiness: false, taxYear: new Date().getFullYear() };
   if (actionObj.taxData) {
     const merged = { ...baseValue, ...actionObj.taxData };
-    await db.settings.put({ key: 'app:taxSettings', value: merged });
+    await db.insert(schema.settings).values({ key: 'app:taxSettings', value: merged }).onConflictDoNothing();
   }
 }`
   },

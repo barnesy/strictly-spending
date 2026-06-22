@@ -1,5 +1,8 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../hooks/useDbQuery';
 import { useShallow } from 'zustand/react/shallow';
 import {
   Group as PanelGroup,
@@ -55,7 +58,7 @@ import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore
 
 import { useTheme } from '@mui/material/styles';
 
-import { db } from '../db';
+
 import { useDataStore } from '../dataStore';
 import { usdCents } from '../lib';
 
@@ -144,7 +147,7 @@ export default function Loans() {
   });
 
   // Settings DB Query
-  const loans = useLiveQuery(() => db.loans.toArray(), []) || [];
+  const loans = useDbQuery(async () => db.select().from(schema.loans), []) || [];
 
   const activeLoans = useMemo(() => {
     return loans.filter((l) => l.enabled !== false);
@@ -470,7 +473,7 @@ export default function Loans() {
     };
 
     if (currentConfig && currentConfig.id !== undefined) {
-      await db.loans.put(updatedConfig);
+      await db.insert(schema.loans).values(updatedConfig).onConflictDoNothing();
       setSnackbarMsg('Loan settings saved successfully!');
     }
   };
@@ -498,7 +501,7 @@ export default function Loans() {
       setFormExtraOneTimePayment(resetLoan.extraOneTimePayment ? String(resetLoan.extraOneTimePayment ?? '') : '');
       setFormExtraOneTimeMonth(resetLoan.extraOneTimeMonth ? String(resetLoan.extraOneTimeMonth ?? '') : '');
 
-      await db.loans.put(resetLoan);
+      await db.insert(schema.loans).values(resetLoan).onConflictDoNothing();
       setSnackbarMsg('Reset to default values.');
     }
   };
@@ -536,8 +539,11 @@ export default function Loans() {
       createdAt: new Date().toISOString(),
     };
 
-    const newId = await db.loans.add(newLoan);
-    setActiveLoanId(newId);
+    const result = await db.insert(schema.loans).values(newLoan).returning();
+    const newId = result?.[0]?.id;
+    if (newId !== undefined) {
+      setActiveLoanId(newId);
+    }
     setAddDialogOpen(false);
     setAddName('');
     setAddMerchant('');
@@ -553,7 +559,7 @@ export default function Loans() {
       ...currentConfig,
       enabled: false,
     };
-    await db.loans.put(updated);
+    await db.insert(schema.loans).values(updated).onConflictDoNothing();
     setSnackbarMsg(`Loan "${currentConfig.name}" removed from view.`);
   };
 
@@ -563,7 +569,7 @@ export default function Loans() {
       ...loan,
       enabled: true,
     };
-    await db.loans.put(updated);
+    await db.insert(schema.loans).values(updated).onConflictDoNothing();
     setActiveLoanId(loan.id);
     setSnackbarMsg(`Loan "${loan.name}" restored successfully.`);
   };
@@ -572,7 +578,7 @@ export default function Loans() {
     if (!window.confirm(`Are you sure you want to delete the loan "${name}"? This action cannot be undone.`)) {
       return;
     }
-    await db.loans.delete(id);
+    await db.delete(schema.loans).where(eq(schema.loans.id, id));
     setSnackbarMsg(`Loan "${name}" deleted permanently.`);
   };
 

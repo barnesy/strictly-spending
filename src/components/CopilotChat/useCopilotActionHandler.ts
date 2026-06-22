@@ -1,3 +1,6 @@
+import { db } from "../../db/drizzle";
+import * as schema from "../../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useFilters, resolveDateRange } from '../../store';
@@ -5,7 +8,7 @@ import { useChatStore, formatModelName } from '../../chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useDataStore } from '../../dataStore';
 import { localAI, type ChatMessage, parseAIResponse, calculateGlobalRunwayData, COPILOT_RESPONSE_SCHEMA } from '../../ai';
-import { db } from '../../db';
+
 import { detectSubscriptionAlerts, detectSpendingAnomalies } from '../../copilotAnalytics';
 import { generateAccessibilityReport } from '../../accessibilityAuditor';
 import { executeCopilotCommand, matchCategories, matchAccounts, getMonthsInRange, aggregateTransactions } from '../../copilotMatcher';
@@ -319,7 +322,7 @@ export function useCopilotActionHandler() {
         currentCash = 10000;
       }
 
-      const incomeSetting = await db.settings.get('monthlyIncome');
+      const incomeSetting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'monthlyIncome')))[0];
       let monthlyIncome = incomeSetting ? Number(incomeSetting.value) : 0;
 
       if (monthlyIncome === 0) {
@@ -374,7 +377,7 @@ Expected Monthly Income: $${monthlyIncome.toFixed(2)}`;
       const executedActions = new Set<string>();
 
       // Multi-Step Skill Tracking
-      const allSkills = ((await db.settings.get('app:agentSkills'))?.value as any[]) || [];
+      const allSkills = ((await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0])?.value as any[]) || [];
       const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant' && m.activeSkillId);
       
       const matchedSkill = findMatchingSkillForPrompt(textToSubmit, allSkills);
@@ -1092,7 +1095,7 @@ If these results are sufficient to answer the user's question, explain them to t
           currentSteps.push(`Tool Call: spending_anomalies (categories: ${resolvedCats.join(', ')})`);
 
         } else if (action === 'categorize_transactions') {
-          const licenseSetting = await db.settings.get('license');
+          const licenseSetting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'license')))[0];
           const license = licenseSetting?.value as { active: boolean } | undefined;
           if (!license?.active) {
             feedbackError = "Error: A license key is required to use AI features. Please activate your license on the Local Model page first.";
@@ -1174,15 +1177,14 @@ Explain to the user that there are no uncategorized transactions to classify in 
                     }
                   }
 
-                  // Save partial report to database settings
-                  await db.settings.put({
+                  await db.insert(schema.settings).values({
                     key: 'app:pendingCategorizationReport',
                     value: {
                       id: reportId,
                       createdAt: new Date().toISOString(),
                       items: proposedItems
                     }
-                  });
+                  }).onConflictDoNothing();
                 }
               } catch (chunkErr: any) {
                 if (chunkErr.name === 'AbortError' || chunkErr.message?.includes('aborted')) {
@@ -1260,7 +1262,7 @@ Please summarize this accessibility report for the developer in the 'body' field
           currentSteps.push('Tool Call: audit_accessibility');
 
         } else if (action === 'update_tax_settings') {
-          const currentSettings = await db.settings.get('app:taxSettings');
+          const currentSettings = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')))[0];
           const baseValue = (currentSettings?.value as any) || { checklist: {}, hasBusiness: false, taxYear: new Date().getFullYear() };
           
           if (actionObj.taxData) {
@@ -1272,7 +1274,7 @@ Please summarize this accessibility report for the developer in the 'body' field
                 merged[key] = actionObj.taxData[key];
               }
             }
-            await db.settings.put({ key: 'app:taxSettings', value: merged });
+            await db.insert(schema.settings).values({ key: 'app:taxSettings', value: merged }).onConflictDoNothing();
           }
 
           actionResult = { action: 'update_tax_settings', taxData: actionObj.taxData };
@@ -1296,8 +1298,8 @@ Please summarize this accessibility report for the developer in the 'body' field
           const filter = actionObj.filter || {};
 
           let updatedCount = 0;
-          await db.transaction('rw', db.transactions, async () => {
-            const txns = await db.transactions.toArray();
+          await (async () => {
+            const txns = await db.select().from(schema.transactions);
             const matched = txns.filter(t => {
               if (filter.transactionId && t.id !== filter.transactionId) return false;
               if (filter.accountId && t.accountId !== filter.accountId) return false;
@@ -1319,7 +1321,7 @@ Please summarize this accessibility report for the developer in the 'body' field
 
             const matchedIds = matched.map(t => t.id!).filter(Boolean);
             if (matchedIds.length > 0) {
-              await db.transactions.where('id').anyOf(matchedIds).modify(updates);
+              await db.update(schema.transactions).set(updates).where(inArray(schema.transactions.id, matchedIds));
               updatedCount = matchedIds.length;
             }
           });
@@ -1481,7 +1483,7 @@ Please summarize this accessibility report for the developer in the 'body' field
                     maxPrice: actionObj.maxPrice !== undefined ? actionObj.maxPrice : lastQueryMaxPrice,
                   };
 
-                  await db.documents.put({
+                  await db.insert(schema.documents).values({
                     id: docId,
                     name: filename,
                     path: filePath,
@@ -1490,17 +1492,17 @@ Please summarize this accessibility report for the developer in the 'body' field
                     associatedChecklistId: docType,
                     createdAt: new Date().toISOString(),
                     metadata
-                  });
+                  }).onConflictDoNothing();
 
-                  await db.documentContents.put({
+                  await db.insert(schema.documentContents).values({
                     id: docId,
                     content
-                  });
+                  }).onConflictDoNothing();
 
-                  const currentSettings = await db.settings.get('app:taxSettings');
+                  const currentSettings = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')))[0];
                   const taxSettings = (currentSettings?.value as any) || { checklist: {}, hasBusiness: false, taxYear: new Date().getFullYear() };
                   taxSettings.checklist[docType] = true;
-                  await db.settings.put({ key: 'app:taxSettings', value: taxSettings });
+                  await db.insert(schema.settings).values({ key: 'app:taxSettings', value: taxSettings }).onConflictDoNothing();
 
                   systemResultsMsg = {
                     role: 'system',
@@ -1532,7 +1534,7 @@ Please summarize this accessibility report for the developer in the 'body' field
                   const newDocId = crypto.randomUUID();
 
                   if (docType) {
-                    await db.documents.put({
+                    await db.insert(schema.documents).values({
                       id: newDocId,
                       name: filename,
                       path: filePath,
@@ -1540,36 +1542,36 @@ Please summarize this accessibility report for the developer in the 'body' field
                       source: 'generated',
                       associatedChecklistId: docType,
                       createdAt: new Date().toISOString()
-                    });
+                    }).onConflictDoNothing();
 
-                    await db.documentContents.put({
+                    await db.insert(schema.documentContents).values({
                       id: newDocId,
                       content
-                    });
+                    }).onConflictDoNothing();
                     
-                    const currentSettings = await db.settings.get('app:taxSettings');
+                    const currentSettings = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')))[0];
                     const taxSettings = (currentSettings?.value as any) || { checklist: {}, hasBusiness: false, taxYear: new Date().getFullYear() };
                     taxSettings.checklist[docType] = true;
-                    await db.settings.put({ key: 'app:taxSettings', value: taxSettings });
+                    await db.insert(schema.settings).values({ key: 'app:taxSettings', value: taxSettings }).onConflictDoNothing();
 
                     systemResultsMsg = {
                       role: 'system',
                       content: `Document successfully generated. The document has been automatically attached to the tax checklist item '${docType}' and stored in the Documents tab.`
                     };
                   } else {
-                    await db.documents.put({
+                    await db.insert(schema.documents).values({
                       id: newDocId,
                       name: filename,
                       path: filePath,
                       type: isCsv ? 'text/csv' : 'text/markdown',
                       source: 'generated',
                       createdAt: new Date().toISOString()
-                    });
+                    }).onConflictDoNothing();
 
-                    await db.documentContents.put({
+                    await db.insert(schema.documentContents).values({
                       id: newDocId,
                       content
-                    });
+                    }).onConflictDoNothing();
 
                     systemResultsMsg = {
                       role: 'system',

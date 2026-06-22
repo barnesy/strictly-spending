@@ -1,4 +1,7 @@
-import { db } from './db';
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+
 import { categorize, inferTypeCategory } from './categorize';
 import type { CategorizeContext } from './categorize';
 import { refreshRecurrenceAll } from './recurrence';
@@ -40,8 +43,8 @@ export interface CleanupReport {
 }
 
 export async function generateCleanupReport(): Promise<CleanupReport> {
-  const rules = await db.rules.toArray();
-  const allTxns = await db.transactions.toArray();
+  const rules = await db.select().from(schema.rules);
+  const allTxns = await db.select().from(schema.transactions);
   
   // 1. Mine Suggestions
   const overriddenTxns = allTxns.filter(t => !!t.userOverridden && t.category !== 'Uncategorized');
@@ -150,13 +153,13 @@ export async function executeCleanup(
 ): Promise<void> {
   // 1. Delete redundant rules
   if (approvedRedundantRuleIds.length > 0) {
-    await db.rules.bulkDelete(approvedRedundantRuleIds);
+    await db.delete(schema.rules).where(inArray(schema.rules.id, approvedRedundantRuleIds));
   }
 
   // 2. Add suggested rules
   const now = new Date().toISOString();
   for (const sug of approvedSuggestions) {
-    await db.rules.add({
+    await db.insert(schema.rules).values({
       pattern: sug.pattern,
       category: sug.category,
       priority: 100, // default priority
@@ -168,28 +171,28 @@ export async function executeCleanup(
   // (No longer needed since we use approved categories directly)
   
   // 3. Execute retroactive changes and clear manual overrides for matched suggestions
-  await db.transaction('rw', db.transactions, async () => {
+  await (async () => {
     // Process retroactive categorizations
     if (approvedRetroactiveTxns.length > 0) {
-      const allTxns = await db.transactions.toArray();
+      const allTxns = await db.select().from(schema.transactions);
       const approvedMap = new Map(approvedRetroactiveTxns.map(t => [t.transactionId, t.category]));
       
       for (const t of allTxns) {
         const approvedCategory = approvedMap.get(t.id!);
         if (approvedCategory) {
-           await db.transactions.update(t.id!, { category: approvedCategory });
+           await db.update(schema.transactions).set({ category: approvedCategory }).where(eq(schema.transactions.id, t.id!));
         }
       }
     }
 
     // Clear overrides for the accepted suggestions (consolidation)
     if (approvedSuggestions.length > 0) {
-      const allTxns = await db.transactions.toArray();
+      const allTxns = await db.select().from(schema.transactions);
       for (const t of allTxns) {
         if (!t.userOverridden) continue;
         for (const sug of approvedSuggestions) {
           if (t.merchantKey && t.merchantKey.toLowerCase() === sug.pattern.toLowerCase() && t.category === sug.category) {
-             await db.transactions.update(t.id!, { userOverridden: false });
+             await db.update(schema.transactions).set({ userOverridden: false }).where(eq(schema.transactions.id, t.id!));
              break; // done with this transaction
           }
         }

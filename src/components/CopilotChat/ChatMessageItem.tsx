@@ -1,3 +1,6 @@
+import { db } from "../../db/drizzle";
+import * as schema from "../../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 // removed useLiveQuery
@@ -22,7 +25,7 @@ import {
   extractFieldUsingRegex,
   forceBoldAndTwoDecimals,
 } from '../../ai';
-import { db } from '../../db';
+
 import { useChatStore } from '../../chatStore';
 import SimpleMarkdown from '../SimpleMarkdown';
 import CopilotQueryResult from '../CopilotQueryResult';
@@ -121,10 +124,10 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
 
       const threadId = useChatStore.getState().activeThreadId;
       if (threadId) {
-        const dbMsgs = await db.messages.where('threadId').equals(threadId).sortBy('id');
+        const dbMsgs = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId)).orderBy(asc(schema.messages.id));
         const dbMsg = dbMsgs.find(m => m.role === targetMsg.role && m.content === targetMsg.content);
         if (dbMsg && dbMsg.id) {
-          await db.messages.update(dbMsg.id, { actionResult: newResult });
+          await db.update(schema.messages).set({ actionResult: newResult }).where(eq(schema.messages.id, dbMsg.id));
         }
       }
     }
@@ -497,7 +500,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 size="small"
                 onClick={async () => {
                   if (message.actionResult?.id) {
-                    const art = await db.artifacts.get(message.actionResult.id);
+                    const art = await (await db.select().from(schema.artifacts).where(eq(schema.artifacts.id, message.actionResult.id)))[0];
                     if (art) useChatStore.getState().setActiveArtifact(art);
                   }
                 }}

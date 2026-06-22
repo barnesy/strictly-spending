@@ -1,4 +1,7 @@
-import { db } from './db';
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+
 
 export interface RuleSuggestion {
   pattern: string;
@@ -9,8 +12,8 @@ export interface RuleSuggestion {
 
 export async function mineRuleSuggestions(): Promise<RuleSuggestion[]> {
   // 1. Fetch all rules and overridden transactions
-  const rules = await db.rules.toArray();
-  const allTxns = await db.transactions.toArray();
+  const rules = await db.select().from(schema.rules);
+  const allTxns = await db.select().from(schema.transactions);
   const overriddenTxns = allTxns.filter(t => !!t.userOverridden && t.category !== 'Uncategorized');
     
   if (overriddenTxns.length === 0) return [];

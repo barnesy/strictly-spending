@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mineRuleSuggestions } from './ruleMiner';
-import { db } from './db';
+import { api } from './api';
 
 vi.mock('./db', () => ({
   db: {

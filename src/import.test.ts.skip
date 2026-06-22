@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { buildPreview, commitPreview } from './import';
-import { db } from './db';
+import { api } from './api';
 import { localAI } from './ai';
 
 const rulesData: any[] = [];

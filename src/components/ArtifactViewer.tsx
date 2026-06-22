@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { useState } from 'react';
 import {
   Box,
@@ -25,8 +28,8 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useDbQuery } from '../hooks/useDbQuery';
+
 import type { AgentSkill } from '../types';
 import SimpleMarkdown from './SimpleMarkdown';
 
@@ -36,7 +39,7 @@ export default function ArtifactViewer() {
     setActiveArtifact: s.setActiveArtifact,
   })));
   const navigate = useNavigate();
-  const activeSkills = useLiveQuery(() => db.settings.get('app:agentSkills'), [])?.value as AgentSkill[] || [];
+  const activeSkills = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0], [])?.value as AgentSkill[] || [];
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -98,7 +101,7 @@ export default function ArtifactViewer() {
   };
 
   const handleSave = async () => {
-    const setting = await db.settings.get('app:agentSkills');
+    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
     const currentSkills = (setting?.value as AgentSkill[]) || [];
     
     // Check if already exists by name
@@ -123,7 +126,7 @@ export default function ArtifactViewer() {
         }
       ];
     }
-    await db.settings.put({ key: 'app:agentSkills', value: updated });
+    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated }).onConflictDoNothing();
   };
 
   return (

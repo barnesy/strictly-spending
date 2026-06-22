@@ -1,7 +1,10 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../hooks/useDbQuery';
 import { Box, Stack, Typography, Paper, Tabs, Tab, Snackbar } from '@mui/material';
-import { db } from '../db';
+
 import type { AgentSkill, SkillTestCase, AgentSkillStage } from '../types';
 import { useChatStore } from '../chatStore';
 import { DEFAULT_SKILLS } from '../defaultSkills';
@@ -18,7 +21,7 @@ import { SkillEditor } from '../components/AgentSkills/SkillEditor';
 import { AGENT_TOOLS } from '../components/AgentSkills/constants';
 
 export const AgentSkills: React.FC = () => {
-  const license = useLiveQuery(() => db.settings.get('license'), [])?.value as { active: boolean; key: string } | undefined;
+  const license = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'license')))[0], [])?.value as { active: boolean; key: string } | undefined;
   const chatMessages = useChatStore((state) => state.messages);
   const activeModel = useChatStore((state) => state.modelName);
   
@@ -32,10 +35,10 @@ export const AgentSkills: React.FC = () => {
 
   const handleActivateLicense = async () => {
     if (licenseKey.trim() === 'PRO-123') {
-      await db.settings.put({
+      await db.insert(schema.settings).values({
         key: 'license',
         value: { active: true, key: 'PRO-123', activatedAt: new Date().toISOString() }
-      });
+      }).onConflictDoNothing();
       setLicenseError(null);
     } else {
       setLicenseError('Invalid license key. Try "PRO-123".');
@@ -43,10 +46,10 @@ export const AgentSkills: React.FC = () => {
   };
 
   // Database settings
-  const skillsSetting = useLiveQuery(() => db.settings.get('app:agentSkills'), []);
+  const skillsSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0], []);
   const skills = (skillsSetting?.value as AgentSkill[]) || [];
   
-  const systemPromptSetting = useLiveQuery(() => db.settings.get('app:systemPrompt'), []);
+  const systemPromptSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPrompt')))[0], []);
   
   // Shared Editor & Autocomplete state
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -192,7 +195,7 @@ export const AgentSkills: React.FC = () => {
   // Seed default skills
   useEffect(() => {
     const seedSkills = async () => {
-      const setting = await db.settings.get('app:agentSkills');
+      const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
       const currentSkills = (setting?.value as AgentSkill[]) || [];
       
       let hasChanges = false;
@@ -228,16 +231,16 @@ export const AgentSkills: React.FC = () => {
       const filteredSkills = updatedSkills.filter(s => !s.isBuiltIn || defaultIds.has(s.id));
 
       if (hasChanges || filteredSkills.length !== currentSkills.length) {
-        await db.settings.put({ key: 'app:agentSkills', value: filteredSkills });
+        await db.insert(schema.settings).values({ key: 'app:agentSkills', value: filteredSkills }).onConflictDoNothing();
       }
 
-      const systemPromptVersionDb = await db.settings.get('app:systemPromptVersion');
+      const systemPromptVersionDb = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPromptVersion')))[0];
       
       let shouldOverwrite = !systemPromptVersionDb || Number(systemPromptVersionDb.value) < CURRENT_PROMPT_VERSION;
 
       if (shouldOverwrite) {
-        await db.settings.put({ key: 'app:systemPrompt', value: GENERAL_SYSTEM_PROMPT });
-        await db.settings.put({ key: 'app:systemPromptVersion', value: CURRENT_PROMPT_VERSION });
+        await db.insert(schema.settings).values({ key: 'app:systemPrompt', value: GENERAL_SYSTEM_PROMPT }).onConflictDoNothing();
+        await db.insert(schema.settings).values({ key: 'app:systemPromptVersion', value: CURRENT_PROMPT_VERSION }).onConflictDoNothing();
       }
     };
     seedSkills();
@@ -255,10 +258,10 @@ export const AgentSkills: React.FC = () => {
   }, [skills]);
 
   const handleToggleSkill = async (skillId: string) => {
-    const setting = await db.settings.get('app:agentSkills');
+    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
     const currentSkills = (setting?.value as AgentSkill[]) || [];
     const updated = currentSkills.map(s => s.id === skillId ? { ...s, enabled: !s.enabled } : s);
-    await db.settings.put({ key: 'app:agentSkills', value: updated });
+    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated }).onConflictDoNothing();
   };
 
   const handleDeleteSkill = async (skillId: string) => {
@@ -268,14 +271,14 @@ export const AgentSkills: React.FC = () => {
       console.warn("Prevented deletion of built-in skill:", skillId);
       return;
     }
-    const setting = await db.settings.get('app:agentSkills');
+    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
     const currentSkills = (setting?.value as AgentSkill[]) || [];
     const updated = currentSkills.filter(s => s.id !== skillId);
-    await db.settings.put({ key: 'app:agentSkills', value: updated });
+    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated }).onConflictDoNothing();
   };
 
   const handleSaveSkill = async (skill: Omit<AgentSkill, 'enabled'> & { enabled?: boolean }) => {
-    const setting = await db.settings.get('app:agentSkills');
+    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
     const currentSkills = (setting?.value as AgentSkill[]) || [];
     
     let updated: AgentSkill[];
@@ -303,7 +306,7 @@ export const AgentSkills: React.FC = () => {
         }
       ];
     }
-    await db.settings.put({ key: 'app:agentSkills', value: updated });
+    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated }).onConflictDoNothing();
   };
 
   const [sidebarTab, setSidebarTab] = useState(0); 
@@ -323,8 +326,7 @@ export const AgentSkills: React.FC = () => {
   const [testCaseDialogPrompt, setTestCaseDialogPrompt] = useState('');
   const [testCaseDialogCriteria, setTestCaseDialogCriteria] = useState('');
 
-  const baselineTestCasesSetting = useLiveQuery(
-    () => db.settings.get('app:baselineTestCases'),
+  const baselineTestCasesSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:baselineTestCases')))[0],
     []
   );
   const baselineTestCases = useMemo(() => {
@@ -428,10 +430,10 @@ export const AgentSkills: React.FC = () => {
         currentCases.push(newTestCase);
       }
  
-      await db.settings.put({
+      await db.insert(schema.settings).values({
         key: 'app:baselineTestCases',
         value: currentCases
-      });
+      }).onConflictDoNothing();
       setSnackbarMessage(testCaseDialogIndex !== null ? 'Baseline test case updated!' : 'Baseline test case added!');
     }
  
@@ -471,10 +473,10 @@ export const AgentSkills: React.FC = () => {
 
   const handleDeleteBaselineTestCase = async (index: number) => {
     const currentCases = baselineTestCases.filter((_, idx) => idx !== index);
-    await db.settings.put({
+    await db.insert(schema.settings).values({
       key: 'app:baselineTestCases',
       value: currentCases
-    });
+    }).onConflictDoNothing();
 
     const updatedResults = { ...baselineDiagnosticResults };
     delete updatedResults[index];
@@ -665,13 +667,13 @@ export const AgentSkills: React.FC = () => {
     if (confirm("Are you sure you want to reset the baseline system prompt back to defaults?")) {
       setSystemPromptText(GENERAL_SYSTEM_PROMPT);
       setIsPromptDirty(false);
-      db.settings.put({ key: 'app:systemPrompt', value: GENERAL_SYSTEM_PROMPT });
+      db.insert(schema.settings).values({ key: 'app:systemPrompt', value: GENERAL_SYSTEM_PROMPT }).onConflictDoNothing();
       setSnackbarMessage('System prompt reset to default!');
     }
   };
 
   const handleSaveSystemPrompt = async () => {
-    await db.settings.put({ key: 'app:systemPrompt', value: systemPromptText });
+    await db.insert(schema.settings).values({ key: 'app:systemPrompt', value: systemPromptText }).onConflictDoNothing();
     setIsPromptDirty(false);
     setSnackbarMessage('Baseline system prompt saved!');
   };

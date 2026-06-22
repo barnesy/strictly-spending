@@ -1,3 +1,6 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi } from 'vitest';
 import { resolveDateRange, type FiltersState } from './store';
@@ -655,13 +658,13 @@ vi.mock('./db', () => {
 });
 
 import { useChatStore } from './chatStore';
-import { db } from './db';
+
 
 describe('useChatStore - Thread-ID Session Isolation & Dexie checkpointers', () => {
   it('correctly creates threads, saves messages under activeThreadId, and switches threads', async () => {
     // Clear existing DB tables for test isolation
-    await db.threads.clear();
-    await db.messages.clear();
+    await db.delete(schema.threads);
+    await db.delete(schema.messages);
 
     const { createThread, addMessage, setActiveThreadId, deleteThread } = useChatStore.getState();
 
@@ -675,7 +678,7 @@ describe('useChatStore - Thread-ID Session Isolation & Dexie checkpointers', () 
     expect(useChatStore.getState().messages.length).toBe(1);
 
     // Verify it is saved in Dexie messages
-    const dbMessages1 = await db.messages.where('threadId').equals(threadId1).toArray();
+    const dbMessages1 = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId1));
     expect(dbMessages1.length).toBe(1);
     expect(dbMessages1[0].content).toBe('Message in thread 1');
 
@@ -690,7 +693,7 @@ describe('useChatStore - Thread-ID Session Isolation & Dexie checkpointers', () 
     expect(useChatStore.getState().messages.length).toBe(1);
 
     // Verify it is saved in Dexie messages
-    const dbMessages2 = await db.messages.where('threadId').equals(threadId2).toArray();
+    const dbMessages2 = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId2));
     expect(dbMessages2.length).toBe(1);
     expect(dbMessages2[0].content).toBe('Message in thread 2');
 
@@ -702,9 +705,9 @@ describe('useChatStore - Thread-ID Session Isolation & Dexie checkpointers', () 
 
     // 6. Delete second thread
     await deleteThread(threadId2);
-    const threads = await db.threads.toArray();
+    const threads = await db.select().from(schema.threads);
     expect(threads.some(t => t.id === threadId2)).toBe(false);
-    const messages = await db.messages.where('threadId').equals(threadId2).toArray();
+    const messages = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId2));
     expect(messages.length).toBe(0);
   });
 });

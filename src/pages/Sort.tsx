@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, inArray } from 'drizzle-orm';
 // The Sort view — rapid Uncategorized triage.
 //
 // Architecture:
@@ -12,7 +15,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { useDataStore } from '../dataStore';
 import { refreshRecurrenceAll } from '../recurrence';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../hooks/useDbQuery';
 import { useShallow } from 'zustand/react/shallow';
 import PageLoader from '../components/PageLoader';
 import {
@@ -35,7 +38,7 @@ import {
 } from '@mui/material';
 import { SCHEDULE_C_CATEGORIES, guessTaxFields, resolveTaxDeduction } from '../taxUtils';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import { db } from '../db';
+
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 
 import { useFilters } from '../store';
@@ -56,7 +59,7 @@ export default function Sort() {
   const [aiSuggestEnabled, setAiSuggestEnabled] = useState(() => {
     return localStorage.getItem('app:aiSuggestEnabled') === 'true';
   });
-  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { category: string; pattern: string; isBusiness?: boolean; taxCategory?: string }>>({});
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { category: string; pattern: string; isBusiness?: boolean; taxCategory?: string; recurrence?: string }>>({});
   const [aiSuggesting, setAiSuggesting] = useState<Record<string, boolean>>({});
   const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
 
@@ -69,7 +72,7 @@ export default function Sort() {
     globalDemoRecurrenceMap: s.demoRecurrenceMap,
   })));
 
-  const taxRules = useLiveQuery(() => db.taxRules.toArray(), []) || [];
+  const taxRules = useDbQuery(async () => db.select().from(schema.taxRules), []) || [];
 
   const uncategorizedAll = useMemo(
     () => allTransactions.filter((t) => t.category === 'Uncategorized'),
@@ -261,29 +264,18 @@ export default function Sort() {
         const catNames = (categories || [])
           .map((c) => c.name)
           .filter((name) => name !== 'Uncategorized');
-        const taxCatNames = taxCategoriesList.map(c => c.name);
-
-        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal, taxCatNames);
+        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal);
         results.forEach((res, idx) => {
           const card = chunk[idx];
           if (card && res) {
             newSuggestions[card.merchantKey] = res;
-            if (mode === 'categorize') {
-              if (res.category && res.category !== 'Uncategorized' && catNames.includes(res.category)) {
-                newSelections[card.merchantKey] = {
-                  category: res.category,
-                  saveRule: true,
-                  rulePattern: res.pattern || card.merchantKey,
-                };
-              }
-            } else {
-              if (res.taxCategory && taxCatNames.includes(res.taxCategory)) {
-                newSelections[card.merchantKey] = {
-                  category: res.taxCategory,
-                  saveRule: false,
-                  rulePattern: '',
-                };
-              }
+            if (res.category && res.category !== 'Uncategorized' && catNames.includes(res.category)) {
+              newSelections[card.merchantKey] = {
+                category: res.category,
+                saveRule: true,
+                rulePattern: res.pattern || card.merchantKey,
+                recurrence: res.recurrence,
+              };
             }
           }
         });
@@ -315,7 +307,8 @@ export default function Sort() {
   const currentCard: SortCardData | undefined =
     visibleQueue[currentIndex] ?? visibleQueue[0];
 
-  const [selections, setSelections] = useState<Record<string, { category: string; saveRule: boolean; rulePattern: string }>>({});
+  const [selections, setSelections] = useState<Record<string, { category: string; saveRule: boolean; rulePattern: string; recurrence?: string }>>({});
+  const [recurrence, setRecurrence] = useState('');
   const [saveRule, setSaveRule] = useState(true);
   const [rulePattern, setRulePattern] = useState('');
 
@@ -335,10 +328,12 @@ export default function Sort() {
     if (sel) {
       setRulePattern(sel.rulePattern);
       setSaveRule(sel.saveRule);
+      setRecurrence(sel.recurrence || '');
     } else {
       const aiSug = aiSuggestions[key];
       setRulePattern(aiSug ? aiSug.pattern : key);
       setSaveRule(true);
+      setRecurrence(aiSug && aiSug.recurrence ? aiSug.recurrence : '');
     }
   }, [currentCard, selections, aiSuggestions]);
 
@@ -355,6 +350,19 @@ export default function Sort() {
     }
   };
 
+  
+  const handleRecurrenceChange = (val: string) => {
+    if (!currentCard) return;
+    const key = currentCard.merchantKey;
+    setRecurrence(val);
+    if (selections[key]) {
+      setSelections(prev => ({
+        ...prev,
+        [key]: { ...prev[key], recurrence: val }
+      }));
+    }
+  };
+
   const handleSaveRuleChange = (val: boolean) => {
     if (!currentCard) return;
     const key = currentCard.merchantKey;
@@ -367,18 +375,18 @@ export default function Sort() {
     }
   };
 
-  const scoreSetting = useLiveQuery(() => db.settings.get('app:aiGuessScore'), []);
+  const scoreSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:aiGuessScore')))[0], []);
   const score = scoreSetting?.value as { correctCount: number; totalCount: number } | undefined;
 
   const updateScore = useCallback(async (correct: boolean) => {
-    await db.transaction('rw', db.settings, async () => {
-      const existing = await db.settings.get('app:aiGuessScore');
+    await (async () => {
+      const existing = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:aiGuessScore')))[0];
       const val = (existing?.value as { correctCount: number; totalCount: number } | undefined) || { correctCount: 0, totalCount: 0 };
       const updated = {
         correctCount: val.correctCount + (correct ? 1 : 0),
         totalCount: val.totalCount + 1,
       };
-      await db.settings.put({ key: 'app:aiGuessScore', value: updated });
+      await db.insert(schema.settings).values({ key: 'app:aiGuessScore', value: updated }).onConflictDoNothing();
     });
   }, []);
 
@@ -424,18 +432,16 @@ export default function Sort() {
           .map((c) => c.name)
           .filter((name) => name !== 'Uncategorized');
 
-        const taxCatNames = taxCategoriesList.map((c) => c.name);
-
         const desc = currentCard.txns[0]?.description || key || '';
         const toReview = [
           {
             desc,
-            ruleCategory: mode === 'categorize' ? (currentCard.suggestedCategory || 'Uncategorized') : 'Uncategorized',
+            ruleCategory: currentCard.suggestedCategory || 'Uncategorized',
           },
         ];
 
         console.log('[Sort.tsx] Calling localAI.reviewTransactionsWithRules with desc:', desc);
-        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal, taxCatNames);
+        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal);
         console.log('[Sort.tsx] localAI.reviewTransactionsWithRules results:', results);
 
         if (!active) {
@@ -446,21 +452,14 @@ export default function Sort() {
           const result = results[0];
           if (result) {
             console.log('[Sort.tsx] Setting AI suggestion for key:', key, result);
-            const isPersonalTax = mode === 'tax' && (
-              result.isBusiness === false ||
-              result.taxCategory === 'Personal Expense (Non-Business)'
-            );
-            if (isPersonalTax) {
-              playFailSound();
-            } else {
-              playSuccessSound();
-            }
+            playSuccessSound();
             setAiSuggestions(prev => ({ ...prev, [key]: result }));
           } else {
             console.log('[Sort.tsx] Suggestion invalid:', result);
             playFailSound();
           }
         } else {
+          console.log('[Sort.tsx] No results returned.');
           playFailSound();
         }
       } catch (err: unknown) {
@@ -534,7 +533,7 @@ export default function Sort() {
     if (selectionKeys.length === 0) return;
 
     if (mode === 'categorize') {
-      await db.transaction('rw', db.transactions, db.rules, async () => {
+      await (async () => {
         for (const key of selectionKeys) {
           const sel = selections[key];
           const card = queue.find(c => c.merchantKey === key);
@@ -542,21 +541,28 @@ export default function Sort() {
 
           const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
 
-          const txs = await db.transactions.where('id').anyOf(txnIds).toArray();
+          const txs = await db.select().from(schema.transactions).where(inArray(schema.transactions.id, txnIds));
           for (const t of txs) {
             const taxGuess = guessTaxFields(t.description, sel.category);
-            await db.transactions.update(t.id!, {
+            await db.update(schema.transactions).set({
               category: sel.category,
               userOverridden: true,
               isBusiness: taxGuess.isBusiness,
               taxCategory: taxGuess.taxCategory,
               deductionStatus: taxGuess.deductionStatus,
-            });
+            }).where(eq(schema.transactions.id, t.id!));
           }
 
           const patternToSave = sel.rulePattern.trim();
+          if (sel.recurrence) {
+            await db.insert(schema.merchantOverrides).values({
+              merchantKey: key,
+              recurrence: sel.recurrence as any
+            }).onConflictDoNothing();
+          }
+
           if (sel.saveRule && patternToSave) {
-            await db.rules.add({
+            await db.insert(schema.rules).values({
               pattern: patternToSave,
               category: sel.category,
               priority: 1000,
@@ -566,7 +572,7 @@ export default function Sort() {
         }
       });
     } else {
-      await db.transaction('rw', db.transactions, db.taxRules, async () => {
+      await (async () => {
         for (const key of selectionKeys) {
           const sel = selections[key];
           const card = taxQueue.find(c => c.merchantKey === key);
@@ -579,24 +585,31 @@ export default function Sort() {
 
           if (sel.category === 'Personal Expense (Non-Business)') {
             isBusiness = false;
-            await db.transactions.where('id').anyOf(txnIds).modify({
+            await db.update(schema.transactions).set({
               isBusiness: false,
               taxCategory: undefined,
               deductionStatus: 'confirmed',
-            });
+            }).where(inArray(schema.transactions.id, txnIds));
           } else {
             const sc = Object.values(SCHEDULE_C_CATEGORIES).find(c => c.label === sel.category);
             taxCategoryId = sc ? sc.id : 'other';
-            await db.transactions.where('id').anyOf(txnIds).modify({
+            await db.update(schema.transactions).set({
               isBusiness: true,
               taxCategory: taxCategoryId,
               deductionStatus: 'confirmed',
-            });
+            }).where(inArray(schema.transactions.id, txnIds));
           }
 
           const patternToSave = sel.rulePattern?.trim();
+          if (sel.recurrence) {
+            await db.insert(schema.merchantOverrides).values({
+              merchantKey: key,
+              recurrence: sel.recurrence as any
+            }).onConflictDoNothing();
+          }
+
           if (sel.saveRule && patternToSave) {
-            await db.taxRules.add({
+            await db.insert(schema.taxRules).values({
               pattern: patternToSave,
               isBusiness,
               taxCategory: taxCategoryId,
@@ -657,8 +670,7 @@ export default function Sort() {
   );
 
   // Keyboard handler — single global listener while the page is mounted.
-  // Number keys 1-9 pick the Nth visible category in the same order as the
-  // grid renders them (suggested first, then sortOrder).
+  // Number keys 1-9 pick the Nth visible category in the same order).returning().
   const visibleGridOrderRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -787,7 +799,7 @@ export default function Sort() {
               variant="outlined"
               onDelete={async () => {
                 if (window.confirm('Reset AI accuracy statistics?')) {
-                  await db.settings.delete('app:aiGuessScore');
+                  await db.delete(schema.settings).where(eq(schema.settings.key, 'app:aiGuessScore'));
                 }
               }}
               sx={{ height: 26, borderRadius: 2 }}
@@ -999,8 +1011,9 @@ export default function Sort() {
                       sx={{ m: 0 }}
                     />
                   </Stack>
+                  
                   {saveRule && (
-                    <Box sx={{ mt: 0.5, mb: 1 }}>
+                    <Box sx={{ mt: 0.5, mb: 1, p: 1.5, borderRadius: 2, border: aiSuggestions[currentCard.merchantKey]?.pattern === rulePattern ? '2px solid' : '1px solid', borderColor: aiSuggestions[currentCard.merchantKey]?.pattern === rulePattern ? 'primary.main' : 'divider' }}>
                       <TextField
                         fullWidth
                         size="small"
@@ -1017,8 +1030,35 @@ export default function Sort() {
                           sx: { mx: 1, my: 0.5 }
                         }}
                       />
+                      <Box sx={{ mt: 2 }}>
+                        <TextField
+                          select
+                          fullWidth
+                          size="small"
+                          label="Recurrence"
+                          value={recurrence}
+                          onChange={(e) => handleRecurrenceChange(e.target.value)}
+                          SelectProps={{ native: true }}
+                          sx={{
+                            '.MuiOutlinedInput-notchedOutline': {
+                              borderColor: aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence ? 'primary.main' : 'inherit',
+                              borderWidth: aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence ? 2 : 1
+                            }
+                          }}
+                        >
+                          <option value=""></option>
+                          <option value="recurring">Recurring</option>
+                          <option value="onetime">One-time</option>
+                        </TextField>
+                        {aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence && (
+                          <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5, px: 1 }}>
+                            ✨ AI Suggested Recurrence
+                          </Typography>
+                        )}
+                      </Box>
                     </Box>
                   )}
+
                   <SortCategoryGrid
                     categories={mode === 'categorize' ? (categories || []) : taxCategoriesList}
                     suggested={activeSuggestion}

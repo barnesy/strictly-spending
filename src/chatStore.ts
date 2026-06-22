@@ -1,7 +1,10 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { localAI, type ChatMessage } from './ai';
-import { db } from './db';
+
 import type { WorkspaceConfig, ChatArtifact, ChatThread } from './types';
 
 let cachedTauriInvoke: any = null;
@@ -90,7 +93,7 @@ export const useChatStore = create<ChatStore>()(
         set((state) => ({ messages: [...state.messages, msg] }));
         const threadId = get().activeThreadId;
         if (threadId) {
-          await db.messages.add({
+          await db.insert(schema.messages).values({
             threadId,
             role: msg.role,
             content: msg.content,
@@ -102,10 +105,14 @@ export const useChatStore = create<ChatStore>()(
           if (thread && thread.title === 'New Chat' && msg.role === 'user') {
             const firstLine = msg.content.trim().split('\n')[0];
             const newTitle = firstLine.length > 25 ? firstLine.slice(0, 25) + '...' : firstLine;
-            await db.threads.update(threadId, { title: newTitle, updatedAt: new Date().toISOString() });
+            await db.update(schema.threads)
+              .set({ title: newTitle, updatedAt: new Date().toISOString() })
+              .where(eq(schema.threads.id, threadId));
             await get().loadThreads();
           } else {
-            await db.threads.update(threadId, { updatedAt: new Date().toISOString() });
+            await db.update(schema.threads)
+              .set({ updatedAt: new Date().toISOString() })
+              .where(eq(schema.threads.id, threadId));
           }
         }
       },
@@ -184,11 +191,11 @@ export const useChatStore = create<ChatStore>()(
         const threadId = get().activeThreadId;
         if (threadId) {
           const lastMsg = get().messages[get().messages.length - 1];
-          await db.messages.add({
+          await db.insert(schema.messages).values({
             threadId,
             role: 'assistant',
             content: finalContent,
-            actionResult,
+            actionResult: actionResult as any,
             steps: steps || lastMsg?.steps,
             tokenUsage: tokenUsage || lastMsg?.tokenUsage,
             purpose: purpose || lastMsg?.purpose,
@@ -197,14 +204,16 @@ export const useChatStore = create<ChatStore>()(
             createdAt: new Date().toISOString()
           });
 
-          await db.threads.update(threadId, { updatedAt: new Date().toISOString() });
+          await db.update(schema.threads)
+            .set({ updatedAt: new Date().toISOString() })
+            .where(eq(schema.threads.id, threadId));
         }
       },
       setMessages: (messages) => set({ messages }),
       clearMessages: async () => {
         const threadId = get().activeThreadId;
         if (threadId) {
-          await db.messages.where('threadId').equals(threadId).delete();
+          await db.delete(schema.messages).where(eq(schema.messages.threadId, threadId));
         }
         set({ messages: [] });
       },
@@ -345,8 +354,8 @@ export const useChatStore = create<ChatStore>()(
       savedWorkspaces: [],
       setActiveWorkspaceId: (id: string) => set({ activeWorkspaceId: id }),
       loadSavedWorkspaces: async () => {
-        const res = await db.settings.get('app:workspaces');
-        set({ savedWorkspaces: (res?.value as WorkspaceConfig[]) || [] });
+        const res = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:workspaces')))[0];
+        set({ savedWorkspaces: (res?.value as any) || [] });
       },
       saveWorkspace: async (updatedWorkspace: WorkspaceConfig) => {
         const isTemplate = ['tpl-budget-audit', 'tpl-sub-check', 'tpl-groceries-plan'].includes(updatedWorkspace.id);
@@ -356,7 +365,7 @@ export const useChatStore = create<ChatStore>()(
         const filtered = currentSaved.filter((w) => w.id !== workspaceToSave.id);
         const nextList = [...filtered, workspaceToSave];
 
-        await db.settings.put({ key: 'app:workspaces', value: nextList });
+        await db.insert(schema.settings).values({ key: 'app:workspaces', value: nextList }).onConflictDoNothing();
         set({ savedWorkspaces: nextList });
         if (isTemplate) {
           set({ activeWorkspaceId: workspaceToSave.id });
@@ -365,7 +374,7 @@ export const useChatStore = create<ChatStore>()(
       deleteWorkspace: async (id: string) => {
         const currentSaved = get().savedWorkspaces;
         const nextList = currentSaved.filter((w) => w.id !== id);
-        await db.settings.put({ key: 'app:workspaces', value: nextList });
+        await db.insert(schema.settings).values({ key: 'app:workspaces', value: nextList }).onConflictDoNothing();
         set({ savedWorkspaces: nextList });
         if (get().activeWorkspaceId === id) {
           set({ activeWorkspaceId: 'tpl-budget-audit' });
@@ -389,7 +398,7 @@ export const useChatStore = create<ChatStore>()(
       },
 
       loadThreads: async () => {
-        const list = await db.threads.reverse().sortBy('createdAt');
+        const list = await db.select().from(schema.threads).orderBy(desc(schema.threads.createdAt));
         set({ threads: list });
         const activeId = get().activeThreadId;
         if (activeId && get().messages.length === 0) {
@@ -405,15 +414,15 @@ export const useChatStore = create<ChatStore>()(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        await db.threads.put(newThread);
+        await db.insert(schema.threads).values(newThread).onConflictDoNothing();
         const currentThreads = get().threads;
         set({ threads: [newThread, ...currentThreads], activeThreadId: id, messages: [] });
         return id;
       },
 
       deleteThread: async (id) => {
-        await db.threads.delete(id);
-        await db.messages.where('threadId').equals(id).delete();
+        await db.delete(schema.threads).where(eq(schema.threads.id, id));
+        await db.delete(schema.messages).where(eq(schema.messages.threadId, id));
         const nextThreads = get().threads.filter(t => t.id !== id);
         set({ threads: nextThreads });
         if (get().activeThreadId === id) {
@@ -426,11 +435,11 @@ export const useChatStore = create<ChatStore>()(
       },
 
       loadThreadMessages: async (threadId) => {
-        const list = await db.messages.where('threadId').equals(threadId).sortBy('id');
+        const list = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId)).orderBy(asc(schema.messages.id));
         const formatted = list.map((m: any) => {
           if (m.actionResult?.metrics?.transactions) {
             delete m.actionResult.metrics.transactions;
-            db.messages.put(m); // scrub legacy data from db
+            db.insert(schema.messages).values(m).onConflictDoNothing(); // scrub legacy data from db
           }
           return {
             role: m.role,

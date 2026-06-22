@@ -1,4 +1,7 @@
-import { db } from '../db';
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+
 import type { AgentSkill, SkillTestCase } from '../types';
 import { useFilters } from '../store';
 import { useBudgetStore } from '../budgetStore';
@@ -436,11 +439,11 @@ If no, return {"success": false, "score": 0 to 80, "reasoning": "Explain what is
 }
 
 export async function calculateGlobalRunwayData() {
-  const accounts = await db.accounts.toArray();
-  const budgets = await db.budgets.toArray();
-  const allTxns = await db.transactions.toArray();
-  const categories = await db.categories.toArray();
-  const overrides = await db.merchantOverrides.toArray();
+  const accounts = await db.select().from(schema.accounts);
+  const budgets = await db.select().from(schema.budgets);
+  const allTxns = await db.select().from(schema.transactions);
+  const categories = await db.select().from(schema.categories);
+  const overrides = await db.select().from(schema.merchantOverrides);
 
   const filters = useFilters.getState();
   const enabledSet = new Set(filters.enabledAccountIds);

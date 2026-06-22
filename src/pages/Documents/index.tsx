@@ -1,3 +1,6 @@
+import { db } from "../../db/drizzle";
+import * as schema from "../../db/schema";
+import { eq, desc } from 'drizzle-orm';
 import { useState, useCallback } from 'react';
 import { DocumentsList } from './DocumentsList';
 import { useSearchParams } from 'react-router-dom';
@@ -16,8 +19,8 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../db';
+import { useDbQuery } from '../../hooks/useDbQuery';
+
 import { open } from '@tauri-apps/plugin-shell';
 import type { AppDocument } from '../../types';
 import { useDataStore } from '../../dataStore';
@@ -55,7 +58,7 @@ export default function Documents() {
       return;
     }
     try {
-      await db.documents.update(derivedPreviewDoc.id, { name: trimmed });
+      await db.update(schema.documents).set({ name: trimmed }).where(eq(schema.documents.id, derivedPreviewDoc.id));
       setIsEditingName(false);
       setSnackbarMessage('Document renamed successfully.');
     } catch (err) {
@@ -64,8 +67,8 @@ export default function Documents() {
     }
   };
 
-  const documents = useLiveQuery(() => db.documents?.orderBy('createdAt').reverse().toArray(), []) || [];
-  const categoriesList = useLiveQuery(() => db.categories.toArray(), []) || [];
+  const documents = (useDbQuery(async () => db.select().from(schema.documents).orderBy(desc(schema.documents.createdAt)), []) || []) as AppDocument[];
+  const categoriesList = useDbQuery(async () => db.select().from(schema.categories), []) || [];
 
   const allTxns = useDataStore((s) => s.transactions);
   const allCats = useDataStore((s) => s.categories);
@@ -100,7 +103,7 @@ export default function Documents() {
     setAuditSearchQuery('');
     setAuditPage(0);
 
-    const hasContent = doc.content || doc.metadata?.docType === 'business_pnl' || (await db.documentContents.get(doc.id));
+    const hasContent = doc.content || doc.metadata?.docType === 'business_pnl' || (await (await db.select().from(schema.documentContents).where(eq(schema.documentContents.id, doc.id)))[0]);
     if (hasContent) {
       setSearchParams({ previewId: doc.id, tab: 'All' });
       return;
@@ -134,8 +137,8 @@ export default function Documents() {
 
   const confirmDelete = async () => {
     if (deleteConfirmId) {
-      await db.documents.delete(deleteConfirmId);
-      await db.documentContents.delete(deleteConfirmId);
+      await db.delete(schema.documents).where(eq(schema.documents.id, deleteConfirmId));
+      await db.delete(schema.documentContents).where(eq(schema.documentContents.id, deleteConfirmId));
       setDeleteConfirmId(null);
       setSnackbarMessage('Document record removed.');
     }
@@ -147,9 +150,9 @@ export default function Documents() {
 
   const handleRecategorize = useCallback(async (txId: number, newCategory: string) => {
     try {
-      const dbTxns = await db.transactions.where('id').equals(txId).toArray();
+      const dbTxns = await db.select().from(schema.transactions).where(eq(schema.transactions.id, txId));
       if (dbTxns.length > 0) {
-        await db.transactions.update(dbTxns[0].id!, { category: newCategory });
+        await db.update(schema.transactions).set({ category: newCategory }).where(eq(schema.transactions.id, dbTxns[0].id!));
         useDataStore.getState().refresh();
       }
     } catch (error) {
@@ -244,7 +247,7 @@ export default function Documents() {
 
           {/* Document Content Viewers */}
           <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            {derivedPreviewDoc.metadata?.docType === 'business_pnl' ? (
+            {(derivedPreviewDoc.metadata as any)?.docType === 'business_pnl' ? (
               <DocumentAuditView
                 derivedPreviewDoc={derivedPreviewDoc}
                 pnlSummary={pnlSummary}
@@ -291,7 +294,7 @@ export default function Documents() {
             )}
 
             {/* Download/export actions at bottom for non-P&L documents */}
-            {derivedPreviewDoc.metadata?.docType !== 'business_pnl' && loadedContent && (
+            {(derivedPreviewDoc.metadata as any)?.docType !== 'business_pnl' && loadedContent && (
               <Box sx={{ display: 'flex', gap: 1.5, mt: 3, justifyContent: 'flex-end' }}>
                 <Button
                   variant="outlined"

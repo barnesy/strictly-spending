@@ -1,4 +1,7 @@
-import { db } from '../db';
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+
 import type { ChatMessage } from './types';
 import type { SkillTestCase } from '../types';
 
@@ -94,7 +97,7 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
 
   let basePrompt = GENERAL_SYSTEM_PROMPT;
   try {
-    const dbPrompt = await db.settings.get('app:systemPrompt');
+    const dbPrompt = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPrompt')))[0];
     if (dbPrompt && typeof dbPrompt.value === 'string' && dbPrompt.value.trim() !== '') {
       basePrompt = dbPrompt.value;
     }
@@ -112,7 +115,7 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
 
   let enabledExtensions = '';
   try {
-    const res = await db.settings.get('app:agentSkills');
+    const res = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
     const skills = (res?.value as any[]) || [];
     enabledExtensions = skills
       .filter((s) => s.enabled)
