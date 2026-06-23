@@ -25,7 +25,7 @@ import { seedAndMigrate } from './seed';
 import { hasDemoData, seedDemoData } from './demoData';
 import { useFilters } from './store';
 import { DEMO_ONLY_BUILD } from './env';
-
+import './testBridge';
 /**
  * In demo-only builds (see env.ts for the flag), the app:
  *   - is mounted with HashRouter so the bundle works under any static host

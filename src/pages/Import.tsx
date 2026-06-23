@@ -234,6 +234,7 @@ export default function Import() {
       );
       setNewUncategorizedCount(newUncategorized);
       setPreviews([]);
+      window.dispatchEvent(new Event('db-update'));
     } catch (e) {
       console.error("Failed to commit import previews:", e);
     } finally {

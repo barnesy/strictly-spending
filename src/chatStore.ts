@@ -439,7 +439,7 @@ export const useChatStore = create<ChatStore>()(
         const formatted = list.map((m: any) => {
           if (m.actionResult?.metrics?.transactions) {
             delete m.actionResult.metrics.transactions;
-            db.insert(schema.messages).values(m).onConflictDoNothing(); // scrub legacy data from db
+            db.insert(schema.messages).values(m).onConflictDoNothing().execute(); // scrub legacy data from db
           }
           return {
             role: m.role,

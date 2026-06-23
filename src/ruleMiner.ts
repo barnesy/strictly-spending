@@ -15,6 +15,11 @@ export async function mineRuleSuggestions(): Promise<RuleSuggestion[]> {
   const rules = await db.select().from(schema.rules);
   const allTxns = await db.select().from(schema.transactions);
   const overriddenTxns = allTxns.filter(t => !!t.userOverridden && t.category !== 'Uncategorized');
+  console.error('mineRuleSuggestions debug:', {
+    allTxnsCount: allTxns.length,
+    overriddenCount: overriddenTxns.length,
+    sample: allTxns[0]
+  });
     
   if (overriddenTxns.length === 0) return [];
   

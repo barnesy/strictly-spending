@@ -160,8 +160,8 @@ export async function importFromJson(json: string): Promise<RestoreReport> {
     await tx.delete(schema.categories);
     await tx.delete(schema.accounts);
 
-    // Restore. bulkAdd preserves explicit primary keys (including
-    // auto-incremented `id` fields, since Dexie respects supplied IDs).
+    // Restore. insert preserves explicit primary keys (including
+    // auto-incremented `id` fields).
     if (file.data.accounts.length > 0) await tx.insert(schema.accounts).values(file.data.accounts as any);
     if (file.data.categories.length > 0) await tx.insert(schema.categories).values(file.data.categories as any);
     if (file.data.rules.length > 0) await tx.insert(schema.rules).values(file.data.rules as any);

@@ -17,14 +17,13 @@ export const db = drizzle(
 
       const result = await tauriDb.select<any[]>(sql, params);
       
-      // If Drizzle asks for 'values', we MUST map the array of objects to array of arrays
-      if (method === 'values') {
-        const rows = result.map(row => Object.values(row));
-        return { rows };
+      if (method === 'get') {
+        const row = result[0];
+        return { rows: row ? Object.values(row) : [] };
       }
-
-      // For 'all' or 'get'
-      return { rows: result };
+      
+      const rows = result.map(row => Object.values(row));
+      return { rows };
     } catch (err) {
       console.error(`[DB ERROR] Failed query: ${sql}`, params, err);
       throw err;

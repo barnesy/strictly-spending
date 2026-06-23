@@ -42,8 +42,6 @@
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-sql": "^2.4.0",
     "date-fns": "^4.3.0",
-    "dexie": "^4.4.2",
-    "dexie-react-hooks": "^4.4.0",
     "drizzle-orm": "^0.45.2",
     "echarts": "^6.1.0",
     "jszip": "^3.10.1",

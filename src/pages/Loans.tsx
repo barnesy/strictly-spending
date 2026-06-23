@@ -1,6 +1,6 @@
 import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useDbQuery } from '../hooks/useDbQuery';
 import { useShallow } from 'zustand/react/shallow';
@@ -48,6 +48,7 @@ import {
 } from '@mui/material';
 import HomeIcon from '@mui/icons-material/Home';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import SchoolIcon from '@mui/icons-material/School';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import PercentIcon from '@mui/icons-material/Percent';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
@@ -75,6 +76,22 @@ const DEFAULT_HOUSE_CONFIG: Omit<Loan, 'id' | 'createdAt'> = {
   monthlyPayment: undefined,
   propertyValue: 500000,
   downPayment: 50000,
+  extraMonthlyPayment: undefined,
+  extraOneTimePayment: undefined,
+  extraOneTimeMonth: undefined,
+};
+
+const DEFAULT_STUDENT_CONFIG: Omit<Loan, 'id' | 'createdAt'> = {
+  name: 'Student Loan',
+  type: 'student',
+  principal: 30000,
+  rate: 5.5,
+  termYears: 10,
+  startDate: '2024-01-01',
+  category: 'Student Loan',
+  monthlyPayment: undefined,
+  propertyValue: undefined,
+  downPayment: undefined,
   extraMonthlyPayment: undefined,
   extraOneTimePayment: undefined,
   extraOneTimeMonth: undefined,
@@ -124,7 +141,7 @@ export default function Loans() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [addName, setAddName] = useState('');
-  const [addType, setAddType] = useState<'house' | 'car'>('house');
+  const [addType, setAddType] = useState<'house' | 'car' | 'student'>('house');
   const [addMerchant, setAddMerchant] = useState('');
   const [addPrincipal, setAddPrincipal] = useState('450000');
   const [addDownPayment, setAddDownPayment] = useState('50000');
@@ -133,6 +150,9 @@ export default function Loans() {
     if (addType === 'house') {
       setAddPrincipal('450000');
       setAddDownPayment('50000');
+    } else if (addType === 'student') {
+      setAddPrincipal('30000');
+      setAddDownPayment('0');
     } else {
       setAddPrincipal('35000');
       setAddDownPayment('5000');
@@ -464,8 +484,8 @@ export default function Loans() {
       category: formCategory,
       merchant: formMerchant.trim() || undefined,
       monthlyPayment: isNaN(MP) || MP <= 0 ? undefined : MP,
-      propertyValue: isNaN(PV) || PV <= 0 ? undefined : PV,
-      downPayment: isNaN(DP) || DP < 0 ? undefined : DP,
+      propertyValue: (currentConfig?.type === 'student' || isNaN(PV) || PV <= 0) ? undefined : PV,
+      downPayment: (currentConfig?.type === 'student' || isNaN(DP) || DP < 0) ? undefined : DP,
       extraMonthlyPayment: isNaN(EMP) || EMP <= 0 ? undefined : EMP,
       extraOneTimePayment: isNaN(EOTP) || EOTP <= 0 ? undefined : EOTP,
       extraOneTimeMonth: isNaN(EOTM) || EOTM <= 0 ? undefined : EOTM,
@@ -473,14 +493,14 @@ export default function Loans() {
     };
 
     if (currentConfig && currentConfig.id !== undefined) {
-      await db.insert(schema.loans).values(updatedConfig).onConflictDoNothing();
+      await db.update(schema.loans).set(updatedConfig).where(eq(schema.loans.id, currentConfig.id));
       setSnackbarMsg('Loan settings saved successfully!');
     }
   };
 
   const handleResetDefaults = async () => {
     if (currentConfig && currentConfig.id !== undefined) {
-      const defaultVal = currentConfig.type === 'house' ? DEFAULT_HOUSE_CONFIG : DEFAULT_CAR_CONFIG;
+      const defaultVal = currentConfig.type === 'house' ? DEFAULT_HOUSE_CONFIG : currentConfig.type === 'student' ? DEFAULT_STUDENT_CONFIG : DEFAULT_CAR_CONFIG;
       const resetLoan = {
         ...currentConfig,
         ...defaultVal,
@@ -501,7 +521,7 @@ export default function Loans() {
       setFormExtraOneTimePayment(resetLoan.extraOneTimePayment ? String(resetLoan.extraOneTimePayment ?? '') : '');
       setFormExtraOneTimeMonth(resetLoan.extraOneTimeMonth ? String(resetLoan.extraOneTimeMonth ?? '') : '');
 
-      await db.insert(schema.loans).values(resetLoan).onConflictDoNothing();
+      await db.update(schema.loans).set(resetLoan).where(eq(schema.loans.id, currentConfig.id));
       setSnackbarMsg('Reset to default values.');
     }
   };
@@ -514,7 +534,7 @@ export default function Loans() {
     }
 
     const principalVal = parseFloat(addPrincipal);
-    const downPaymentVal = parseFloat(addDownPayment);
+    const downPaymentVal = addType === 'student' ? 0 : parseFloat(addDownPayment);
 
     if (isNaN(principalVal) || principalVal <= 0) {
       alert('Please enter a valid purchase price.');
@@ -526,23 +546,24 @@ export default function Loans() {
       return;
     }
 
-    const defaultVal = addType === 'house' ? DEFAULT_HOUSE_CONFIG : DEFAULT_CAR_CONFIG;
+    const defaultVal = addType === 'house' ? DEFAULT_HOUSE_CONFIG : addType === 'student' ? DEFAULT_STUDENT_CONFIG : DEFAULT_CAR_CONFIG;
     const newLoan: Loan = {
       ...defaultVal,
       name: nameStr,
       type: addType,
       principal: principalVal,
-      downPayment: downPaymentVal,
-      propertyValue: principalVal,
+      downPayment: addType === 'student' ? undefined : downPaymentVal,
+      propertyValue: addType === 'student' ? undefined : principalVal,
       merchant: addMerchant.trim() || undefined,
       enabled: true,
       createdAt: new Date().toISOString(),
     };
 
-    const result = await db.insert(schema.loans).values(newLoan).returning();
-    const newId = result?.[0]?.id;
-    if (newId !== undefined) {
-      setActiveLoanId(newId);
+    await db.insert(schema.loans).values(newLoan);
+    // Fetch the newly inserted loan ID
+    const latest = await db.select().from(schema.loans).orderBy(desc(schema.loans.id)).limit(1);
+    if (latest && latest[0] && latest[0].id !== undefined) {
+      setActiveLoanId(latest[0].id);
     }
     setAddDialogOpen(false);
     setAddName('');
@@ -559,17 +580,13 @@ export default function Loans() {
       ...currentConfig,
       enabled: false,
     };
-    await db.insert(schema.loans).values(updated).onConflictDoNothing();
+    await db.update(schema.loans).set({ enabled: false }).where(eq(schema.loans.id, currentConfig.id));
     setSnackbarMsg(`Loan "${currentConfig.name}" removed from view.`);
   };
 
   const handleRestoreLoan = async (loan: Loan) => {
     if (loan.id === undefined) return;
-    const updated = {
-      ...loan,
-      enabled: true,
-    };
-    await db.insert(schema.loans).values(updated).onConflictDoNothing();
+    await db.update(schema.loans).set({ enabled: true }).where(eq(schema.loans.id, loan.id));
     setActiveLoanId(loan.id);
     setSnackbarMsg(`Loan "${loan.name}" restored successfully.`);
   };
@@ -614,33 +631,36 @@ export default function Loans() {
             <Select
               labelId="add-loan-type-label"
               value={addType}
-              onChange={(e) => setAddType(e.target.value as 'house' | 'car')}
+              onChange={(e) => setAddType(e.target.value as 'house' | 'car' | 'student')}
               label="Loan Type"
             >
               <MenuItem value="house">House Mortgage</MenuItem>
               <MenuItem value="car">Car Loan / Lease</MenuItem>
+              <MenuItem value="student">Student Loan</MenuItem>
             </Select>
           </FormControl>
           <TextField
             fullWidth
             size="small"
-            label="Purchase Price"
+            label={activeTab === 'student' ? "Loan Amount" : "Purchase Price"}
             value={addPrincipal}
             onChange={(e) => setAddPrincipal(e.target.value)}
             InputProps={{
               startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
             }}
           />
-          <TextField
-            fullWidth
-            size="small"
-            label="Down Payment"
-            value={addDownPayment}
-            onChange={(e) => setAddDownPayment(e.target.value)}
-            InputProps={{
-              startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-            }}
-          />
+          {addType !== 'student' && (
+            <TextField
+              fullWidth
+              size="small"
+              label="Down Payment"
+              value={addDownPayment}
+              onChange={(e) => setAddDownPayment(e.target.value)}
+              InputProps={{
+                startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+              }}
+            />
+          )}
           <Autocomplete
             freeSolo
             options={merchantOptions}
@@ -693,7 +713,7 @@ export default function Loans() {
                   <TableRow key={loan.id} hover>
                     <TableCell sx={{ fontWeight: 600 }}>
                       <Stack direction="row" spacing={1} alignItems="center">
-                        {loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18, color: 'primary.main' }} /> : <DirectionsCarIcon sx={{ fontSize: 18, color: 'secondary.main' }} />}
+                        {loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18, color: 'primary.main' }} /> : loan.type === 'student' ? <SchoolIcon sx={{ fontSize: 18, color: 'info.main' }} /> : <DirectionsCarIcon sx={{ fontSize: 18, color: 'secondary.main' }} />}
                         <Typography variant="body2">{loan.name}</Typography>
                       </Stack>
                     </TableCell>
@@ -871,7 +891,7 @@ export default function Loans() {
           {activeLoans.map((loan) => (
             <Tab
               key={loan.id}
-              icon={loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18 }} /> : <DirectionsCarIcon sx={{ fontSize: 18 }} />}
+              icon={loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18 }} /> : loan.type === 'student' ? <SchoolIcon sx={{ fontSize: 18 }} /> : <DirectionsCarIcon sx={{ fontSize: 18 }} />}
               iconPosition="start"
               label={loan.name}
               value={loan.id}
@@ -1136,16 +1156,18 @@ export default function Loans() {
                       startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
                     }}
                   />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Down Payment"
-                    value={formDownPayment}
-                    onChange={(e) => setFormDownPayment(e.target.value)}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
+                  {activeTab !== 'student' && (
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Down Payment"
+                      value={formDownPayment}
+                      onChange={(e) => setFormDownPayment(e.target.value)}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+                      }}
+                    />
+                  )}
                   <TextField
                     fullWidth
                     size="small"
@@ -1217,17 +1239,19 @@ export default function Loans() {
                       startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
                     }}
                   />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label={activeTab === 'house' ? "Current Home Value" : "Estimated Resale Value"}
-                    value={formPropertyValue}
-                    onChange={(e) => setFormPropertyValue(e.target.value)}
-                    helperText={activeTab === 'house' ? "Estimated resale value of the house for equity tracking" : "Estimated resale value of the car for equity tracking"}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
+                  {activeTab !== 'student' && (
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={activeTab === 'house' ? "Current Home Value" : "Estimated Resale Value"}
+                      value={formPropertyValue}
+                      onChange={(e) => setFormPropertyValue(e.target.value)}
+                      helperText={activeTab === 'house' ? "Estimated resale value of the house for equity tracking" : "Estimated resale value of the car for equity tracking"}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+                      }}
+                    />
+                  )}
                   <Divider sx={{ my: 1 }} />
                   <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Extra Payments (Accelerate Payoff)

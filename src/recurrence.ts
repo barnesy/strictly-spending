@@ -52,11 +52,20 @@ export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
   const stddev = Math.sqrt(variance);
 
   let kind: RecurrenceKind = 'none';
-  // Tolerances tuned for noisy bank dates (weekends shift bills 1-3 days).
-  if (mean >= 25 && mean <= 35 && stddev <= 7) kind = 'monthly';
-  else if (mean >= 12 && mean <= 17 && stddev <= 5) kind = 'biweekly';
-  else if (mean >= 5 && mean <= 9 && stddev <= 3) kind = 'weekly';
-  else if (mean >= 330 && mean <= 400 && stddev <= 40) kind = 'annual';
+
+  // Check if amounts are somewhat consistent (standard deviation <= 30% of mean)
+  const meanAmt = spend.reduce((s, t) => s + Math.abs(t.amount), 0) / spend.length;
+  const amtVariance = spend.reduce((s, t) => s + (Math.abs(t.amount) - meanAmt) ** 2, 0) / spend.length;
+  const amtStddev = Math.sqrt(amtVariance);
+  const isStableAmount = amtStddev <= (meanAmt * 0.3) + 5; // Allow 30% variance + $5 buffer
+
+  if (isStableAmount) {
+    // Tolerances tuned for noisy bank dates (weekends shift bills 1-3 days).
+    if (mean >= 25 && mean <= 35 && stddev <= 7) kind = 'monthly';
+    else if (mean >= 12 && mean <= 17 && stddev <= 5) kind = 'biweekly';
+    else if (mean >= 5 && mean <= 9 && stddev <= 3) kind = 'weekly';
+    else if (mean >= 330 && mean <= 400 && stddev <= 40) kind = 'annual';
+  }
 
   // Use mean of the MOST RECENT 3 charges so the estimate reflects the
   // current subscription price (subscriptions often change tier; raw mean of

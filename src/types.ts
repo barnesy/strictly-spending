@@ -111,7 +111,10 @@ export type AppSetting =
 export type PostImportAction = 'leave' | 'move' | 'delete';
 
 export interface WatchFolderConfig {
-  // FileSystemDirectoryHandle is structured-clonable; Dexie stores it as-is.
+  /**
+   * The saved directory handle.
+   * FileSystemDirectoryHandle is structured-clonable; IndexedDB stores it as-is.
+   */
   handle: FileSystemDirectoryHandle;
   name: string;
   connectedAt: string;
@@ -371,7 +374,7 @@ export interface ProposedCategorizationReport {
 export interface Loan {
   id?: number;
   name: string;
-  type: 'house' | 'car';
+  type: 'house' | 'car' | 'student';
   principal: number;
   rate: number;
   termYears: number;

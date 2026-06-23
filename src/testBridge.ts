@@ -13,3 +13,7 @@ declare global {
     __TEST_API__: typeof testBridge;
   }
 }
+
+if (typeof window !== 'undefined') {
+  window.__TEST_API__ = testBridge;
+}

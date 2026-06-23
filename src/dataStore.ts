@@ -72,3 +72,12 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   setData: (data) => set(data),
 }));
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('db-update', () => {
+    const state = useDataStore.getState();
+    if (state.isInitialized) {
+      state.refresh();
+    }
+  });
+}

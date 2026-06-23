@@ -680,7 +680,7 @@ export async function seedAndMigrate(): Promise<void> {
     (c) => !existingCategoryNames.has(c.name)
   );
   if (newCategories.length > 0) {
-    await db.insert(schema.categories).values(newCategories);
+    await db.insert(schema.categories).values(newCategories).onConflictDoNothing();
   }
 
   // Ensure all default rules exist (by pattern)
@@ -692,7 +692,7 @@ export async function seedAndMigrate(): Promise<void> {
     (r) => !existingPatterns.has(r.pattern)
   ).map((r) => ({ ...r, createdAt: now }));
   if (newRules.length > 0) {
-    await db.insert(schema.rules).values(newRules);
+    await db.insert(schema.rules).values(newRules).onConflictDoNothing();
   }
 
   // Update recurrence defaults for existing categories

@@ -28,11 +28,9 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { usd, usdCents } from '../lib';
 import { recurrenceLabel } from '../recurrence';
 import {
-  buildForecast,
   lastMonthActualSpend,
-  type MerchantForecast,
 } from '../forecast';
-import { categoryTrailingAvg } from '../budgets';
+import { categoryTrailingAvg, getConsolidatedRecurringMerchants, type ConsolidatedMerchant } from '../budgets';
 import { useBudgetStore } from '../budgetStore';
 import { useFilters } from '../store';
 import BulkRecategorizeDialog from '../components/BulkRecategorizeDialog';
@@ -43,14 +41,12 @@ import { useDeferredRender } from '../hooks/useDeferredRender';
 
 export default function Budget() {
   const demoMode = useFilters((s) => s.demoMode);
-  const { allTransactions, categories, overrides, budgets, isDataLoading, globalRecurrenceMap, globalDemoRecurrenceMap } = useDataStore(useShallow((s) => ({
+  const { allTransactions, categories, overrides, budgets, isDataLoading } = useDataStore(useShallow((s) => ({
     allTransactions: s.transactions,
     categories: s.categories,
     overrides: s.merchantOverrides,
     budgets: s.budgets,
     isDataLoading: s.isLoading,
-    globalRecurrenceMap: s.recurrenceMap,
-    globalDemoRecurrenceMap: s.demoRecurrenceMap,
   })));
 
   const deferredAllTxnsAll = useDeferredValue(allTransactions);
@@ -62,35 +58,33 @@ export default function Budget() {
         : deferredAllTxnsAll?.filter((t) => t.source !== 'demo'),
     [deferredAllTxnsAll, demoMode]
   );
+  const excludedBudgetCategories = useBudgetStore((s) => s.excludedBudgetCategories);
   const excludedMerchants = useBudgetStore((s) => s.excludedMerchants);
-  const excludedBudgetCategories = useBudgetStore(
-    (s) => s.excludedBudgetCategories
-  );
   const toggleMerchant = useBudgetStore((s) => s.toggleMerchant);
-  const setMerchantsExcluded = useBudgetStore((s) => s.setMerchantsExcluded);
   const toggleBudgetCategory = useBudgetStore((s) => s.toggleBudgetCategory);
   const reset = useBudgetStore((s) => s.reset);
 
-  const recurrenceMap = demoMode ? globalDemoRecurrenceMap : globalRecurrenceMap;
-
-  const forecast = useMemo(
-    () => buildForecast(allTxns || [], recurrenceMap, categories || []),
-    [allTxns, recurrenceMap, categories]
+  const spendCategories = useMemo(
+    () => (categories || []).filter((c) => c.type === 'spend'),
+    [categories]
   );
+
+
+
 
 
   const trailingAvgByCategory = useMemo(
     () =>
       categoryTrailingAvg(
         allTxns || [],
-        categories || []
+        spendCategories
       ),
-    [allTxns, categories]
+    [allTxns, spendCategories]
   );
 
   const lastMonth = useMemo(
-    () => lastMonthActualSpend(allTxns || [], categories || []),
-    [allTxns, categories]
+    () => lastMonthActualSpend(allTxns || [], spendCategories),
+    [allTxns, spendCategories]
   );
 
   // Auto-seed budgets for any category with trailing spend but no budget row yet.
@@ -107,11 +101,39 @@ export default function Budget() {
       });
     }
     if (toAdd.length > 0) {
-      db.insert(schema.budgets).values(toAdd).onConflictDoNothing();
+      db.insert(schema.budgets).values(toAdd).onConflictDoNothing().execute();
     }
   }, [budgets, categories, trailingAvgByCategory]);
 
   const isLoading = isDataLoading || !allTxns || !categories || !overrides || !budgets;
+  const recurringCategoryNames = useMemo(() => new Set(
+    spendCategories.filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+  ), [spendCategories]);
+
+  const consolidatedMerchants = useMemo(
+    () => getConsolidatedRecurringMerchants(allTxns || [], recurringCategoryNames),
+    [allTxns, recurringCategoryNames]
+  );
+
+  const merchantsByCategory = useMemo(() => {
+    const map = new Map<string, ConsolidatedMerchant[]>();
+    for (const m of consolidatedMerchants) {
+      const arr = map.get(m.category) || [];
+      arr.push(m);
+      map.set(m.category, arr);
+    }
+    return map;
+  }, [consolidatedMerchants]);
+
+  const recurringCategoryTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const [cat, arr] of merchantsByCategory) {
+      const total = arr.filter((m) => !excludedMerchants.has(m.merchantKey)).reduce((s, m) => s + m.monthlyAverage, 0);
+      map.set(cat, total);
+    }
+    return map;
+  }, [merchantsByCategory, excludedMerchants]);
+
   const shouldRender = useDeferredRender();
 
   if (isLoading || !shouldRender) {
@@ -131,28 +153,28 @@ export default function Budget() {
     );
   }
 
-  const recurring = forecast
-    .filter((f) => f.kind === 'recurring')
-    .sort((a, b) => b.monthlyEstimate - a.monthlyEstimate);
 
-  const recurringProjected = recurring
-    .filter((f) => !excludedMerchants.has(f.merchantKey))
-    .reduce((s, f) => s + f.monthlyEstimate, 0);
-  const budgetProjected = budgets
+
+  const recurringBudgets = (budgets || []).filter((b) => recurringCategoryNames.has(b.category));
+  const oneTimeBudgets = (budgets || []).filter((b) => !recurringCategoryNames.has(b.category));
+
+  const recurringProjected = Array.from(recurringCategoryNames)
+    .filter((cat) => !excludedBudgetCategories.has(cat))
+    .reduce((s, cat) => s + (recurringCategoryTotals.get(cat) || 0), 0);
+  const budgetProjected = oneTimeBudgets
     .filter((b) => !excludedBudgetCategories.has(b.category))
     .reduce((s, b) => s + b.monthlyAmount, 0);
   const projected = recurringProjected + budgetProjected;
 
-  const recurringExcludedSavings = recurring
-    .filter((f) => excludedMerchants.has(f.merchantKey))
-    .reduce((s, f) => s + f.monthlyEstimate, 0);
-  const budgetExcludedSavings = budgets
+  const recurringExcludedSavings = consolidatedMerchants
+    .filter((m) => excludedMerchants.has(m.merchantKey) && !excludedBudgetCategories.has(m.category))
+    .reduce((s, m) => s + m.monthlyAverage, 0);
+  const budgetExcludedSavings = oneTimeBudgets
     .filter((b) => excludedBudgetCategories.has(b.category))
     .reduce((s, b) => s + b.monthlyAmount, 0);
   const savings = recurringExcludedSavings + budgetExcludedSavings;
 
-  const totalExclusions =
-    excludedMerchants.size + excludedBudgetCategories.size;
+  const totalExclusions = excludedBudgetCategories.size + excludedMerchants.size;
 
   return (
     <PageLoader isLoading={isLoading}>
@@ -219,9 +241,8 @@ export default function Budget() {
                 color="text.secondary"
                 component="div"
               >
-                {recurring.length} recurring merchant
-                {recurring.length === 1 ? '' : 's'} · {budgets.length} budget
-                categor{budgets.length === 1 ? 'y' : 'ies'}
+                {recurringBudgets.length} recurring categor{recurringBudgets.length === 1 ? 'y' : 'ies'}
+                · {oneTimeBudgets.length} variable categor{oneTimeBudgets.length === 1 ? 'y' : 'ies'}
               </Typography>
               <Typography
                 variant="caption"
@@ -234,308 +255,28 @@ export default function Budget() {
           </Stack>
         </Paper>
 
-        <RecurringCard
-          items={recurring}
-          categories={categories}
-          excluded={excludedMerchants}
-          onToggle={toggleMerchant}
-          onToggleGroup={setMerchantsExcluded}
+        <RecurringBudgetCard
+          categories={spendCategories}
+          recurringCategoryNames={recurringCategoryNames}
+          merchantsByCategory={merchantsByCategory}
+          categoryTotals={recurringCategoryTotals}
+          excludedCategories={excludedBudgetCategories}
+          excludedMerchants={excludedMerchants}
+          onToggleCategory={toggleBudgetCategory}
+          onToggleMerchant={toggleMerchant}
         />
         <BudgetCard
-          budgets={budgets}
-          categories={categories}
+          title="Variable Spend / One-Time"
+          subtitle="Set what you want to spend per category next month. Initial values auto-seeded from your trailing 3-month actuals."
+          emptyMessage="No one-time spend in the last 90 days."
+          budgets={oneTimeBudgets}
+          categories={spendCategories}
           trailingAvgByCategory={trailingAvgByCategory}
           excluded={excludedBudgetCategories}
           onToggle={toggleBudgetCategory}
         />
       </Stack>
     </PageLoader>
-  );
-}
-
-// ----- Recurring (unchanged grouped + collapsible) -----
-
-function RecurringCard({
-  items,
-  categories,
-  excluded,
-  onToggle,
-  onToggleGroup,
-}: {
-  items: MerchantForecast[];
-  categories: Category[];
-  excluded: Set<string>;
-  onToggle: (key: string) => void;
-  onToggleGroup: (keys: string[], excluded: boolean) => void;
-}) {
-  const [verifyingMerchant, setVerifyingMerchant] = useState<string | null>(
-    null
-  );
-  const subtotal = items
-    .filter((i) => !excluded.has(i.merchantKey))
-    .reduce((s, i) => s + i.monthlyEstimate, 0);
-
-  const categoryColor = (name: string) =>
-    categories.find((c) => c.name === name)?.color || '#bdbdbd';
-
-  const grouped = useMemo(() => {
-    const map = new Map<string, MerchantForecast[]>();
-    for (const item of items) {
-      const list = map.get(item.category);
-      if (list) list.push(item);
-      else map.set(item.category, [item]);
-    }
-    return [...map.entries()]
-      .map(([category, list]) => ({
-        category,
-        list: list.sort((a, b) => b.monthlyEstimate - a.monthlyEstimate),
-        total: list.reduce((s, i) => s + i.monthlyEstimate, 0),
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [items]);
-
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const toggleExpanded = (cat: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
-      return next;
-    });
-  const allExpanded = grouped.length > 0 && expanded.size === grouped.length;
-  const expandAll = () =>
-    setExpanded(allExpanded ? new Set() : new Set(grouped.map((g) => g.category)));
-
-  return (
-    <Paper sx={{ p: 2 }}>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="baseline"
-        sx={{ mb: 1.5 }}
-      >
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Recurring
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Auto-detected from your real transactions (3+ charges at consistent
-            intervals) · grouped by category
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Button
-            size="small"
-            onClick={expandAll}
-            disabled={grouped.length === 0}
-          >
-            {allExpanded ? 'Collapse all' : 'Expand all'}
-          </Button>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="overline" color="text.secondary">
-              Subtotal
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              {usd.format(subtotal)}
-              <Typography
-                component="span"
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 0.5 }}
-              >
-                /mo
-              </Typography>
-            </Typography>
-          </Box>
-        </Stack>
-      </Stack>
-
-      {items.length === 0 ? (
-        <Box sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
-          No recurring charges detected yet. Needs at least 3 evenly-spaced
-          charges from a merchant.
-        </Box>
-      ) : (
-        <Stack spacing={1.5}>
-          {grouped.map((g) => {
-            const allKeys = g.list.map((i) => i.merchantKey);
-            const excludedCount = allKeys.filter((k) => excluded.has(k)).length;
-            const groupExcluded = excludedCount === allKeys.length;
-            const groupPartial = excludedCount > 0 && !groupExcluded;
-            const groupSubtotal = g.list
-              .filter((i) => !excluded.has(i.merchantKey))
-              .reduce((s, i) => s + i.monthlyEstimate, 0);
-            const color = categoryColor(g.category);
-            const isExpanded = expanded.has(g.category);
-            return (
-              <Box key={g.category}>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  spacing={1}
-                  onClick={() => toggleExpanded(g.category)}
-                  sx={{
-                    p: 1,
-                    bgcolor: color + '14',
-                    borderRadius: 1,
-                    borderLeft: `3px solid ${color}`,
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: color + '22' },
-                  }}
-                >
-                  <IconButton size="small" sx={{ p: 0.25 }}>
-                    {isExpanded ? (
-                      <ExpandLessIcon fontSize="small" />
-                    ) : (
-                      <ExpandMoreIcon fontSize="small" />
-                    )}
-                  </IconButton>
-                  <Box
-                    sx={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      bgcolor: color,
-                    }}
-                  />
-                  <Typography
-                    variant="subtitle2"
-                    sx={{
-                      fontWeight: 600,
-                      flex: 1,
-                      textDecoration: groupExcluded ? 'line-through' : 'none',
-                      opacity: groupExcluded ? 0.5 : 1,
-                    }}
-                  >
-                    {g.category}
-                    <Typography
-                      component="span"
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ ml: 0.75 }}
-                    >
-                      {g.list.length} merchant{g.list.length === 1 ? '' : 's'}
-                      {groupPartial && ` · ${allKeys.length - excludedCount} on`}
-                    </Typography>
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: 700,
-                      fontVariantNumeric: 'tabular-nums',
-                      textDecoration: groupExcluded ? 'line-through' : 'none',
-                      opacity: groupExcluded ? 0.5 : 1,
-                    }}
-                  >
-                    {usd.format(groupSubtotal)}
-                    <Typography
-                      component="span"
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ ml: 0.5 }}
-                    >
-                      /mo
-                    </Typography>
-                  </Typography>
-                  <Tooltip
-                    title={
-                      groupExcluded
-                        ? 'Include all in this category'
-                        : 'Exclude all in this category'
-                    }
-                  >
-                    <Switch
-                      size="small"
-                      checked={!groupExcluded}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        onToggleGroup(
-                          allKeys,
-                          groupPartial ? true : !groupExcluded
-                        );
-                      }}
-                    />
-                  </Tooltip>
-                </Stack>
-                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                  <DataTable component={Box} containerSx={{ border: 'none', borderRadius: 0 }} size="small">
-                    <TableBody>
-                      {g.list.map((item) => {
-                        const isExcluded = excluded.has(item.merchantKey);
-                        return (
-                          <TableRow
-                            key={item.merchantKey}
-                            hover
-                            onClick={() => setVerifyingMerchant(item.merchantKey)}
-                            sx={{
-                              cursor: 'pointer',
-                              opacity: isExcluded ? 0.4 : 1,
-                              '& td': {
-                                textDecoration: isExcluded
-                                  ? 'line-through'
-                                  : 'none',
-                                borderBottom: 'none',
-                              },
-                            }}
-                          >
-                            <TableCell
-                              sx={{
-                                maxWidth: 280,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                pl: 3,
-                              }}
-                            >
-                              <Typography variant="body2">
-                                {item.merchantKey}
-                              </Typography>
-                              {item.cadenceLabel && (
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                >
-                                  {recurrenceLabel(item.cadenceLabel as any)}
-                                  {' · click to see transactions'}
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontVariantNumeric: 'tabular-nums',
-                                fontWeight: 600,
-                              }}
-                            >
-                              {usdCents.format(item.monthlyEstimate)}
-                            </TableCell>
-                            <TableCell align="center" width={60}>
-                              <Switch
-                                size="small"
-                                checked={!isExcluded}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={() => onToggle(item.merchantKey)}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </DataTable>
-                </Collapse>
-              </Box>
-            );
-          })}
-        </Stack>
-      )}
-      {verifyingMerchant && (
-        <BulkRecategorizeDialog
-          merchantKey={verifyingMerchant}
-          onClose={() => setVerifyingMerchant(null)}
-        />
-      )}
-    </Paper>
   );
 }
 
@@ -595,12 +336,18 @@ function BudgetAmountInput({
 // ----- Budget card (new) -----
 
 function BudgetCard({
+  title,
+  subtitle,
+  emptyMessage,
   budgets,
   categories,
   trailingAvgByCategory,
   excluded,
   onToggle,
 }: {
+  title: string;
+  subtitle: string;
+  emptyMessage: string;
   budgets: BudgetType[];
   categories: Category[];
   trailingAvgByCategory: Map<string, number>;
@@ -653,12 +400,10 @@ function BudgetCard({
       >
         <Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Budgets (one-time / variable spend)
+            {title}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Set what you want to spend per category next month. Initial values
-            auto-seeded from your trailing 3-month actuals. Edit to budget
-            differently.
+            {subtitle}
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
@@ -686,7 +431,7 @@ function BudgetCard({
 
       {sorted.length === 0 ? (
         <Box sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
-          No non-recurring spend in the last 90 days.
+          {emptyMessage}
         </Box>
       ) : (
         <DataTable component={Box} containerSx={{ border: 'none', borderRadius: 0 }} size="small">
@@ -786,6 +531,249 @@ function BudgetCard({
             })}
           </TableBody>
         </DataTable>
+      )}
+    </Paper>
+  );
+}
+
+
+// ----- Recurring Budget Card -----
+function RecurringBudgetCard({
+  categories,
+  recurringCategoryNames,
+  merchantsByCategory,
+  categoryTotals,
+  excludedCategories,
+  excludedMerchants,
+  onToggleCategory,
+  onToggleMerchant,
+}: {
+  categories: Category[];
+  recurringCategoryNames: Set<string>;
+  merchantsByCategory: Map<string, ConsolidatedMerchant[]>;
+  categoryTotals: Map<string, number>;
+  excludedCategories: Set<string>;
+  excludedMerchants: Set<string>;
+  onToggleCategory: (category: string) => void;
+  onToggleMerchant: (merchantKey: string) => void;
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (category: string) => {
+    const next = new Set(expanded);
+    if (next.has(category)) next.delete(category);
+    else next.add(category);
+    setExpanded(next);
+  };
+
+  const sortedCategories = Array.from(recurringCategoryNames).sort((a, b) => {
+    return (categoryTotals.get(b) || 0) - (categoryTotals.get(a) || 0);
+  });
+
+  const subtotal = sortedCategories
+    .filter((cat) => !excludedCategories.has(cat))
+    .reduce((s, cat) => s + (categoryTotals.get(cat) || 0), 0);
+
+  const categoryColor = (name: string) =>
+    categories.find((c) => c.name === name)?.color || '#bdbdbd';
+
+  return (
+    <Paper sx={{ p: 2 }}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="baseline"
+        sx={{ mb: 1.5 }}
+      >
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+            Recurring Categories
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Consolidated underlying charges from the previous 2 months. Turn them off and on to adjust the budget.
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: 'right' }}>
+          <Typography variant="overline" color="text.secondary">
+            Subtotal
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            {usd.format(subtotal)}
+            <Typography
+              component="span"
+              variant="caption"
+              color="text.secondary"
+              sx={{ ml: 0.5 }}
+            >
+              /mo
+            </Typography>
+          </Typography>
+        </Box>
+      </Stack>
+
+      {sortedCategories.length === 0 ? (
+        <Box sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
+          No recurring categories found.
+        </Box>
+      ) : (
+        <Stack spacing={1}>
+          {sortedCategories.map((cat) => {
+            const isExcluded = excludedCategories.has(cat);
+            const total = categoryTotals.get(cat) || 0;
+            const merchants = merchantsByCategory.get(cat) || [];
+            const isExpanded = expanded.has(cat);
+            const color = categoryColor(cat);
+
+            return (
+              <Box
+                key={cat}
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  bgcolor: isExcluded ? 'action.hover' : 'background.paper',
+                  overflow: 'hidden',
+                }}
+              >
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  alignItems="center"
+                  onClick={() => toggleExpand(cat)}
+                  sx={{
+                    p: 1.5,
+                    cursor: merchants.length > 0 ? 'pointer' : 'default',
+                    '&:hover': {
+                      bgcolor: 'action.hover',
+                    },
+                  }}
+                >
+                  <IconButton
+                    size="small"
+                    sx={{ p: 0.5 }}
+                    disabled={merchants.length === 0}
+                  >
+                    {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  </IconButton>
+                  
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      bgcolor: color,
+                    }}
+                  />
+
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      fontWeight: 600,
+                      flex: 1,
+                      textDecoration: isExcluded ? 'line-through' : 'none',
+                      opacity: isExcluded ? 0.5 : 1,
+                    }}
+                  >
+                    {cat}
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ ml: 0.75 }}
+                    >
+                      {merchants.length} merchant{merchants.length === 1 ? '' : 's'}
+                    </Typography>
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 700,
+                      fontVariantNumeric: 'tabular-nums',
+                      textDecoration: isExcluded ? 'line-through' : 'none',
+                      opacity: isExcluded ? 0.5 : 1,
+                    }}
+                  >
+                    {usd.format(total)}
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ ml: 0.5 }}
+                    >
+                      /mo
+                    </Typography>
+                  </Typography>
+
+                  <Switch
+                    size="small"
+                    checked={!isExcluded}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      onToggleCategory(cat);
+                    }}
+                  />
+                </Stack>
+                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                  <DataTable component={Box} containerSx={{ border: 'none', borderRadius: 0, borderTop: '1px solid rgba(0,0,0,0.06)' }} size="small">
+                    <TableBody>
+                      {merchants.map((item) => {
+                        const mExcluded = excludedMerchants.has(item.merchantKey);
+                        return (
+                          <TableRow
+                            key={item.merchantKey}
+                            hover
+                            sx={{
+                              opacity: mExcluded ? 0.4 : 1,
+                              '& td': {
+                                textDecoration: mExcluded
+                                  ? 'line-through'
+                                  : 'none',
+                                borderBottom: 'none',
+                              },
+                            }}
+                          >
+                            <TableCell
+                              sx={{
+                                maxWidth: 280,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                pl: 6,
+                              }}
+                            >
+                              <Typography variant="body2">
+                                {item.merchantKey}
+                              </Typography>
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontVariantNumeric: 'tabular-nums',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {usd.format(item.monthlyAverage)}
+                            </TableCell>
+                            <TableCell align="center" width={60}>
+                              <Switch
+                                size="small"
+                                checked={!mExcluded}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => onToggleMerchant(item.merchantKey)}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </DataTable>
+                </Collapse>
+              </Box>
+            );
+          })}
+        </Stack>
       )}
     </Paper>
   );

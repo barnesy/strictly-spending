@@ -5,7 +5,7 @@ import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
  * Watch-folder integration via the File System Access API.
  *
  * High-level model:
- *   - User picks a folder once → handle persists to Dexie
+ *   - User picks a folder once → handle persists to the database
  *   - Each scan: list files, hash content, filter to ones not yet imported
  *   - Browser permission can lapse between sessions → we re-prompt on demand
  *
