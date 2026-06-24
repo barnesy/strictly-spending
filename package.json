@@ -1,6 +1,6 @@
 {
   "name": "strictly-spending",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A local-first household spending dashboard. Multi-bank CSV ingestion, rule-based categorization, recurring-charge detection, per-category budgets, and a rapid-triage Sort view — all in the browser. No server, no cloud, no account credentials.",
   "private": true,
   "type": "module",
