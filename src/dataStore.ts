@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import type { Transaction, Account, Category, MerchantOverride, Budget, CategoryRule } from './types';
 import { buildRecurrenceMap, type RecurrenceInfo } from './recurrence';
 
-interface DataState {
+export interface DataState {
   transactions: Transaction[];
   accounts: Account[];
   categories: Category[];

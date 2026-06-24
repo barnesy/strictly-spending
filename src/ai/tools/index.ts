@@ -1,8 +1,8 @@
-import type { FilterState } from '../../store';
+import type { FiltersState } from '../../store';
 import type { DataState } from '../../dataStore';
 
 export interface AIToolContext {
-  filters: FilterState;
+  filters: FiltersState;
   dataStore: DataState;
   budgetStore: any;
   lastQueryState?: any;

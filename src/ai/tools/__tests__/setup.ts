@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../../../db/schema';
-import type { FilterState } from '../../../store';
+import type { FiltersState } from '../../../store';
 import type { DataState } from '../../../dataStore';
 import type { AIToolContext } from '../index';
 
@@ -52,7 +52,7 @@ export function setupTestDb() {
   return { db, sqlite };
 }
 
-export function createMockContext(): AIToolContext {
+export function createMockContext(filters: Partial<FiltersState> = {}): AIToolContext {
   return {
     filters: {
       preset: 'allTime',
@@ -64,7 +64,7 @@ export function createMockContext(): AIToolContext {
       searchQuery: '',
       minPrice: undefined,
       maxPrice: undefined,
-    } as unknown as FilterState,
+    } as unknown as FiltersState,
     dataStore: {
       categories: [
         { name: 'Travel', color: 'blue', type: 'expense', sortOrder: 1 },
