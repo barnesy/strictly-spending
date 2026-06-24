@@ -1,6 +1,6 @@
 import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import type { ChatMessage } from './types';
 import type { SkillTestCase } from '../types';

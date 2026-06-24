@@ -345,7 +345,7 @@ Example valid JSON output:
     if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
 
     try {
-      let prompt = `You are a financial categorization auditor running locally.
+      const prompt = `You are a financial categorization auditor running locally.
 Review the following transaction descriptions and suggest:
 1. The BEST category from the available list.
 2. A simplified keyword/pattern that can be used as a matching rule for future transactions of this merchant.

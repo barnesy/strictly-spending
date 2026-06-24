@@ -24,7 +24,7 @@ export class GenerateDocumentTool implements AIToolHandler {
 
     let pnlReportMarkdown = '';
     let pnlSpreadsheetCsv = '';
-    let pnlSpreadsheetDocId = crypto.randomUUID();
+    const pnlSpreadsheetDocId = crypto.randomUUID();
     const mdDocId = crypto.randomUUID();
 
     try {

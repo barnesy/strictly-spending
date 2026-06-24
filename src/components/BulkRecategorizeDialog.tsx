@@ -1,6 +1,6 @@
 import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { useState, useMemo } from 'react';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -27,7 +27,7 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 
-import type { Category, RecurrenceKind } from '../types';
+import type { RecurrenceKind } from '../types';
 import { usdCents } from '../lib';
 import { recategorizeAll } from '../categorize';
 import {

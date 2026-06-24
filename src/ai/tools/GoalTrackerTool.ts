@@ -3,7 +3,6 @@ import type { AIToolContext } from './index';
 import { db } from '../../db/drizzle';
 import * as schema from '../../db/schema';
 import { getMonthsInRange, aggregateTransactions } from '../../copilotMatcher';
-import { useDataStore } from '../../dataStore';
 
 export class GoalTrackerTool implements AIToolHandler {
   name = 'goal_tracking';

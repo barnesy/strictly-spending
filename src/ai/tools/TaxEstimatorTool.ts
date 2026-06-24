@@ -3,7 +3,6 @@ import type { AIToolContext } from './index';
 import { db } from '../../db/drizzle';
 import * as schema from '../../db/schema';
 import { eq } from 'drizzle-orm';
-import { useDataStore } from '../../dataStore';
 
 export class TaxEstimatorTool implements AIToolHandler {
   name = 'tax_estimation';

@@ -26,14 +26,12 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 
 import { usd, usdCents } from '../lib';
-import { recurrenceLabel } from '../recurrence';
 import {
   lastMonthActualSpend,
 } from '../forecast';
 import { categoryTrailingAvg, getConsolidatedRecurringMerchants, type ConsolidatedMerchant } from '../budgets';
 import { useBudgetStore } from '../budgetStore';
 import { useFilters } from '../store';
-import BulkRecategorizeDialog from '../components/BulkRecategorizeDialog';
 import PageLoader from '../components/PageLoader';
 import DataTable from '../components/DataTable';
 import type { Budget as BudgetType, Category } from '../types';

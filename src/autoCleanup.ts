@@ -1,6 +1,6 @@
 import { db } from './db/drizzle';
 import * as schema from './db/schema';
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 import { categorize, inferTypeCategory } from './categorize';
 import type { CategorizeContext } from './categorize';

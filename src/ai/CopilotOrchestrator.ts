@@ -1,6 +1,3 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
 import { useChatStore, formatModelName } from '../chatStore';
 import { useDataStore } from '../dataStore';
 import { useFilters } from '../store';
@@ -116,7 +113,7 @@ Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}`;
     let conversationHistory = [...messages, userMsg];
     let loops = 0;
     const maxLoops = 4;
-    let currentSteps: string[] = [];
+    const currentSteps: string[] = [];
 
     let totalPrompt = 0;
     let totalCompletion = 0;

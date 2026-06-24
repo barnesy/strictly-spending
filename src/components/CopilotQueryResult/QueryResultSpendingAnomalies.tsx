@@ -1,6 +1,6 @@
 import { db } from "../../db/drizzle";
 import * as schema from "../../db/schema";
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Box, Typography, Stack } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import type { SpendingAnomalies } from '../../copilotAnalytics';

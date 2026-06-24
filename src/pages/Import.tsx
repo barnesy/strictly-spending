@@ -1,6 +1,5 @@
 import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';

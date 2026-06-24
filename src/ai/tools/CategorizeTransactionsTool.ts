@@ -3,8 +3,6 @@ import type { AIToolContext } from './index';
 import { db } from '../../db/drizzle';
 import * as schema from '../../db/schema';
 import { eq } from 'drizzle-orm';
-import { useFilters } from '../../store';
-import { useDataStore } from '../../dataStore';
 import { localAI } from '../../ai';
 import { useChatStore } from '../../chatStore';
 

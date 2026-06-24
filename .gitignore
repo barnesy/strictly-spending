@@ -82,3 +82,8 @@ src-tauri/generate_extra.py
 src-tauri/handlers.txt
 src-tauri/src/bulk_add.patch
 src-tauri/test_rust.rs
+
+# Local databases
+src-tauri/data.db
+src-tauri/data.db-shm
+src-tauri/data.db-wal

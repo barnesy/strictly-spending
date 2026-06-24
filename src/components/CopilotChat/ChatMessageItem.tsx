@@ -1,6 +1,6 @@
 import { db } from "../../db/drizzle";
 import * as schema from "../../db/schema";
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 // removed useLiveQuery

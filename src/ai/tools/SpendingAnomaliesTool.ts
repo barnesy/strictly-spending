@@ -2,9 +2,8 @@ import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
 import { db } from '../../db/drizzle';
 import * as schema from '../../db/schema';
-import { inArray, sql, and } from 'drizzle-orm';
-import { useFilters, resolveDateRange } from '../../store';
-import { useDataStore } from '../../dataStore';
+import { inArray, and } from 'drizzle-orm';
+import { resolveDateRange } from '../../store';
 import { matchCategories } from '../../copilotMatcher';
 import { detectSpendingAnomalies } from '../../copilotAnalytics';
 

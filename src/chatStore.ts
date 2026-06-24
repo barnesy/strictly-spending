@@ -1,6 +1,6 @@
 import { db } from './db/drizzle';
 import * as schema from './db/schema';
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+import { eq, desc, asc } from 'drizzle-orm';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { localAI, type ChatMessage } from './ai';

@@ -246,7 +246,7 @@ export const AgentSkills: React.FC = () => {
 
       const systemPromptVersionDb = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPromptVersion')))[0];
       
-      let shouldOverwrite = !systemPromptVersionDb || Number(systemPromptVersionDb.value) < CURRENT_PROMPT_VERSION;
+      const shouldOverwrite = !systemPromptVersionDb || Number(systemPromptVersionDb.value) < CURRENT_PROMPT_VERSION;
 
       if (shouldOverwrite) {
         await db.insert(schema.settings).values({ key: 'app:systemPrompt', value: GENERAL_SYSTEM_PROMPT }).onConflictDoNothing();

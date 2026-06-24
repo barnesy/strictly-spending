@@ -1,6 +1,5 @@
 import { db } from './db/drizzle';
 import * as schema from './db/schema';
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 
 import type {
   Account,

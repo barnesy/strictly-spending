@@ -1,6 +1,6 @@
 import { db } from './db/drizzle';
 import * as schema from './db/schema';
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+import { asc } from 'drizzle-orm';
 import { create } from 'zustand';
 
 import type { Transaction, Account, Category, MerchantOverride, Budget, CategoryRule } from './types';

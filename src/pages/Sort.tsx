@@ -33,8 +33,6 @@ import {
   Chip,
   Switch,
   TextField,
-  Tabs,
-  Tab,
   Drawer,
   useTheme,
   useMediaQuery,
@@ -46,7 +44,6 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'reac
 
 import { useFilters } from '../store';
 import { buildSortQueue, type SortCard as SortCardData } from '../sort';
-import type { Transaction } from '../types';
 
 import SortCard from '../components/SortCard';
 import SortCategoryGrid from '../components/SortCategoryGrid';

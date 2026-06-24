@@ -1,6 +1,6 @@
 import { db } from './db/drizzle';
 import * as schema from './db/schema';
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
+import { eq, ne, inArray } from 'drizzle-orm';
 /**
  * Demo data generator.
  *
@@ -19,7 +19,7 @@ import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
  */
 
 
-import type { Account, Transaction } from './types';
+import type { Transaction } from './types';
 import { extractMerchantKey } from './categorize';
 import { refreshRecurrenceAll } from './recurrence';
 
@@ -168,7 +168,7 @@ export function buildDemoTransactions(
   // Bi-weekly payroll (Income) — every 14 days starting Jan 3
   const start = new Date(year, 0, 3);
   const today = new Date(year, throughMonth + 1, 0);
-  let cursor = new Date(start);
+  const cursor = new Date(start);
   while (cursor <= today) {
     out.push({
       date: isoDate(
