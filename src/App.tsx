@@ -44,6 +44,8 @@ import { useDataStore } from './dataStore';
 import { useChatStore } from './chatStore';
 import { PageTransition } from './components/PageTransition';
 import AnimatedLogo from './components/AnimatedLogo';
+import Landing from './pages/Landing';
+import { LANDING_ONLY_BUILD } from './env';
 
 const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', end: true },
@@ -247,6 +249,17 @@ export default function App() {
         (demoMode ? t.source === 'demo' : t.source !== 'demo')
     ).length;
   }, [transactions, demoMode]);
+
+  if (LANDING_ONLY_BUILD) {
+    return (
+      <ThemeProvider theme={dynamicTheme}>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <CssBaseline />
+          <Landing />
+        </LocalizationProvider>
+      </ThemeProvider>
+    );
+  }
 
   const renderMainWindow = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
