@@ -1,0 +1,301 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
+import { useChatStore, formatModelName } from '../chatStore';
+import { useDataStore } from '../dataStore';
+import { useFilters } from '../store';
+import { useBudgetStore } from '../budgetStore';
+import { localAI, parseAIResponse, calculateGlobalRunwayData, COPILOT_RESPONSE_SCHEMA } from './index';
+import type { ChatMessage } from './index';
+import { toolRegistry } from './tools';
+import { executeCopilotCommand } from '../copilotMatcher';
+
+export interface OrchestratorContext {
+  navigate: (path: string) => void;
+  location: { pathname: string };
+  signal: AbortSignal;
+}
+
+export class CopilotOrchestrator {
+  static async classifyIntent(prompt: string, skills: any[]): Promise<any | null> {
+    if (!skills || skills.length === 0) return null;
+    
+    // Fallback: fast keyword heuristic first to avoid latency on simple things
+    const normPrompt = prompt.toLowerCase();
+    const pnlMatch = skills.find(s => s.id === 'builtin:pnl' || s.name.toLowerCase().includes('profit'));
+    if (pnlMatch && (normPrompt.includes('p&l') || normPrompt.includes('profit and loss') || normPrompt.includes('profit & loss') || normPrompt.includes('income statement'))) {
+      return pnlMatch;
+    }
+
+    const runwayMatch = skills.find(s => s.id === 'builtin:runway' || s.name.toLowerCase().includes('runway'));
+    if (runwayMatch && (normPrompt.includes('runway') || normPrompt.includes('rundown') || normPrompt.includes('cash projection'))) {
+      return runwayMatch;
+    }
+
+    // Fast LLM intent check
+    const skillList = skills.map(s => `- ID: ${s.id}, Name: ${s.name}, Desc: ${s.description}`).join('\n');
+    const systemMsg = `You are a Semantic Intent Router. Match the user's prompt to one of the following skills:\n${skillList}\n\nIf the prompt matches a skill's intent, output its exact ID. If no skill matches, output "none". DO NOT OUTPUT ANYTHING ELSE. ONLY THE EXACT ID OR "none".`;
+    
+    try {
+      const response = await localAI.chatCopilot(
+        [{ role: 'user', content: prompt }],
+        "System State Context not needed for intent routing.",
+        systemMsg,
+        {
+           type: "object",
+           properties: { skillId: { type: "string" } },
+           required: ["skillId"]
+        }
+      );
+      const parsed = parseAIResponse(response);
+      const id = parsed?.skillId || response.trim();
+      if (id === 'none') return null;
+      return skills.find(s => s.id === id) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  static async run(
+    userMsg: ChatMessage,
+    context: OrchestratorContext
+  ): Promise<void> {
+    const chatStore = useChatStore.getState();
+    const { addMessage, startStreamingMessage, appendStreamingToken, updateStreamingMetadata, finalizeStreamingMessage, messages } = chatStore;
+    const { signal, navigate, location } = context;
+
+    // Use already cached agent skills
+    const allSkills = chatStore.agentSkills || [];
+
+    const filters = useFilters.getState();
+    const dataStore = useDataStore.getState();
+
+    let currentSkillId: string | undefined = undefined;
+    let currentCompletedStages: string[] = [];
+
+    const matchedSkill = await CopilotOrchestrator.classifyIntent(userMsg.content, allSkills);
+    if (matchedSkill) {
+      currentSkillId = matchedSkill.id;
+      currentCompletedStages = [];
+    } else {
+      const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant' && m.activeSkillId);
+      const activeSkill = allSkills.find(s => s.id === lastAssistantMsg?.activeSkillId);
+      let lastAction = 'none';
+      if (lastAssistantMsg) {
+        try {
+          const parsed = parseAIResponse(lastAssistantMsg.content);
+          lastAction = parsed?.agent_action?.action || 'none';
+        } catch {}
+      }
+      
+      const hasUncompletedStages = activeSkill && activeSkill.stages && activeSkill.stages.length > 0 &&
+        lastAssistantMsg?.completedStages && lastAssistantMsg.completedStages.length < activeSkill.stages.length;
+        
+      const isStillRunningActions = activeSkill && lastAction !== 'none';
+      
+      if (hasUncompletedStages || isStillRunningActions) {
+        currentSkillId = lastAssistantMsg?.activeSkillId;
+        currentCompletedStages = lastAssistantMsg?.completedStages || [];
+      } else {
+        currentSkillId = undefined;
+        currentCompletedStages = [];
+      }
+    }
+
+    const runwayData = await calculateGlobalRunwayData();
+
+    const stateContext = `Current Date: ${new Date().toISOString().slice(0, 10)} (${new Date().toLocaleDateString()})
+Earliest Transaction Date: ${filters.earliestTransactionDate || 'None'}
+Latest Transaction Date: ${filters.latestTransactionDate || 'None'}
+Current Page: ${location.pathname}
+Current Filter Preset: ${filters.preset}
+Current Search Query: "${filters.searchQuery}"
+Available Categories: ${dataStore.categories.map((c) => c.name).join(', ')}
+Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}`;
+
+    let conversationHistory = [...messages, userMsg];
+    let loops = 0;
+    const maxLoops = 4;
+    let currentSteps: string[] = [];
+
+    let totalPrompt = 0;
+    let totalCompletion = 0;
+
+    // Shared execution state across loop
+    let lastQueryState: any = null;
+
+    while (loops < maxLoops) {
+      if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+      loops++;
+      const isLastLoop = loops === maxLoops;
+
+      startStreamingMessage(currentSteps, 'tool_select');
+
+      const cleanedHistory = conversationHistory.map((m) => {
+        if (m.role === 'assistant') {
+          try {
+            const p = parseAIResponse(m.content);
+            if (p && p.body) return { ...m, content: JSON.stringify({ ...p, body: '' }) };
+          } catch {}
+        }
+        return m;
+      });
+
+      const activeHistory = isLastLoop
+        ? [
+            ...cleanedHistory,
+            {
+              role: 'system' as const,
+              content: `This is the final turn. Explain results strictly using numbers. Set 'agent_action.action' to 'none'.`
+            }
+          ]
+        : cleanedHistory;
+
+      const activeSkill = currentSkillId ? allSkills.find(s => s.id === currentSkillId) : null;
+      let skillPrompt = activeSkill ? `[SKILL ACTIVE: ${activeSkill.name}]\n${activeSkill.description}\n\nINSTRUCTIONS:\n${activeSkill.prompt}` : '';
+
+      if (activeSkill && activeSkill.stages && activeSkill.stages.length > 0) {
+         // Stage logic
+         const uncompletedStages = activeSkill.stages.filter((s: any) => !currentCompletedStages.includes(s.name));
+         if (uncompletedStages.length > 0) {
+           const currentStage = uncompletedStages[0];
+           skillPrompt += `\n\nCURRENT STAGE: ${currentStage.name}\n${currentStage.instructions}\n\nWhen you have completed this stage's goals, output "STAGE_COMPLETE: ${currentStage.name}" in your body.`;
+         } else {
+           skillPrompt += `\n\nALL STAGES COMPLETED. Summarize final results.`;
+         }
+      }
+
+      const localAIModel = localAI;
+      const modelName = formatModelName(localAIModel.modelName);
+      currentSteps.push(`Running ${modelName}...`);
+
+      let currentResponse = '';
+      try {
+        currentResponse = await localAIModel.chatCopilot(
+          activeHistory,
+          stateContext,
+          skillPrompt,
+          COPILOT_RESPONSE_SCHEMA,
+          (chunk) => { appendStreamingToken(chunk); },
+          signal
+        );
+      } catch (err: any) {
+        if (err.name === 'AbortError') throw err;
+        throw new Error(`LLM Error: ${err.message}`);
+      }
+
+      // Check usage from localAI directly instead of parsed wrapper
+      totalPrompt += 0;
+      totalCompletion += 0;
+
+      let actionObj: any = null;
+      let actionResult: any = null;
+      let systemResultsMsg: ChatMessage | null = null;
+
+      try {
+        const parsed = parseAIResponse(currentResponse);
+        actionObj = parsed?.agent_action;
+
+        if (parsed?.body) {
+           const match = parsed.body.match(/STAGE_COMPLETE:\\s*([^\\n]+)/);
+           if (match && match[1]) {
+              const stageName = match[1].trim();
+              if (!currentCompletedStages.includes(stageName)) {
+                 currentCompletedStages.push(stageName);
+                 currentSteps.push(`Completed Stage: ${stageName}`);
+              }
+           }
+        }
+      } catch {
+        // syntax error
+      }
+
+      const action = actionObj?.action || 'none';
+      if (action === 'none') {
+        await finalizeStreamingMessage(
+          currentResponse,
+          actionResult,
+          currentSteps,
+          { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
+          'explanation',
+          currentSkillId,
+          currentCompletedStages
+        );
+        break;
+      }
+
+      currentSteps.push(`Executing action: ${action}`);
+
+      const toolHandler = toolRegistry.get(action);
+      if (toolHandler) {
+        const budgetStore = useBudgetStore.getState();
+        const result = await toolHandler.execute(actionObj, { filters, dataStore, budgetStore, lastQueryState });
+        
+        if (result.lastQueryState) {
+          lastQueryState = result.lastQueryState;
+        }
+
+        if (result.feedbackError) {
+          systemResultsMsg = { role: 'system', content: result.feedbackError };
+        } else {
+          actionResult = result.actionResult;
+          systemResultsMsg = result.systemResultsMsg ? { role: 'system', content: result.systemResultsMsg } : null;
+        }
+      } else {
+         // handle dom_update, navigate, etc.
+         if (action === 'dom_update') {
+           executeCopilotCommand(actionObj, { navigate, location } as any);
+           actionResult = { action, success: true };
+           systemResultsMsg = { role: 'system', content: "DOM clicked." };
+         } else if (action === 'navigate' || action === 'filter') {
+           executeCopilotCommand(actionObj, { navigate, location } as any);
+           actionResult = { action };
+           await finalizeStreamingMessage(
+             currentResponse,
+             actionResult,
+             currentSteps,
+             { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
+             'explanation',
+             currentSkillId,
+             currentCompletedStages
+           );
+           break;
+         } else {
+           systemResultsMsg = { role: 'system', content: `Unknown action: ${action}` };
+         }
+      }
+
+      await finalizeStreamingMessage(
+        currentResponse,
+        actionResult,
+        currentSteps,
+        { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
+        'tool_select',
+        currentSkillId,
+        currentCompletedStages
+      );
+
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: currentResponse,
+        actionResult,
+        steps: [...currentSteps],
+        tokenUsage: { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
+        purpose: 'tool_select',
+        activeSkillId: currentSkillId,
+        completedStages: currentCompletedStages
+      };
+
+      if (systemResultsMsg) {
+        await addMessage(systemResultsMsg);
+        conversationHistory = [
+          ...conversationHistory,
+          assistantMsg,
+          systemResultsMsg
+        ];
+      } else {
+        break;
+      }
+    }
+  }
+}

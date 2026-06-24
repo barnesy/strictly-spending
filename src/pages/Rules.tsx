@@ -189,12 +189,17 @@ export default function Rules() {
     for (const r of allRules) stats[r.id!] = 0;
     if (!deferredAllTxns) return stats;
 
+    const normalizedRules = allRules.map(r => ({
+      id: r.id!,
+      pattern: r.pattern ? normalizeForMatch(r.pattern) : ''
+    }));
+
     for (const t of deferredAllTxns) {
       const desc = normalizeForMatch(t.description);
-      const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey) : '';
-      for (const r of allRules) {
-        if (r.pattern && (desc.includes(normalizeForMatch(r.pattern)) || (mkey && mkey.includes(normalizeForMatch(r.pattern))))) {
-          stats[r.id!]++;
+      const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey as string) : '';
+      for (const r of normalizedRules) {
+        if (r.pattern && (desc.includes(r.pattern) || (mkey && mkey.includes(r.pattern)))) {
+          stats[r.id]++;
           break; // First matching rule wins
         }
       }

@@ -35,6 +35,9 @@ import {
   TextField,
   Tabs,
   Tab,
+  Drawer,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { guessTaxFields } from '../taxUtils';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
@@ -129,82 +132,7 @@ export default function Sort() {
     }
   }, [currentIndex, visibleQueue]);
 
-  const [aiRunning, setAiRunning] = useState(false);
-  const [aiProgress, setAiProgress] = useState(0);
-  const bulkAbortControllerRef = useRef<AbortController | null>(null);
-
-  const handleCancelAi = () => {
-    if (bulkAbortControllerRef.current) {
-      bulkAbortControllerRef.current.abort();
-    }
-  };
-
-  const handleStartBulkAi = async () => {
-    const cardsToProcess = visibleQueue.filter(card => !selections[card.merchantKey]?.category);
-    if (cardsToProcess.length === 0) return;
-
-    setAiRunning(true);
-    setAiProgress(0);
-    const controller = new AbortController();
-    bulkAbortControllerRef.current = controller;
-
-    try {
-      if (!localAI.isLoaded) {
-        await localAI.init();
-      }
-
-      const chunkSize = 10;
-      const total = cardsToProcess.length;
-      let processed = 0;
-      const newSelections = { ...selections };
-      const newSuggestions = { ...aiSuggestions };
-
-      for (let i = 0; i < total; i += chunkSize) {
-        if (controller.signal.aborted) break;
-
-        const chunk = cardsToProcess.slice(i, i + chunkSize);
-        const toReview = chunk.map(card => ({
-          desc: card.txns[0]?.description || card.merchantKey || '',
-          ruleCategory: card.suggestedCategory || 'Uncategorized',
-        }));
-
-        const catNames = (categories || [])
-          .map((c) => c.name)
-          .filter((name) => name !== 'Uncategorized');
-        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal);
-        results.forEach((res, idx) => {
-          const card = chunk[idx];
-          if (card && res) {
-            newSuggestions[card.merchantKey] = res;
-            if (res.category && res.category !== 'Uncategorized' && catNames.includes(res.category)) {
-              newSelections[card.merchantKey] = {
-                category: res.category,
-                saveRule: true,
-                rulePattern: res.pattern || card.merchantKey,
-                recurrence: res.recurrence,
-              };
-            }
-          }
-        });
-
-        processed += chunk.length;
-        setAiProgress(Math.round((processed / total) * 100));
-        setAiSuggestions({ ...newSuggestions });
-        setSelections({ ...newSelections });
-      }
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.log('AI Auto-categorization aborted by user');
-      } else {
-        console.error('AI Auto-categorization failed:', err);
-        alert('AI Auto-categorization failed: ' + err.message);
-      }
-    } finally {
-      setAiRunning(false);
-      bulkAbortControllerRef.current = null;
-    }
-  };
-
+  
   useEffect(() => {
     if (visibleQueue.length > 0 && currentIndex >= visibleQueue.length) {
       setCurrentIndex(Math.max(0, visibleQueue.length - 1));
@@ -221,6 +149,9 @@ export default function Sort() {
 
   const fetchingKeysRef = useRef<Set<string>>(new Set());
 
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const [helpOpen, setHelpOpen] = useState(false);
 
   // Sync state when active card or suggestions or selections change
@@ -479,6 +410,7 @@ export default function Sort() {
       if (!currentCard) return;
       const key = currentCard.merchantKey;
 
+      setMobileDrawerOpen(false);
       const nextSelection = {
         category: categoryName,
         saveRule,
@@ -606,21 +538,7 @@ export default function Sort() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2} alignItems="center">
-          {/* AI Bulk Auto-Categorize Button */}
-          {visibleQueue.length > 0 && (
-            <Button
-              variant="contained"
-              color="primary"
-              size="small"
-              onClick={aiRunning ? handleCancelAi : handleStartBulkAi}
-              disabled={aiRunning && !bulkAbortControllerRef.current}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
-            >
-              {aiRunning ? `Stop AI (${aiProgress}%)` : 'Auto-Categorize All (AI)'}
-            </Button>
-          )}
-
-          <FormControlLabel
+                    <FormControlLabel
             control={
               <Switch
                 size="small"
@@ -661,21 +579,7 @@ export default function Sort() {
         </Stack>
       </Stack>
       
-      {/* Bulk AI Progress Alert */}
-      {aiRunning && (
-        <Alert severity="info" variant="outlined" sx={{ mb: 1, alignItems: 'center' }}>
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, flexGrow: 1 }}>
-              AI Auto-Categorization in progress: {aiProgress}% completed. Choices will appear in the queue as they load.
-            </Typography>
-            <Button size="small" color="error" variant="outlined" onClick={handleCancelAi}>
-              Stop
-            </Button>
-          </Stack>
-        </Alert>
-      )}
-
-      {/* Global Apply Bar */}
+            {/* Global Apply Bar */}
       {selectionsCount > 0 && (
         <Paper
           sx={{
@@ -719,87 +623,14 @@ export default function Sort() {
         </Paper>
       )}
 
-      {/* Horizontal queue tracker */}
-      {visibleQueue.length > 0 && (
-        <Box>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, display: 'block', mb: 0.5 }}
-          >
-            {currentIndex + 1} of {visibleQueue.length} Merchants
-          </Typography>
-          <Paper
-            ref={scrollContainerRef}
-            elevation={0}
-            sx={{
-              p: 1.5,
-              border: '1px solid',
-              borderColor: 'divider',
-              display: 'flex',
-              gap: 1,
-              overflowX: 'auto',
-              bgcolor: 'background.default',
-              '&::-webkit-scrollbar': {
-                height: 6,
-              },
-              '&::-webkit-scrollbar-thumb': {
-                bgcolor: 'action.selected',
-                borderRadius: 3,
-              },
-            }}
-          >
-            {visibleQueue.map((card, idx) => {
-              const sel = selections[card.merchantKey];
-              const isActive = idx === currentIndex;
-              const isSelected = !!sel?.category;
-              const chosenColor = isSelected ? lookupCategoryColor(sel.category) : undefined;
-              
-              return (
-                <Button
-                  key={card.merchantKey}
-                  variant={isActive ? "contained" : "outlined"}
-                  color={isActive ? "primary" : "inherit"}
-                  onClick={() => setCurrentIndex(idx)}
-                  sx={{
-                    flexShrink: 0,
-                    px: 2,
-                    py: 1,
-                    borderWidth: isSelected ? 3 : (isActive ? 2 : 1),
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    minWidth: 140,
-                    maxWidth: 180,
-                    bgcolor: isActive ? 'primary.main' : 'background.paper',
-                    color: isActive ? 'primary.contrastText' : 'text.primary',
-                    borderColor: isSelected ? chosenColor : (isActive ? 'primary.main' : 'divider'),
-                    '&:hover': {
-                      bgcolor: isActive ? 'primary.dark' : 'action.hover',
-                    }
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    noWrap
-                    sx={{ fontWeight: isActive || isSelected ? 700 : 600, fontSize: '0.8rem', width: '100%', textAlign: 'center' }}
-                  >
-                    {card.merchantKey}
-                  </Typography>
-                </Button>
-              );
-            })}
-          </Paper>
-        </Box>
-      )}
-
       {/* Card or empty state */}
       {currentCard ? (
-        <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
-          {/* Left Panel: Controls (Scrollable) */}
-          <Panel id="sort-controls-panel" defaultSize="45%" minSize="30%" style={{ display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
-              <Stack spacing={2}>
+        <>
+          {isDesktop ? (
+            <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
+              <Panel id="sort-controls-panel" defaultSize="45%" minSize="30%" style={{ display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
+                  <Stack spacing={2}>
                 <Paper sx={{ p: 3 }}>
                   <Stack spacing={1.5}>
                     <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
@@ -909,52 +740,48 @@ export default function Sort() {
                   <KeyHint k="?" desc="help" />
                 </Stack>
               </Stack>
-            </Box>
-          </Panel>
+                </Box>
+              </Panel>
+              
+              <PanelResizeHandle
+                aria-label="Resize panels"
+                style={{
+                  width: 16,
+                  position: 'relative',
+                }}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    margin: '0 auto',
+                    width: 2,
+                    bgcolor: 'divider',
+                    borderRadius: 1,
+                    transition: 'background-color 120ms ease',
+                    '[data-resize-handle-active] &, &:hover': {
+                      bgcolor: 'primary.main',
+                      width: 3,
+                    },
+                  }}
+                />
+              </PanelResizeHandle>
 
-          {/* Separator / Drag Handle */}
-          <PanelResizeHandle
-            aria-label="Resize panels"
-            style={{
-              width: 16,
-              position: 'relative',
-            }}
-          >
-            <Box
-              sx={{
-                position: 'absolute',
-                inset: 0,
-                margin: '0 auto',
-                width: 2,
-                bgcolor: 'divider',
-                borderRadius: 1,
-                transition: 'background-color 120ms ease',
-                '[data-resize-handle-active] &, &:hover': {
-                  bgcolor: 'primary.main',
-                  width: 3,
-                },
-              }}
-            />
-          </PanelResizeHandle>
-
-          {/* Right Panel: 3D Stack Viewport */}
-          <Panel id="sort-preview-panel" defaultSize="55%" minSize="35%" style={{ display: 'flex', flexDirection: 'column' }}>
-            <Box
-              sx={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                position: 'relative',
-                overflow: 'auto',
-                p: 3,
-                ml: 2,
-                width: '100%',
-                height: '100%',
-              }}
-            >
-              {/* 3D Stack of Cards */}
-              <Box sx={{ position: 'relative', width: '100%', maxWidth: 680, minHeight: 560, my: 'auto' }}>
+              <Panel id="sort-preview-panel" defaultSize="55%" minSize="35%" style={{ display: 'flex', flexDirection: 'column' }}>
+                <Box
+                  sx={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    overflowX: 'hidden',
+                    overflowY: 'auto',
+                    p: 3,
+                    ml: 2,
+                  }}
+                >
+                  <Box sx={{ position: 'relative', width: '100%', maxWidth: 680, height: '100%', minHeight: 0, my: 'auto' }}>
                 {(() => {
                   const windowStart = Math.max(0, currentIndex - 2);
                   const windowEnd = Math.min(visibleQueue.length - 1, currentIndex + 3);
@@ -1000,12 +827,263 @@ export default function Sort() {
                   });
                 })()}
               </Box>
+                </Box>
+              </Panel>
+            </PanelGroup>
+          ) : (
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 1, overflow: 'hidden' }}>
+                <Box sx={{ position: 'relative', width: '100%', maxWidth: '100%', height: '100%', minHeight: 0, my: 'auto' }}>
+                {(() => {
+                  const windowStart = Math.max(0, currentIndex - 2);
+                  const windowEnd = Math.min(visibleQueue.length - 1, currentIndex + 3);
+                  
+                  const visibleCards = [];
+                  for (let i = windowStart; i <= windowEnd; i++) {
+                    visibleCards.push({
+                      card: visibleQueue[i],
+                      stackIndex: i - currentIndex
+                    });
+                  }
+
+                  const sortedCards = [...visibleCards].sort((a, b) => b.stackIndex - a.stackIndex);
+
+                  return sortedCards.map(({ card, stackIndex }) => {
+                    const cardSuggestion = aiSuggestEnabled
+                      ? (aiSuggestions[card.merchantKey]?.category || null)
+                      : card.suggestedCategory;
+
+                    const selection = selections[card.merchantKey];
+                    const chosenColor = selection ? lookupCategoryColor(selection.category) : undefined;
+                    const zipDirection = selection ? 'right' : 'left';
+
+                    return (
+                      <SortCard
+                        key={card.merchantKey}
+                        card={card}
+                        suggestedColor={
+                          cardSuggestion
+                            ? lookupCategoryColor(cardSuggestion)
+                            : undefined
+                        }
+                        chosenColor={chosenColor}
+                        suggestedCategoryOverride={
+                          aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined
+                        }
+                        aiSuggesting={aiSuggesting[card.merchantKey] || false}
+                        aiError={aiErrors[card.merchantKey] || null}
+                        stackIndex={stackIndex}
+                        zipDirection={zipDirection}
+                      />
+                    );
+                  });
+                })()}
+              </Box>
+              </Box>
+              <Box sx={{ p: 2, display: 'flex', justifyContent: 'center', zIndex: 10 }}>
+                <Button 
+                  variant="contained" 
+                  size="large" 
+                  fullWidth
+                  onClick={() => setMobileDrawerOpen(true)} 
+                >
+                  Pick Category
+                </Button>
+              </Box>
+              <Drawer 
+                anchor="bottom" 
+                open={mobileDrawerOpen} 
+                onClose={() => setMobileDrawerOpen(false)}
+                PaperProps={{ sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85vh' } }}
+              >
+                <Box sx={{ p: 2, overflowY: 'auto' }}>
+                  <Stack spacing={2}>
+                <Paper sx={{ p: 3 }}>
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}
+                        >
+                          Pick a category
+                        </Typography>
+                        {selections[currentCard.merchantKey]?.category && (
+                          <Chip
+                            size="small"
+                            label="Clear Selection"
+                            onClick={handleClearSelection}
+                            onDelete={handleClearSelection}
+                            color="warning"
+                            variant="outlined"
+                            sx={{ height: 20, fontSize: '0.65rem', borderRadius: 1 }}
+                          />
+                        )}
+                      </Stack>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={saveRule}
+                          onChange={(e) => handleSaveRuleChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" color="text.secondary">
+                          Save as rule (catches future imports)
+                        </Typography>
+                      }
+                      sx={{ m: 0 }}
+                    />
+                  </Stack>
+                  
+                  {saveRule && (
+                    <Box sx={{ mt: 0.5, mb: 1, p: 1.5, borderRadius: 2, border: aiSuggestions[currentCard.merchantKey]?.pattern === rulePattern ? '2px solid' : '1px solid', borderColor: aiSuggestions[currentCard.merchantKey]?.pattern === rulePattern ? 'primary.main' : 'divider' }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Rule Pattern"
+                        value={rulePattern}
+                        onChange={(e) => handlePatternChange(e.target.value)}
+                        placeholder="e.g. starbucks"
+                        helperText="Future imports matching this keyword will be auto-categorized."
+                        FormHelperTextProps={{
+                          sx: { mx: 1, my: 0.5 }
+                        }}
+                      />
+                      <Box sx={{ mt: 2 }}>
+                        <TextField
+                          select
+                          fullWidth
+                          size="small"
+                          label="Recurrence"
+                          value={recurrence}
+                          onChange={(e) => handleRecurrenceChange(e.target.value)}
+                          SelectProps={{ native: true }}
+                          sx={{
+                            '.MuiOutlinedInput-notchedOutline': {
+                              borderColor: aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence ? 'primary.main' : 'inherit',
+                              borderWidth: aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence ? 2 : 1
+                            }
+                          }}
+                        >
+                          <option value=""></option>
+                          <option value="recurring">Recurring</option>
+                          <option value="onetime">One-time</option>
+                        </TextField>
+                        {aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence && (
+                          <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5, px: 1 }}>
+                            ✨ AI Suggested Recurrence
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+
+                  <SortCategoryGrid
+                    categories={categories || []}
+                    suggested={activeSuggestion}
+                    selected={selections[currentCard.merchantKey]?.category || null}
+                    onPick={onPick}
+                    spendOnly={false}
+                    isAiSuggested={aiSuggestEnabled && (aiSuggestions[currentCard.merchantKey]?.category !== undefined)}
+                    hideNewCategory={false}
+                  />
+                  </Stack>
+                </Paper>
+
+                {/* Footer hint */}
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  justifyContent="center"
+                  sx={{ opacity: 0.7, py: 1 }}
+                  flexWrap="wrap"
+                >
+                  <KeyHint k="Enter" desc="accept suggested" />
+                  <KeyHint k="1–9" desc="grid pick" />
+                  <KeyHint k="← / →" desc="navigate cards" />
+                  <KeyHint k="?" desc="help" />
+                </Stack>
+              </Stack>
+                </Box>
+              </Drawer>
             </Box>
-          </Panel>
-        </PanelGroup>
+          )}
+        </>
+
       ) : (
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <SortEmptyState />
+        </Box>
+      )}
+
+      {/* Horizontal queue tracker */}
+      {visibleQueue.length > 0 && (
+        <Box>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, display: 'block', mb: 0.5 }}
+          >
+            {currentIndex + 1} of {visibleQueue.length} Merchants
+          </Typography>
+          <Paper
+            ref={scrollContainerRef}
+            elevation={0}
+            sx={{
+              p: 1.5,
+              border: '1px solid',
+              borderColor: 'divider',
+              display: 'flex',
+              gap: 1,
+              overflowX: 'auto',
+              scrollbarWidth: 'thin',
+              scrollbarColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.15) transparent' : 'rgba(0,0,0,0.15) transparent',
+            }}
+          >
+            {visibleQueue.map((card, idx) => {
+              const sel = selections[card.merchantKey];
+              const isActive = idx === currentIndex;
+              const isSelected = !!sel?.category;
+              const chosenColor = isSelected ? lookupCategoryColor(sel.category) : undefined;
+              
+              return (
+                <Button
+                  key={card.merchantKey}
+                  variant={isActive ? "contained" : "outlined"}
+                  color={isActive ? "primary" : "inherit"}
+                  onClick={() => setCurrentIndex(idx)}
+                  sx={{
+                    flexShrink: 0,
+                    px: 2,
+                    py: 1,
+                    borderWidth: isSelected ? 3 : (isActive ? 2 : 1),
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    minWidth: 140,
+                    maxWidth: 180,
+                    bgcolor: isActive ? 'primary.main' : 'background.paper',
+                    color: isActive ? 'primary.contrastText' : 'text.primary',
+                    borderColor: isSelected ? chosenColor : (isActive ? 'primary.main' : 'divider'),
+                    '&:hover': {
+                      bgcolor: isActive ? 'primary.dark' : 'action.hover',
+                    }
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    noWrap
+                    sx={{ fontWeight: isActive || isSelected ? 700 : 600, fontSize: '0.8rem', width: '100%', textAlign: 'center' }}
+                  >
+                    {card.merchantKey}
+                  </Typography>
+                </Button>
+              );
+            })}
+          </Paper>
         </Box>
       )}
 

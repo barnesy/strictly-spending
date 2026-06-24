@@ -67,8 +67,16 @@ export default function Documents() {
     }
   };
 
-  const documents = (useDbQuery(async () => db.select().from(schema.documents).orderBy(desc(schema.documents.createdAt)), []) || []) as AppDocument[];
-  const categoriesList = useDbQuery(async () => db.select().from(schema.categories), []) || [];
+  const { documents, categoriesList } = useDbQuery(async () => {
+    const [docsRes, catsRes] = await Promise.all([
+      db.select().from(schema.documents).orderBy(desc(schema.documents.createdAt)),
+      db.select().from(schema.categories)
+    ]);
+    return {
+      documents: docsRes as AppDocument[],
+      categoriesList: catsRes,
+    };
+  }, []) || { documents: [], categoriesList: [] };
 
   const allTxns = useDataStore((s) => s.transactions);
   const allCats = useDataStore((s) => s.categories);

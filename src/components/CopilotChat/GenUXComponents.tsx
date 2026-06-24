@@ -344,16 +344,11 @@ export function ProposedCategorizationReportUX({
           <Stack
             spacing={1}
             sx={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.15) transparent' : 'rgba(0,0,0,0.15) transparent',
               maxHeight: 280,
               overflowY: 'auto',
               pr: 0.5,
-              '&::-webkit-scrollbar': {
-                width: 6,
-              },
-              '&::-webkit-scrollbar-thumb': {
-                bgcolor: 'action.selected',
-                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
-              },
             }}
           >
             {items.map((item, idx) => (

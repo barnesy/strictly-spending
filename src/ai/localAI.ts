@@ -17,7 +17,7 @@ export class LocalAI implements AIProvider {
       if (savedModel) {
         this.activeProvider.modelName = savedModel;
       } else {
-        this.activeProvider.modelName = 'llama3.2:1b';
+        this.activeProvider.modelName = 'llama3.2:3b';
       }
     }
   }

@@ -421,9 +421,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary', fontSize: 11 }}>
                           {item.label}
                         </Typography>
-                        {!isReadOnly && (
-                          <ContentCopyIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
-                        )}
+
                       </Stack>
                       <Typography
                         variant="caption"
@@ -498,9 +496,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary', fontSize: 11 }}>
                           {tool.label}
                         </Typography>
-                        {!isReadOnly && (
-                          <ContentCopyIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
-                        )}
+
                       </Stack>
                       <Typography
                         variant="caption"
@@ -575,9 +571,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({
                         <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.primary', fontSize: 11 }}>
                           {comp.label}
                         </Typography>
-                        {!isReadOnly && (
-                          <ContentCopyIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
-                        )}
+
                       </Stack>
                       <Typography
                         variant="caption"

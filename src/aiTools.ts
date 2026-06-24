@@ -41,8 +41,32 @@ export const AVAILABLE_TOOLS: AITool[] = [
     description: 'Use this to update the business status (isBusiness), Schedule C category (taxCategory), or deduction status (deductionStatus) of transactions in bulk or for specific criteria (by account, category, merchant description, or transaction ID).'
   },
   {
-    name: 'dom_update / navigate / filter',
-    description: 'Use these to interact with the UI.'
+    name: 'debt_optimization',
+    description: 'Use this to analyze active loans and provide Snowflake and Avalanche payoff methods.'
+  },
+  {
+    name: 'cashflow_prediction',
+    description: 'Use this to calculate current Safe to Spend limits after subtracting upcoming recurring bills.'
+  },
+  {
+    name: 'scenario_forecasting',
+    description: 'Use this to adjust the budget and forecast the updated runway.'
+  },
+  {
+    name: 'goal_tracking',
+    description: 'Use this to project how many months it will take to hit a target savings goal.'
+  },
+  {
+    name: 'tax_estimation',
+    description: 'Use this to estimate self-employment 1099 tax burden based on business net income.'
+  },
+  {
+    name: 'navigate',
+    description: "Use this to navigate to a specific page (e.g. '/settings', '/budget'). Set 'page' to the route."
+  },
+  {
+    name: 'filter',
+    description: "Use this to apply filters and navigate to the dashboard. Use when the user asks to 'show me' specific categories, merchants, or time periods. Provide 'categories', 'preset', 'search', etc."
   },
   {
     name: 'none',

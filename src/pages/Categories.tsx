@@ -100,7 +100,8 @@ export default function Categories() {
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     if (!categories || !deferredTransactions) return c;
-    for (const t of deferredTransactions) {
+    for (let i = 0; i < deferredTransactions.length; i++) {
+      const t = deferredTransactions[i];
       c[t.category] = (c[t.category] || 0) + 1;
     }
     return c;

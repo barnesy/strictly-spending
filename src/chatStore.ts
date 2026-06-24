@@ -71,6 +71,8 @@ interface ChatStore {
   setActiveArtifact: (art: ChatArtifact | null) => void;
   lastDebugPayload: string;
   setLastDebugPayload: (payload: string) => void;
+  agentSkills: any[];
+  loadAgentSkills: () => Promise<void>;
 }
 
 export const useChatStore = create<ChatStore>()(
@@ -82,6 +84,17 @@ export const useChatStore = create<ChatStore>()(
       aiProgress: '',
       aiProgressPercent: 0,
       modelName: localAI.modelName,
+      agentSkills: [],
+
+      loadAgentSkills: async () => {
+        try {
+          const res = await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills'));
+          const skills = res[0]?.value as any[] || [];
+          set({ agentSkills: skills });
+        } catch (e) {
+          console.error('Failed to load agent skills', e);
+        }
+      },
 
       setModelName: (name: string) => {
         localAI.setModelName(name);

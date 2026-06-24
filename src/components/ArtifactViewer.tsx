@@ -253,7 +253,7 @@ export default function ArtifactViewer() {
         {isSkill ? (
           <Paper
             variant="outlined"
-            sx={{
+            sx={(theme) => ({
               p: 3,
               bgcolor: '#18181c',
               color: '#e2e8f0',
@@ -263,21 +263,9 @@ export default function ArtifactViewer() {
               fontSize: 12.5,
               lineHeight: 1.6,
               whiteSpace: 'pre-wrap',
-              height: '100%',
-              boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.15)',
-              overflowY: 'auto',
-              '&::-webkit-scrollbar': {
-                width: '8px',
-                height: '8px',
-              },
-              '&::-webkit-scrollbar-track': {
-                backgroundColor: '#141419',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                backgroundColor: '#2d2d38',
-                borderRadius: '4px',
-              },
-            }}
+              scrollbarWidth: 'thin',
+              scrollbarColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.15) transparent' : 'rgba(0,0,0,0.15) transparent',
+            })}
           >
             {activeArtifact.content}
           </Paper>

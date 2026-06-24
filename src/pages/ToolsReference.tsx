@@ -2,109 +2,10 @@ import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 import { useState } from 'react';
+import { AGENT_TOOLS } from '../components/AgentSkills/constants';
 import { Box, Typography, Card, CardContent, Grid, Stack, Chip, Divider, useTheme, Tabs, Tab, Paper } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import CategoryIcon from '@mui/icons-material/Category';
-import DescriptionIcon from '@mui/icons-material/Description';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import TimelineIcon from '@mui/icons-material/Timeline';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import BugReportIcon from '@mui/icons-material/BugReport';
-import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import SchoolIcon from '@mui/icons-material/School';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-
-const TOOLS = [
-  {
-    name: 'query_data',
-    icon: <SearchIcon />,
-    description: 'Searches the local database for transactions, totals, averages, and spending patterns.',
-    prompts: ['How much did I spend on food last month?', 'Find Netflix transactions over $10']
-  },
-  {
-    name: 'categorize_transactions',
-    icon: <CategoryIcon />,
-    description: 'Uses the local AI model to review all uncategorized transactions and automatically propose categories based on historical data.',
-    prompts: ['AI categorize all my remaining transactions']
-  },
-  {
-    name: 'generate_document',
-    icon: <DescriptionIcon />,
-    description: 'Dynamically generates documents (P&L, Expense Summary, generic lists) based on your transactions and saves them securely to your computer.',
-    prompts: ['Generate a P&L statement for my business this year', 'Export my expense deductions', 'Create a CSV of my top 10 merchants'],
-    code: `} else if (action === 'generate_document') {
-  const docType = actionObj.documentType;
-  const content = actionObj.documentContent || '';
-  const isCsv = content.trim().startsWith('Date') || content.trim().includes(',');
-  const defaultExt = isCsv ? 'csv' : 'md';
-  const filePath = await save({
-    filters: [{ name: 'Document', extensions: [defaultExt] }],
-    defaultPath: \`Document_\${new Date().getFullYear()}.\${defaultExt}\`
-  });
-  if (filePath) {
-    await writeTextFile(filePath, content);
-    // Automatically check off tax form if applicable
-  }
-}`
-  },
-  {
-    name: 'update_tax_settings',
-    icon: <SettingsSuggestIcon />,
-    description: 'Updates your tax settings and autofills form fields based on conversational input.',
-    prompts: ['I am an LLC filing in California', 'Update my tax status to married filing jointly'],
-    code: `} else if (action === 'update_tax_settings') {
-  const currentSettings = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')))[0];
-  const baseValue = currentSettings?.value || { checklist: {}, hasBusiness: false, taxYear: new Date().getFullYear() };
-  if (actionObj.taxData) {
-    const merged = { ...baseValue, ...actionObj.taxData };
-    await db.insert(schema.settings).values({ key: 'app:taxSettings', value: merged }).onConflictDoNothing();
-  }
-}`
-  },
-  {
-    name: 'subscription_alerts',
-    icon: <ReceiptLongIcon />,
-    description: 'Scans recurring payments for duplicate subscriptions, price spikes, and overlapping services.',
-    prompts: ['Check for subscription spikes', 'Find duplicate subscriptions'],
-    code: `} else if (action === 'subscription_alerts') {
-  // Finds transactions in 'Subscriptions' category
-  // Groups by merchant and detects price changes > 20%
-  // Alerts user to anomalies
-}`
-  },
-  {
-    name: 'spending_anomalies',
-    icon: <AssessmentIcon />,
-    description: 'Searches for unusual spending patterns or outliers within specific categories compared to your historical averages.',
-    prompts: ['Are there any anomalies in my groceries spending?'],
-    code: `} else if (action === 'spending_anomalies') {
-  // Computes rolling 3-month average for category
-  // Flags recent months that exceed 1.5x the average
-}`
-  },
-  {
-    name: 'project_runway',
-    icon: <TimelineIcon />,
-    description: 'Calculates your financial runway projection based on current cash reserves and monthly outflow.',
-    prompts: ['How much runway do I have?', 'How long will my cash last?'],
-    code: `} else if (action === 'project_runway') {
-  const netCash = 17370.40; // Simulated cash balance
-  const outflow = 4009.66; // Simulated monthly outflow
-  const runway = (netCash / outflow).toFixed(2);
-}`
-  },
-  {
-    name: 'audit_accessibility',
-    icon: <BugReportIcon />,
-    description: 'Audits the web app accessibility score and provides a summary report.',
-    prompts: ['Run an accessibility audit on this page'],
-    code: `} else if (action === 'audit_accessibility') {
-  const axe = await import('axe-core');
-  const results = await axe.run();
-  // Formats axe-core results for LLM summary
-}`
-  }
-];
 
 const SKILLS = [
   {
@@ -158,7 +59,7 @@ export default function ToolsReference() {
 
       {tabValue === 0 ? (
         <Grid container spacing={3}>
-          {TOOLS.map((tool) => (
+          {AGENT_TOOLS.map((tool) => (
             <Grid size={{ xs: 12, md: 6 }} key={tool.name}>
               <Card 
                 variant="outlined" 
@@ -174,73 +75,22 @@ export default function ToolsReference() {
                 }}
               >
                 <CardContent sx={{ flexGrow: 1 }}>
-                  <Stack direction="row" spacing={2} alignItems="center" mb={2}>
-                    <Box 
-                      sx={{ 
-                        p: 1.5, 
-                        borderRadius: 2, 
-                        bgcolor: 'primary.main', 
-                        color: 'primary.contrastText',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      {tool.icon}
-                    </Box>
-                    <Typography variant="h6" fontWeight="600" sx={{ wordBreak: 'break-all' }}>
-                      {tool.name}
-                    </Typography>
-                  </Stack>
-                  <Typography variant="body2" color="text.secondary" mb={3} sx={{ minHeight: 40 }}>
-                    {tool.description}
+                  <Typography variant="h6" fontWeight="600" sx={{ wordBreak: 'break-all', mb: 0.5 }}>
+                    {tool.label}
                   </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  <Typography variant="caption" fontWeight="bold" color="text.primary" sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Example Prompts
+                  <Typography variant="caption" component="code" sx={{ 
+                    fontFamily: 'monospace', 
+                    bgcolor: 'action.selected', 
+                    px: 1, py: 0.5, borderRadius: 1, 
+                    display: 'inline-block', mb: 2, 
+                    color: 'primary.main', fontWeight: 600 
+                  }}>
+                    action: "{tool.name}"
                   </Typography>
-                  <Stack direction="column" spacing={1} mb={3}>
-                    {tool.prompts.map((prompt, idx) => (
-                      <Chip 
-                        key={idx} 
-                        label={prompt} 
-                        size="small" 
-                        variant="outlined" 
-                        sx={{ 
-                          justifyContent: 'flex-start',
-                          bgcolor: 'background.default',
-                          py: 1,
-                          height: 'auto',
-                          '& .MuiChip-label': { whiteSpace: 'normal', display: 'block' }
-                        }} 
-                      />
-                    ))}
-                  </Stack>
-                  {tool.code && (
-                    <>
-                      <Divider sx={{ mb: 2 }} />
-                      <Typography variant="caption" fontWeight="bold" color="text.primary" sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Underlying Code implementation
-                      </Typography>
-                      <Box 
-                        component="pre" 
-                        sx={{ 
-                          bgcolor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.04)',
-                          p: 1.5,
-                          borderRadius: 1,
-                          overflowX: 'auto',
-                          fontSize: '0.75rem',
-                          fontFamily: 'monospace',
-                          color: theme.palette.mode === 'dark' ? '#a5d6ff' : '#0550ae',
-                          m: 0,
-                          border: '1px solid',
-                          borderColor: 'divider'
-                        }}
-                      >
-                        {tool.code}
-                      </Box>
-                    </>
-                  )}
+                  
+                  <Typography variant="body2" color="text.secondary" mb={3}>
+                    {tool.desc}
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>

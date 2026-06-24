@@ -19,9 +19,9 @@ import { parseISO, format } from 'date-fns';
 
 const PRESETS: { value: DateRangePreset; label: string }[] = [
   { value: 'ytd', label: 'YTD' },
-  { value: 'last30', label: 'Last 30D' },
-  { value: 'last90', label: 'Last 90D' },
-  { value: 'allTime', label: 'All Time' },
+  { value: 'last30', label: '30D' },
+  { value: 'last90', label: '90D' },
+  { value: 'allTime', label: 'All' },
   { value: 'custom', label: 'Custom' },
 ];
 

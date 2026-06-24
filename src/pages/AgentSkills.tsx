@@ -21,7 +21,20 @@ import { SkillEditor } from '../components/AgentSkills/SkillEditor';
 import { AGENT_TOOLS } from '../components/AgentSkills/constants';
 
 export const AgentSkills: React.FC = () => {
-  const license = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'license')))[0], [])?.value as { active: boolean; key: string } | undefined;
+  const { license, skillsSetting, systemPromptSetting, baselineTestCasesSetting } = useDbQuery(async () => {
+    const [licenseRes, skillsRes, promptRes, testCasesRes] = await Promise.all([
+      db.select().from(schema.settings).where(eq(schema.settings.key, 'license')),
+      db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')),
+      db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPrompt')),
+      db.select().from(schema.settings).where(eq(schema.settings.key, 'app:baselineTestCases'))
+    ]);
+    return {
+      license: licenseRes[0]?.value as { active: boolean; key: string } | undefined,
+      skillsSetting: skillsRes[0],
+      systemPromptSetting: promptRes[0],
+      baselineTestCasesSetting: testCasesRes[0]
+    };
+  }, []) || { license: undefined, skillsSetting: undefined, systemPromptSetting: undefined, baselineTestCasesSetting: undefined };
   const chatMessages = useChatStore((state) => state.messages);
   const activeModel = useChatStore((state) => state.modelName);
   
@@ -46,10 +59,7 @@ export const AgentSkills: React.FC = () => {
   };
 
   // Database settings
-  const skillsSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0], []);
   const skills = (skillsSetting?.value as AgentSkill[]) || [];
-  
-  const systemPromptSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPrompt')))[0], []);
   
   // Shared Editor & Autocomplete state
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -326,9 +336,7 @@ export const AgentSkills: React.FC = () => {
   const [testCaseDialogPrompt, setTestCaseDialogPrompt] = useState('');
   const [testCaseDialogCriteria, setTestCaseDialogCriteria] = useState('');
 
-  const baselineTestCasesSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:baselineTestCases')))[0],
-    []
-  );
+
   const baselineTestCases = useMemo(() => {
     return (baselineTestCasesSetting?.value as SkillTestCase[]) || BASELINE_TEST_CASES;
   }, [baselineTestCasesSetting]);

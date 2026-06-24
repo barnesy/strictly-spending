@@ -22,6 +22,7 @@ import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useBudgetStore } from '../budgetStore';
 import { buildForecast } from '../forecast';
+import { getConsolidatedRecurringMerchants } from '../budgets';
 
 export default function FilterPanel({
   accounts,
@@ -74,26 +75,27 @@ export default function FilterPanel({
   );
 
   const recurringProjected = useMemo(() => {
-    if (!forecast) return 0;
+    const recurringCategoryNames = new Set(
+      (categories || []).filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+    );
+    const consolidatedMerchants = getConsolidatedRecurringMerchants(allTxns || [], recurringCategoryNames);
     const disabledSet = new Set(filters.disabledCategories);
-    return forecast
-      .filter(
-        (f) =>
-          f.kind === 'recurring' &&
-          !excludedMerchants.has(f.merchantKey) &&
-          !disabledSet.has(f.category)
-      )
-      .reduce((sum, f) => sum + f.monthlyEstimate, 0);
-  }, [forecast, excludedMerchants, filters.disabledCategories]);
+    return consolidatedMerchants
+      .filter((m) => !disabledSet.has(m.category) && !excludedBudgetCategories.has(m.category) && !excludedMerchants.has(m.merchantKey))
+      .reduce((sum, m) => sum + m.monthlyAverage, 0);
+  }, [allTxns, categories, filters.disabledCategories, excludedBudgetCategories, excludedMerchants]);
 
   const totalBudget = useMemo(() => {
+    const recurringCategoryNames = new Set(
+      (categories || []).filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+    );
     const activeBudgets = budgets
       ? budgets
-          .filter((b) => !filters.disabledCategories.includes(b.category) && !excludedBudgetCategories.has(b.category))
+          .filter((b) => !filters.disabledCategories.includes(b.category) && !excludedBudgetCategories.has(b.category) && !recurringCategoryNames.has(b.category))
           .reduce((sum, b) => sum + b.monthlyAmount, 0)
       : 0;
     return activeBudgets + recurringProjected;
-  }, [budgets, filters.disabledCategories, excludedBudgetCategories, recurringProjected]);
+  }, [budgets, filters.disabledCategories, excludedBudgetCategories, recurringProjected, categories]);
 
   const { cashBalance, creditDebt, startingCash } = useMemo(() => {
     if (!accounts) return { cashBalance: 0, creditDebt: 0, startingCash: 0 };

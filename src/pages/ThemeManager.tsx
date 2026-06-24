@@ -22,6 +22,11 @@ import {
 
 const THEME_PALETTES = [
   {
+    name: 'Default',
+    light: { primary: '#1976d2', secondary: '#5c6bc0', background: '#f5f7fa', paper: '#ffffff' },
+    dark: { primary: '#1976d2', secondary: '#5c6bc0', background: '#0f172a', paper: '#1e293b' },
+  },
+  {
     name: 'Grand Budapest',
     light: { primary: '#E8A598', secondary: '#F3B562', background: '#FDE4D1', paper: '#FEF0E7' },
     dark: { primary: '#E8A598', secondary: '#F3B562', background: '#3D2B26', paper: '#4A342E' },
@@ -109,7 +114,12 @@ export default function ThemeManager() {
       }
     }
 
-    await db.insert(schema.settings).values({ key: 'themeConfig', value: nextConfig }).onConflictDoNothing();
+    await db.insert(schema.settings)
+      .values({ key: 'themeConfig', value: nextConfig })
+      .onConflictDoUpdate({
+        target: schema.settings.key,
+        set: { value: nextConfig },
+      });
   };
 
   const [localRadius, setLocalRadius] = useState(borderRadius);

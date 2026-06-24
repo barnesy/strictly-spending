@@ -93,14 +93,20 @@ const REQUIRED_DOCUMENTS: Array<{
 export default function Taxes() {
   const theme = useTheme();
 
-  const rawSettings = useLiveQuery(async () => {
-    const res = await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings'));
-    return res[0];
-  }, []);
-  const taxSettings: TaxSettings = (rawSettings?.value as TaxSettings) || DEFAULT_TAX_SETTINGS;
+  const { rawSettings, documents, taxRules } = useLiveQuery(async () => {
+    const [settingsRes, docsRes, rulesRes] = await Promise.all([
+      db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')),
+      db.select().from(schema.documents),
+      db.select().from(schema.taxRules)
+    ]);
+    return {
+      rawSettings: settingsRes[0],
+      documents: docsRes as AppDocument[],
+      taxRules: rulesRes,
+    };
+  }, []) || { rawSettings: undefined, documents: [], taxRules: [] };
 
-  const documents = (useLiveQuery(() => db.select().from(schema.documents), []) || []) as AppDocument[];
-  const taxRules = useLiveQuery(() => db.select().from(schema.taxRules), []) || [];
+  const taxSettings: TaxSettings = (rawSettings?.value as TaxSettings) || DEFAULT_TAX_SETTINGS;
 
   const transactions = useDataStore((s) => s.transactions);
   const accounts = useDataStore((s) => s.accounts);

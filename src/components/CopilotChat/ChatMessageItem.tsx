@@ -185,7 +185,10 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
     if (!parsedJson) return null;
     const bodyText = parsedJson.body || parsedJson.explanation || parsedJson.agent_action?.explanation;
     if (bodyText && typeof bodyText === 'string') {
-      return bodyText.trim();
+      const trimmed = bodyText.trim();
+      // Don't shove giant paragraphs into the tiny execution log
+      if (trimmed.length > 100) return null;
+      return trimmed;
     }
     return null;
   }, [parsedJson]);
@@ -218,10 +221,16 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
     parsedJson.suggested_actions.length > 0;
 
   const displayContent = useMemo(() => {
+    const content = renderMessageContent(message);
     if (hasAgentAction) {
+      // If the LLM output a substantial answer but forgot to set action: 'none', 
+      // still show it to the user so it doesn't get hidden.
+      if (content.length > 100) {
+        return content;
+      }
       return '';
     }
-    return renderMessageContent(message);
+    return content;
   }, [message, hasAgentAction]);
 
   return (

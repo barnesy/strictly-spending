@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
-import { getDb } from './sqlite';
+import { getDb, dispatchDbUpdate } from './sqlite';
 import * as schema from './schema';
 
 export const db = drizzle(
@@ -10,7 +10,7 @@ export const db = drizzle(
       if (method === 'run') {
         const result = await tauriDb.execute(sql, params);
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('db-update'));
+          dispatchDbUpdate();
         }
         return { rows: [] };
       }

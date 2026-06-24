@@ -95,8 +95,13 @@ export default function CopilotChat({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const categories = useDbQuery(async () => db.select().from(schema.categories), []) || [];
-  const accounts = useDbQuery(async () => db.select().from(schema.accounts), []) || [];
+  const { categories, accounts } = useDbQuery(async () => {
+    const [catRes, accRes] = await Promise.all([
+      db.select().from(schema.categories),
+      db.select().from(schema.accounts)
+    ]);
+    return { categories: catRes, accounts: accRes };
+  }, []) || { categories: [], accounts: [] };
 
   const [debugModalOpen, setDebugModalOpen] = useState(false);
 

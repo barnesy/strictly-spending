@@ -78,11 +78,10 @@ export default function SortCard({
     >
       {/* Header */}
       <Stack
-        direction="row"
-        spacing={2}
-        alignItems="flex-start"
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={{ xs: 1.5, sm: 2 }}
+        alignItems={{ xs: 'stretch', sm: 'flex-start' }}
         justifyContent="space-between"
-        flexWrap="wrap"
       >
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
@@ -129,7 +128,7 @@ export default function SortCard({
         </Box>
 
         {aiSuggesting ? (
-          <Stack alignItems="flex-end" spacing={0.5}>
+          <Stack alignItems={{ xs: 'flex-start', sm: 'flex-end' }} spacing={0.5}>
             <Typography
               variant="caption"
               sx={{
@@ -161,7 +160,7 @@ export default function SortCard({
             </Typography>
           </Stack>
         ) : aiError ? (
-          <Stack alignItems="flex-end" spacing={0.5}>
+          <Stack alignItems={{ xs: 'flex-start', sm: 'flex-end' }} spacing={0.5}>
             <Typography
               variant="caption"
               sx={{
@@ -185,7 +184,7 @@ export default function SortCard({
             </Typography>
           </Stack>
         ) : suggestedCategoryOverride ? (
-          <Stack alignItems="flex-end" spacing={0.5}>
+          <Stack alignItems={{ xs: 'flex-start', sm: 'flex-end' }} spacing={0.5}>
             <Typography
               variant="caption"
               sx={{
@@ -212,7 +211,7 @@ export default function SortCard({
             </Typography>
           </Stack>
         ) : suggestedCategory ? (
-          <Stack alignItems="flex-end" spacing={0.5}>
+          <Stack alignItems={{ xs: 'flex-start', sm: 'flex-end' }} spacing={0.5}>
             <Typography
               variant="caption"
               sx={{
@@ -258,7 +257,7 @@ export default function SortCard({
                   <TableCell sx={{ width: 140, whiteSpace: 'nowrap', color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
                     {t.date}
                   </TableCell>
-                  <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
                     {t.description.slice(0, 60)}
                   </TableCell>
                   <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, whiteSpace: 'nowrap' }}>

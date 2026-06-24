@@ -7,6 +7,7 @@ import { useFilters } from '../store';
 import { useBudgetStore } from '../budgetStore';
 import { buildRecurrenceMap } from '../recurrence';
 import { buildForecast } from '../forecast';
+import { getConsolidatedRecurringMerchants } from '../budgets';
 
 import { EVALUATOR_RESPONSE_SCHEMA, type SkillTestResult } from './types';
 import { getSystemPrompt, GENERAL_SYSTEM_PROMPT } from './prompts';
@@ -464,13 +465,17 @@ export async function calculateGlobalRunwayData() {
   const recurrenceMap = buildRecurrenceMap(allTxns, overrides);
   const forecast = buildForecast(allTxns, recurrenceMap, categories);
   
-  const recurringProjected = forecast
-    .filter((f) => f.kind === 'recurring' && !excludedMerchants.has(f.merchantKey))
-    .reduce((sum, f) => sum + f.monthlyEstimate, 0);
+  const recurringCategoryNames = new Set(
+    categories.filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+  );
+  const consolidatedMerchants = getConsolidatedRecurringMerchants(allTxns, recurringCategoryNames);
+  const recurringProjected = consolidatedMerchants
+    .filter((m) => !excludedBudgetCategories.has(m.category) && !excludedMerchants.has(m.merchantKey))
+    .reduce((sum, m) => sum + m.monthlyAverage, 0);
 
   const activeBudgets = budgets
     ? budgets
-        .filter((b) => !filters.disabledCategories.includes(b.category) && !excludedBudgetCategories.has(b.category))
+        .filter((b) => !filters.disabledCategories.includes(b.category) && !excludedBudgetCategories.has(b.category) && !recurringCategoryNames.has(b.category))
         .reduce((sum, b) => sum + b.monthlyAmount, 0)
     : 0;
 

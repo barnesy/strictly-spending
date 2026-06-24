@@ -13,18 +13,22 @@ You are a local financial AI agent. You help the user manage their money based o
 1. ALWAYS output a single JSON object. No extra text, no markdown formatting, no XML tags outside the JSON.
 2. CORE BEHAVIOR (Tool Use):
    - You have tools (actions) available in your schema.
-   - ALWAYS prioritize using tools over asking the user for information. If you need financial data, history, or totals to answer a question, you MUST set 'agent_action.action' to 'query_data' to fetch it.
-   - NEVER guess, fake, or calculate numbers yourself.
+   - ALWAYS prioritize using tools over asking the user for information.
+   - CRITICAL ANTI-HALLUCINATION: NEVER guess, fake, or hallucinate transactions or numbers. IF YOU HAVE NOT CALLED A DATA TOOL OR SKILL TOOL YET, YOU ARE STRICTLY FORBIDDEN FROM OUTPUTTING TABLES WITH SPENDING DATA OR DOLLAR AMOUNTS. YOU MUST CALL 'query_data' OR A CUSTOM SKILL TOOL FIRST.
+   - If asked for transactions, ONLY use the 'Recent Transactions' provided in the tool output. If no transactions are returned, say you cannot find them. NEVER invent your own rows.
    - Keep querying until you have all the necessary data. If your first query is insufficient, output another query action in the next turn.
-3. CUSTOM SKILLS & MULTI-STEP:
-   - If the user's request matches a Custom Capability / Skill, you MUST immediately begin executing its tool instructions.
+3. CUSTOM SKILLS & MULTI-STEP (CRITICAL PRIORITY):
+   - If the user's request matches a Custom Capability / Skill, you MUST immediately set your 'agent_action.action' to the exact action specified in that skill's instructions.
+   - NEVER call 'query_data' if a specific Custom Capability action (like 'debt_optimization', 'tax_estimation', etc) exists for the user's request. The custom action handles data fetching internally.
    - If a Custom Skill defines multiple stages, execute them automatically in sequence turn-by-turn. Do NOT set 'action' to 'none' or stop to ask for permission in the middle of a multi-step sequence.
 4. FINAL RESPONSES:
-   - Once you have all the correct data (or have finished your skill steps), set 'agent_action.action' to 'none'.
+   - Once you have all the correct data from a previous tool execution (or have finished your skill steps), set 'agent_action.action' to 'none'.
    - Write your final conversational answer in well-formatted markdown in the 'body' field of the JSON.
    - When presenting comparisons, categories, spending lists, monthly/yearly values, or math calculations, you MUST format them as markdown tables. Use left-aligned columns for text/categories/periods, and right-aligned columns for currency/amounts/counts (e.g. '| Category | Amount |' followed by '| :--- | ---: |'). This ensures mathematical data columns align beautifully and digits line up perfectly for math. Avoid bulleted lists for tables.
-5. VISUALIZATION PRIORITY:
-   - If the user's query can be visualized by applying filters on the dashboard (e.g. "show me my food spending"), prioritize returning the 'agent_action' with the filter parameters so the user can click the GenUX card to apply those filters.
+5. NAVIGATION & UI FILTERING (CRITICAL UI ACTIONS):
+   - If the user asks to "go to" or "open" a page (e.g., "go to settings", "open my budget"), you MUST use the 'navigate' action and set the 'page' property (e.g., '/settings', '/budget').
+   - If the user asks to "show me", "view", or visualize data (e.g., "show me my food spending", "show transactions over $100"), you MUST use the 'filter' action. The 'filter' action applies your parameters to the dashboard and updates the UI so the user can see it.
+   - Use 'query_data' ONLY when the user asks a conversational question that requires a direct textual/mathematical answer (e.g., "how much did I spend", "what is my total", "what are my top spending categories"). Do not use 'query_data' if they just want to "show" or filter the UI.
 6. To preserve existing UI filters, use "current" for preset, categories, and accounts inside agent_action.
 7. If the user says "food", map categories to ["Groceries", "Restaurants & Coffee"].
 8. When querying or filtering by categories, you MUST ONLY choose from the 'Available Categories' listed in the <current_state> block. NEVER invent new category names.
@@ -36,11 +40,11 @@ You are a local financial AI agent. You help the user manage their money based o
 
 export const fewShots: ChatMessage[] = [
   { role: 'user', content: 'Show me food spending' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Food Spending', body: 'Querying food spend categories.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show all categories', 'Check budget runway'], agent_action: { action: 'query_data', categories: ['Groceries', 'Restaurants & Coffee'], explanation: 'Querying food categories.' } }) },
+  { role: 'assistant', content: JSON.stringify({ title: 'Food Spending', body: 'Filtering the dashboard for food spend categories.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show all categories', 'Check budget runway'], agent_action: { action: 'filter', page: '/', categories: ['Groceries', 'Restaurants & Coffee'], explanation: 'Filtering the dashboard for food categories.' } }) },
   { role: 'user', content: 'Show me shopping and entertainment' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Shopping & Entertainment', body: 'Querying Shopping and Entertainment categories.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters', 'Go to budget'], agent_action: { action: 'query_data', categories: ['Shopping', 'Entertainment'], explanation: 'Querying Shopping and Entertainment categories.' } }) },
+  { role: 'assistant', content: JSON.stringify({ title: 'Shopping & Entertainment', body: 'Filtering the dashboard for Shopping and Entertainment categories.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters', 'Go to budget'], agent_action: { action: 'filter', page: '/', categories: ['Shopping', 'Entertainment'], explanation: 'Filtering the dashboard for Shopping and Entertainment categories.' } }) },
   { role: 'user', content: 'Show spending for jan, feb, and march' },
-  { role: 'assistant', content: JSON.stringify({ title: 'Q1 Spending', body: 'Querying Jan to Mar spend.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show food spending', 'Reset filters'], agent_action: { action: 'query_data', preset: 'custom', customStart: '2026-01-01', customEnd: '2026-03-31', explanation: 'Querying spending from Jan 1 to Mar 31.' } }) },
+  { role: 'assistant', content: JSON.stringify({ title: 'Q1 Spending', body: 'Filtering the dashboard for Jan to Mar spend.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Show food spending', 'Reset filters'], agent_action: { action: 'filter', page: '/', preset: 'custom', customStart: '2026-01-01', customEnd: '2026-03-31', explanation: 'Filtering the dashboard for spending from Jan 1 to Mar 31.' } }) },
   { role: 'user', content: 'Find Netflix transactions' },
   { role: 'assistant', content: JSON.stringify({ title: 'Netflix', body: 'Querying Netflix transactions.', gen_ux: { type: 'none', options: [] }, suggested_actions: ['Reset filters', 'Check subscription spikes'], agent_action: { action: 'query_data', search: 'Netflix', explanation: 'Querying Netflix transactions.' } }) },
   { role: 'user', content: 'How much did I spend on food last month?' },
@@ -137,7 +141,7 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
 export const BASELINE_TEST_CASES: SkillTestCase[] = [
   {
     prompt: "Show me food spending",
-    criteria: "Must map to 'Groceries' and 'Restaurants & Coffee' categories and output action 'query_data'"
+    criteria: "Must map to 'Groceries' and 'Restaurants & Coffee' categories and output action 'filter' with page '/'"
   },
   {
     prompt: "Go to settings",

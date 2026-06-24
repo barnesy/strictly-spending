@@ -61,6 +61,36 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
     insertTemplate: '- Set the "action" to "update_deduction_status", configure "isBusiness", "taxCategory", and deduction filters.'
   },
   {
+    name: 'debt_optimization',
+    label: 'Debt Optimization',
+    desc: 'Calculate debt optimization strategies such as avalanche or snowball.',
+    insertTemplate: '- Set the "action" to "debt_optimization" in your agent_action response to compute debt payoffs.'
+  },
+  {
+    name: 'cash_flow_predictor',
+    label: 'Cash Flow Predictor',
+    desc: 'Forecast future cash flow based on historical trends and recurring expenses.',
+    insertTemplate: '- Set the "action" to "cash_flow_predictor" in your agent_action response to run forecasting models.'
+  },
+  {
+    name: 'scenario_forecasting',
+    label: 'Scenario Forecasting',
+    desc: 'Simulate financial scenarios (e.g. market downturn, job loss) to assess impact.',
+    insertTemplate: '- Set the "action" to "scenario_forecasting" in your agent_action response to test resilience.'
+  },
+  {
+    name: 'goal_tracker',
+    label: 'Goal Tracker',
+    desc: 'Track progress against user-defined financial goals over time.',
+    insertTemplate: '- Set the "action" to "goal_tracker" in your agent_action response to analyze goal pacing.'
+  },
+  {
+    name: 'tax_estimator',
+    label: 'Tax Estimator',
+    desc: 'Estimate tax liability based on current categorized income and deductions.',
+    insertTemplate: '- Set the "action" to "tax_estimator" in your agent_action response to compute projected taxes.'
+  },
+  {
     name: 'dom_update',
     label: 'DOM Element Clicks',
     desc: 'Execute interactive navigations and clicks via CSS selectors (e.g. #import-csv-btn).',

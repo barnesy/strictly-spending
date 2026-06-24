@@ -146,7 +146,6 @@ export default function AnimatedCard({
         left: 0,
         width: '100%',
         height: '100%',
-        minHeight: 540,
         zIndex,
         pointerEvents: stackIndex === 0 ? 'auto' : 'none',
         overflow: 'hidden',

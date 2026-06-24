@@ -185,15 +185,17 @@ export default function Merchants() {
   const merchantGroups = useMemo<MerchantGroup[]>(() => {
     if (!deferredAllTransactions) return [];
 
-    const groups: Record<string, MerchantGroup> = {};
+    const groups = new Map<string, MerchantGroup>();
 
-    deferredAllTransactions.forEach((t) => {
+    for (let i = 0; i < deferredAllTransactions.length; i++) {
+      const t = deferredAllTransactions[i];
       const key = t.merchantKey || 'Unknown';
       const isSpend = t.amount < 0;
-      const amt = isSpend ? Math.abs(t.amount) : 0;
+      const amt = isSpend ? -t.amount : 0;
 
-      if (!groups[key]) {
-        groups[key] = {
+      let g = groups.get(key);
+      if (!g) {
+        g = {
           merchantKey: key,
           totalSpend: 0,
           totalTransactions: 0,
@@ -202,9 +204,9 @@ export default function Merchants() {
           earliestDate: t.date,
           latestDate: t.date,
         };
+        groups.set(key, g);
       }
 
-      const g = groups[key];
       g.totalTransactions += 1;
       g.totalSpend += amt;
 
@@ -214,21 +216,23 @@ export default function Merchants() {
       // Update date boundaries
       if (t.date < g.earliestDate) g.earliestDate = t.date;
       if (t.date > g.latestDate) g.latestDate = t.date;
-    });
+    }
 
     // Post-process to resolve most common category and convert to array
-    return Object.values(groups).map((g) => {
+    const result: MerchantGroup[] = [];
+    for (const g of groups.values()) {
       let maxCount = 0;
       let commonCat = 'Uncategorized';
-      Object.entries(g.categories).forEach(([cat, count]) => {
-        if (count > maxCount) {
-          maxCount = count;
+      for (const cat in g.categories) {
+        if (g.categories[cat] > maxCount) {
+          maxCount = g.categories[cat];
           commonCat = cat;
         }
-      });
+      }
       g.mostCommonCategory = commonCat;
-      return g;
-    });
+      result.push(g);
+    }
+    return result;
   }, [deferredAllTransactions]);
 
   // Filtered groups

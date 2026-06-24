@@ -2,6 +2,16 @@ import Database from '@tauri-apps/plugin-sql';
 
 let dbInstance: Database | null = null;
 
+let dispatchTimeout: ReturnType<typeof setTimeout> | null = null;
+export function dispatchDbUpdate() {
+  if (typeof window === 'undefined') return;
+  if (dispatchTimeout) {
+    clearTimeout(dispatchTimeout);
+  }
+  dispatchTimeout = setTimeout(() => {
+    window.dispatchEvent(new Event('db-update'));
+  }, 50);
+}
 export async function getDb(): Promise<Database> {
   if (!dbInstance) {
     dbInstance = await Database.load('sqlite:spending-viz.sqlite');
@@ -30,13 +40,13 @@ export const sqliteDb = {
        ON CONFLICT(${keyColumn}) DO UPDATE SET data = excluded.data`,
       [key, dataStr]
     );
-    window.dispatchEvent(new Event('db-update'));
+    dispatchDbUpdate();
   },
 
   delete: async (table: string, keyColumn: string, key: any): Promise<void> => {
     const db = await getDb();
     await db.execute(`DELETE FROM ${table} WHERE ${keyColumn} = $1`, [key]);
-    window.dispatchEvent(new Event('db-update'));
+    dispatchDbUpdate();
   },
 
   toArray: async <T>(table: string): Promise<T[]> => {
@@ -49,7 +59,7 @@ export const sqliteDb = {
     const db = await getDb();
     const dataStr = JSON.stringify(data);
     const res = await db.execute(`INSERT INTO ${table} (data) VALUES ($1)`, [dataStr]);
-    window.dispatchEvent(new Event('db-update'));
+    dispatchDbUpdate();
     return res.lastInsertId;
   },
 
@@ -58,7 +68,7 @@ export const sqliteDb = {
     for (const item of items) {
       await db.execute(`INSERT INTO ${table} (data) VALUES ($1)`, [JSON.stringify(item)]);
     }
-    window.dispatchEvent(new Event('db-update'));
+    dispatchDbUpdate();
   },
 
   update: async (table: string, keyColumn: string, key: any, updates: any): Promise<void> => {
@@ -90,6 +100,6 @@ export const sqliteDb = {
   clear: async (table: string): Promise<void> => {
     const db = await getDb();
     await db.execute(`DELETE FROM ${table}`);
-    window.dispatchEvent(new Event('db-update'));
+    dispatchDbUpdate();
   }
 };

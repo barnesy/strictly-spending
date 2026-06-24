@@ -45,6 +45,8 @@ import {
   DialogContent,
   DialogActions,
   Autocomplete,
+  Drawer,
+  useMediaQuery,
 } from '@mui/material';
 import HomeIcon from '@mui/icons-material/Home';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
@@ -137,6 +139,9 @@ interface PaymentRow {
 }
 
 export default function Loans() {
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [activeLoanId, setActiveLoanId] = useState<number | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
@@ -495,6 +500,7 @@ export default function Loans() {
     if (currentConfig && currentConfig.id !== undefined) {
       await db.update(schema.loans).set(updatedConfig).where(eq(schema.loans.id, currentConfig.id));
       setSnackbarMsg('Loan settings saved successfully!');
+      setMobileSettingsOpen(false);
     }
   };
 
@@ -1112,16 +1118,18 @@ export default function Loans() {
       </Grid>
 
       {/* Resizable Config Sidebar & Graph Panel */}
-      <Box sx={{ width: '100%', height: 600, display: 'flex' }}>
-        <PanelGroup
-          orientation="horizontal"
-          defaultLayout={defaultLayout}
-          onLayoutChanged={onLayoutChanged}
-          style={{ height: '100%', width: '100%' }}
-        >
-          {/* Left Panel: Parameters/Filters */}
-          <Panel id="loan-parameters" defaultSize="30%" minSize="25%" maxSize="45%">
-            <Paper
+            {/* Resizable Config Sidebar & Graph Panel */}
+      <Box sx={{ width: '100%', height: isDesktop ? 600 : 'auto', display: 'flex', flexDirection: 'column' }}>
+        {isDesktop ? (
+          <PanelGroup
+            orientation="horizontal"
+            defaultLayout={defaultLayout}
+            onLayoutChanged={onLayoutChanged}
+            style={{ height: '100%', width: '100%' }}
+          >
+            {/* Left Panel: Parameters/Filters */}
+            <Panel id="loan-parameters" defaultSize="30%" minSize="25%" maxSize="45%">
+              <Paper
               sx={{
                 height: '100%',
                 display: 'flex',
@@ -1205,6 +1213,7 @@ export default function Loans() {
                       onChange={(e) => handleCategoryChange(e.target.value)}
                       label="Linked Category"
                     >
+                      <MenuItem value=""><em>None</em></MenuItem>
                       {categories.map((cat) => (
                         <MenuItem key={cat.id} value={cat.name}>
                           {cat.name}
@@ -1337,13 +1346,13 @@ export default function Loans() {
                 </Button>
               </Box>
             </Paper>
-          </Panel>
+            </Panel>
 
-          <StyledResizeHandle ariaLabel="Resize loan config panel" />
+            <StyledResizeHandle ariaLabel="Resize loan config panel" />
 
-          {/* Right Panel: Graph */}
-          <Panel id="loan-graph" defaultSize="70%">
-            <Paper sx={{ p: 3, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+            {/* Right Panel: Graph */}
+            <Panel id="loan-graph" defaultSize="70%">
+              <Paper sx={{ p: 3, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', gap: 2 }}>
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -1380,8 +1389,280 @@ export default function Loans() {
                 />
               </Box>
             </Paper>
-          </Panel>
-        </PanelGroup>
+            </Panel>
+          </PanelGroup>
+        ) : (
+          <>
+            <Box sx={{ height: 400, mb: 2 }}>
+              <Paper sx={{ p: 3, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', gap: 2 }}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Remaining Balance & Payment Projections
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Visualizing balance, payments, principal, and interest totals over time.
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={2} sx={{ display: { xs: 'none', sm: 'flex' }, flexWrap: 'wrap', gap: 1 }}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-primary-main, #1976d2)', borderRadius: 0.5 }} />
+                    <Typography variant="caption" color="text.secondary">Balance</Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-secondary-main, #9c27b0)', borderRadius: 0.5 }} />
+                    <Typography variant="caption" color="text.secondary">Total Payments</Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-success-main, #2e7d32)', borderRadius: 0.5 }} />
+                    <Typography variant="caption" color="text.secondary">Principal Paid</Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-warning-main, #ed6c02)', borderRadius: 0.5 }} />
+                    <Typography variant="caption" color="text.secondary">Interest Paid</Typography>
+                  </Stack>
+                </Stack>
+              </Stack>
+              
+              <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%' }}>
+                <LoanChart 
+                  rows={scheduleData.rows} 
+                  originalPrincipal={currentConfig.principal - (currentConfig.downPayment || 0)} 
+                />
+              </Box>
+            </Paper>
+            </Box>
+            <Box sx={{ px: 2, pb: 2, display: 'flex', justifyContent: 'center' }}>
+              <Button variant="contained" fullWidth size="large" onClick={() => setMobileSettingsOpen(true)}>
+                Edit Loan Settings
+              </Button>
+            </Box>
+            <Drawer
+              anchor="bottom"
+              open={mobileSettingsOpen}
+              onClose={() => setMobileSettingsOpen(false)}
+              PaperProps={{ sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85vh', pb: 4 } }}
+            >
+              <Paper
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                border: '1px solid',
+                borderColor: 'divider',
+                overflow: 'hidden',
+              }}
+            >
+              <Box sx={{ p: 3, pb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Loan Parameters
+                </Typography>
+              </Box>
+              
+              <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 3, pb: 3 }}>
+                <Stack spacing={2.5}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Loan Name"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Purchase Price"
+                    value={formPrincipal}
+                    onChange={(e) => setFormPrincipal(e.target.value)}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+                    }}
+                  />
+                  {activeTab !== 'student' && (
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Down Payment"
+                      value={formDownPayment}
+                      onChange={(e) => setFormDownPayment(e.target.value)}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+                      }}
+                    />
+                  )}
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Interest Rate (APR)"
+                    value={formRate}
+                    onChange={(e) => setFormRate(e.target.value)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end"><PercentIcon fontSize="small" /></InputAdornment>,
+                    }}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Loan Term"
+                    value={formTerm}
+                    onChange={(e) => setFormTerm(e.target.value)}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">years</InputAdornment>,
+                    }}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Start Date"
+                    type="date"
+                    value={formStartDate}
+                    onChange={(e) => setFormStartDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="loan-category-label">Linked Category</InputLabel>
+                    <Select
+                      labelId="loan-category-label"
+                      value={formCategory}
+                      onChange={(e) => handleCategoryChange(e.target.value)}
+                      label="Linked Category"
+                    >
+                      <MenuItem value=""><em>None</em></MenuItem>
+                      {categories.map((cat) => (
+                        <MenuItem key={cat.id} value={cat.name}>
+                          {cat.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <Autocomplete
+                    freeSolo
+                    options={merchantOptions}
+                    value={formMerchant}
+                    onChange={(_, newValue) => setFormMerchant(newValue || '')}
+                    onInputChange={(_, newInputValue) => setFormMerchant(newInputValue || '')}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        size="small"
+                        label="Linked Merchant Pattern (Optional)"
+                        placeholder="e.g. TOYOTA FIN"
+                        helperText="If specified, matches transactions by merchant name instead of category."
+                      />
+                    )}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Monthly Payment (Scheduled)"
+                    value={formMonthlyPayment}
+                    onChange={(e) => setFormMonthlyPayment(e.target.value)}
+                    helperText="Calculated from loan amount if left empty"
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+                    }}
+                  />
+                  {activeTab !== 'student' && (
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={activeTab === 'house' ? "Current Home Value" : "Estimated Resale Value"}
+                      value={formPropertyValue}
+                      onChange={(e) => setFormPropertyValue(e.target.value)}
+                      helperText={activeTab === 'house' ? "Estimated resale value of the house for equity tracking" : "Estimated resale value of the car for equity tracking"}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+                      }}
+                    />
+                  )}
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Extra Payments (Accelerate Payoff)
+                  </Typography>
+                  <Box>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                        Monthly Extra Payment
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
+                        {usdCents.format(Number(formExtraMonthlyPayment) || 0)}
+                      </Typography>
+                    </Stack>
+                    <Slider
+                      value={Number(formExtraMonthlyPayment) || 0}
+                      min={0}
+                      max={2000}
+                      step={10}
+                      onChange={(_, val) => setFormExtraMonthlyPayment(String(val))}
+                      valueLabelDisplay="auto"
+                      valueLabelFormat={(val) => `$${val}`}
+                      sx={{
+                        color: 'success.main',
+                        py: 1,
+                        '& .MuiSlider-thumb': {
+                          width: 14,
+                          height: 14,
+                          '&:hover, &.Mui-focusVisible': {
+                            boxShadow: (theme) => `0px 0px 0px 8px ${theme.palette.success.main}1a`,
+                          },
+                          '&.Mui-active': {
+                            boxShadow: (theme) => `0px 0px 0px 14px ${theme.palette.success.main}2a`,
+                          },
+                        },
+                      }}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -0.5 }}>
+                      Additional principal paid every month
+                    </Typography>
+                  </Box>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="One-Time Extra Payment"
+                    value={formExtraOneTimePayment}
+                    onChange={(e) => setFormExtraOneTimePayment(e.target.value)}
+                    helperText="Additional principal paid once"
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
+                    }}
+                  />
+                  <FormControl fullWidth size="small" disabled={!formExtraOneTimePayment || parseFloat(formExtraOneTimePayment) <= 0}>
+                    <InputLabel id="one-time-month-label">Apply One-Time Payment At</InputLabel>
+                    <Select
+                      labelId="one-time-month-label"
+                      value={formExtraOneTimeMonth}
+                      onChange={(e) => setFormExtraOneTimeMonth(e.target.value)}
+                      label="Apply One-Time Payment At"
+                    >
+                      <MenuItem value=""><em>None</em></MenuItem>
+                      {scheduleData.rows
+                        .filter((row) => !row.isPast)
+                        .map((row) => (
+                          <MenuItem key={row.paymentNumber} value={row.paymentNumber}>
+                            Month {row.paymentNumber} ({row.date})
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                </Stack>
+              </Box>
+
+              <Box sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  size="medium"
+                  color="primary"
+                  onClick={handleSaveSettings}
+                  sx={{ textTransform: 'none', fontWeight: 700, py: 1 }}
+                >
+                  Save Settings
+                </Button>
+              </Box>
+            </Paper>
+            </Drawer>
+          </>
+        )}
       </Box>
 
       {/* Schedule Table Container */}

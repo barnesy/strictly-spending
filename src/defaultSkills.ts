@@ -122,5 +122,70 @@ For each category, list the transactions in a table:
         criteria: "Must call query_data in Stage 1, then generate_document in Stage 2 with documentType 'business_ledger'."
       }
     ]
+  },
+  {
+    id: 'builtin:debt_optimizer',
+    name: 'Debt Payoff Optimizer',
+    description: 'Calculates the optimal debt payoff strategy using Snowball and Avalanche methods.',
+    systemPromptExtension: `- To optimize debt payoff:
+  1. Set 'agent_action.action' to 'debt_optimization'.
+  2. The system will return a formatted message with total debt and both payoff methods.
+  3. In your response, summarize the methods and ask the user which one they prefer.`,
+    enabled: true,
+    isBuiltIn: true,
+    stages: [{ title: 'Optimize Debt', requiredAction: 'debt_optimization' }],
+    testCases: [{ prompt: "What is the fastest way to pay off my debt?", criteria: "Must call debt_optimization action." }]
+  },
+  {
+    id: 'builtin:cash_flow',
+    name: 'Cash Flow Predictor',
+    description: 'Calculates the Safe to Spend cash amount by subtracting upcoming recurring bills from liquid cash.',
+    systemPromptExtension: `- To predict cash flow:
+  1. Set 'agent_action.action' to 'cashflow_prediction'.
+  2. The system will return current cash, upcoming bills, and Safe to Spend amount.
+  3. Explain the Safe to Spend amount to the user.`,
+    enabled: true,
+    isBuiltIn: true,
+    stages: [{ title: 'Predict Cash Flow', requiredAction: 'cashflow_prediction' }],
+    testCases: [{ prompt: "Will I overdraft if I spend $500?", criteria: "Must call cashflow_prediction action." }]
+  },
+  {
+    id: 'builtin:scenario_forecaster',
+    name: 'Scenario Forecaster',
+    description: 'Performs what-if forecasting by adjusting income or budget to see the impact on financial runway.',
+    systemPromptExtension: `- To forecast a scenario:
+  1. Parse the user's requested changes into 'incomeAdjustment' or 'budgetAdjustment' (e.g. if they say "what if I save $500 more", budgetAdjustment is -500).
+  2. Set 'agent_action.action' to 'scenario_forecasting' with these parameters.
+  3. Summarize the new runway in your response.`,
+    enabled: true,
+    isBuiltIn: true,
+    stages: [{ title: 'Forecast Scenario', requiredAction: 'scenario_forecasting' }],
+    testCases: [{ prompt: "What if my rent goes up by $300?", criteria: "Must call scenario_forecasting action." }]
+  },
+  {
+    id: 'builtin:goal_tracker',
+    name: 'Goal Tracker',
+    description: 'Projects how many months it will take to reach a financial goal based on historical savings rates.',
+    systemPromptExtension: `- To track a savings goal:
+  1. Extract the target dollar amount.
+  2. Set 'agent_action.action' to 'goal_tracking' with 'targetAmount'.
+  3. The system will calculate the timeline. Summarize it for the user.`,
+    enabled: true,
+    isBuiltIn: true,
+    stages: [{ title: 'Track Goal', requiredAction: 'goal_tracking' }],
+    testCases: [{ prompt: "How long until I save $10000?", criteria: "Must call goal_tracking action." }]
+  },
+  {
+    id: 'builtin:tax_estimator',
+    name: 'Tax Estimator',
+    description: 'Estimates 1099 self-employment tax burden based on business transactions and deductions.',
+    systemPromptExtension: `- To estimate taxes:
+  1. Set 'agent_action.action' to 'tax_estimation'.
+  2. The system will return net business income and estimated tax burden.
+  3. Explain the estimate to the user, reminding them it is just an estimate.`,
+    enabled: true,
+    isBuiltIn: true,
+    stages: [{ title: 'Estimate Taxes', requiredAction: 'tax_estimation' }],
+    testCases: [{ prompt: "How much will I owe in taxes?", criteria: "Must call tax_estimation action." }]
   }
 ];
