@@ -29,7 +29,6 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { seedDemoData, clearDemoData, hasDemoData, clearImportedData } from '../demoData';
 import { useFilters } from '../store';
 import { useChatStore } from '../chatStore';
-import { DEMO_ONLY_BUILD } from '../env';
 
 export default function Settings() {
   const demoMode = useFilters((s) => s.demoMode);
@@ -173,17 +172,6 @@ export default function Settings() {
     <Stack spacing={3}>
       <Typography variant="h5">Settings</Typography>
 
-      {DEMO_ONLY_BUILD && (
-        <Alert severity="info">
-          You're viewing the embedded demo build. Demo data is preloaded,
-          demo mode is forced on, and destructive controls (clear, disconnect)
-          are hidden. Visit the GitHub repo to run the full app locally.
-        </Alert>
-      )}
-
-
-
-      {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
@@ -250,9 +238,7 @@ export default function Settings() {
           )}
         </Stack>
       </Paper>
-      )}
 
-      {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
@@ -344,9 +330,7 @@ export default function Settings() {
           )}
         </Stack>
       </Paper>
-      )}
 
-      {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
@@ -384,7 +368,6 @@ export default function Settings() {
           )}
         </Stack>
       </Paper>
-      )}
 
       <Dialog
         open={confirmOpen}

@@ -36,7 +36,6 @@ import Taxes from './pages/Taxes';
 import Loans from './pages/Loans';
 import Documents from './pages/Documents';
 import ToolsReference from './pages/ToolsReference';
-import Landing from './pages/Landing';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
 
@@ -45,7 +44,6 @@ import { useDataStore } from './dataStore';
 import { useChatStore } from './chatStore';
 import { PageTransition } from './components/PageTransition';
 import AnimatedLogo from './components/AnimatedLogo';
-import { DEMO_ONLY_BUILD } from './env';
 
 const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', end: true },
@@ -158,8 +156,6 @@ export default function App() {
   const isAiToolsActive = ['/local-model', '/agent-skills', '/tools-reference'].includes(location.pathname);
   const isSettingsActive = ['/import', '/settings', '/animation-playground', '/theme'].includes(location.pathname);
 
-  const isLandingPage = DEMO_ONLY_BUILD && location.pathname === '/';
-
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);
   useEffect(() => {
     const updateMem = () => {
@@ -252,17 +248,6 @@ export default function App() {
     ).length;
   }, [transactions, demoMode]);
 
-  if (DEMO_ONLY_BUILD) {
-    return (
-      <ThemeProvider theme={dynamicTheme}>
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <CssBaseline />
-          <Landing />
-        </LocalizationProvider>
-      </ThemeProvider>
-    );
-  }
-
   const renderMainWindow = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <AppBar
@@ -294,7 +279,7 @@ export default function App() {
             {PRIMARY_NAV.map((n) => {
               const showBadge =
                 n.badge === 'uncategorized' && uncategorizedCount > 0;
-              const targetRoute = (n.to === '/' && DEMO_ONLY_BUILD) ? '/dashboard' : n.to;
+              const targetRoute = n.to;
               return (
                 <Button
                   key={n.to}
@@ -670,7 +655,7 @@ export default function App() {
         <List sx={{ pt: 1, px: 1 }}>
           <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Primary</Typography>
           {PRIMARY_NAV.map((n) => {
-            const targetRoute = (n.to === '/' && DEMO_ONLY_BUILD) ? '/dashboard' : n.to;
+            const targetRoute = n.to;
             return (
               <ListItem key={n.to} disablePadding sx={{ mb: 0.5 }}>
                 <ListItemButton
@@ -782,9 +767,7 @@ export default function App() {
         <CssBaseline />
         <DynamicAnimationStyles />
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
-          {isLandingPage ? (
-            <Landing />
-          ) : isDesktop ? (
+          {isDesktop ? (
             <PanelGroup
               orientation="horizontal"
               className={isTransitioning ? 'transitioning-panels' : ''}

@@ -7,10 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:demo": "tsc -b && VITE_DEMO_ONLY=true vite build --mode demo --base /strictly-spending/ --outDir dist-demo --emptyOutDir",
     "preview": "vite preview",
-    "preview:demo": "vite preview --outDir dist-demo --base /strictly-spending/",
-    "deploy:demo": "npm run build:demo && DEST=${BARNESY_NEW:-../../projects/barnesy-new}/strictly-spending && rm -rf \"$DEST\" && cp -r dist-demo \"$DEST\" && echo Deployed to $DEST",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run src",

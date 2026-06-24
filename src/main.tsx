@@ -18,13 +18,12 @@ if (typeof window !== 'undefined') {
     originalError.apply(console, cleanArgs);
   };
 }
-import { BrowserRouter, HashRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ErrorBoundary } from './ErrorBoundary';
 import { seedAndMigrate } from './seed';
 import { hasDemoData, seedDemoData } from './demoData';
 import { useFilters } from './store';
-import { DEMO_ONLY_BUILD } from './env';
 import './testBridge';
 /**
  * In demo-only builds (see env.ts for the flag), the app:
@@ -36,23 +35,15 @@ import './testBridge';
  */
 async function bootstrap() {
   await seedAndMigrate();
-  if (DEMO_ONLY_BUILD) {
-    if (!(await hasDemoData())) {
-      await seedDemoData();
-    }
-    // Force demo mode on so the views filter to source === 'demo' only.
-    useFilters.setState({ demoMode: true });
-  } else {
-    const hasDemo = await hasDemoData();
-    if (!hasDemo && useFilters.getState().demoMode) {
-      useFilters.setState({ demoMode: false });
-    }
+  const hasDemo = await hasDemoData();
+  if (!hasDemo && useFilters.getState().demoMode) {
+    useFilters.setState({ demoMode: false });
   }
 }
 
 bootstrap();
 
-const Router = DEMO_ONLY_BUILD ? HashRouter : BrowserRouter;
+const Router = BrowserRouter;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
