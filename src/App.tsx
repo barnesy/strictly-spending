@@ -68,7 +68,7 @@ const ORGANIZE_NAV = [
 const AI_NAV = [
   { to: '/local-model', label: 'Local Model' },
   { to: '/agent-skills', label: 'Agent Skills' },
-  { to: '/tools-reference', label: 'Tool Reference' },
+  { to: '/ai-reference', label: 'AI Reference' },
 ];
 
 const SETTINGS_NAV = [
@@ -155,7 +155,7 @@ export default function App() {
 
   const isPlanningActive = ['/loans', '/taxes', '/documents'].includes(location.pathname);
   const isOrganizeActive = ['/categories', '/rules', '/merchants'].includes(location.pathname);
-  const isAiToolsActive = ['/local-model', '/agent-skills', '/tools-reference'].includes(location.pathname);
+  const isAiToolsActive = ['/local-model', '/agent-skills', '/ai-reference'].includes(location.pathname);
   const isSettingsActive = ['/import', '/settings', '/animation-playground', '/theme'].includes(location.pathname);
 
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);
@@ -760,7 +760,7 @@ export default function App() {
               <Route path="/theme" element={<ThemeManager />} />
               <Route path="/local-model" element={<LocalModel />} />
               <Route path="/agent-skills" element={<AgentSkills />} />
-              <Route path="/tools-reference" element={<ToolsReference />} />
+              <Route path="/ai-reference" element={<ToolsReference />} />
               <Route path="/animation-playground" element={<AnimationSettings />} />
               <Route path="/merchants" element={<Merchants />} />
               <Route path="/taxes" element={<Taxes />} />

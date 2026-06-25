@@ -1,6 +1,6 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
-import { generatePnlData, generateBalanceSheetData, generateLedgerData } from '../../pnlGenerator';
+import { generatePnlData, generateBalanceSheetData, generateLedgerData, generateCustomDocumentData } from '../../pnlGenerator';
 import { db } from '../../db/drizzle';
 import * as schema from '../../db/schema';
 
@@ -63,7 +63,20 @@ export class GenerateDocumentTool implements AIToolHandler {
         pnlReportMarkdown = compiledMd;
         pnlSpreadsheetCsv = compiledCsv;
       } else {
-        return { feedbackError: `Error: Unknown document type '${docType}'` };
+        const { customMarkdown: compiledMd, customCsv: compiledCsv } = await generateCustomDocumentData({
+          start,
+          end,
+          resolvedCats: cats,
+          resolvedAccts: accts,
+          search: search || undefined,
+          minPrice,
+          maxPrice,
+          markdownDocId: mdDocId,
+          spreadsheetDocId: pnlSpreadsheetDocId,
+          documentContent: actionObj.documentContent
+        });
+        pnlReportMarkdown = compiledMd;
+        pnlSpreadsheetCsv = compiledCsv;
       }
 
       // Save to database

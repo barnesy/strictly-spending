@@ -112,7 +112,6 @@ Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}`;
 
     let conversationHistory = [...messages, userMsg];
     let loops = 0;
-    const maxLoops = 4;
     const currentSteps: string[] = [];
 
     let totalPrompt = 0;
@@ -121,12 +120,16 @@ Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}`;
     // Shared execution state across loop
     let lastQueryState: any = null;
 
+    const initialActiveSkill = currentSkillId ? allSkills.find(s => s.id === currentSkillId) : null;
+    const maxLoops = initialActiveSkill ? 6 : 2; // Skills can have multiple stages, basic queries get strictly 2 loops
+
     while (loops < maxLoops) {
       if (signal.aborted) throw new DOMException('aborted', 'AbortError');
       loops++;
+      const activeSkill = currentSkillId ? allSkills.find(s => s.id === currentSkillId) : null;
       const isLastLoop = loops === maxLoops;
 
-      startStreamingMessage(currentSteps, 'tool_select');
+      startStreamingMessage(currentSteps, 'tool_select', loops > 1);
 
       const cleanedHistory = conversationHistory.map((m) => {
         if (m.role === 'assistant') {
@@ -148,7 +151,6 @@ Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}`;
           ]
         : cleanedHistory;
 
-      const activeSkill = currentSkillId ? allSkills.find(s => s.id === currentSkillId) : null;
       let skillPrompt = activeSkill ? `[SKILL ACTIVE: ${activeSkill.name}]\n${activeSkill.description}\n\nINSTRUCTIONS:\n${activeSkill.prompt}` : '';
 
       if (activeSkill && activeSkill.stages && activeSkill.stages.length > 0) {
@@ -193,8 +195,34 @@ Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}`;
         const parsed = parseAIResponse(currentResponse);
         actionObj = parsed?.agent_action;
 
+        // POST-PROCESSING INTERCEPTOR
+        // If LLM hallucinated data without querying first, intercept and force query_data
+        const rawAction = actionObj?.action || 'none';
+        const bodyText = parsed?.body || "";
+        const hasSystemDbMessage = activeHistory.some((m: ChatMessage) => m.role === 'system' && m.content.includes('Database Query Results'));
+        
+        const hasHallucinatedNumbers = bodyText.includes('$') || bodyText.includes('| ---');
+
+        if (rawAction === 'none' && hasHallucinatedNumbers && !hasSystemDbMessage) {
+            actionObj = actionObj || {};
+            actionObj.action = 'query_data';
+            actionObj.explanation = "Intercepted hallucinated numbers. Reverting to query_data.";
+            
+            // Scrub the hallucinated body so it doesn't render alongside the query_data UI card
+            if (parsed) {
+               parsed.body = "I need to fetch those numbers from the database first. One moment...";
+               currentResponse = JSON.stringify(parsed);
+            }
+        } else if (rawAction !== 'none' && hasHallucinatedNumbers && !hasSystemDbMessage) {
+            // Intercept if the model called a valid action (like spending_anomalies) but hallucinated a markdown table in the body
+            if (parsed) {
+               parsed.body = "I'll run that tool for you now. Here are the results:";
+               currentResponse = JSON.stringify(parsed);
+            }
+        }
+
         if (parsed?.body) {
-           const match = parsed.body.match(/STAGE_COMPLETE:\\s*([^\\n]+)/);
+           const match = parsed.body.match(/STAGE_COMPLETE:\s*([^\n]+)/);
            if (match && match[1]) {
               const stageName = match[1].trim();
               if (!currentCompletedStages.includes(stageName)) {
@@ -245,7 +273,20 @@ Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}`;
            actionResult = { action, success: true };
            systemResultsMsg = { role: 'system', content: "DOM clicked." };
          } else if (action === 'navigate' || action === 'filter') {
-           executeCopilotCommand(actionObj, { navigate, location } as any);
+           const ctx = {
+             navigate,
+             currentPath: location.pathname,
+             categories: dataStore.categories,
+             accounts: dataStore.accounts,
+             setPreset: filters.setPreset,
+             setCustomRange: filters.setCustomRange,
+             setDisabledCategories: filters.setDisabledCategories,
+             setEnabledAccounts: filters.setEnabledAccounts,
+             setSearchQuery: filters.setSearchQuery,
+             setMinPrice: filters.setMinPrice,
+             setMaxPrice: filters.setMaxPrice
+           };
+           executeCopilotCommand(actionObj, ctx);
            actionResult = { action };
            await finalizeStreamingMessage(
              currentResponse,

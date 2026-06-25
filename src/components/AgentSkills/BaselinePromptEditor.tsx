@@ -22,7 +22,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { HighlightingEditor } from './HighlightingEditor';
-import { AGENT_TOOLS, GEN_UX_COMPONENTS } from './constants';
+import { AGENT_TOOLS, GEN_UX_COMPONENTS } from '../../ai/architecture';
 import type { SkillTestCase } from '../../types';
 import type { InspectDiagnosticData, DiagnosticResult } from './InspectDiagnosticModal';
 

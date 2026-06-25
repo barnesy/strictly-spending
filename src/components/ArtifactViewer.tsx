@@ -126,7 +126,8 @@ export default function ArtifactViewer() {
         }
       ];
     }
-    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated }).onConflictDoNothing();
+    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated })
+      .onConflictDoUpdate({ target: schema.settings.key, set: { value: updated } });
   };
 
   return (

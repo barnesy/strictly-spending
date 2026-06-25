@@ -30,7 +30,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { HighlightingEditor } from './HighlightingEditor';
-import { AGENT_TOOLS, GEN_UX_COMPONENTS } from './constants';
+import { AGENT_TOOLS, GEN_UX_COMPONENTS } from '../../ai/architecture';
 import type { AgentSkill, AgentSkillStage } from '../../types';
 import type { InspectDiagnosticData, DiagnosticResult } from './InspectDiagnosticModal';
 

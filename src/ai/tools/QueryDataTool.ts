@@ -284,12 +284,8 @@ export class QueryDataTool implements AIToolHandler {
       .limit(10);
 
     if (recentTxns.length > 0) {
-      const recentTable = [
-        '| Date | Description | Category | Amount |',
-        '| :--- | :--- | :--- | ---: |',
-        ...recentTxns.map(t => `| ${t.date} | ${t.description} | ${t.category} | $${Math.abs(t.amount).toFixed(2)} |`)
-      ].join('\\n');
-      breakdownText += `\\n\\nRecent Transactions:\\n${recentTable}`;
+      const recentList = recentTxns.map(t => `- ${t.date} | ${t.description} | ${t.category} | $${Math.abs(t.amount).toFixed(2)}`).join('\\n');
+      breakdownText += `\\n\\nRecent Transactions (Top 10):\\n${recentList}`;
     }
 
     const systemResultsMsg = `Database Query Results for categories [${queryCats.join(', ')}] between ${start} and ${end}:
@@ -298,10 +294,9 @@ export class QueryDataTool implements AIToolHandler {
 - Average Transaction: $${metrics.spendAverage.toFixed(2)}
 - Total Monthly Budget Limit: $${metrics.totalBudget.toFixed(2)}${breakdownText}
 
-If these results provide the data you need to fulfill the user's request, proceed with your final response (e.g. set 'action' to 'none') OR your next tool action (e.g. 'generate_document').
-Your final answer MUST be detailed and insightful, using the exact numbers returned above (dollar amounts, averages, transactions). Never use placeholders like $XXX or generalize. Explicitly compute differences and percentages when comparing periods.
-ALL numbers in your final answer MUST be bolded (e.g. **$391.29**, **6.00** transactions, **+56.50%**). Numbers, counts, percentages, and currency values MUST never be rounded to a whole integer, except to the second decimal place (.00) (e.g. write **$250.00**, NEVER $250; write **6.00** transactions, NEVER 6).
-If you still need more data (e.g. to compare with a different period), query it in your next turn.`;
+Proceed with your final response by setting 'agent_action.action' to 'none'.
+Your final answer MUST be detailed and insightful, using the exact aggregated numbers returned above (dollar amounts, averages). Focus on summarizing the high-level insights. Do NOT output a list or table of the Recent Transactions. Never use placeholders like $XXX or generalize. Explicitly compute differences and percentages when comparing periods.
+ALL numbers in your final answer MUST be bolded (e.g. **$391.29**, **6.00** transactions, **+56.50%**). Numbers, counts, percentages, and currency values MUST never be rounded to a whole integer, except to the second decimal place (.00) (e.g. write **$250.00**, NEVER $250; write **6.00** transactions, NEVER 6).`;
 
     const actionResult = {
       action: 'query_data',

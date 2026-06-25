@@ -44,31 +44,5 @@ export class ToolRegistry {
 export const toolRegistry = new ToolRegistry();
 
 import { QueryDataTool } from './QueryDataTool';
-import { SubscriptionAlertsTool } from './SubscriptionAlertsTool';
-import { SpendingAnomaliesTool } from './SpendingAnomaliesTool';
-import { GenerateDocumentTool } from './GenerateDocumentTool';
-import { ProjectRunwayTool } from './ProjectRunwayTool';
-import { AuditAccessibilityTool } from './AuditAccessibilityTool';
-import { UpdateTaxSettingsTool } from './UpdateTaxSettingsTool';
-import { UpdateDeductionStatusTool } from './UpdateDeductionStatusTool';
-import { CategorizeTransactionsTool } from './CategorizeTransactionsTool';
-import { DebtOptimizationTool } from './DebtOptimizationTool';
-import { CashFlowPredictorTool } from './CashFlowPredictorTool';
-import { ScenarioForecastingTool } from './ScenarioForecastingTool';
-import { GoalTrackerTool } from './GoalTrackerTool';
-import { TaxEstimatorTool } from './TaxEstimatorTool';
 
 toolRegistry.register(new QueryDataTool());
-toolRegistry.register(new SubscriptionAlertsTool());
-toolRegistry.register(new SpendingAnomaliesTool());
-toolRegistry.register(new GenerateDocumentTool());
-toolRegistry.register(new ProjectRunwayTool());
-toolRegistry.register(new AuditAccessibilityTool());
-toolRegistry.register(new UpdateTaxSettingsTool());
-toolRegistry.register(new UpdateDeductionStatusTool());
-toolRegistry.register(new CategorizeTransactionsTool());
-toolRegistry.register(new DebtOptimizationTool());
-toolRegistry.register(new CashFlowPredictorTool());
-toolRegistry.register(new ScenarioForecastingTool());
-toolRegistry.register(new GoalTrackerTool());
-toolRegistry.register(new TaxEstimatorTool());

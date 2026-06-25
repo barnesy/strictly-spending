@@ -1,36 +1,11 @@
 import { useState } from 'react';
-import { AGENT_TOOLS } from '../components/AgentSkills/constants';
+import { AGENT_TOOLS, GEN_UX_COMPONENTS } from '../ai/architecture';
 import { Box, Typography, Card, CardContent, Grid, Stack, Chip, Divider, useTheme, Tabs, Tab, Paper } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-
-const SKILLS = [
-  {
-    name: 'Generate Profit & Loss Statement',
-    description: 'Queries global category totals and generates a business Profit and Loss statement, saving it to the Documents tab.',
-    prompts: ['generate business P&L', 'help me create a P&L for my business'],
-    stages: [
-      { step: '1', title: 'Query Database Aggregates', action: 'query_data', details: 'Retrieves year-to-date category totals for all categories, identifying income and expenses.' },
-      { step: '2', title: 'Generate Document', action: 'generate_document', details: 'Formats the queried numbers into a structured Markdown document and prompts the user to save it.' }
-    ]
-  },
-  {
-    name: 'Financial Runway & Cash Projection',
-    description: 'Calculates project budget runway based on cash reserves, CC debt, and monthly outflow.',
-    prompts: ['How much runway do I have?', 'If I get 30k of income how much runway would I have if I raise the budget by $1000/month'],
-    stages: [
-      { step: '1', title: 'Project Runway', action: 'project_runway', details: 'Queries cash reserves and credit card debt to calculate net cash starting reserves, then outputs runway projection.' }
-    ]
-  },
-  {
-    name: 'Manual Transaction Categorization',
-    description: 'Uses the local AI model to review and auto-categorize uncategorized transactions chunk-by-chunk.',
-    prompts: ['AI categorize remaining transactions', 'please auto-categorize all uncategorized items'],
-    stages: [
-      { step: '1', title: 'Categorize Transactions', action: 'categorize_transactions', details: 'Processes uncategorized transactions in chunks using the local AI classification engine.' }
-    ]
-  }
-];
+import ArchitectureIcon from '@mui/icons-material/Architecture';
+import BuildIcon from '@mui/icons-material/Build';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 
 export default function ToolsReference() {
   const theme = useTheme();
@@ -43,18 +18,67 @@ export default function ToolsReference() {
           Copilot Reference Library
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Reference documentation for tools (actions) and multi-step capabilities available to the Copilot financial AI.
+          Reference documentation for the underlying architecture, tools, Gen UX components, and multi-step capabilities available to the Copilot financial AI.
         </Typography>
       </Box>
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3.5 }}>
         <Tabs value={tabValue} onChange={(_, val) => setTabValue(val)}>
+          <Tab label="Architecture Overview" sx={{ textTransform: 'none', fontWeight: 600 }} />
           <Tab label="AI Tools" sx={{ textTransform: 'none', fontWeight: 600 }} />
-          <Tab label="Multi-Step Skills" sx={{ textTransform: 'none', fontWeight: 600 }} />
+          <Tab label="Gen UX Components" sx={{ textTransform: 'none', fontWeight: 600 }} />
         </Tabs>
       </Box>
 
-      {tabValue === 0 ? (
+      {tabValue === 0 && (
+        <Stack spacing={3}>
+          <Card variant="outlined">
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex' }}>
+                  <ArchitectureIcon />
+                </Box>
+                <Typography variant="h6" fontWeight="600">
+                  System Architecture
+                </Typography>
+              </Stack>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                The Copilot AI operates using an orchestrator that evaluates a <strong>System Prompt</strong>, executes <strong>Tools</strong>, responds with <strong>Gen UX Components</strong>, and can run multi-step <strong>Skills</strong>.
+              </Typography>
+              
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom mt={2}>
+                1. System Prompt
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                The System Prompt acts as the foundation of the AI's behavior. It instructs the LLM on how to format its JSON responses, which tools are available, and how to maintain a helpful financial tone without hallucinating data. The prompt also dynamically injects the user's current application state (e.g., active budgets, current route).
+              </Typography>
+              
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom mt={2}>
+                2. Tools (Actions)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Tools are explicit capabilities the LLM can invoke to interact with the application. When the LLM outputs an <code>agent_action</code> with a specific tool name (like <code>query_data</code> or <code>navigate</code>), the local Copilot Orchestrator executes that tool to either modify the UI or fetch data from the local SQLite database.
+              </Typography>
+
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom mt={2}>
+                3. Gen UX Components
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Instead of just generating text, the LLM can output Generative UX components (like buttons, forms, or confirmations) in the chat stream. By setting the <code>gen_ux.type</code> property, the LLM provides interactive interfaces directly inside the chat, allowing the user to seamlessly make choices or confirm actions.
+              </Typography>
+
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom mt={2}>
+                4. Agent Skills
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Skills are multi-step workflows that chain together tools, logic, and Gen UX components. When a skill is triggered, the Orchestrator steps through the skill's defined stages, executing one or more tools automatically until the workflow is complete. This allows the AI to perform complex, long-running tasks.
+              </Typography>
+            </CardContent>
+          </Card>
+        </Stack>
+      )}
+
+      {tabValue === 1 && (
         <Grid container spacing={3}>
           {AGENT_TOOLS.map((tool) => (
             <Grid size={{ xs: 12, md: 6 }} key={tool.name}>
@@ -93,98 +117,50 @@ export default function ToolsReference() {
             </Grid>
           ))}
         </Grid>
-      ) : (
-        <Stack spacing={3}>
-          {SKILLS.map((skill) => (
-            <Card key={skill.name} variant="outlined">
-              <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center" mb={2}>
-                  <Box 
-                    sx={{ 
-                      p: 1.5, 
-                      borderRadius: 2, 
-                      bgcolor: 'secondary.main', 
-                      color: 'secondary.contrastText',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    <SchoolIcon />
-                  </Box>
-                  <Typography variant="h6" fontWeight="600">
-                    {skill.name}
-                  </Typography>
-                </Stack>
-                
-                <Typography variant="body2" color="text.secondary" mb={3}>
-                  {skill.description}
-                </Typography>
-                
-                <Divider sx={{ mb: 2.5 }} />
-
-                <Typography variant="caption" fontWeight="bold" color="text.primary" sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Trigger Prompts
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" gap={1} mb={3}>
-                  {skill.prompts.map((p, idx) => (
-                    <Chip key={idx} label={p} size="small" variant="outlined" sx={{ bgcolor: 'background.default' }} />
-                  ))}
-                </Stack>
-
-                <Divider sx={{ mb: 2.5 }} />
-
-                <Typography variant="caption" fontWeight="bold" color="text.primary" sx={{ display: 'block', mb: 1.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Skill Stages & Execution Flow
-                </Typography>
-                
-                <Stack spacing={2}>
-                  {skill.stages.map((stage, idx) => (
-                    <Paper 
-                      key={idx} 
-                      variant="outlined" 
-                      sx={{ 
-                        p: 2, 
-                        bgcolor: 'background.default',
-                        display: 'flex',
-                        flexDirection: { xs: 'column', sm: 'row' },
-                        alignItems: { xs: 'flex-start', sm: 'center' },
-                        gap: 2
-                      }}
-                    >
-                      <Chip 
-                        label={`Stage ${stage.step}`} 
-                        color="primary" 
-                        size="small" 
-                        sx={{ fontWeight: 'bold' }} 
-                      />
-                      <Box sx={{ flexGrow: 1 }}>
-                        <Typography variant="subtitle2" fontWeight="600" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {stage.title}
-                          <Chip 
-                            label={`action: "${stage.action}"`} 
-                            size="small" 
-                            component="code"
-                            sx={{ fontFamily: 'monospace', height: 18, fontSize: '0.65rem', bgcolor: 'action.selected' }} 
-                          />
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
-                          {stage.details}
-                        </Typography>
-                      </Box>
-                      {idx < skill.stages.length - 1 && (
-                        <Box sx={{ display: { xs: 'none', sm: 'block' }, color: 'text.secondary' }}>
-                          <ArrowForwardIcon />
-                        </Box>
-                      )}
-                    </Paper>
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
-        </Stack>
       )}
+
+      {tabValue === 2 && (
+        <Grid container spacing={3}>
+          {GEN_UX_COMPONENTS.map((comp) => (
+            <Grid size={{ xs: 12, md: 6 }} key={comp.name}>
+              <Card 
+                variant="outlined" 
+                sx={{ 
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme.shadows[4]
+                  }
+                }}
+              >
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" fontWeight="600" sx={{ wordBreak: 'break-all', mb: 0.5 }}>
+                    {comp.label}
+                  </Typography>
+                  <Typography variant="caption" component="code" sx={{ 
+                    fontFamily: 'monospace', 
+                    bgcolor: 'action.selected', 
+                    px: 1, py: 0.5, borderRadius: 1, 
+                    display: 'inline-block', mb: 2, 
+                    color: 'success.main', fontWeight: 600 
+                  }}>
+                    gen_ux.type: "{comp.name}"
+                  </Typography>
+                  
+                  <Typography variant="body2" color="text.secondary" mb={3}>
+                    {comp.desc}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+
     </Box>
   );
 }

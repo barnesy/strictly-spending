@@ -757,7 +757,8 @@ export async function seedAndMigrate(): Promise<void> {
     const filteredSkills = updatedSkills.filter(s => !s.isBuiltIn || defaultIds.has(s.id));
 
     if (hasChanges || filteredSkills.length !== currentSkills.length) {
-      await db.insert(schema.settings).values({ key: 'app:agentSkills', value: filteredSkills }).onConflictDoNothing();
+      await db.insert(schema.settings).values({ key: 'app:agentSkills', value: filteredSkills })
+        .onConflictDoUpdate({ target: schema.settings.key, set: { value: filteredSkills } });
     }
   } catch (err) {
     console.error('Failed to seed agent skills globally:', err);

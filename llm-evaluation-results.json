@@ -1,0 +1,332 @@
+{
+  "model": "llama3.2:3b",
+  "totalTests": 12,
+  "successCount": 11,
+  "successRate": "92%",
+  "results": [
+    {
+      "prompt": "Show me food spending",
+      "criteria": "Must map to 'Groceries' and 'Restaurants & Coffee' categories and output action 'filter' with page '/'",
+      "expectedAction": "filter",
+      "actualAction": "filter",
+      "success": true,
+      "latencyMs": 11621,
+      "rawResponse": {
+        "title": "Food Spending",
+        "body": "Here are your Food and Dining expenses:\n\n* **Groceries**: **$100.00** (**3** transactions)\n* **Restaurants & Coffee**: **$50.00** (**2** transactions)\n\nTotal Food Spending: **$150.00** (**5** transactions)",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Reset filters",
+          "Check budget runway"
+        ],
+        "agent_action": {
+          "action": "filter",
+          "page": "/",
+          "categories": [
+            "Groceries",
+            "Restaurants & Coffee"
+          ],
+          "explanation": "Filtering the dashboard for food categories."
+        }
+      }
+    },
+    {
+      "prompt": "Go to settings",
+      "criteria": "Must set action to 'navigate' with page set to '/settings'",
+      "expectedAction": "navigate",
+      "actualAction": "navigate",
+      "success": true,
+      "latencyMs": 1418,
+      "rawResponse": {
+        "title": "Settings",
+        "body": "Taking you back to the settings page.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [],
+        "agent_action": {
+          "action": "navigate",
+          "page": "/settings",
+          "explanation": "Navigating to settings."
+        }
+      }
+    },
+    {
+      "prompt": "reset all filters",
+      "criteria": "Must reset categories to ['all'], accounts to ['all'], preset to 'allTime', action to 'filter'",
+      "expectedAction": null,
+      "actualAction": "filter",
+      "success": true,
+      "latencyMs": 2265,
+      "rawResponse": {
+        "title": "Filters Reset",
+        "body": "I've cleared all the filters so you can see your complete transaction history again.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Show food spending",
+          "Check subscriptions"
+        ],
+        "agent_action": {
+          "action": "filter",
+          "page": "/",
+          "categories": [
+            "all"
+          ],
+          "accounts": [
+            "all"
+          ],
+          "search": "",
+          "preset": "allTime",
+          "minPrice": 0,
+          "maxPrice": 0,
+          "explanation": "Resetting all filters."
+        }
+      }
+    },
+    {
+      "prompt": "How much did I spend on food last month?",
+      "criteria": "Must output action 'query_data' with categories mapped to food and preset 'lastMonth'",
+      "expectedAction": "query_data",
+      "actualAction": "query_data",
+      "success": true,
+      "latencyMs": 2127,
+      "rawResponse": {
+        "title": "Last Month Food Spending",
+        "body": "You spent **$100.00** on groceries and dining out last month.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Compare to previous month",
+          "Reset filters"
+        ],
+        "agent_action": {
+          "action": "query_data",
+          "categories": [
+            "Groceries",
+            "Restaurants & Coffee"
+          ],
+          "preset": "lastMonth",
+          "explanation": "Querying food spending for last month."
+        }
+      }
+    },
+    {
+      "prompt": "Go to budget page",
+      "criteria": "Must set action to 'navigate' with page set to '/budget'",
+      "expectedAction": "navigate",
+      "actualAction": "navigate",
+      "success": true,
+      "latencyMs": 1516,
+      "rawResponse": {
+        "title": "Budget",
+        "body": "Taking you to the budget page now.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Show me my income",
+          "Reset filters"
+        ],
+        "agent_action": {
+          "action": "navigate",
+          "page": "/budget",
+          "explanation": "Navigating to budget."
+        }
+      }
+    },
+    {
+      "prompt": "What are the top spending categories?",
+      "criteria": "Must output action 'query_data' with preset 'allTime' and 'all' categories. Must NOT output a markdown table or fake any numbers.",
+      "expectedAction": "query_data",
+      "actualAction": "query_data",
+      "success": true,
+      "latencyMs": 2892,
+      "rawResponse": {
+        "title": "Top Spending Categories",
+        "body": "Here are your top spending categories:\n\n* **Restaurants & Coffee**: **$** **123.45** (**6** transactions)\n* **Groceries**: **$** **90.00** (**4** transactions)\n* **Shopping**: **$** **50.00** (**3** transactions)\n\nThese categories show the most spending activity in your account.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Reset filters"
+        ],
+        "agent_action": {
+          "action": "query_data",
+          "explanation": "Intercepted hallucinated numbers. Reverting to query_data."
+        }
+      }
+    },
+    {
+      "prompt": "Show me all transactions from Amazon over $50",
+      "criteria": "Must output action 'filter' with search 'Amazon' and minPrice 50.",
+      "expectedAction": "filter",
+      "actualAction": "filter",
+      "success": true,
+      "latencyMs": 2220,
+      "rawResponse": {
+        "title": "Amazon Over $50",
+        "body": "I've filtered the dashboard to show you only your transactions with Amazon that are over $50.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Reset filters",
+          "Check subscriptions"
+        ],
+        "agent_action": {
+          "action": "filter",
+          "page": "/",
+          "categories": [
+            "Shopping",
+            "Amazon"
+          ],
+          "minPrice": 50,
+          "explanation": "Filtering the dashboard for Amazon transactions over $50."
+        }
+      }
+    },
+    {
+      "prompt": "Filter by my chase credit card",
+      "criteria": "Must output action 'filter' with accounts containing 'chase' or similar.",
+      "expectedAction": "filter",
+      "actualAction": "filter",
+      "success": true,
+      "latencyMs": 1952,
+      "rawResponse": {
+        "title": "Chase Credit Card",
+        "body": "I've applied a filter to show your transactions related to your Chase Credit Card.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Reset filters",
+          "Show food spending"
+        ],
+        "agent_action": {
+          "action": "filter",
+          "page": "/",
+          "accounts": [
+            "Chase Checking"
+          ],
+          "explanation": "Filtering the dashboard for Chase Credit Card transactions."
+        }
+      }
+    },
+    {
+      "prompt": "How many times did I go to Starbucks this year?",
+      "criteria": "Must output action 'query_data' with search 'Starbucks' and preset 'thisYear'.",
+      "expectedAction": "query_data",
+      "actualAction": "query_data",
+      "success": true,
+      "latencyMs": 1824,
+      "rawResponse": {
+        "title": "Starbucks Visits",
+        "body": "Let me check your transaction history for Starbucks visits this year...",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [],
+        "agent_action": {
+          "action": "query_data",
+          "categories": [
+            "Restaurants & Coffee"
+          ],
+          "search": "Starbucks",
+          "explanation": "Querying data for Starbucks transactions."
+        }
+      }
+    },
+    {
+      "prompt": "I want to see my income for the last 6 months",
+      "criteria": "Must output action 'filter' with categories 'Income' and preset 'last6Months'.",
+      "expectedAction": "filter",
+      "actualAction": "query_data",
+      "success": false,
+      "latencyMs": 2091,
+      "rawResponse": {
+        "title": "Income Overview",
+        "body": "Let me fetch your income data for the last 6 months...",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Reset filters",
+          "Check budget runway"
+        ],
+        "agent_action": {
+          "action": "query_data",
+          "categories": [
+            "Income"
+          ],
+          "preset": "last90",
+          "explanation": "Querying income data for the last 3 months."
+        }
+      }
+    },
+    {
+      "prompt": "Find any subscriptions under $10",
+      "criteria": "Must output action 'query_data' with categories 'Subscriptions' and maxPrice 10.",
+      "expectedAction": "query_data",
+      "actualAction": "query_data",
+      "success": true,
+      "latencyMs": 1757,
+      "rawResponse": {
+        "title": "Small Subscriptions",
+        "body": "Let me check for any subscription payments under $10 for you.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [],
+        "agent_action": {
+          "action": "query_data",
+          "categories": [
+            "Subscriptions"
+          ],
+          "maxPrice": 10,
+          "explanation": "Searching for subscriptions under $10."
+        }
+      }
+    },
+    {
+      "prompt": "Go to the import data page",
+      "criteria": "Must output action 'navigate' with page '/import'.",
+      "expectedAction": "navigate",
+      "actualAction": "navigate",
+      "success": true,
+      "latencyMs": 1611,
+      "rawResponse": {
+        "title": "Import Data",
+        "body": "Taking you to the import data page now.",
+        "gen_ux": {
+          "type": "none",
+          "options": []
+        },
+        "suggested_actions": [
+          "Go back to dashboard",
+          "Start importing again"
+        ],
+        "agent_action": {
+          "action": "navigate",
+          "page": "/import-data",
+          "explanation": "Navigating to import data."
+        }
+      }
+    }
+  ]
+}

@@ -42,12 +42,7 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
     desc: "Update the user's tax settings and form fields based on their chat input.",
     insertTemplate: '- Set the "action" to "update_tax_settings" in your agent_action response to edit tax details.'
   },
-  {
-    name: 'generate_document',
-    label: 'Generate Document',
-    desc: 'Save a generated document (P&L, Balance Sheet, General Ledger, or Expense Summary) to the file system.',
-    insertTemplate: '- Set the "action" to "generate_document", specify "documentType" and write the markdown in "documentContent".'
-  },
+
   {
     name: 'audit_accessibility',
     label: 'Accessibility Audit',
@@ -116,7 +111,14 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
   }
 ];
 
-export const GEN_UX_COMPONENTS = [
+export interface GenUxComponentInfo {
+  name: string;
+  label: string;
+  desc: string;
+  insertTemplate: string;
+}
+
+export const GEN_UX_COMPONENTS: GenUxComponentInfo[] = [
   {
     name: 'choices',
     label: 'Gen UX: Interactive Choices',
@@ -142,3 +144,5 @@ export const GEN_UX_COMPONENTS = [
     insertTemplate: '- Set "gen_ux" to {"type": "none", "options": []} when no interactive UI components are required.'
   }
 ];
+
+

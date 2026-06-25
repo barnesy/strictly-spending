@@ -98,7 +98,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
   const navigate = useNavigate();
   const [showInspector, setShowInspector] = useState(false);
   const [isLogsExpanded, setIsLogsExpanded] = useState<boolean | null>(null);
-  const logsExpanded = isLogsExpanded !== null ? isLogsExpanded : !!message.isStreaming;
+  const logsExpanded = isLogsExpanded !== null ? isLogsExpanded : false;
 
   const handleChatMessageLinkClick = (url: string) => {
     const match = url.match(/^doc:\/\/([^#]+)(?:#tab=(.+))?$/);
@@ -242,6 +242,235 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         gap: 1,
       }}
     >
+      {/* Skill stages are now embedded directly in the execution log steps */}
+
+      {hasSteps && (
+        <Box sx={{ width: '85%', mb: 0.5 }}>
+
+
+          {/* Collapsible Chip */}
+          <Chip
+            icon={logsExpanded ? <ExpandLessIcon sx={{ fontSize: '16px !important' }} /> : <ExpandMoreIcon sx={{ fontSize: '16px !important' }} />}
+            label={message.isStreaming ? `LLM Progress (${stepsList.length} steps)` : `Execution Log (${stepsList.length} steps)`}
+            onClick={() => setIsLogsExpanded(!logsExpanded)}
+            variant="outlined"
+            size="small"
+            clickable
+            color={message.isStreaming ? "primary" : "default"}
+            sx={{
+              fontSize: '11px',
+              fontWeight: 600,
+              height: 26,
+              borderColor: 'divider',
+              '& .MuiChip-icon': {
+                color: message.isStreaming ? 'primary.main' : 'text.secondary',
+              },
+              '&:hover': {
+                bgcolor: 'action.hover',
+              }
+            }}
+          />
+
+          {/* Collapsible List Container */}
+          <Collapse in={logsExpanded} timeout="auto" unmountOnExit>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 1.5,
+                mt: 1,
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50',
+                borderColor: 'divider',
+                borderRadius: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
+                overflowY: 'auto',
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                maxHeight: 150,
+              }}
+            >
+              {/* Steps List */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                {stepsList.map((step, idx) => {
+                  const isToolCall = step.includes('Tool Call:');
+                  const isError = step.startsWith('Error:');
+                  const isCorrection = step.startsWith('Self-Correction');
+                  const isLast = idx === stepsList.length - 1;
+                  const isPending = message.isStreaming && isLast;
+
+                  const isSkillStage = step.startsWith('Skill Stage:');
+
+                  let dotColor = 'text.secondary';
+                  let textColor: any = 'text.primary';
+                  let fontWeight = 400;
+
+                  if (isSkillStage) {
+                    dotColor = 'success.main';
+                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'success.light' : 'success.dark';
+                    fontWeight = 600;
+                  } else if (isToolCall) {
+                    dotColor = 'info.main';
+                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'info.light' : 'info.dark';
+                    fontWeight = 500;
+                  } else if (isError) {
+                    dotColor = 'error.main';
+                    textColor = 'error.main';
+                  } else if (isCorrection) {
+                    dotColor = 'warning.main';
+                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark';
+                  } else if (isLast && !message.isStreaming) {
+                    dotColor = 'success.main';
+                  }
+
+                  return (
+                    <Box
+                      key={idx}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        fontSize: '11px',
+                        color: textColor,
+                        fontWeight: fontWeight,
+                        overflow: 'hidden',
+                        animation: (message.isStreaming && isLast) ? 'slideDownAndFade 300ms ease-out forwards' : 'none',
+                        '@keyframes slideDownAndFade': {
+                          '0%': {
+                            opacity: 0,
+                            maxHeight: 0,
+                            transform: 'translateY(-4px)'
+                          },
+                          '100%': {
+                            opacity: 1,
+                            maxHeight: '60px',
+                            transform: 'translateY(0)'
+                          }
+                        }
+                      }}
+                    >
+                      {/* Step Indicator */}
+                      {isSkillStage ? (
+                        <Box sx={{ color: 'success.main', fontWeight: 900, flexShrink: 0, fontSize: '11px', lineHeight: 1 }}>✓</Box>
+                      ) : isPending ? (
+                        <AnimatedLogo scale={0.9} spinSpeed={0.04} />
+                      ) : (
+                        <Box
+                          sx={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            bgcolor: dotColor,
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '11px', lineHeight: 1.2 }}>
+                        {step}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+
+              {/* Token Usage Block */}
+              {message.tokenUsage && (
+                <Box
+                  sx={{
+                    mt: 0.5,
+                    pt: 1,
+                    borderTop: '1px dashed',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 1.5,
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '10px', fontWeight: 600 }}>
+                    Token Usage:
+                  </Typography>
+                  <Chip
+                    label={`Prompt: ${message.tokenUsage.prompt}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', color: 'text.secondary' }}
+                  />
+                  <Chip
+                    label={`Response: ${message.tokenUsage.completion}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', color: 'text.secondary' }}
+                  />
+                  <Chip
+                    label={`Total: ${message.tokenUsage.total}`}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', fontWeight: 600 }}
+                  />
+                </Box>
+              )}
+
+              {/* Raw Tool Call Inspection inside collapsed area if exists */}
+              {message.actionResult && (
+                <Box sx={{ mt: 0.5, pt: 0.5, borderTop: '1px dashed', borderColor: 'divider' }}>
+                  <Box
+                    onClick={() => setShowInspector(!showInspector)}
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      opacity: 0.7,
+                      '&:hover': { opacity: 1 },
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontFamily: 'monospace', fontSize: '10px' }}>
+                      {showInspector ? '▼ Hide Parameters' : '▶ Show Parameters'} (<code>{message.actionResult.action}</code>)
+                    </Typography>
+                  </Box>
+                  {showInspector && (
+                    <Box
+                      component="pre"
+                      sx={{
+                        m: 0,
+                        mt: 0.5,
+                        p: 1,
+                        bgcolor: 'background.paper',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        fontSize: '9px',
+                        fontFamily: 'monospace',
+                        color: 'text.secondary',
+                        overflowX: 'auto',
+                      }}
+                    >
+                      {JSON.stringify(
+                        {
+                          action: message.actionResult.action,
+                          categories: message.actionResult.categories,
+                          accounts: message.actionResult.accounts,
+                          search: message.actionResult.search,
+                          minPrice: message.actionResult.minPrice,
+                          maxPrice: message.actionResult.maxPrice,
+                          preset: message.actionResult.preset,
+                          customStart: message.actionResult.customStart,
+                          customEnd: message.actionResult.customEnd,
+                        },
+                        (_key, val) => val === undefined || val === null ? undefined : val,
+                        2
+                      )}
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </Paper>
+          </Collapse>
+        </Box>
+      )}
+
       {displayContent ? (
         <Paper
           elevation={0}
@@ -522,236 +751,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         </Box>
       )}
 
-      {/* Skill stages are now embedded directly in the execution log steps */}
 
-      {hasSteps && (
-        <Box sx={{ width: '85%', mt: 0.5 }}>
-
-
-          {/* Collapsible Chip */}
-          <Chip
-            icon={logsExpanded ? <ExpandLessIcon sx={{ fontSize: '16px !important' }} /> : <ExpandMoreIcon sx={{ fontSize: '16px !important' }} />}
-            label={message.isStreaming ? `LLM Progress (${stepsList.length} steps)` : `Execution Log (${stepsList.length} steps)`}
-            onClick={() => setIsLogsExpanded(!logsExpanded)}
-            variant="outlined"
-            size="small"
-            clickable
-            color={message.isStreaming ? "primary" : "default"}
-            sx={{
-              fontSize: '11px',
-              fontWeight: 600,
-              height: 26,
-              borderColor: 'divider',
-              '& .MuiChip-icon': {
-                color: message.isStreaming ? 'primary.main' : 'text.secondary',
-              },
-              '&:hover': {
-                bgcolor: 'action.hover',
-              }
-            }}
-          />
-
-          {/* Collapsible List Container */}
-          <Collapse in={logsExpanded} timeout="auto" unmountOnExit>
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 1.5,
-                mt: 1,
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50',
-                borderColor: 'divider',
-                borderRadius: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1,
-                overflowY: 'auto',
-                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                height: message.isStreaming ? 320 : 'auto',
-                maxHeight: 320,
-              }}
-            >
-              {/* Steps List */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                {stepsList.map((step, idx) => {
-                  const isToolCall = step.includes('Tool Call:');
-                  const isError = step.startsWith('Error:');
-                  const isCorrection = step.startsWith('Self-Correction');
-                  const isLast = idx === stepsList.length - 1;
-                  const isPending = message.isStreaming && isLast;
-
-                  const isSkillStage = step.startsWith('Skill Stage:');
-
-                  let dotColor = 'text.secondary';
-                  let textColor: any = 'text.primary';
-                  let fontWeight = 400;
-
-                  if (isSkillStage) {
-                    dotColor = 'success.main';
-                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'success.light' : 'success.dark';
-                    fontWeight = 600;
-                  } else if (isToolCall) {
-                    dotColor = 'info.main';
-                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'info.light' : 'info.dark';
-                    fontWeight = 500;
-                  } else if (isError) {
-                    dotColor = 'error.main';
-                    textColor = 'error.main';
-                  } else if (isCorrection) {
-                    dotColor = 'warning.main';
-                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark';
-                  } else if (isLast && !message.isStreaming) {
-                    dotColor = 'success.main';
-                  }
-
-                  return (
-                    <Box
-                      key={idx}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        fontSize: '11px',
-                        color: textColor,
-                        fontWeight: fontWeight,
-                        overflow: 'hidden',
-                        animation: (message.isStreaming && isLast) ? 'slideDownAndFade 300ms ease-out forwards' : 'none',
-                        '@keyframes slideDownAndFade': {
-                          '0%': {
-                            opacity: 0,
-                            maxHeight: 0,
-                            transform: 'translateY(-4px)'
-                          },
-                          '100%': {
-                            opacity: 1,
-                            maxHeight: '60px',
-                            transform: 'translateY(0)'
-                          }
-                        }
-                      }}
-                    >
-                      {/* Step Indicator */}
-                      {isSkillStage ? (
-                        <Box sx={{ color: 'success.main', fontWeight: 900, flexShrink: 0, fontSize: '11px', lineHeight: 1 }}>✓</Box>
-                      ) : isPending ? (
-                        <AnimatedLogo scale={0.9} spinSpeed={0.04} />
-                      ) : (
-                        <Box
-                          sx={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            bgcolor: dotColor,
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '11px', lineHeight: 1.2 }}>
-                        {step}
-                      </Typography>
-                    </Box>
-                  );
-                })}
-              </Box>
-
-              {/* Token Usage Block */}
-              {message.tokenUsage && (
-                <Box
-                  sx={{
-                    mt: 0.5,
-                    pt: 1,
-                    borderTop: '1px dashed',
-                    borderColor: 'divider',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    gap: 1.5,
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '10px', fontWeight: 600 }}>
-                    Token Usage:
-                  </Typography>
-                  <Chip
-                    label={`Prompt: ${message.tokenUsage.prompt}`}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', color: 'text.secondary' }}
-                  />
-                  <Chip
-                    label={`Response: ${message.tokenUsage.completion}`}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', color: 'text.secondary' }}
-                  />
-                  <Chip
-                    label={`Total: ${message.tokenUsage.total}`}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', fontWeight: 600 }}
-                  />
-                </Box>
-              )}
-
-              {/* Raw Tool Call Inspection inside collapsed area if exists */}
-              {message.actionResult && (
-                <Box sx={{ mt: 0.5, pt: 0.5, borderTop: '1px dashed', borderColor: 'divider' }}>
-                  <Box
-                    onClick={() => setShowInspector(!showInspector)}
-                    sx={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 0.5,
-                      cursor: 'pointer',
-                      userSelect: 'none',
-                      opacity: 0.7,
-                      '&:hover': { opacity: 1 },
-                    }}
-                  >
-                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontFamily: 'monospace', fontSize: '10px' }}>
-                      {showInspector ? '▼ Hide Parameters' : '▶ Show Parameters'} (<code>{message.actionResult.action}</code>)
-                    </Typography>
-                  </Box>
-                  {showInspector && (
-                    <Box
-                      component="pre"
-                      sx={{
-                        m: 0,
-                        mt: 0.5,
-                        p: 1,
-                        bgcolor: 'background.paper',
-                        borderRadius: 1,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        fontSize: '9px',
-                        fontFamily: 'monospace',
-                        color: 'text.secondary',
-                        overflowX: 'auto',
-                      }}
-                    >
-                      {JSON.stringify(
-                        {
-                          action: message.actionResult.action,
-                          categories: message.actionResult.categories,
-                          accounts: message.actionResult.accounts,
-                          search: message.actionResult.search,
-                          minPrice: message.actionResult.minPrice,
-                          maxPrice: message.actionResult.maxPrice,
-                          preset: message.actionResult.preset,
-                          customStart: message.actionResult.customStart,
-                          customEnd: message.actionResult.customEnd,
-                          accessibilityAuditScore: message.actionResult.accessibilityReport?.score,
-                        },
-                        (_key, val) => val === undefined || val === null ? undefined : val,
-                        2
-                      )}
-                    </Box>
-                  )}
-                </Box>
-              )}
-            </Paper>
-          </Collapse>
-        </Box>
-      )}
 
       {!hasSteps && message.actionResult && (
         <Box sx={{ width: '85%', mt: 0.5 }}>

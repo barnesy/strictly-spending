@@ -42,7 +42,7 @@ interface ChatStore {
   modelName: string;
   setModelName: (name: string) => void;
   addMessage: (msg: ChatMessage) => void;
-  startStreamingMessage: (initialSteps?: string[], purpose?: 'tool_select' | 'explanation') => void;
+  startStreamingMessage: (initialSteps?: string[], purpose?: 'tool_select' | 'explanation', resumeLastMessage?: boolean) => void;
   appendStreamingToken: (token: string) => void;
   updateStreamingMetadata: (steps: string[], tokenUsage?: { prompt: number; completion: number; total: number }) => void;
   finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: string[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation', activeSkillId?: string, completedStages?: string[]) => Promise<void>;
@@ -130,17 +130,17 @@ export const useChatStore = create<ChatStore>()(
         }
       },
 
-      startStreamingMessage: (initialSteps, purpose) => {
+      startStreamingMessage: (initialSteps, purpose, resumeLastMessage) => {
         set((state) => {
           const lastMsg = state.messages[state.messages.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+          if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.isStreaming || resumeLastMessage)) {
             const updated = [...state.messages];
             updated[updated.length - 1] = {
-              role: 'assistant',
-              content: '',
+              ...lastMsg,
+              content: resumeLastMessage ? '' : lastMsg.content,
               isStreaming: true,
               steps: initialSteps || [],
-              purpose
+              purpose: purpose || lastMsg.purpose
             };
             return { messages: updated };
           }
@@ -189,12 +189,12 @@ export const useChatStore = create<ChatStore>()(
             updated[updated.length - 1] = {
               role: 'assistant',
               content: finalContent,
-              actionResult,
+              actionResult: actionResult !== undefined && actionResult !== null ? actionResult : lastMsg.actionResult,
               steps: steps || lastMsg.steps,
               tokenUsage: tokenUsage || lastMsg.tokenUsage,
               purpose: purpose || lastMsg.purpose,
-              activeSkillId,
-              completedStages
+              activeSkillId: activeSkillId !== undefined ? activeSkillId : lastMsg.activeSkillId,
+              completedStages: completedStages !== undefined ? completedStages : lastMsg.completedStages
             };
             return { messages: updated };
           }

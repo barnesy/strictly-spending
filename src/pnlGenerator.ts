@@ -555,3 +555,89 @@ ${tableRows.join('\n')}
     summaryCsv
   };
 }
+
+export interface CustomDocumentParams {
+  start: string;
+  end: string;
+  resolvedCats: string[];
+  resolvedAccts: number[];
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  markdownDocId: string;
+  spreadsheetDocId: string;
+  documentContent?: string;
+}
+
+export async function generateCustomDocumentData(params: CustomDocumentParams) {
+  const {
+    start,
+    end,
+    resolvedCats,
+    resolvedAccts,
+    search,
+    minPrice,
+    maxPrice,
+    documentContent
+  } = params;
+
+  const store = useDataStore.getState();
+  const allAccts = store.isInitialized ? store.accounts : await db.select().from(schema.accounts);
+  const allTxns = store.isInitialized ? store.transactions : await db.select().from(schema.transactions);
+
+  const matchedTxns = allTxns.filter(t => {
+    if (t.date < start || t.date > end) return false;
+    if (!resolvedAccts.includes(t.accountId)) return false;
+
+    if (search) {
+      const q = search.toLowerCase();
+      if (!t.description.toLowerCase().includes(q) && !t.merchantKey.toLowerCase().includes(q)) {
+        return false;
+      }
+    }
+
+    if (minPrice !== undefined) {
+      if (Math.abs(t.amount) < minPrice) return false;
+    }
+    if (maxPrice !== undefined) {
+      if (Math.abs(t.amount) > maxPrice) return false;
+    }
+
+    const isCategoryMatched = resolvedCats.some(c => c.toLowerCase() === t.category.toLowerCase());
+    if (!isCategoryMatched) return false;
+
+    return true;
+  }).sort((a, b) => a.date.localeCompare(b.date));
+
+  const accountNameMap: Record<number, string> = {};
+  for (const a of allAccts) {
+    if (a.id !== undefined) {
+      accountNameMap[a.id] = a.name;
+    }
+  }
+
+  const customMarkdown = documentContent || `# Custom Document
+**Period:** ${start} to ${end}
+Total Transactions: **${matchedTxns.length}**
+`;
+
+  const csvLines: string[] = ['ID,Date,Account,Description,Category,Amount,Is Business,Tax Category,Deduction Status'];
+  for (const t of matchedTxns) {
+    const accName = accountNameMap[t.accountId] || `Account ${t.accountId}`;
+    const taxCatLabel = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.label || t.taxCategory) : '';
+    const bizText = t.isBusiness === true ? 'TRUE' : t.isBusiness === false ? 'FALSE' : '';
+    
+    const escapeCsv = (val: string) => {
+      const cleaned = val.replace(/"/g, '""');
+      return cleaned.includes(',') || cleaned.includes('"') || cleaned.includes('\n') ? `"${cleaned}"` : cleaned;
+    };
+    
+    csvLines.push(`${t.id},${t.date},${escapeCsv(accName)},${escapeCsv(t.description)},${escapeCsv(t.category)},${t.amount.toFixed(2)},${bizText},${escapeCsv(taxCatLabel)},${t.deductionStatus || ''}`);
+  }
+  const customCsv = csvLines.join('\n');
+
+  return {
+    customMarkdown,
+    customCsv
+  };
+}
