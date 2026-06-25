@@ -1,9 +1,12 @@
-import { db } from '../db';
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+
 import type { AgentSkill, SkillTestCase } from '../types';
 import { useFilters } from '../store';
 import { useBudgetStore } from '../budgetStore';
 import { buildRecurrenceMap } from '../recurrence';
 import { buildForecast } from '../forecast';
+import { getConsolidatedRecurringMerchants } from '../budgets';
 
 import { EVALUATOR_RESPONSE_SCHEMA, type SkillTestResult } from './types';
 import { getSystemPrompt, GENERAL_SYSTEM_PROMPT } from './prompts';
@@ -436,11 +439,11 @@ If no, return {"success": false, "score": 0 to 80, "reasoning": "Explain what is
 }
 
 export async function calculateGlobalRunwayData() {
-  const accounts = await db.accounts.toArray();
-  const budgets = await db.budgets.toArray();
-  const allTxns = await db.transactions.toArray();
-  const categories = await db.categories.toArray();
-  const overrides = await db.merchantOverrides.toArray();
+  const accounts = await db.select().from(schema.accounts);
+  const budgets = await db.select().from(schema.budgets);
+  const allTxns = await db.select().from(schema.transactions);
+  const categories = await db.select().from(schema.categories);
+  const overrides = await db.select().from(schema.merchantOverrides);
 
   const filters = useFilters.getState();
   const enabledSet = new Set(filters.enabledAccountIds);
@@ -461,13 +464,17 @@ export async function calculateGlobalRunwayData() {
   const recurrenceMap = buildRecurrenceMap(allTxns, overrides);
   const forecast = buildForecast(allTxns, recurrenceMap, categories);
   
-  const recurringProjected = forecast
-    .filter((f) => f.kind === 'recurring' && !excludedMerchants.has(f.merchantKey))
-    .reduce((sum, f) => sum + f.monthlyEstimate, 0);
+  const recurringCategoryNames = new Set(
+    categories.filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+  );
+  const consolidatedMerchants = getConsolidatedRecurringMerchants(allTxns, recurringCategoryNames);
+  const recurringProjected = consolidatedMerchants
+    .filter((m) => !excludedBudgetCategories.has(m.category) && !excludedMerchants.has(m.merchantKey))
+    .reduce((sum, m) => sum + m.monthlyAverage, 0);
 
   const activeBudgets = budgets
     ? budgets
-        .filter((b) => !filters.disabledCategories.includes(b.category) && !excludedBudgetCategories.has(b.category))
+        .filter((b) => !filters.disabledCategories.includes(b.category) && !excludedBudgetCategories.has(b.category) && !recurringCategoryNames.has(b.category))
         .reduce((sum, b) => sum + b.monthlyAmount, 0)
     : 0;
 

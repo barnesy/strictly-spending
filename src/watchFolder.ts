@@ -1,8 +1,11 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq } from 'drizzle-orm';
 /**
  * Watch-folder integration via the File System Access API.
  *
  * High-level model:
- *   - User picks a folder once → handle persists to Dexie
+ *   - User picks a folder once → handle persists to the database
  *   - Each scan: list files, hash content, filter to ones not yet imported
  *   - Browser permission can lapse between sessions → we re-prompt on demand
  *
@@ -10,7 +13,7 @@
  * Firefox: not yet supported → caller should fall back to drag-and-drop.
  */
 
-import { db } from './db';
+
 import { sha256 } from './hash';
 import { detectSource, type ParseResult } from './parsers';
 import type {
@@ -29,16 +32,16 @@ export function isWatchFolderSupported(): boolean {
 }
 
 export async function getConfig(): Promise<WatchFolderConfig | null> {
-  const row = await db.settings.get(SETTINGS_KEY);
+  const row = await (await db.select().from(schema.settings).where(eq(schema.settings.key, SETTINGS_KEY)))[0];
   return (row?.value as WatchFolderConfig | undefined) ?? null;
 }
 
 export async function setConfig(config: WatchFolderConfig): Promise<void> {
-  await db.settings.put({ key: SETTINGS_KEY, value: config });
+  await db.insert(schema.settings).values({ key: SETTINGS_KEY, value: config }).onConflictDoNothing();
 }
 
 export async function clearConfig(): Promise<void> {
-  await db.settings.delete(SETTINGS_KEY);
+  await db.delete(schema.settings).where(eq(schema.settings.key, SETTINGS_KEY));
 }
 
 export interface PickerResult {
@@ -146,7 +149,7 @@ export async function scanFolder(
   const skipped: SkippedFile[] = [];
 
   // Pre-load all imported hashes (1 query, then in-memory lookup)
-  const imports = await db.imports.toArray();
+  const imports = await db.select().from(schema.imports);
   const importedHashes = new Map<string, string>();
   for (const imp of imports) {
     if (imp.contentHash) {

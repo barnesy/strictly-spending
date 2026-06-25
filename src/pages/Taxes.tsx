@@ -29,10 +29,12 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DownloadIcon from '@mui/icons-material/Download';
 import Papa from 'papaparse';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useDbQuery as useLiveQuery } from '../hooks/useDbQuery';
+import { db } from '../db/drizzle';
+import * as schema from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { useDataStore } from '../dataStore';
-import type { TaxSettings } from '../types';
+import type { TaxSettings, AppDocument } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
 import { SCHEDULE_C_CATEGORIES, resolveTaxDeduction } from '../taxUtils';
 
@@ -91,11 +93,20 @@ const REQUIRED_DOCUMENTS: Array<{
 export default function Taxes() {
   const theme = useTheme();
 
-  const rawSettings = useLiveQuery(() => db.settings.get('app:taxSettings'), []);
-  const taxSettings: TaxSettings = (rawSettings?.value as TaxSettings) || DEFAULT_TAX_SETTINGS;
+  const { rawSettings, documents, taxRules } = useLiveQuery(async () => {
+    const [settingsRes, docsRes, rulesRes] = await Promise.all([
+      db.select().from(schema.settings).where(eq(schema.settings.key, 'app:taxSettings')),
+      db.select().from(schema.documents),
+      db.select().from(schema.taxRules)
+    ]);
+    return {
+      rawSettings: settingsRes[0],
+      documents: docsRes as AppDocument[],
+      taxRules: rulesRes,
+    };
+  }, []) || { rawSettings: undefined, documents: [], taxRules: [] };
 
-  const documents = useLiveQuery(() => db.documents?.toArray(), []) || [];
-  const taxRules = useLiveQuery(() => db.taxRules.toArray(), []) || [];
+  const taxSettings: TaxSettings = (rawSettings?.value as TaxSettings) || DEFAULT_TAX_SETTINGS;
 
   const transactions = useDataStore((s) => s.transactions);
   const accounts = useDataStore((s) => s.accounts);
@@ -115,10 +126,10 @@ export default function Taxes() {
 
   const handleUpdateSettings = async (updates: Partial<TaxSettings>) => {
     const newSettings = { ...taxSettings, ...updates };
-    await db.settings.put({
-      key: 'app:taxSettings',
-      value: newSettings,
-    });
+    await db.insert(schema.settings)
+      .values({ key: 'app:taxSettings', value: newSettings })
+      .onConflictDoUpdate({ target: schema.settings.key, set: { value: newSettings } });
+    window.dispatchEvent(new Event('db-update'));
   };
 
   const updateNestedSetting = (category: keyof TaxSettings, field: string, value: unknown) => {
@@ -153,47 +164,48 @@ export default function Taxes() {
   const handleBulkUpdateConfirm = async () => {
     if (!bulkAction) return;
     const { type, targetId, value } = bulkAction;
-    await db.transaction('rw', db.transactions, async () => {
-      if (type === 'account') {
-        if (value === 'business') {
-          const txns = await db.transactions.where('accountId').equals(targetId as number).toArray();
-          for (const t of txns) {
-            const guess = resolveTaxDeduction(t.description, t.category, t.merchantKey, taxRules);
-            await db.transactions.update(t.id!, {
-              isBusiness: true,
-              taxCategory: guess.taxCategory || 'other',
-              deductionStatus: 'confirmed',
-            });
-          }
-        } else if (value === 'personal') {
-          await db.transactions.where('accountId').equals(targetId as number).modify({
-            isBusiness: false,
-            taxCategory: undefined,
-            deductionStatus: 'confirmed',
-          });
-        } else if (value === 'unassigned') {
-          await db.transactions.where('accountId').equals(targetId as number).modify({
-            isBusiness: undefined,
-            taxCategory: undefined,
-            deductionStatus: 'pending',
-          });
-        }
-      } else if (type === 'category') {
-        if (value === 'personal') {
-          await db.transactions.where('category').equals(targetId as string).modify({
-            isBusiness: false,
-            taxCategory: undefined,
-            deductionStatus: 'confirmed',
-          });
-        } else {
-          await db.transactions.where('category').equals(targetId as string).modify({
+
+    if (type === 'account') {
+      if (value === 'business') {
+        const txns = await db.select().from(schema.transactions).where(eq(schema.transactions.accountId, targetId as number));
+        for (const t of txns) {
+          const guess = resolveTaxDeduction(t.description, t.category, t.merchantKey, taxRules);
+          await db.update(schema.transactions).set({
             isBusiness: true,
-            taxCategory: value,
+            taxCategory: guess.taxCategory || 'other',
             deductionStatus: 'confirmed',
-          });
+          }).where(eq(schema.transactions.id, t.id!));
         }
+      } else if (value === 'personal') {
+        await db.update(schema.transactions).set({
+          isBusiness: false,
+          taxCategory: null,
+          deductionStatus: 'confirmed',
+        }).where(eq(schema.transactions.accountId, targetId as number));
+      } else if (value === 'unassigned') {
+        await db.update(schema.transactions).set({
+          isBusiness: null,
+          taxCategory: null,
+          deductionStatus: 'pending',
+        }).where(eq(schema.transactions.accountId, targetId as number));
       }
-    });
+    } else if (type === 'category') {
+      if (value === 'personal') {
+        await db.update(schema.transactions).set({
+          isBusiness: false,
+          taxCategory: null,
+          deductionStatus: 'confirmed',
+        }).where(eq(schema.transactions.category, targetId as string));
+      } else {
+        await db.update(schema.transactions).set({
+          isBusiness: true,
+          taxCategory: value,
+          deductionStatus: 'confirmed',
+        }).where(eq(schema.transactions.category, targetId as string));
+      }
+    }
+
+    window.dispatchEvent(new Event('db-update'));
 
     if (type === 'account') {
       const currentMap = taxSettings.accountDefaults || {};
@@ -213,7 +225,7 @@ export default function Taxes() {
 
   const handleDocumentUpload = async (documentId: string, fileInfo: { filename: string; type: string; path: string; uploadedAt: string }) => {
     const newDocId = crypto.randomUUID();
-    await db.documents.put({
+    await db.insert(schema.documents).values({
       id: newDocId,
       name: fileInfo.filename,
       path: fileInfo.path,
@@ -222,6 +234,7 @@ export default function Taxes() {
       associatedChecklistId: documentId,
       createdAt: fileInfo.uploadedAt
     });
+    window.dispatchEvent(new Event('db-update'));
 
     handleUpdateSettings({
       checklist: {
@@ -234,8 +247,9 @@ export default function Taxes() {
   const handleDocumentRemove = async (documentId: string) => {
     const docToRemove = documents.find((d) => d.associatedChecklistId === documentId);
     if (docToRemove) {
-      await db.documents.delete(docToRemove.id);
-      await db.documentContents.delete(docToRemove.id);
+      await db.delete(schema.documents).where(eq(schema.documents.id, docToRemove.id));
+      await db.delete(schema.documentContents).where(eq(schema.documentContents.id, docToRemove.id));
+      window.dispatchEvent(new Event('db-update'));
     }
     
     const checklistCopy = { ...(taxSettings.checklist || {}) };
@@ -650,8 +664,9 @@ export default function Taxes() {
         if (doc) {
           try {
             if (doc.source === 'generated') {
-              const contentRecord = await db.documentContents.get(doc.id);
-              const docContent = contentRecord ? contentRecord.content : doc.content || '';
+              const contentsRes = await db.select().from(schema.documentContents).where(eq(schema.documentContents.id, doc.id));
+              const contentRecord = contentsRes[0];
+              const docContent = contentRecord ? contentRecord.content : (doc as any).content || '';
               if (docContent) {
                 zip.file(doc.name, docContent);
               }

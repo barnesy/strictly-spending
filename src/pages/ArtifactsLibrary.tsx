@@ -1,5 +1,8 @@
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
+import { useDbQuery } from '../hooks/useDbQuery';
+
 import {
   Box,
   Typography,
@@ -12,7 +15,7 @@ import {
 import { useChatStore } from '../chatStore';
 
 export default function ArtifactsLibrary() {
-  const artifacts = useLiveQuery(() => db.artifacts.toArray());
+  const artifacts = useDbQuery(async () => db.select().from(schema.artifacts));
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
 
   if (!artifacts) {
@@ -65,7 +68,7 @@ export default function ArtifactsLibrary() {
                     size="small" 
                     color="error"
                     onClick={async () => {
-                      await db.artifacts.delete(art.id);
+                      await db.delete(schema.artifacts).where(eq(schema.artifacts.id, art.id));
                     }}
                   >
                     Delete

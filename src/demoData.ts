@@ -1,3 +1,6 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq, ne, inArray } from 'drizzle-orm';
 /**
  * Demo data generator.
  *
@@ -15,8 +18,8 @@
  * Non-destructive — doesn't touch any user-imported account or transaction.
  */
 
-import { db } from './db';
-import type { Account, Transaction } from './types';
+
+import type { Transaction } from './types';
 import { extractMerchantKey } from './categorize';
 import { refreshRecurrenceAll } from './recurrence';
 
@@ -165,7 +168,7 @@ export function buildDemoTransactions(
   // Bi-weekly payroll (Income) — every 14 days starting Jan 3
   const start = new Date(year, 0, 3);
   const today = new Date(year, throughMonth + 1, 0);
-  let cursor = new Date(start);
+  const cursor = new Date(start);
   while (cursor <= today) {
     out.push({
       date: isoDate(
@@ -374,7 +377,7 @@ export function buildDemoTransactions(
 }
 
 export async function hasDemoData(): Promise<boolean> {
-  const c = await db.transactions.where('source').equals('demo').count();
+  const c = (await db.select().from(schema.transactions).where(eq(schema.transactions.source, 'demo'))).length;
   return c > 0;
 }
 
@@ -395,30 +398,30 @@ export async function seedDemoData(): Promise<SeedResult> {
   const accountIds: Record<keyof typeof ACCOUNTS, number> = {} as never;
   for (const key of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
     const name = ACCOUNTS[key];
-    const existing = await db.accounts.where('name').equals(name).first();
+    const existing = (await db.select().from(schema.accounts).where(eq(schema.accounts.name, name)))[0];
     if (existing) {
       accountIds[key] = existing.id!;
       const balance = key === 'checking' ? 12000 : key === 'credit' ? -1500 : -800;
-      await db.accounts.update(existing.id!, { currentBalance: balance });
+      await db.update(schema.accounts).set({ currentBalance: balance }).where(eq(schema.accounts.id, existing.id!));
     } else {
       const balance = key === 'checking' ? 12000 : key === 'credit' ? -1500 : -800;
-      const id = await db.accounts.add({
+      const id = await db.insert(schema.accounts).values({
         name,
         type: key === 'checking' ? 'checking' : 'credit',
         institution: 'Demo Bank',
         source: 'demo',
         enabled: true,
         currentBalance: balance,
-      } as Account);
-      accountIds[key] = id as number;
+      }).returning();
+      accountIds[key] = id[0].id!;
     }
   }
 
   // 1.5. Seed merchant overrides to force recurring classification for demo services
-  await db.merchantOverrides.put({ merchantKey: 'netflix', recurrence: 'monthly' });
-  await db.merchantOverrides.put({ merchantKey: 'claudeai', recurrence: 'monthly' });
-  await db.merchantOverrides.put({ merchantKey: 'spotify', recurrence: 'monthly' });
-  await db.merchantOverrides.put({ merchantKey: 'applemusic', recurrence: 'monthly' });
+  await db.insert(schema.merchantOverrides).values({ merchantKey: 'netflix', recurrence: 'monthly' }).onConflictDoNothing();
+  await db.insert(schema.merchantOverrides).values({ merchantKey: 'claudeai', recurrence: 'monthly' }).onConflictDoNothing();
+  await db.insert(schema.merchantOverrides).values({ merchantKey: 'spotify', recurrence: 'monthly' }).onConflictDoNothing();
+  await db.insert(schema.merchantOverrides).values({ merchantKey: 'applemusic', recurrence: 'monthly' }).onConflictDoNothing();
 
   // 2. Build transactions for the current year through this month
   const demoTxns = buildDemoTransactions(year, throughMonth);
@@ -446,7 +449,7 @@ export async function seedDemoData(): Promise<SeedResult> {
     };
   });
 
-  await db.transactions.bulkAdd(rows as Transaction[]);
+  await db.insert(schema.transactions).values(rows as Transaction[]);
   await refreshRecurrenceAll();
   return { added: rows.length, alreadyPresent: false };
 }
@@ -457,17 +460,14 @@ interface ClearResult {
 }
 
 export async function clearDemoData(): Promise<ClearResult> {
-  const txnIds = await db.transactions
-    .where('source')
-    .equals('demo')
-    .primaryKeys();
-  await db.transactions.bulkDelete(txnIds as number[]);
+  const txnIds = (await db.select({ id: schema.transactions.id }).from(schema.transactions).where(eq(schema.transactions.source, 'demo'))).map(t => t.id);
+  await db.delete(schema.transactions).where(inArray(schema.transactions.id, txnIds as number[]));
 
-  const accts = await db.accounts.where('source').equals('demo').toArray();
-  await db.accounts.bulkDelete(accts.map((a) => a.id!));
+  const accts = await db.select().from(schema.accounts).where(eq(schema.accounts.source, 'demo'));
+  await db.delete(schema.accounts).where(inArray(schema.accounts.id, accts.map(a => a.id!)));
 
   // Clear demo overrides
-  await db.merchantOverrides.bulkDelete(['netflix', 'claudeai', 'spotify', 'applemusic']);
+  await db.delete(schema.merchantOverrides).where(inArray(schema.merchantOverrides.merchantKey, ['netflix', 'claudeai', 'spotify', 'applemusic']));
 
   return {
     removedTransactions: txnIds.length,
@@ -476,16 +476,13 @@ export async function clearDemoData(): Promise<ClearResult> {
 }
 
 export async function clearImportedData(): Promise<ClearResult> {
-  const txnIds = await db.transactions
-    .where('source')
-    .notEqual('demo')
-    .primaryKeys();
-  await db.transactions.bulkDelete(txnIds as number[]);
+  const txnIds = (await db.select({ id: schema.transactions.id }).from(schema.transactions).where(ne(schema.transactions.source, 'demo'))).map(t => t.id);
+  await db.delete(schema.transactions).where(inArray(schema.transactions.id, txnIds as number[]));
 
-  const accts = await db.accounts.where('source').notEqual('demo').toArray();
-  await db.accounts.bulkDelete(accts.map((a) => a.id!));
+  const accts = await db.select().from(schema.accounts).where(ne(schema.accounts.source, 'demo'));
+  await db.delete(schema.accounts).where(inArray(schema.accounts.id, accts.map(a => a.id!)));
 
-  await db.imports.clear();
+  await db.delete(schema.imports);
   await refreshRecurrenceAll();
 
   return {

@@ -1,5 +1,8 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq } from 'drizzle-orm';
 import type { CategoryRule, Source } from './types';
-import { db } from './db';
+
 import { refreshRecurrenceAll } from './recurrence';
 import { normalizeForMatch } from './lib';
 
@@ -189,12 +192,12 @@ export function inferTypeCategory(
 }
 
 export async function recategorizeAll(): Promise<{ updated: number }> {
-  const rules = await db.rules.toArray();
+  const rules = await db.select().from(schema.rules);
   const ctx: CategorizeContext = { rules };
 
   let updated = 0;
-  await db.transaction('rw', db.transactions, async () => {
-    const all = await db.transactions.toArray();
+  await (async () => {
+    const all = await db.select().from(schema.transactions);
     for (const t of all) {
       if (t.userOverridden) continue;
       let category = categorize(t.description, t.merchantKey, t.rawCategory, ctx);
@@ -203,7 +206,7 @@ export async function recategorizeAll(): Promise<{ updated: number }> {
         if (inferred) category = inferred;
       }
       if (category !== t.category) {
-        await db.transactions.update(t.id!, { category });
+        await db.update(schema.transactions).set({ category }).where(eq(schema.transactions.id, t.id!));
         updated++;
       }
     }
@@ -222,7 +225,7 @@ export async function categorizeBatch(
     source: Source;
   }[]
 ): Promise<string[]> {
-  const rules = await db.rules.toArray();
+  const rules = await db.select().from(schema.rules);
   const ctx: CategorizeContext = { rules };
   return transactions.map((t) => {
     let category = categorize(t.description, t.merchantKey, t.rawCategory, ctx);

@@ -18,7 +18,7 @@ jobs:
           - platform: 'macos-13' # This builds for Intel (x86_64) on older GitHub runners
             args: ''
           - platform: 'windows-latest'
-            args: ''
+            args: '--bundles nsis'
 
     runs-on: ${{ matrix.platform }}
     steps:

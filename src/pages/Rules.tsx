@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -40,7 +43,7 @@ import {
   useDefaultLayout,
 } from 'react-resizable-panels';
 import { subtleScrollSx } from '../styles';
-import { db } from '../db';
+
 import type { CategoryRule, Transaction } from '../types';
 import { normalizeForMatch } from '../lib';
 
@@ -145,13 +148,13 @@ export default function Rules() {
 
   const onSave = async (rule: Omit<CategoryRule, 'id' | 'createdAt'> & { id?: number }) => {
     if (rule.id) {
-      await db.rules.update(rule.id, {
+      await db.update(schema.rules).set({
         pattern: rule.pattern,
         category: rule.category,
         priority: rule.priority,
-      });
+      }).where(eq(schema.rules.id, rule.id));
     } else {
-      await db.rules.add({
+      await db.insert(schema.rules).values({
         pattern: rule.pattern,
         category: rule.category,
         priority: rule.priority,
@@ -167,7 +170,7 @@ export default function Rules() {
 
   const handleDeleteConfirm = async () => {
     if (deleteRuleId !== null) {
-      await db.rules.delete(deleteRuleId);
+      await db.delete(schema.rules).where(eq(schema.rules.id, deleteRuleId));
       setDeleteRuleId(null);
     }
   };
@@ -186,12 +189,17 @@ export default function Rules() {
     for (const r of allRules) stats[r.id!] = 0;
     if (!deferredAllTxns) return stats;
 
+    const normalizedRules = allRules.map(r => ({
+      id: r.id!,
+      pattern: r.pattern ? normalizeForMatch(r.pattern) : ''
+    }));
+
     for (const t of deferredAllTxns) {
       const desc = normalizeForMatch(t.description);
-      const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey) : '';
-      for (const r of allRules) {
-        if (r.pattern && (desc.includes(normalizeForMatch(r.pattern)) || (mkey && mkey.includes(normalizeForMatch(r.pattern))))) {
-          stats[r.id!]++;
+      const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey as string) : '';
+      for (const r of normalizedRules) {
+        if (r.pattern && (desc.includes(r.pattern) || (mkey && mkey.includes(r.pattern)))) {
+          stats[r.id]++;
           break; // First matching rule wins
         }
       }
@@ -482,7 +490,7 @@ function RuleDialog({
         return;
       }
       const matches = allTxns.filter(t => {
-        const desc = normalizeForMatch(t.description as string);
+        const desc = normalizeForMatch(t.description);
         const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey as string) : '';
         return desc.includes(norm) || (mkey && mkey.includes(norm));
       });

@@ -1,5 +1,8 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import React, { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../hooks/useDbQuery';
 import {
   Stack,
   Typography,
@@ -15,9 +18,14 @@ import {
   ToggleButton,
   Divider,
 } from '@mui/material';
-import { db } from '../db';
+
 
 const THEME_PALETTES = [
+  {
+    name: 'Default',
+    light: { primary: '#1976d2', secondary: '#5c6bc0', background: '#f5f7fa', paper: '#ffffff' },
+    dark: { primary: '#1976d2', secondary: '#5c6bc0', background: '#0f172a', paper: '#1e293b' },
+  },
   {
     name: 'Grand Budapest',
     light: { primary: '#E8A598', secondary: '#F3B562', background: '#FDE4D1', paper: '#FEF0E7' },
@@ -81,7 +89,7 @@ const FONTS = [
 ];
 
 export default function ThemeManager() {
-  const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
+  const themeSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'themeConfig')))[0], []);
   const config = (themeSetting?.value as Record<string, unknown>) || {};
 
   const mode = (config.mode as string) || 'light';
@@ -106,7 +114,12 @@ export default function ThemeManager() {
       }
     }
 
-    await db.settings.put({ key: 'themeConfig', value: nextConfig });
+    await db.insert(schema.settings)
+      .values({ key: 'themeConfig', value: nextConfig })
+      .onConflictDoUpdate({
+        target: schema.settings.key,
+        set: { value: nextConfig },
+      });
   };
 
   const [localRadius, setLocalRadius] = useState(borderRadius);

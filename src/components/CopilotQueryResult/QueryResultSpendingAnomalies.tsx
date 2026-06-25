@@ -1,9 +1,12 @@
+import { db } from "../../db/drizzle";
+import * as schema from "../../db/schema";
+import { eq } from 'drizzle-orm';
 import { Box, Typography, Stack } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import type { SpendingAnomalies } from '../../copilotAnalytics';
 import { formatCurrency } from './utils';
 
-import { db } from '../../db';
+
 
 interface Props {
   anomalies?: SpendingAnomalies;
@@ -89,7 +92,7 @@ export function QueryResultSpendingAnomalies({ anomalies, setSelectedTxn }: Prop
                 key={idx}
                 onClick={async () => {
                   if (setSelectedTxn) {
-                    const t = await db.transactions.get(outlier.id);
+                    const t = await (await db.select().from(schema.transactions).where(eq(schema.transactions.id, outlier.id)))[0];
                     if (t) setSelectedTxn(t);
                   }
                 }}

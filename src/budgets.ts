@@ -10,8 +10,7 @@ function daysAgoIso(today: Date, days: number): string {
 
 /**
  * Compute the trailing-90-day-average monthly spend per spend category, using
- * ONLY non-recurring transactions (since recurring is handled separately).
- * "Non-recurring" here is determined by the supplied recurringMerchantKeys set.
+ * ALL transactions.
  */
 export function categoryTrailingAvg(
   allTxns: Transaction[],
@@ -28,7 +27,6 @@ export function categoryTrailingAvg(
     if (t.amount >= 0) continue;
     if (!spendCategoryNames.has(t.category)) continue;
     if (t.date < trailingCutoff) continue;
-    if (t.recurrence === 'recurring') continue;
     totals.set(t.category, (totals.get(t.category) || 0) + Math.abs(t.amount));
   }
   // Divide each total by 3 (months) to get $/mo
@@ -45,4 +43,45 @@ export interface CategoryBudgetView {
   monthlyAmount: number;
   userSet: boolean;
   trailingAvg: number;
+}
+
+export interface ConsolidatedMerchant {
+  merchantKey: string;
+  category: string;
+  monthlyAverage: number;
+}
+
+/**
+ * Consolidate merchants over the last 60 days to compute their monthly average.
+ */
+export function getConsolidatedRecurringMerchants(
+  allTxns: Transaction[],
+  recurringCategoryNames: Set<string>,
+  today: Date = new Date()
+): ConsolidatedMerchant[] {
+  const cutoff = daysAgoIso(today, 60);
+
+  const map = new Map<string, { merchantKey: string, category: string, total: number }>();
+
+  for (const t of allTxns) {
+    if (t.amount >= 0) continue;
+    if (t.date < cutoff) continue;
+    if (!recurringCategoryNames.has(t.category)) continue;
+
+    const key = `${t.category}::${t.merchantKey}`;
+    const existing = map.get(key) || { merchantKey: t.merchantKey, category: t.category, total: 0 };
+    existing.total += Math.abs(t.amount);
+    map.set(key, existing);
+  }
+
+  const result: ConsolidatedMerchant[] = [];
+  for (const item of map.values()) {
+    result.push({
+      merchantKey: item.merchantKey,
+      category: item.category,
+      monthlyAverage: item.total / 2, // 60 days is roughly 2 months
+    });
+  }
+
+  return result.sort((a, b) => b.monthlyAverage - a.monthlyAverage);
 }

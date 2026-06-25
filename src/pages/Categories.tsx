@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import {
   Stack,
   Typography,
@@ -18,7 +21,7 @@ import {
 } from '@mui/material';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
-import { db } from '../db';
+
 import { refreshRecurrenceAll } from '../recurrence';
 import PageLoader from '../components/PageLoader';
 import DataTable from '../components/DataTable';
@@ -97,7 +100,8 @@ export default function Categories() {
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     if (!categories || !deferredTransactions) return c;
-    for (const t of deferredTransactions) {
+    for (let i = 0; i < deferredTransactions.length; i++) {
+      const t = deferredTransactions[i];
       c[t.category] = (c[t.category] || 0) + 1;
     }
     return c;
@@ -115,7 +119,7 @@ export default function Categories() {
   }, [categories, searchQuery, categoryType, recurrenceFilter]);
 
   const handleRecurrenceChange = async (categoryId: number, value: 'recurring' | 'onetime') => {
-    await db.categories.update(categoryId, { defaultRecurrence: value });
+    await db.update(schema.categories).set({ defaultRecurrence: value }).where(eq(schema.categories.id, categoryId));
     await refreshRecurrenceAll();
   };
 

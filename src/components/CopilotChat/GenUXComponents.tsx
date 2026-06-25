@@ -1,7 +1,10 @@
+import { db } from "../../db/drizzle";
+import * as schema from "../../db/schema";
+import { eq } from 'drizzle-orm';
 import React, { useState, useEffect } from 'react';
 import { Box, Stack, Paper, Button, TextField, Checkbox, Select, MenuItem, Typography, Divider } from '@mui/material';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../db';
+import { useDbQuery } from '../../hooks/useDbQuery';
+
 import { useDataStore } from '../../dataStore';
 import { useShallow } from 'zustand/react/shallow';
 import { refreshRecurrenceAll } from '../../recurrence';
@@ -146,7 +149,7 @@ export function ProposedCategorizationReportUX({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = useDataStore(useShallow(s => s.categories));
-  const reportSetting = useLiveQuery(() => db.settings.get('app:pendingCategorizationReport'), []);
+  const reportSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:pendingCategorizationReport')))[0], []);
   const report = reportSetting?.value as ProposedCategorizationReport | undefined;
 
   const status = message.actionResult?.status || 'pending';
@@ -242,10 +245,10 @@ export function ProposedCategorizationReportUX({
     updated[idx] = { ...updated[idx], approved: !updated[idx].approved };
     setItems(updated);
     // Persist local edit back to settings so it survives reload/navigation
-    db.settings.put({
+    db.insert(schema.settings).values({
       key: 'app:pendingCategorizationReport',
       value: { ...report, items: updated },
-    });
+    }).onConflictDoNothing();
   };
 
   const handleChangeCategory = (idx: number, newCat: string) => {
@@ -253,10 +256,10 @@ export function ProposedCategorizationReportUX({
     updated[idx] = { ...updated[idx], proposedCategory: newCat };
     setItems(updated);
     // Persist local edit back to settings
-    db.settings.put({
+    db.insert(schema.settings).values({
       key: 'app:pendingCategorizationReport',
       value: { ...report, items: updated },
-    });
+    }).onConflictDoNothing();
   };
 
   const handleApply = async () => {
@@ -265,19 +268,19 @@ export function ProposedCategorizationReportUX({
       const approvedItems = items.filter((item) => item.approved);
       if (approvedItems.length > 0) {
         // Write to DB
-        await db.transaction('rw', db.transactions, async () => {
+        await (async () => {
           for (const item of approvedItems) {
-            await db.transactions.update(item.transactionId, {
+            await db.update(schema.transactions).set({
               category: item.proposedCategory,
               userOverridden: true, // Mark userOverridden since the user manually reviewed and approved
-            });
+            }).where(eq(schema.transactions.id, item.transactionId));
           }
         });
         await refreshRecurrenceAll();
       }
 
       // Clear report from settings
-      await db.settings.delete('app:pendingCategorizationReport');
+      await db.delete(schema.settings).where(eq(schema.settings.key, 'app:pendingCategorizationReport'));
 
       // Update message status
       await onUpdateMessageResult({
@@ -296,7 +299,7 @@ export function ProposedCategorizationReportUX({
     setIsSubmitting(true);
     try {
       // Clear report from settings
-      await db.settings.delete('app:pendingCategorizationReport');
+      await db.delete(schema.settings).where(eq(schema.settings.key, 'app:pendingCategorizationReport'));
 
       // Update message status
       await onUpdateMessageResult({
@@ -341,16 +344,11 @@ export function ProposedCategorizationReportUX({
           <Stack
             spacing={1}
             sx={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.15) transparent' : 'rgba(0,0,0,0.15) transparent',
               maxHeight: 280,
               overflowY: 'auto',
               pr: 0.5,
-              '&::-webkit-scrollbar': {
-                width: 6,
-              },
-              '&::-webkit-scrollbar-thumb': {
-                bgcolor: 'action.selected',
-                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
-              },
             }}
           >
             {items.map((item, idx) => (

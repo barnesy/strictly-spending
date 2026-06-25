@@ -1,8 +1,11 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, between } from 'drizzle-orm';
 import { useState, useEffect } from 'react';
 import { Box, Typography, Stack, Chip, Button } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import { db } from '../db';
+
 import RecategorizeDialog from './RecategorizeDialog';
 import { useFilters } from '../store';
 
@@ -100,7 +103,7 @@ export default function CopilotQueryResult({
       const startStr = customStart || storeEarliest || '2000-01-01';
       const endStr = customEnd || storeLatest || new Date().toISOString().slice(0, 10);
       
-      db.transactions.where('date').between(startStr, endStr, true, true).toArray().then(txns => {
+      db.select().from(schema.transactions).where(between(schema.transactions.date, startStr, endStr)).then(txns => {
         const filtered = txns.filter(t => {
           if (accounts.length > 0 && !accounts.includes('all')) {
             if (!accounts.includes(t.accountId)) return false;
@@ -242,7 +245,7 @@ export default function CopilotQueryResult({
           txn={selectedTxn}
           onClose={async () => {
             setShowRecategorize(false);
-            const updated = await db.transactions.get(selectedTxn.id);
+            const updated = await (await db.select().from(schema.transactions).where(eq(schema.transactions.id, selectedTxn.id)))[0];
             if (updated) {
               setSelectedTxn(updated);
             } else {

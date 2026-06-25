@@ -1,5 +1,8 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq } from 'drizzle-orm';
 import type { RecurrenceKind, Transaction, MerchantOverride, Category } from './types';
-import { db } from './db';
+
 
 export interface RecurrenceInfo {
   kind: RecurrenceKind;
@@ -49,11 +52,20 @@ export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
   const stddev = Math.sqrt(variance);
 
   let kind: RecurrenceKind = 'none';
-  // Tolerances tuned for noisy bank dates (weekends shift bills 1-3 days).
-  if (mean >= 25 && mean <= 35 && stddev <= 7) kind = 'monthly';
-  else if (mean >= 12 && mean <= 17 && stddev <= 5) kind = 'biweekly';
-  else if (mean >= 5 && mean <= 9 && stddev <= 3) kind = 'weekly';
-  else if (mean >= 330 && mean <= 400 && stddev <= 40) kind = 'annual';
+
+  // Check if amounts are somewhat consistent (standard deviation <= 30% of mean)
+  const meanAmt = spend.reduce((s, t) => s + Math.abs(t.amount), 0) / spend.length;
+  const amtVariance = spend.reduce((s, t) => s + (Math.abs(t.amount) - meanAmt) ** 2, 0) / spend.length;
+  const amtStddev = Math.sqrt(amtVariance);
+  const isStableAmount = amtStddev <= (meanAmt * 0.3) + 5; // Allow 30% variance + $5 buffer
+
+  if (isStableAmount) {
+    // Tolerances tuned for noisy bank dates (weekends shift bills 1-3 days).
+    if (mean >= 25 && mean <= 35 && stddev <= 7) kind = 'monthly';
+    else if (mean >= 12 && mean <= 17 && stddev <= 5) kind = 'biweekly';
+    else if (mean >= 5 && mean <= 9 && stddev <= 3) kind = 'weekly';
+    else if (mean >= 330 && mean <= 400 && stddev <= 40) kind = 'annual';
+  }
 
   // Use mean of the MOST RECENT 3 charges so the estimate reflects the
   // current subscription price (subscriptions often change tier; raw mean of
@@ -185,7 +197,7 @@ export function recurrenceLabel(kind: RecurrenceKind): string {
 export function resolveRecurrenceForTransaction(
   txn: Omit<Transaction, 'id' | 'recurrence'> & { recurrenceOverride?: 'recurring' | 'onetime' | null },
   categoryMap: Map<string, Category>,
-  merchantOverrideMap: Map<string, MerchantOverride>,
+  merchantOverrideMap: Map<string, any>,
   autoRecurringMerchantKeys: Set<string>
 ): 'recurring' | 'onetime' {
   // 1. Transaction override
@@ -197,7 +209,7 @@ export function resolveRecurrenceForTransaction(
   if (mkey) {
     const override = merchantOverrideMap.get(mkey);
     if (override) {
-      return override.recurrence === 'none' ? 'onetime' : 'recurring';
+      return override.recurrence === 'none' || override.recurrence === 'onetime' ? 'onetime' : 'recurring';
     }
   }
 
@@ -216,9 +228,9 @@ export function resolveRecurrenceForTransaction(
 }
 
 export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
-  const categories = await db.categories.toArray();
-  const overrides = await db.merchantOverrides.toArray();
-  const allTxns = await db.transactions.toArray();
+  const categories = await db.select().from(schema.categories);
+  const overrides = await db.select().from(schema.merchantOverrides);
+  const allTxns = await db.select().from(schema.transactions);
 
   const categoryMap = new Map(categories.map((c) => [c.name, c]));
   const merchantOverrideMap = new Map(overrides.map((o) => [o.merchantKey, o]));
@@ -241,7 +253,7 @@ export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
   }
 
   let updated = 0;
-  await db.transaction('rw', db.transactions, async () => {
+  await (async () => {
     for (const t of allTxns) {
       const resolved = resolveRecurrenceForTransaction(
         t,
@@ -250,7 +262,7 @@ export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
         autoRecurringMerchantKeys
       );
       if (t.recurrence !== resolved) {
-        await db.transactions.update(t.id!, { recurrence: resolved });
+        await db.update(schema.transactions).set({ recurrence: resolved }).where(eq(schema.transactions.id, t.id!));
         updated++;
       }
     }

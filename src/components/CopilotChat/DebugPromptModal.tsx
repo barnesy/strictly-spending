@@ -25,8 +25,8 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
 
   const { parsed, issues, keywords } = useMemo(() => {
     let parsed: any = null;
-    let issues: Issue[] = [];
-    let keywords: ContextKeyword[] = [];
+    const issues: Issue[] = [];
+    const keywords: ContextKeyword[] = [];
     
     if (!lastDebugPayload) return { parsed, issues, keywords };
 

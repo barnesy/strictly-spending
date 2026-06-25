@@ -340,75 +340,39 @@ Example valid JSON output:
   async reviewTransactionsWithRules(
     transactions: { desc: string; ruleCategory: string }[],
     availableCategories: string[],
-    signal?: AbortSignal,
-    taxCategories?: string[]
-  ): Promise<{ category: string; pattern: string; isBusiness?: boolean; taxCategory?: string }[]> {
+    signal?: AbortSignal
+  ): Promise<{ category: string; pattern: string; recurrence: 'recurring' | 'onetime' }[]> {
     if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
 
     try {
-      const hasTax = taxCategories && taxCategories.length > 0;
-      let prompt = `You are a financial categorization auditor running locally.
+      const prompt = `You are a financial categorization auditor running locally.
 Review the following transaction descriptions and suggest:
 1. The BEST category from the available list.
 2. A simplified keyword/pattern that can be used as a matching rule for future transactions of this merchant.
-   - The keyword MUST be simplified to the most important, distinctive part (e.g. "starbucks" instead of "SQ * STARBUCKS #12", "netflix" instead of "NETFLIX.COM V1234", "uber" instead of "UBER *TRIP 123456").
-   - Strip any random numbers, IDs, dates, credit card prefixes, transaction prefixes (like "SQ *", "TST*", "PAYPAL *", "SP *"), location suffixes, or phone numbers.
+   - The keyword MUST be simplified to the most important, distinctive part (e.g. "starbucks" instead of "SQ * STARBUCKS #12").
+   - Strip any random numbers, IDs, dates, credit card prefixes.
    - It should be lowercase.
-   - It must still get picked up by the sorting next time (not too generic, e.g. don't use "inc" or "corp", but use the merchant name).
-`;
+3. Whether this transaction is recurring (e.g. a subscription, rent, utility bill) or onetime.
 
-      if (hasTax) {
-        prompt += `3. Whether this transaction is a business tax deduction (isBusiness: true or false).
-4. The BEST tax category from the available tax categories list.
-`;
-      }
-
-      prompt += `
 You MUST choose categories from the following Available Categories EXACTLY (do not invent new ones):
 ${availableCategories.map(c => `- ${c}`).join('\n')}
-`;
 
-      if (hasTax && taxCategories) {
-        prompt += `
-You MUST choose tax categories from the following Available Tax Categories EXACTLY (do not invent new ones):
-${taxCategories.map(tc => `- ${tc}`).join('\n')}
-`;
-      }
-
-      prompt += `
 Transactions:
 ${transactions.map((t, i) => `${i+1}. Desc: "${t.desc}" | Rule Guessed: "${t.ruleCategory}"`).join('\n')}
 
 Respond with a JSON object containing a "results" array of objects, where each object has:
 - "category": the suggested category
 - "pattern": the simplified keyword pattern
-`;
+- "recurrence": "recurring" or "onetime"
 
-      if (hasTax) {
-        prompt += `- "isBusiness": true if it's a business expense, false otherwise
-- "taxCategory": the suggested tax category name from the list (if isBusiness is false, set this to "Personal Expense (Non-Business)")
-`;
-      }
-
-      prompt += `
 Example valid JSON output:
-`;
-
-      if (hasTax) {
-        prompt += `{
+{
   "results": [
-    { "category": "Restaurants & Coffee", "pattern": "starbucks", "isBusiness": true, "taxCategory": "Meals (50% deduction)" }
+    { "category": "Restaurants & Coffee", "pattern": "starbucks", "recurrence": "onetime" },
+    { "category": "Entertainment", "pattern": "netflix", "recurrence": "recurring" }
   ]
 }
 `;
-      } else {
-        prompt += `{
-  "results": [
-    { "category": "Restaurants & Coffee", "pattern": "starbucks" }
-  ]
-}
-`;
-      }
 
       const response = await safeFetch('http://localhost:11434/api/chat', {
         method: 'POST',
@@ -441,15 +405,14 @@ Example valid JSON output:
         console.error('Failed to parse AI classification response content:', content, err);
       }
 
-      const resultsList: { category: string; pattern: string; isBusiness?: boolean; taxCategory?: string }[] = [];
+      const resultsList: { category: string; pattern: string; recurrence: 'recurring' | 'onetime' }[] = [];
 
       if (parsed && Array.isArray(parsed.results) && parsed.results.length === transactions.length) {
         for (let idx = 0; idx < transactions.length; idx++) {
           const item = parsed.results[idx];
           const cat = item && typeof item === 'object' && item.category ? String(item.category).trim() : '';
           const pat = item && typeof item === 'object' && item.pattern ? String(item.pattern).trim().toLowerCase() : '';
-          const isBiz = item && typeof item === 'object' && 'isBusiness' in item ? Boolean(item.isBusiness) : undefined;
-          const taxCat = item && typeof item === 'object' && item.taxCategory ? String(item.taxCategory).trim() : undefined;
+          const rec = item && typeof item === 'object' && item.recurrence === 'recurring' ? 'recurring' : 'onetime';
           
           let finalCat = '';
           if (cat && cat !== 'Uncategorized' && availableCategories.includes(cat)) {
@@ -462,8 +425,7 @@ Example valid JSON output:
           resultsList.push({
             category: finalCat,
             pattern: pat || transactions[idx].desc.toLowerCase(),
-            isBusiness: isBiz,
-            taxCategory: taxCat && taxCategories && taxCategories.includes(taxCat) ? taxCat : undefined
+            recurrence: rec
           });
         }
       } else {
@@ -473,8 +435,7 @@ Example valid JSON output:
           resultsList.push({
             category: (fallback && fallback !== 'Uncategorized' && availableCategories.includes(fallback)) ? fallback : '',
             pattern: transactions[idx].desc.toLowerCase(),
-            isBusiness: false,
-            taxCategory: hasTax ? 'Personal Expense (Non-Business)' : undefined
+            recurrence: 'onetime'
           });
         }
       }

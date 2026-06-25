@@ -8,28 +8,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
  *
  * Apply to any container with overflow: auto / scroll.
  */
-export const subtleScrollSx: SxProps<Theme> = {
+export const subtleScrollSx: SxProps<Theme> = (theme) => ({
   scrollbarWidth: 'thin',
-  scrollbarColor: 'rgba(0,0,0,0.15) transparent',
-  '&::-webkit-scrollbar': {
-    width: 8,
-    height: 8,
-  },
-  '&::-webkit-scrollbar-track': {
-    background: 'transparent',
-  },
-  '&::-webkit-scrollbar-thumb': {
-    background: 'rgba(0,0,0,0.12)',
-    borderRadius: 4,
-    border: '2px solid transparent',
-    backgroundClip: 'padding-box',
-    transition: 'background-color 120ms ease',
-  },
-  '&::-webkit-scrollbar-thumb:hover': {
-    background: 'rgba(0,0,0,0.3)',
-    backgroundClip: 'padding-box',
-  },
-  '&::-webkit-scrollbar-corner': {
-    background: 'transparent',
-  },
-};
+  scrollbarColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.15) transparent' : 'rgba(0,0,0,0.15) transparent',
+});

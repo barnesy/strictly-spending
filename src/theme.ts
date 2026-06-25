@@ -127,6 +127,26 @@ export function getAppTheme(config: ThemeConfig) {
             --transition-duration: ${ANIMATION_TIMING.duration}ms;
             --transition-easing: ${ANIMATION_TIMING.easing};
           }
+          html, body {
+            scrollbar-width: thin;
+            scrollbar-color: ${mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'} transparent;
+          }
+          ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+          }
+          ::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          ::-webkit-scrollbar-thumb {
+            background-color: ${mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'};
+            border-radius: 6px;
+            border: 3px solid transparent;
+            background-clip: padding-box;
+          }
+          ::-webkit-scrollbar-thumb:hover {
+            background-color: ${mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)'};
+          }
           .transitioning-panels [data-panel] {
             transition: flex-grow var(--transition-duration) var(--transition-easing),
                         flex-basis var(--transition-duration) var(--transition-easing),
@@ -137,6 +157,18 @@ export function getAppTheme(config: ThemeConfig) {
       MuiDialog: {
         defaultProps: {
           transitionDuration: ANIMATION_TIMING.duration,
+        },
+        styleOverrides: {
+          paper: ({ theme }) => ({
+            [theme.breakpoints.down('sm')]: {
+              margin: 0,
+              width: '100%',
+              maxWidth: '100%',
+              height: '100%',
+              maxHeight: 'none',
+              borderRadius: 0,
+            },
+          }),
         },
       },
       MuiMenu: {

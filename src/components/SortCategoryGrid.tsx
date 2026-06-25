@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import { useState } from 'react';
 import {
   Box,
@@ -14,7 +17,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import { db } from '../db';
+
 import type { Category } from '../types';
 
 interface Props {
@@ -74,17 +77,17 @@ export default function SortCategoryGrid({
   const onCreate = async () => {
     const name = newName.trim();
     if (!name) return;
-    const existing = await db.categories.where('name').equals(name).first();
+    const existing = await (await db.select().from(schema.categories).where(eq(schema.categories.name, name)))[0];
     if (existing) {
       onPick(existing.name);
     } else {
       const maxSort = Math.max(...categories.map((c) => c.sortOrder), 0);
-      await db.categories.add({
+      await db.insert(schema.categories).values({
         name,
         color: newColor,
         type: 'spend',
         sortOrder: maxSort + 1,
-      } as Category);
+      }).returning();
       onPick(name);
     }
     setCreateOpen(false);

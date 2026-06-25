@@ -36,9 +36,8 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
         
-      - name: Build Demo
-        # Uses the build:demo script from package.json which has VITE_DEMO_ONLY=true
-        run: npm run build:demo
+      - name: Build Landing Page
+        run: npm run build:landing
         
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -46,8 +45,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload the dist-demo directory
-          path: './dist-demo'
+          # Upload the dist-landing directory
+          path: './dist-landing'
 
   # Deployment job
   deploy:

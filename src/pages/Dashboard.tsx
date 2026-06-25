@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import { useMemo, useEffect, useState, useDeferredValue } from 'react';
 import {
   Group as PanelGroup,
@@ -26,13 +29,13 @@ import {
   TablePagination,
   Tooltip,
   Alert,
-  Collapse,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   MenuItem,
   TextField,
+  Drawer,
 } from '@mui/material';
 import { SCHEDULE_C_CATEGORIES } from '../taxUtils';
 import PageLoader from '../components/PageLoader';
@@ -41,9 +44,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import CloseIcon from '@mui/icons-material/Close';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 
-import { db } from '../db';
+
 import {
   useFilters,
   resolveDateRange,
@@ -533,6 +537,7 @@ export default function Dashboard() {
             onChange={(_, v) => v && setGroupBy(v)}
             size="small"
             sx={{
+              display: { xs: 'none', md: 'inline-flex' },
               '& .MuiToggleButton-root': { whiteSpace: 'nowrap' },
               overflowX: 'auto',
               ...subtleScrollSx,
@@ -581,7 +586,7 @@ export default function Dashboard() {
             </Button>
           </Box>
         ) : viewMode === 'chart' ? (
-          <Box sx={{ height: '100%', minHeight: 400 }}>
+          <Box sx={{ height: { xs: '75vh', md: '100%' }, minHeight: 400 }}>
             <SpendChart
               monthList={monthList}
               transactions={visibleTxns}
@@ -715,15 +720,45 @@ export default function Dashboard() {
 
         {/* Resizable content panel */}
         {!isDesktop ? (
-          <Stack spacing={2}>
-            <Collapse in={filterVisible} timeout={220} mountOnEnter unmountOnExit>
-              {filterPanel}
-            </Collapse>
-            {middleSectionContent}
-            <Collapse in={sidebarVisible} timeout={220} mountOnEnter unmountOnExit>
-              {merchantsCard}
-            </Collapse>
-          </Stack>
+          <>
+            <Drawer
+              anchor="left"
+              open={filterVisible}
+              onClose={() => setFilterVisible(false)}
+              PaperProps={{ sx: { width: { xs: '100%', sm: 360 } } }}
+              sx={{ zIndex: (theme) => theme.zIndex.drawer + 2 }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>Filters</Typography>
+                <IconButton onClick={() => setFilterVisible(false)} size="small" aria-label="Close filters">
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, overflowY: 'auto', p: 2, ...subtleScrollSx }}>
+                {filterPanel}
+              </Box>
+            </Drawer>
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+              {middleSectionContent}
+            </Box>
+            <Drawer
+              anchor="right"
+              open={sidebarVisible}
+              onClose={() => setSidebarVisible(false)}
+              PaperProps={{ sx: { width: { xs: '100%', sm: 360 } } }}
+              sx={{ zIndex: (theme) => theme.zIndex.drawer + 2 }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>Top Merchants</Typography>
+                <IconButton onClick={() => setSidebarVisible(false)} size="small" aria-label="Close merchants">
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, overflowY: 'auto', p: 2, ...subtleScrollSx }}>
+                {merchantsCard}
+              </Box>
+            </Drawer>
+          </>
         ) : (
           <Box
             sx={{
@@ -802,7 +837,7 @@ export default function Dashboard() {
                       updates.taxCategory = undefined;
                       updates.deductionStatus = 'pending';
                     }
-                    await db.transactions.update(taxEditTxn.id!, updates);
+                    await db.update(schema.transactions).set(updates).where(eq(schema.transactions.id, taxEditTxn.id!));
                     setTaxEditTxn(prev => prev ? { ...prev, ...updates } : null);
                   }}
                 >
@@ -820,7 +855,7 @@ export default function Dashboard() {
                     value={taxEditTxn.taxCategory || 'other'}
                     onChange={async (e) => {
                       const val = e.target.value;
-                      await db.transactions.update(taxEditTxn.id!, { taxCategory: val });
+                      await db.update(schema.transactions).set({ taxCategory: val }).where(eq(schema.transactions.id, taxEditTxn.id!));
                       setTaxEditTxn(prev => prev ? { ...prev, taxCategory: val } : null);
                     }}
                   >

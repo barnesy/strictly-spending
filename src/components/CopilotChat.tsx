@@ -1,3 +1,5 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
 import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import {
   Box,
@@ -18,8 +20,8 @@ import { useFilters } from '../store';
 import { useChatStore, formatModelName } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { parseAIResponse } from '../ai';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useDbQuery } from '../hooks/useDbQuery';
+
 import { executeCopilotCommand } from '../copilotMatcher';
 import { useCopilotActionHandler } from './CopilotChat/useCopilotActionHandler';
 import { ChatInput } from './CopilotChat/ChatInput';
@@ -92,8 +94,13 @@ export default function CopilotChat({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const categories = useLiveQuery(() => db.categories.toArray(), []) || [];
-  const accounts = useLiveQuery(() => db.accounts.toArray(), []) || [];
+  const { categories, accounts } = useDbQuery(async () => {
+    const [catRes, accRes] = await Promise.all([
+      db.select().from(schema.categories),
+      db.select().from(schema.accounts)
+    ]);
+    return { categories: catRes, accounts: accRes };
+  }, []) || { categories: [], accounts: [] };
 
   const [debugModalOpen, setDebugModalOpen] = useState(false);
 

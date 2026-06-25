@@ -1,3 +1,6 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import { useState, useMemo } from 'react';
 import { useDataStore } from '../dataStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -23,8 +26,8 @@ import {
   TableCell,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import { db } from '../db';
-import type { Category, RecurrenceKind } from '../types';
+
+import type { RecurrenceKind } from '../types';
 import { usdCents } from '../lib';
 import { recategorizeAll } from '../categorize';
 import {
@@ -125,29 +128,29 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
             setSaving(false);
             return;
           }
-          const existing = await db.categories.where('name').equals(name).first();
+          const existing = await (await db.select().from(schema.categories).where(eq(schema.categories.name, name)))[0];
           if (existing) {
             categoryName = existing.name;
           } else {
             const maxSort = Math.max(...categories.map((c) => c.sortOrder), 0);
-            await db.categories.add({
+            await db.insert(schema.categories).values({
               name,
               color: newCategoryColor,
               type: 'spend',
               sortOrder: maxSort + 1,
-            } as Category);
+            }).returning();
             categoryName = name;
           }
         }
 
         // Apply override to all matching transactions
         const finalCat = categoryName;
-        await db.transaction('rw', db.transactions, async () => {
+        await (async () => {
           for (const t of matchingTxns) {
-            await db.transactions.update(t.id!, {
+            await db.update(schema.transactions).set({
               category: finalCat,
               userOverridden: true,
-            });
+            }).where(eq(schema.transactions.id, t.id!));
           }
         });
       }
@@ -157,19 +160,19 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
       if (recurrenceChanged) {
         if (recurrenceChoice === AUTO) {
           if (existingOverride) {
-            await db.merchantOverrides.delete(merchantKey);
+            await db.delete(schema.merchantOverrides).where(eq(schema.merchantOverrides.merchantKey, merchantKey));
           }
         } else {
-          await db.merchantOverrides.put({
+          await db.insert(schema.merchantOverrides).values({
             merchantKey,
             recurrence: recurrenceChoice,
-          });
+          }).onConflictDoNothing();
         }
       }
 
       // Optionally save a rule so future imports use this category
       if (categoryChosen && categoryName && saveRule && rulePattern.trim()) {
-        await db.rules.add({
+        await db.insert(schema.rules).values({
           pattern: rulePattern.trim(),
           category: categoryName,
           priority: 1000,
@@ -185,7 +188,7 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
 
       onClose();
     } catch (e) {
-      setError((e as Error).message);
+      setError((e).returning().message);
       setSaving(false);
     }
   };

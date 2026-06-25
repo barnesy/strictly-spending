@@ -1,3 +1,5 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
@@ -33,7 +35,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import RestoreIcon from '@mui/icons-material/Restore';
 import { buildPreview, commitPreview, type ImportPreview } from '../import';
 import { usdCents } from '../lib';
-import { db } from '../db';
+
 import { sha256 } from '../hash';
 import {
   exportToJson,
@@ -231,6 +233,7 @@ export default function Import() {
       );
       setNewUncategorizedCount(newUncategorized);
       setPreviews([]);
+      window.dispatchEvent(new Event('db-update'));
     } catch (e) {
       console.error("Failed to commit import previews:", e);
     } finally {
@@ -275,7 +278,7 @@ export default function Import() {
         headers,
       };
       
-      await db.csvMappings.add(fullMapping);
+      await db.insert(schema.csvMappings).values(fullMapping).returning();
       
       const p = await buildPreview(previews[index].filename, rawText, contentHash);
       setPreviews((prev) => {

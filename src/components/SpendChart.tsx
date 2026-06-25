@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState, useRef } from 'react';
-import { Box } from '@mui/material';
+import { Box, useTheme, useMediaQuery } from '@mui/material';
 import * as echarts from 'echarts';
 import { monthKey, monthLabel, usd } from '../lib';
 import { ACCOUNT_COLORS } from '../theme';
@@ -12,6 +12,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useFilters } from '../store';
 import { useBudgetStore } from '../budgetStore';
 import { buildForecast } from '../forecast';
+import { getConsolidatedRecurringMerchants } from '../budgets';
 
 /** Track a parent element's height via ResizeObserver */
 function useElementHeight(minHeight = 240) {
@@ -74,6 +75,8 @@ export default function SpendChart({
   onMonthClick,
   allTxns,
 }: Props) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const disabledCategories = useFilters((s) => s.disabledCategories);
   const enabledAccountIds = useFilters((s) => s.enabledAccountIds);
   const showRunway = useFilters((s) => s.showRunway);
@@ -88,26 +91,27 @@ export default function SpendChart({
   );
 
   const recurringProjected = useMemo(() => {
-    if (!forecast) return 0;
+    const recurringCategoryNames = new Set(
+      (categories || []).filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+    );
+    const consolidatedMerchants = getConsolidatedRecurringMerchants(allTxns || [], recurringCategoryNames);
     const disabledSet = new Set(disabledCategories);
-    return forecast
-      .filter(
-        (f) =>
-          f.kind === 'recurring' &&
-          !excludedMerchants.has(f.merchantKey) &&
-          !disabledSet.has(f.category)
-      )
-      .reduce((sum, f) => sum + f.monthlyEstimate, 0);
-  }, [forecast, excludedMerchants, disabledCategories]);
+    return consolidatedMerchants
+      .filter((m) => !disabledSet.has(m.category) && !excludedBudgetCategories.has(m.category) && !excludedMerchants.has(m.merchantKey))
+      .reduce((sum, m) => sum + m.monthlyAverage, 0);
+  }, [allTxns, categories, disabledCategories, excludedBudgetCategories, excludedMerchants]);
 
   const totalBudget = useMemo(() => {
+    const recurringCategoryNames = new Set(
+      (categories || []).filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+    );
     const activeBudgets = budgets
       ? budgets
-          .filter((b) => !disabledCategories.includes(b.category) && !excludedBudgetCategories.has(b.category))
+          .filter((b) => !disabledCategories.includes(b.category) && !excludedBudgetCategories.has(b.category) && !recurringCategoryNames.has(b.category))
           .reduce((sum, b) => sum + b.monthlyAmount, 0)
       : 0;
     return activeBudgets + recurringProjected;
-  }, [budgets, disabledCategories, excludedBudgetCategories, recurringProjected]);
+  }, [budgets, disabledCategories, excludedBudgetCategories, recurringProjected, categories]);
 
   const showBudgetLine = monthList.length > 1 && totalBudget > 0;
 
@@ -153,9 +157,9 @@ export default function SpendChart({
         mTotals.set(m, (mTotals.get(m) || 0) + Math.abs(t.amount));
       }
 
-      const orderedCats = categories
+      const orderedCats = Array.from(new Set(categories
         .filter((c) => presentCats.has(c.name))
-        .map((c) => c.name);
+        .map((c) => c.name)));
 
       const series = orderedCats.map((catName) => {
         const cat = categories.find((c) => c.name === catName);
@@ -514,12 +518,20 @@ export default function SpendChart({
           return html;
         }
       },
-      xAxis: {
+      xAxis: isMobile ? {
+        type: 'value',
+        axisLabel: { formatter: (v: number) => usd.format(v) }
+      } : {
         type: 'category',
         data: finalLabels,
         axisTick: { alignWithLabel: true }
       },
-      yAxis: {
+      yAxis: isMobile ? {
+        type: 'category',
+        data: finalLabels,
+        axisTick: { alignWithLabel: true },
+        inverse: true // Flip so the earliest month is at the top on mobile
+      } : {
         type: 'value',
         axisLabel: { formatter: (v: number) => usd.format(v) }
       },
@@ -538,11 +550,11 @@ export default function SpendChart({
         // Add markLine to the first series for the budget
         if (showBudgetLine && i === 0) {
            base.markLine = {
-               data: [{ yAxis: totalBudget, name: 'Monthly Budget' }],
+               data: [{ [isMobile ? 'xAxis' : 'yAxis']: totalBudget, name: 'Recurring + Budget' }],
                label: { 
                    show: true, 
                    position: 'middle', 
-                   formatter: `Monthly Budget (${usd.format(totalBudget)})`,
+                   formatter: `Recurring + Budget (${usd.format(totalBudget)})`,
                    backgroundColor: '#ffffff',
                    color: '#000000',
                    borderColor: '#000000',
@@ -573,7 +585,7 @@ export default function SpendChart({
       }
     });
     
-  }, [finalSeries, finalLabels, showBudgetLine, totalBudget, spendOnly, onMonthClick, monthList, chartHeight]);
+  }, [finalSeries, finalLabels, showBudgetLine, totalBudget, spendOnly, onMonthClick, monthList, chartHeight, isMobile]);
 
   if (series.length === 0 || labels.length === 0) {
     return (
@@ -589,7 +601,7 @@ export default function SpendChart({
         ref={chartRef} 
         style={{ 
           width: '100%', 
-          height: '100%',
+          height: chartHeight,
           cursor: (onMonthClick && monthList.length > 1) ? 'pointer' : 'default' 
         }} 
       />

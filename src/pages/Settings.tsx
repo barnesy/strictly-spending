@@ -1,5 +1,8 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq, ne } from 'drizzle-orm';
 import { useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../hooks/useDbQuery';
 import { NavLink } from 'react-router-dom';
 import {
   Box,
@@ -22,11 +25,10 @@ import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import ScienceIcon from '@mui/icons-material/Science';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { db } from '../db';
+
 import { seedDemoData, clearDemoData, hasDemoData, clearImportedData } from '../demoData';
 import { useFilters } from '../store';
 import { useChatStore } from '../chatStore';
-import { DEMO_ONLY_BUILD } from '../env';
 
 export default function Settings() {
   const demoMode = useFilters((s) => s.demoMode);
@@ -41,16 +43,15 @@ export default function Settings() {
   const [clearImportedBusy, setClearImportedBusy] = useState(false);
   const [clearImportedMsg, setClearImportedMsg] = useState<string | null>(null);
 
-  const hasImportedData = useLiveQuery(
-    async () => {
-      const count = await db.transactions.where('source').notEqual('demo').count();
-      return count > 0;
-    },
-    []
-  );
+  const [hasImportedData, setHasImportedData] = useState(false);
+  useEffect(() => {
+    db.select().from(schema.transactions).where(ne(schema.transactions.source, 'demo')).then(rows => {
+      setHasImportedData(rows.length > 0);
+    });
+  }, []);
 
   // License state
-  const licenseSetting = useLiveQuery(() => db.settings.get('license'), []);
+  const licenseSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'license')))[0], []);
   const license = licenseSetting?.value as { active: boolean; key: string } | undefined;
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseError, setLicenseError] = useState<string | null>(null);
@@ -58,7 +59,9 @@ export default function Settings() {
   const onActivateLicense = async () => {
     setLicenseError(null);
     if (licenseKey.trim().toUpperCase() === 'PRO-123') {
-      await db.settings.put({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } });
+      await db.insert(schema.settings)
+        .values({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } })
+        .onConflictDoNothing();
       setLicenseKey('');
     } else {
       setLicenseError("Invalid license key. For testing, try 'PRO-123'.");
@@ -169,17 +172,6 @@ export default function Settings() {
     <Stack spacing={3}>
       <Typography variant="h5">Settings</Typography>
 
-      {DEMO_ONLY_BUILD && (
-        <Alert severity="info">
-          You're viewing the embedded demo build. Demo data is preloaded,
-          demo mode is forced on, and destructive controls (clear, disconnect)
-          are hidden. Visit the GitHub repo to run the full app locally.
-        </Alert>
-      )}
-
-
-
-      {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
@@ -246,9 +238,7 @@ export default function Settings() {
           )}
         </Stack>
       </Paper>
-      )}
 
-      {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
@@ -340,9 +330,7 @@ export default function Settings() {
           )}
         </Stack>
       </Paper>
-      )}
 
-      {!DEMO_ONLY_BUILD && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Box>
@@ -380,7 +368,6 @@ export default function Settings() {
           )}
         </Stack>
       </Paper>
-      )}
 
       <Dialog
         open={confirmOpen}
@@ -406,7 +393,7 @@ export default function Settings() {
               } else if (confirmType === 'clearImported') {
                 await executeClearImported();
               } else if (confirmType === 'deactivateLicense') {
-                await db.settings.delete('license');
+                await db.delete(schema.settings).where(eq(schema.settings.key, 'license'));
               }
               setConfirmType(null);
             }}

@@ -1,13 +1,18 @@
+import { db } from './db/drizzle';
+import * as schema from './db/schema';
+import { eq } from 'drizzle-orm';
 import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from './hooks/useDbQuery';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer, Tooltip } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer, Tooltip, IconButton, List, ListItem, ListItemButton, ListItemText, Divider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { useTheme } from '@mui/material/styles';
 import { getAppTheme } from './theme';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
 import {
   Group as PanelGroup,
   Panel,
@@ -33,11 +38,14 @@ import Documents from './pages/Documents';
 import ToolsReference from './pages/ToolsReference';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
-import { db } from './db';
+
 import { useFilters } from './store';
 import { useDataStore } from './dataStore';
+import { useChatStore } from './chatStore';
 import { PageTransition } from './components/PageTransition';
 import AnimatedLogo from './components/AnimatedLogo';
+import Landing from './pages/Landing';
+import { LANDING_ONLY_BUILD } from './env';
 
 const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', end: true },
@@ -60,7 +68,7 @@ const ORGANIZE_NAV = [
 const AI_NAV = [
   { to: '/local-model', label: 'Local Model' },
   { to: '/agent-skills', label: 'Agent Skills' },
-  { to: '/tools-reference', label: 'Tool Reference' },
+  { to: '/ai-reference', label: 'AI Reference' },
 ];
 
 const SETTINGS_NAV = [
@@ -71,7 +79,7 @@ const SETTINGS_NAV = [
 ];
 
 export default function App() {
-  const themeSetting = useLiveQuery(() => db.settings.get('themeConfig'), []);
+  const themeSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'themeConfig')))[0], []);
   const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string; backgroundColor?: string; paperColor?: string; textColor?: string; borderRadius?: number; fontFamily?: string; fontSize?: number } | undefined;
 
   const fontSize = themeConfig?.fontSize ?? 14;
@@ -79,6 +87,10 @@ export default function App() {
     const rootSize = (fontSize / 14) * 16;
     document.documentElement.style.fontSize = `${rootSize}px`;
   }, [fontSize]);
+
+  useEffect(() => {
+    useChatStore.getState().loadAgentSkills();
+  }, []);
 
   const dynamicTheme = useMemo(() => {
     const mode = themeConfig?.mode || 'light';
@@ -100,12 +112,13 @@ export default function App() {
   const location = useLocation();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-  const layoutPages = ['/', '/transactions', '/documents', '/categories', '/rules', '/merchants'];
+  const layoutPages = ['/', '/dashboard', '/transactions', '/documents', '/categories', '/rules', '/merchants'];
   const isLayoutPage = layoutPages.includes(location.pathname) && isDesktop;
   const [planningAnchorEl, setPlanningAnchorEl] = useState<null | HTMLElement>(null);
   const [organizeAnchorEl, setOrganizeAnchorEl] = useState<null | HTMLElement>(null);
   const [aiToolsAnchorEl, setAiToolsAnchorEl] = useState<null | HTMLElement>(null);
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(null);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const isPlanningOpen = Boolean(planningAnchorEl);
   const isOrganizeOpen = Boolean(organizeAnchorEl);
@@ -142,7 +155,7 @@ export default function App() {
 
   const isPlanningActive = ['/loans', '/taxes', '/documents'].includes(location.pathname);
   const isOrganizeActive = ['/categories', '/rules', '/merchants'].includes(location.pathname);
-  const isAiToolsActive = ['/local-model', '/agent-skills', '/tools-reference'].includes(location.pathname);
+  const isAiToolsActive = ['/local-model', '/agent-skills', '/ai-reference'].includes(location.pathname);
   const isSettingsActive = ['/import', '/settings', '/animation-playground', '/theme'].includes(location.pathname);
 
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);
@@ -237,10 +250,21 @@ export default function App() {
     ).length;
   }, [transactions, demoMode]);
 
+  if (LANDING_ONLY_BUILD) {
+    return (
+      <ThemeProvider theme={dynamicTheme}>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <CssBaseline />
+          <Landing />
+        </LocalizationProvider>
+      </ThemeProvider>
+    );
+  }
+
   const renderMainWindow = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <AppBar
-        position="static"
+        position="sticky"
         elevation={0}
         sx={{
           bgcolor: 'background.paper',
@@ -250,17 +274,30 @@ export default function App() {
           zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
-        <Toolbar sx={{ gap: 3 }}>
-          <AnimatedLogo sx={{ mr: 1.5 }} />
-          <Box sx={{ display: 'flex', gap: 0.5, flex: 1, alignItems: 'center' }}>
+        <Toolbar sx={{ gap: 3, minHeight: { xs: 56, sm: 64 }, px: { xs: 1.5, sm: 3 } }}>
+          <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
+            <IconButton
+              size="large"
+              edge="start"
+              color="inherit"
+              aria-label="menu"
+              onClick={() => setIsMobileNavOpen(true)}
+              sx={{ mr: 1 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Box>
+          <AnimatedLogo sx={{ mr: { xs: 'auto', md: 1.5 } }} />
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 0.5, flex: 1, alignItems: 'center' }}>
             {PRIMARY_NAV.map((n) => {
               const showBadge =
                 n.badge === 'uncategorized' && uncategorizedCount > 0;
+              const targetRoute = n.to;
               return (
                 <Button
                   key={n.to}
                   component={NavLink}
-                  to={n.to}
+                  to={targetRoute}
                   end={(n as { end?: boolean }).end}
                   sx={{
                     color: 'text.secondary',
@@ -614,6 +651,77 @@ export default function App() {
           </Button>
         </Toolbar>
       </AppBar>
+
+      <Drawer
+        anchor="left"
+        open={isMobileNavOpen}
+        onClose={() => setIsMobileNavOpen(false)}
+        PaperProps={{ sx: { width: 280 } }}
+        sx={{ zIndex: (theme) => theme.zIndex.drawer + 2 }}
+      >
+        <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>Menu</Typography>
+          <IconButton onClick={() => setIsMobileNavOpen(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        <List sx={{ pt: 1, px: 1 }}>
+          <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Primary</Typography>
+          {PRIMARY_NAV.map((n) => {
+            const targetRoute = n.to;
+            return (
+              <ListItem key={n.to} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  component={NavLink}
+                  to={targetRoute}
+                  end={(n as { end?: boolean }).end}
+                  onClick={() => setIsMobileNavOpen(false)}
+                  sx={{
+                    borderRadius: 1,
+                    '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' }
+                  }}
+                >
+                  <ListItemText primary={n.label} />
+                  {n.badge === 'uncategorized' && uncategorizedCount > 0 && (
+                    <Chip label={uncategorizedCount} size="small" color="warning" sx={{ height: 20, '& .MuiChip-label': { px: 1 } }} />
+                  )}
+                </ListItemButton>
+              </ListItem>
+            );
+          })}
+          
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Planning</Typography>
+          {PLANNING_NAV.map((item) => (
+            <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton component={NavLink} to={item.to} onClick={() => setIsMobileNavOpen(false)} sx={{ borderRadius: 1, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' } }}>
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+            </ListItem>
+          ))}
+          
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Organize</Typography>
+          {ORGANIZE_NAV.map((item) => (
+            <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton component={NavLink} to={item.to} onClick={() => setIsMobileNavOpen(false)} sx={{ borderRadius: 1, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' } }}>
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+            </ListItem>
+          ))}
+          
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Settings</Typography>
+          {SETTINGS_NAV.map((item) => (
+            <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton component={NavLink} to={item.to} onClick={() => setIsMobileNavOpen(false)} sx={{ borderRadius: 1, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' } }}>
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+      </Drawer>
+
       <Box
         sx={{
           flex: 1,
@@ -626,8 +734,8 @@ export default function App() {
         <Container
           maxWidth={false}
           sx={{
-            py: 3,
-            px: 3,
+            py: { xs: 1.5, sm: 3 },
+            px: { xs: 1.5, sm: 3 },
             ...(isLayoutPage
               ? {
                 flex: 1,
@@ -638,9 +746,10 @@ export default function App() {
               : {}),
           }}
         >
-          <PageTransition transitionKey={location.pathname === '/' || location.pathname === '/transactions' ? 'dashboard' : location.pathname}>
+          <PageTransition transitionKey={location.pathname === '/' || location.pathname === '/dashboard' || location.pathname === '/transactions' ? 'dashboard' : location.pathname}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/sort" element={<Sort />} />
               <Route path="/budget" element={<Budget />} />
               <Route path="/transactions" element={<Dashboard />} />
@@ -651,7 +760,7 @@ export default function App() {
               <Route path="/theme" element={<ThemeManager />} />
               <Route path="/local-model" element={<LocalModel />} />
               <Route path="/agent-skills" element={<AgentSkills />} />
-              <Route path="/tools-reference" element={<ToolsReference />} />
+              <Route path="/ai-reference" element={<ToolsReference />} />
               <Route path="/animation-playground" element={<AnimationSettings />} />
               <Route path="/merchants" element={<Merchants />} />
               <Route path="/taxes" element={<Taxes />} />
@@ -739,6 +848,7 @@ export default function App() {
                 anchor="right"
                 open={isChatOpen}
                 onClose={() => setIsChatOpen(false)}
+                sx={{ zIndex: (theme) => theme.zIndex.drawer + 2 }}
                 PaperProps={{
                   sx: {
                     width: { xs: '100%', sm: 400 },

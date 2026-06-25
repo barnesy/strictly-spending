@@ -1,5 +1,8 @@
+import { db } from "../db/drizzle";
+import * as schema from "../db/schema";
+import { eq } from 'drizzle-orm';
 import { useState, useEffect, useCallback } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../hooks/useDbQuery';
 import {
   Box,
   Stack,
@@ -28,7 +31,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
-import { db } from '../db';
+
 import { useChatStore, formatModelName } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { localAI } from '../ai';
@@ -44,7 +47,7 @@ const RECOMMENDED_OLLAMA_MODELS = [
 
 
 export default function LocalModel() {
-  const licenseSetting = useLiveQuery(() => db.settings.get('license'), []);
+  const licenseSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'license')))[0], []);
   const license = licenseSetting?.value as { active: boolean; key: string } | undefined;
 
   const [licenseKey, setLicenseKey] = useState('');
@@ -112,7 +115,9 @@ export default function LocalModel() {
   const onActivateLicense = async () => {
     setLicenseError(null);
     if (licenseKey.trim().toUpperCase() === 'PRO-123') {
-      await db.settings.put({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } });
+      await db.insert(schema.settings)
+        .values({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } })
+        .onConflictDoNothing();
       setLicenseKey('');
     } else {
       setLicenseError("Invalid license key. For testing, try 'PRO-123'.");
