@@ -1,6 +1,4 @@
-import { db } from './db/drizzle';
-import * as schema from './db/schema';
-import { eq, ne, inArray } from 'drizzle-orm';
+import { api } from './api';
 /**
  * Demo data generator.
  *
@@ -377,7 +375,8 @@ export function buildDemoTransactions(
 }
 
 export async function hasDemoData(): Promise<boolean> {
-  const c = (await db.select().from(schema.transactions).where(eq(schema.transactions.source, 'demo'))).length;
+  const txns = await api.getTransactions();
+  const c = (txns || []).filter(t => t.source === 'demo').length;
   return c > 0;
 }
 
@@ -396,32 +395,32 @@ export async function seedDemoData(): Promise<SeedResult> {
 
   // 1. Ensure demo accounts exist (idempotent — match by name).
   const accountIds: Record<keyof typeof ACCOUNTS, number> = {} as never;
+  const accounts = await api.getAccounts();
   for (const key of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
     const name = ACCOUNTS[key];
-    const existing = (await db.select().from(schema.accounts).where(eq(schema.accounts.name, name)))[0];
+    const existing = accounts.find(a => a.name === name);
+    const balance = key === 'checking' ? 12000 : key === 'credit' ? -1500 : -800;
     if (existing) {
       accountIds[key] = existing.id!;
-      const balance = key === 'checking' ? 12000 : key === 'credit' ? -1500 : -800;
-      await db.update(schema.accounts).set({ currentBalance: balance }).where(eq(schema.accounts.id, existing.id!));
+      await api.updateAccount(existing.id!, { currentBalance: balance });
     } else {
-      const balance = key === 'checking' ? 12000 : key === 'credit' ? -1500 : -800;
-      const id = await db.insert(schema.accounts).values({
+      const id = await api.addAccount({
         name,
         type: key === 'checking' ? 'checking' : 'credit',
         institution: 'Demo Bank',
         source: 'demo',
         enabled: true,
         currentBalance: balance,
-      }).returning();
-      accountIds[key] = id[0].id!;
+      });
+      accountIds[key] = id;
     }
   }
 
   // 1.5. Seed merchant overrides to force recurring classification for demo services
-  await db.insert(schema.merchantOverrides).values({ merchantKey: 'netflix', recurrence: 'monthly' }).onConflictDoNothing();
-  await db.insert(schema.merchantOverrides).values({ merchantKey: 'claudeai', recurrence: 'monthly' }).onConflictDoNothing();
-  await db.insert(schema.merchantOverrides).values({ merchantKey: 'spotify', recurrence: 'monthly' }).onConflictDoNothing();
-  await db.insert(schema.merchantOverrides).values({ merchantKey: 'applemusic', recurrence: 'monthly' }).onConflictDoNothing();
+  await api.putMerchantOverride({ merchantKey: 'netflix', recurrence: 'monthly' });
+  await api.putMerchantOverride({ merchantKey: 'claudeai', recurrence: 'monthly' });
+  await api.putMerchantOverride({ merchantKey: 'spotify', recurrence: 'monthly' });
+  await api.putMerchantOverride({ merchantKey: 'applemusic', recurrence: 'monthly' });
 
   // 2. Build transactions for the current year through this month
   const demoTxns = buildDemoTransactions(year, throughMonth);
@@ -429,7 +428,7 @@ export async function seedDemoData(): Promise<SeedResult> {
   // 3. Insert (assign dedupKeys with sequence counters so identical
   //    same-day-same-amount-same-desc rows are kept distinct)
   const seqCounter = new Map<string, number>();
-  const rows: Omit<Transaction, 'id'>[] = demoTxns.map((d) => {
+  const rows: Transaction[] = demoTxns.map((d) => {
     const accountName = ACCOUNTS[d.account];
     const merchantKey = extractMerchantKey(d.description);
     const bucket = `${accountName}|${d.date}|${d.amount.toFixed(2)}|${d.description.trim().toLowerCase()}`;
@@ -449,7 +448,7 @@ export async function seedDemoData(): Promise<SeedResult> {
     };
   });
 
-  await db.insert(schema.transactions).values(rows as Transaction[]);
+  await api.bulkAddTransactions(rows);
   await refreshRecurrenceAll();
   return { added: rows.length, alreadyPresent: false };
 }
@@ -460,34 +459,57 @@ interface ClearResult {
 }
 
 export async function clearDemoData(): Promise<ClearResult> {
-  const txnIds = (await db.select({ id: schema.transactions.id }).from(schema.transactions).where(eq(schema.transactions.source, 'demo'))).map(t => t.id);
-  await db.delete(schema.transactions).where(inArray(schema.transactions.id, txnIds as number[]));
+  const allTxns = await api.getTransactions();
+  const demoTxns = allTxns.filter(t => t.source === 'demo');
+  for (const t of demoTxns) {
+    if (t.id !== undefined) {
+      await api.deleteTransaction(t.id);
+    }
+  }
 
-  const accts = await db.select().from(schema.accounts).where(eq(schema.accounts.source, 'demo'));
-  await db.delete(schema.accounts).where(inArray(schema.accounts.id, accts.map(a => a.id!)));
+  const allAccts = await api.getAccounts();
+  const demoAccts = allAccts.filter(a => a.source === 'demo');
+  for (const a of demoAccts) {
+    if (a.id !== undefined) {
+      await api.deleteAccount(a.id);
+    }
+  }
 
   // Clear demo overrides
-  await db.delete(schema.merchantOverrides).where(inArray(schema.merchantOverrides.merchantKey, ['netflix', 'claudeai', 'spotify', 'applemusic']));
+  await api.deleteMerchantOverride('netflix');
+  await api.deleteMerchantOverride('claudeai');
+  await api.deleteMerchantOverride('spotify');
+  await api.deleteMerchantOverride('applemusic');
 
   return {
-    removedTransactions: txnIds.length,
-    removedAccounts: accts.length,
+    removedTransactions: demoTxns.length,
+    removedAccounts: demoAccts.length,
   };
 }
 
 export async function clearImportedData(): Promise<ClearResult> {
-  const txnIds = (await db.select({ id: schema.transactions.id }).from(schema.transactions).where(ne(schema.transactions.source, 'demo'))).map(t => t.id);
-  await db.delete(schema.transactions).where(inArray(schema.transactions.id, txnIds as number[]));
+  const allTxns = await api.getTransactions();
+  const importedTxns = allTxns.filter(t => t.source !== 'demo');
+  for (const t of importedTxns) {
+    if (t.id !== undefined) {
+      await api.deleteTransaction(t.id);
+    }
+  }
 
-  const accts = await db.select().from(schema.accounts).where(ne(schema.accounts.source, 'demo'));
-  await db.delete(schema.accounts).where(inArray(schema.accounts.id, accts.map(a => a.id!)));
+  const allAccts = await api.getAccounts();
+  const importedAccts = allAccts.filter(a => a.source !== 'demo');
+  for (const a of importedAccts) {
+    if (a.id !== undefined) {
+      await api.deleteAccount(a.id);
+    }
+  }
 
-  await db.delete(schema.imports);
+  await api.clearImports();
   await refreshRecurrenceAll();
 
   return {
-    removedTransactions: txnIds.length,
-    removedAccounts: accts.length,
+    removedTransactions: importedTxns.length,
+    removedAccounts: importedAccts.length,
   };
 }
 

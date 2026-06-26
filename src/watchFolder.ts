@@ -1,6 +1,4 @@
-import { db } from './db/drizzle';
-import * as schema from './db/schema';
-import { eq } from 'drizzle-orm';
+import { api } from './api';
 /**
  * Watch-folder integration via the File System Access API.
  *
@@ -32,16 +30,16 @@ export function isWatchFolderSupported(): boolean {
 }
 
 export async function getConfig(): Promise<WatchFolderConfig | null> {
-  const row = await (await db.select().from(schema.settings).where(eq(schema.settings.key, SETTINGS_KEY)))[0];
-  return (row?.value as WatchFolderConfig | undefined) ?? null;
+  const config = await api.getSetting<WatchFolderConfig>(SETTINGS_KEY);
+  return config ?? null;
 }
 
 export async function setConfig(config: WatchFolderConfig): Promise<void> {
-  await db.insert(schema.settings).values({ key: SETTINGS_KEY, value: config }).onConflictDoNothing();
+  await api.putSetting(SETTINGS_KEY, config);
 }
 
 export async function clearConfig(): Promise<void> {
-  await db.delete(schema.settings).where(eq(schema.settings.key, SETTINGS_KEY));
+  await api.deleteSetting(SETTINGS_KEY);
 }
 
 export interface PickerResult {
@@ -149,7 +147,7 @@ export async function scanFolder(
   const skipped: SkippedFile[] = [];
 
   // Pre-load all imported hashes (1 query, then in-memory lookup)
-  const imports = await db.select().from(schema.imports);
+  const imports = await api.getImports();
   const importedHashes = new Map<string, string>();
   for (const imp of imports) {
     if (imp.contentHash) {

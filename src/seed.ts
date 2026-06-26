@@ -673,8 +673,9 @@ const DEFAULT_RULES: StarterRule[] = [...STARTER_RULES, ...LOCAL_RULES];
 
 export async function seedAndMigrate(): Promise<void> {
   // Ensure all default categories exist (by name)
+  const dbCategories = await db.select().from(schema.categories);
   const existingCategoryNames = new Set(
-    (await db.select().from(schema.categories)).map((c) => c.name)
+    (dbCategories || []).map((c) => c.name)
   );
   const newCategories = DEFAULT_CATEGORIES.filter(
     (c) => !existingCategoryNames.has(c.name)
@@ -684,8 +685,9 @@ export async function seedAndMigrate(): Promise<void> {
   }
 
   // Ensure all default rules exist (by pattern)
+  const dbRules = await db.select().from(schema.rules);
   const existingPatterns = new Set(
-    (await db.select().from(schema.rules)).map((r) => r.pattern)
+    (dbRules || []).map((r) => r.pattern)
   );
   const now = new Date().toISOString();
   const newRules = DEFAULT_RULES.filter(
@@ -696,7 +698,7 @@ export async function seedAndMigrate(): Promise<void> {
   }
 
   // Update recurrence defaults for existing categories
-  const allDbCategories = await db.select().from(schema.categories);
+  const allDbCategories = (await db.select().from(schema.categories)) || [];
   for (const dbCat of allDbCategories) {
     const defaultCat = DEFAULT_CATEGORIES.find((c) => c.name === dbCat.name);
     if (defaultCat && dbCat.defaultRecurrence !== defaultCat.defaultRecurrence) {
@@ -711,7 +713,8 @@ export async function seedAndMigrate(): Promise<void> {
   // retroactively re-bucket existing transactions.
   const storedVersion = Number(localStorage.getItem('seed_version') || '0');
   if (storedVersion < SEED_VERSION) {
-    const hasTransactions = (await (await db.select().from(schema.transactions)).length) > 0;
+    const dbTransactions = await db.select().from(schema.transactions);
+    const hasTransactions = (dbTransactions || []).length > 0;
     if (hasTransactions) {
       await recategorizeAll();
       await refreshRecurrenceAll();

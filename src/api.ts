@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { 
   Account, Transaction, CategoryRule, TaxRule, Category, 
   ImportBatch, MerchantOverride, Budget, ChatArtifact, ChatThread, 
-  DbChatMessage, CsvMapping, AppDocument, Loan 
+  DbChatMessage, CsvMapping, AppDocument, Loan, SortCard 
 } from './types';
 
 // For settings which can be arbitrary types
@@ -21,6 +21,58 @@ async function mut<T>(promise: Promise<T>): Promise<T> {
   const result = await promise;
   window.dispatchEvent(new CustomEvent('db-update'));
   return result;
+}
+
+export interface DashboardFilters {
+  startDate?: string;
+  endDate?: string;
+  enabledAccountIds?: number[];
+  disabledCategories?: string[];
+  spendOnly?: boolean;
+  recurrenceFilter?: string;
+  searchQuery?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  demoMode?: boolean;
+}
+
+export interface DashboardAggregates {
+  totalSpend: number;
+  totalIncome: number;
+  accountTotals: Record<number, number>;
+}
+
+export interface TopMerchant {
+  merchantKey: string;
+  total: number;
+  count: number;
+}
+
+export interface SpendChartGroup {
+  month: string;
+  key: string;
+  total: number;
+}
+
+export interface ConsolidatedMerchant {
+  merchantKey: string;
+  category: string;
+  monthlyAverage: number;
+}
+
+export interface CategoryTrailingAvg {
+  category: string;
+  average: number;
+}
+
+export interface MerchantGroup {
+  merchantKey: string;
+  totalSpend: number;
+  totalTransactions: number;
+  categories: Record<string, number>;
+  mostCommonCategory: string;
+  earliestDate: string;
+  latestDate: string;
 }
 
 export const api = {
@@ -47,9 +99,29 @@ export const api = {
     accountId: filters?.accountId, 
     deductionStatus: filters?.deductionStatus 
   }),
+  getTransactionsPaginated: (filters: DashboardFilters, limit: number, offset: number) => 
+    invoke<Transaction[]>('get_transactions_paginated', { filters, limit, offset }),
+  getTransactionCount: (filters: DashboardFilters) => 
+    invoke<number>('get_transaction_count', { filters }),
+  getDashboardAggregates: (filters: DashboardFilters) => 
+    invoke<DashboardAggregates>('get_dashboard_aggregates', { filters }),
+  getTopMerchants: (filters: DashboardFilters) => 
+    invoke<TopMerchant[]>('get_top_merchants', { filters }),
+  getSpendChartData: (filters: DashboardFilters, groupBy: string) => 
+    invoke<SpendChartGroup[]>('get_spend_chart_data', { filters, groupBy }),
+  getIncomeChartData: (filters: DashboardFilters) => 
+    invoke<SpendChartGroup[]>('get_income_chart_data', { filters }),
+  getConsolidatedRecurringMerchants: (isDemo: boolean) => 
+    invoke<ConsolidatedMerchant[]>('get_consolidated_recurring_merchants', { isDemo }),
+  getCategoryTrailingAverages: (isDemo: boolean) => 
+    invoke<CategoryTrailingAvg[]>('get_category_trailing_averages', { isDemo }),
+  getUniqueMerchants: (isDemo: boolean) => 
+    invoke<string[]>('get_unique_merchants', { isDemo }),
+  lastMonthActualSpend: (isDemo: boolean) => 
+    invoke<number>('last_month_actual_spend', { isDemo }),
   addTransaction: (item: Transaction) => mut(invoke<number>('add_transaction', { item })),
   updateTransaction: async (id: number, updates: Partial<Transaction>) => {
-    const existing = (await invoke<Transaction[]>('get_transactions')).find(t => t.id === id);
+    const existing = await invoke<Transaction | null>('get_transaction', { id });
     if (!existing) throw new Error(`Transaction ${id} not found`);
     const full = { ...existing, ...updates };
     return mut(invoke<void>('update_transaction', { id, updates: full }));
@@ -57,6 +129,9 @@ export const api = {
   deleteTransaction: (id: number) => mut(invoke<void>('delete_transaction', { id })),
   bulkAddTransactions: (transactions: Transaction[], ignoreErrors: boolean = false) => 
     mut(invoke<void>('bulk_add_transactions', { transactions, ignoreErrors })),
+  bulkUpdateTransactions: (transactions: Transaction[]) => 
+    mut(invoke<void>('bulk_update_transactions', { transactions })),
+  getSortQueue: (demoMode: boolean) => invoke<SortCard[]>('get_sort_queue', { demoMode }),
 
   // Rules
   getRules: () => invoke<CategoryRule[]>('get_rules'),
@@ -68,6 +143,7 @@ export const api = {
     return mut(invoke<void>('update_rule', { id, updates: full }));
   },
   deleteRule: (id: number) => mut(invoke<void>('delete_rule', { id })),
+  clearRules: () => mut(invoke<void>('clear_rules')),
 
   // Categories
   getCategories: () => invoke<Category[]>('get_categories'),
@@ -95,6 +171,7 @@ export const api = {
   getBudgets: () => invoke<Budget[]>('get_budgets'),
   putBudget: (item: Budget) => mut(invoke<void>('put_budget', { item })),
   bulkPutBudgets: (budgets: Budget[]) => mut(invoke<void>('bulk_put_budgets', { budgets })),
+  clearBudgets: () => mut(invoke<void>('clear_budgets')),
 
   // Settings
   getSettings: () => invoke<AppSetting[]>('get_settings'),
@@ -115,6 +192,7 @@ export const api = {
   getThreads: () => invoke<ChatThread[]>('get_threads'),
   putThread: (item: ChatThread) => mut(invoke<void>('put_thread', { item })),
   deleteThread: (id: string) => mut(invoke<void>('delete_thread', { id })),
+  deleteThreadMessages: (threadId: string) => mut(invoke<void>('delete_thread_messages', { threadId })),
 
   // Messages
   getMessages: () => invoke<DbChatMessage[]>('get_messages'),
@@ -143,9 +221,21 @@ export const api = {
 
   // Loans
   getLoans: () => invoke<Loan[]>('get_loans'),
+  addLoan: (item: Loan) => mut(invoke<number>('add_loan', { item })),
   putLoan: (item: Loan) => mut(invoke<void>('put_loan', { item })),
+  updateLoan: (id: number, updates: Loan) => mut(invoke<void>('update_loan', { id, updates })),
   deleteLoan: (id: number) => mut(invoke<void>('delete_loan', { id })),
 
   // Data Management
   clearTransactions: () => mut(invoke<void>('clear_transactions')),
+  getTransactionBounds: (demoMode: boolean) => 
+    invoke<[string | null, string | null]>('get_transaction_bounds', { demoMode }),
+  getUncategorizedCount: (demoMode: boolean) => 
+    invoke<number>('get_uncategorized_count', { demoMode }),
+  getCategoryTransactionCounts: (demoMode: boolean) =>
+    invoke<Record<string, number>>('get_category_transaction_counts', { demoMode }),
+  getRuleMatchCounts: (demoMode: boolean) =>
+    invoke<Record<number, number>>('get_rule_match_counts', { demoMode }),
+  getMerchantGroups: (demoMode: boolean) =>
+    invoke<MerchantGroup[]>('get_merchant_groups', { demoMode }),
 };

@@ -1,6 +1,4 @@
-import { db } from './db/drizzle';
-import * as schema from './db/schema';
-import { eq } from 'drizzle-orm';
+import { api } from './api';
 
 import type { ParsedTransaction, Transaction, Source } from './types';
 import { refreshRecurrenceAll } from './recurrence';
@@ -80,7 +78,8 @@ export async function buildPreview(
     // Check if there is a saved mapping for these headers
     const headers = extractCsvHeaders(rawText);
     const headerHash = headers.join(',');
-    const existingMapping = await (await db.select().from(schema.csvMappings).where(eq(schema.csvMappings.headerHash, headerHash)))[0];
+    const mappings = await api.getCsvMappings();
+    const existingMapping = mappings.find(m => m.headerHash === headerHash);
     if (existingMapping) {
       source = 'custom';
       parseResult = { source: 'custom' as const, ...parseCustomCsv(filename, rawText, existingMapping as any) };
@@ -102,7 +101,7 @@ export async function buildPreview(
     }
   }
 
-  const rules = await db.select().from(schema.rules);
+  const rules = await api.getRules();
 
   const potentialKeys: string[] = [];
   const tempSeqCounter = new Map<string, number>();
@@ -115,8 +114,9 @@ export async function buildPreview(
     potentialKeys.push(dedupKey(p.accountName, p.date, p.amount, p.description, seq));
   }
 
+  const allTxnsForDedup = await api.getTransactions();
   const existingKeys = new Set<string>(
-    (await (await db.select({ dedupKey: schema.transactions.dedupKey }).from(schema.transactions)).map(r => r.dedupKey)) as string[]
+    allTxnsForDedup.map(t => t.dedupKey)
   );
 
   const rows: ProcessedRow[] = [];
@@ -154,11 +154,10 @@ export async function buildPreview(
   }
 
   // Local AI Cross-Reference
-  const licenseSetting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'license')))[0];
-  const license = licenseSetting?.value as { active: boolean } | undefined;
+  const license = await api.getSetting<{ active: boolean }>('license');
   if (runAiAudit && license?.active && localAI.isLoaded && rows.length > 0) {
     try {
-      const allCats = await db.select().from(schema.categories);
+      const allCats = await api.getCategories();
       const catNames = allCats.map(c => c.name);
       
       // Filter out duplicates (don't waste AI tokens on duplicate rules, though they might have slight variations, we'll send unique descriptions)
@@ -209,38 +208,37 @@ export async function commitPreview(preview: ImportPreview): Promise<{
       uniqueAccounts.set(row.parsed.accountName, row.parsed);
     }
   }
+  const accounts = await api.getAccounts();
   const accountIdByName = new Map<string, number>();
   for (const [name, sample] of uniqueAccounts) {
-    const existing = await (await db.select().from(schema.accounts).where(eq(schema.accounts.name, name)))[0];
+    const existing = accounts.find(a => a.name === name);
     if (existing) {
       accountIdByName.set(name, existing.id!);
     } else {
-      const insertedAcc = await db.insert(schema.accounts).values({
+      const id = await api.addAccount({
         name: sample.accountName,
-        type: sample.accountType,
+        type: sample.accountType as any,
         institution: sample.institution,
         last4: sample.last4,
         source: sample.source,
         enabled: true,
         currentBalance: 0,
-      }).returning();
-      const id = insertedAcc[0].id;
-      accountIdByName.set(name, id!);
+      });
+      accountIdByName.set(name, id);
     }
   }
 
   // Create the import batch row.
-  const insertedBatch = await db.insert(schema.imports).values({
+  const batchId = await api.addImport({
     filename: preview.filename,
-    source: preview.source,
+    source: preview.source!,
     importedAt: new Date().toISOString(),
     rowCount: preview.totalCount,
     newCount: preview.newCount,
     duplicateCount: preview.duplicateCount,
     contentHash: preview.contentHash,
-  }).returning();
-  const batchId = insertedBatch[0].id;
-  const taxRules = await db.select().from(schema.taxRules);
+  });
+  const taxRules = await api.getTaxRules();
   
   // Pass 2: insert all non-duplicate transactions in one shot.
   const toInsert: Omit<Transaction, 'id'>[] = [];
@@ -281,7 +279,7 @@ export async function commitPreview(preview: ImportPreview): Promise<{
   let imported = 0;
   if (toInsert.length > 0) {
     // allKeys + ignoreErrors: skip any unique-constraint conflicts silently.
-    const result = await db.insert(schema.transactions).values(toInsert as Transaction[]);
+    await api.bulkAddTransactions(toInsert as Transaction[], true);
     imported = toInsert.length;
   }
 
@@ -294,11 +292,12 @@ export async function commitPreview(preview: ImportPreview): Promise<{
     const importedBalance = latestBalanceRow?.parsed.balance;
 
     if (importedBalance !== undefined) {
-      await db.update(schema.accounts).set({ currentBalance: importedBalance }).where(eq(schema.accounts.id, accountId));
+      await api.updateAccount(accountId, { currentBalance: importedBalance });
     } else if (sample.accountType === 'credit') {
-      const txns = await db.select().from(schema.transactions).where(eq(schema.transactions.accountId, accountId));
+      const allTxns = await api.getTransactions();
+      const txns = allTxns.filter(t => t.accountId === accountId);
       const balance = txns.reduce((sum, t) => sum + t.amount, 0);
-      await db.update(schema.accounts).set({ currentBalance: balance }).where(eq(schema.accounts.id, accountId));
+      await api.updateAccount(accountId, { currentBalance: balance });
     }
   }
 

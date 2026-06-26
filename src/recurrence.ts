@@ -1,18 +1,51 @@
-import { db } from './db/drizzle';
-import * as schema from './db/schema';
-import { eq } from 'drizzle-orm';
+import { invoke } from '@tauri-apps/api/core';
 import type { RecurrenceKind, Transaction, MerchantOverride, Category } from './types';
-
 
 export interface RecurrenceInfo {
   kind: RecurrenceKind;
   count: number;
   meanIntervalDays: number;
   meanAmount: number;
-  /** Normalized to a monthly figure ($/month) regardless of cadence. */
   estMonthlyCost: number;
   lastDate: string | null;
   source: 'auto' | 'override';
+}
+
+export async function buildRecurrenceMap(isDemo: boolean = false): Promise<Record<string, RecurrenceInfo>> {
+  try {
+    return await invoke<Record<string, RecurrenceInfo>>('build_recurrence_map', { isDemo });
+  } catch (e) {
+    console.error("Failed to build recurrence map natively:", e);
+    return {};
+  }
+}
+
+export function isRecurring(kind: RecurrenceKind): boolean {
+  return kind !== 'none';
+}
+
+export function recurrenceLabel(kind: RecurrenceKind): string {
+  switch (kind) {
+    case 'monthly':
+      return 'Monthly';
+    case 'biweekly':
+      return 'Biweekly';
+    case 'weekly':
+      return 'Weekly';
+    case 'annual':
+      return 'Annual';
+    case 'none':
+      return 'One-time';
+  }
+}
+
+export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
+  try {
+    return await invoke<{ updated: number }>('refresh_recurrence_all');
+  } catch (e) {
+    console.error("Failed to refresh recurrence natively:", e);
+    return { updated: 0 };
+  }
 }
 
 const NONE: RecurrenceInfo = {
@@ -31,7 +64,6 @@ function daysBetween(a: string, b: string): number {
   );
 }
 
-/** Auto-detect recurrence purely from transaction history. */
 export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
   const spend = txns
     .filter((t) => t.amount < 0)
@@ -53,23 +85,18 @@ export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
 
   let kind: RecurrenceKind = 'none';
 
-  // Check if amounts are somewhat consistent (standard deviation <= 30% of mean)
   const meanAmt = spend.reduce((s, t) => s + Math.abs(t.amount), 0) / spend.length;
   const amtVariance = spend.reduce((s, t) => s + (Math.abs(t.amount) - meanAmt) ** 2, 0) / spend.length;
   const amtStddev = Math.sqrt(amtVariance);
-  const isStableAmount = amtStddev <= (meanAmt * 0.3) + 5; // Allow 30% variance + $5 buffer
+  const isStableAmount = amtStddev <= (meanAmt * 0.3) + 5; 
 
   if (isStableAmount) {
-    // Tolerances tuned for noisy bank dates (weekends shift bills 1-3 days).
     if (mean >= 25 && mean <= 35 && stddev <= 7) kind = 'monthly';
     else if (mean >= 12 && mean <= 17 && stddev <= 5) kind = 'biweekly';
     else if (mean >= 5 && mean <= 9 && stddev <= 3) kind = 'weekly';
     else if (mean >= 330 && mean <= 400 && stddev <= 40) kind = 'annual';
   }
 
-  // Use mean of the MOST RECENT 3 charges so the estimate reflects the
-  // current subscription price (subscriptions often change tier; raw mean of
-  // all history understates "what you'll pay next month").
   const recentSpend = spend.slice(-3);
   const meanAmount =
     recentSpend.reduce((s, t) => s + Math.abs(t.amount), 0) /
@@ -102,109 +129,14 @@ export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
   };
 }
 
-/** Apply a user override on top of the auto-detected info. */
-export function applyOverride(
-  auto: RecurrenceInfo,
-  override: MerchantOverride | undefined
-): RecurrenceInfo {
-  if (!override) return auto;
-  const kind = override.recurrence;
-  let estMonthlyCost = auto.estMonthlyCost;
-  // If the override forces a different cadence, recompute the monthly cost from
-  // the observed mean amount + the forced cadence so the burn panel is honest.
-  if (kind !== auto.kind && auto.meanAmount > 0) {
-    switch (kind) {
-      case 'monthly':
-        estMonthlyCost = auto.meanAmount;
-        break;
-      case 'biweekly':
-        estMonthlyCost = auto.meanAmount * (30 / 14);
-        break;
-      case 'weekly':
-        estMonthlyCost = auto.meanAmount * (30 / 7);
-        break;
-      case 'annual':
-        estMonthlyCost = auto.meanAmount / 12;
-        break;
-      case 'none':
-        estMonthlyCost = 0;
-        break;
-    }
-  }
-  return { ...auto, kind, estMonthlyCost, source: 'override' };
-}
-
-/**
- * Build a map of merchantKey -> RecurrenceInfo for a transaction set, applying
- * any user overrides. Pass ALL transactions for the merchant (not just the
- * filtered set) so detection has enough history to be confident.
- */
-export function buildRecurrenceMap(
-  allTxns: Transaction[],
-  overrides: MerchantOverride[]
-): Map<string, RecurrenceInfo> {
-  const byMerchant = new Map<string, Transaction[]>();
-  for (const t of allTxns) {
-    const k = t.merchantKey || '';
-    if (!k) continue;
-    const list = byMerchant.get(k);
-    if (list) list.push(t);
-    else byMerchant.set(k, [t]);
-  }
-  const overrideMap = new Map(overrides.map((o) => [o.merchantKey, o]));
-  const result = new Map<string, RecurrenceInfo>();
-  for (const [merchantKey, txns] of byMerchant) {
-    const recurringTxns = txns.filter(t => t.recurrence === 'recurring');
-    if (recurringTxns.length === 0) continue;
-
-    const auto = detectRecurrence(txns.filter(t => t.amount < 0));
-    const final = applyOverride(auto, overrideMap.get(merchantKey));
-
-    if (final.kind === 'none') {
-      final.kind = 'monthly';
-      const meanAmount = recurringTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0) / recurringTxns.length;
-      final.meanAmount = meanAmount;
-      final.estMonthlyCost = meanAmount;
-    }
-
-    final.count = recurringTxns.length;
-    final.lastDate = recurringTxns[recurringTxns.length - 1]?.date ?? null;
-
-    result.set(merchantKey, final);
-  }
-  return result;
-}
-
-export function isRecurring(kind: RecurrenceKind): boolean {
-  return kind !== 'none';
-}
-
-export function recurrenceLabel(kind: RecurrenceKind): string {
-  switch (kind) {
-    case 'monthly':
-      return 'Monthly';
-    case 'biweekly':
-      return 'Biweekly';
-    case 'weekly':
-      return 'Weekly';
-    case 'annual':
-      return 'Annual';
-    case 'none':
-      return 'One-time';
-  }
-}
-
 export function resolveRecurrenceForTransaction(
   txn: Omit<Transaction, 'id' | 'recurrence'> & { recurrenceOverride?: 'recurring' | 'onetime' | null },
   categoryMap: Map<string, Category>,
   merchantOverrideMap: Map<string, any>,
   autoRecurringMerchantKeys: Set<string>
 ): 'recurring' | 'onetime' {
-  // 1. Transaction override
   if (txn.recurrenceOverride === 'recurring') return 'recurring';
   if (txn.recurrenceOverride === 'onetime') return 'onetime';
-
-  // 2. Merchant override
   const mkey = txn.merchantKey;
   if (mkey) {
     const override = merchantOverrideMap.get(mkey);
@@ -212,61 +144,12 @@ export function resolveRecurrenceForTransaction(
       return override.recurrence === 'none' || override.recurrence === 'onetime' ? 'onetime' : 'recurring';
     }
   }
-
-  // 3. Auto-detection fallback
   if (mkey && autoRecurringMerchantKeys.has(mkey)) {
     return 'recurring';
   }
-
-  // 4. Category default
   const cat = categoryMap.get(txn.category);
   if (cat?.defaultRecurrence) {
     return cat.defaultRecurrence;
   }
-
   return 'onetime';
-}
-
-export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
-  const categories = await db.select().from(schema.categories);
-  const overrides = await db.select().from(schema.merchantOverrides);
-  const allTxns = await db.select().from(schema.transactions);
-
-  const categoryMap = new Map(categories.map((c) => [c.name, c]));
-  const merchantOverrideMap = new Map(overrides.map((o) => [o.merchantKey, o]));
-
-  const byMerchant = new Map<string, Transaction[]>();
-  for (const t of allTxns) {
-    const k = t.merchantKey || '';
-    if (!k) continue;
-    const list = byMerchant.get(k);
-    if (list) list.push(t);
-    else byMerchant.set(k, [t]);
-  }
-
-  const autoRecurringMerchantKeys = new Set<string>();
-  for (const [mkey, txns] of byMerchant) {
-    const auto = detectRecurrence(txns);
-    if (auto.kind !== 'none') {
-      autoRecurringMerchantKeys.add(mkey);
-    }
-  }
-
-  let updated = 0;
-  await (async () => {
-    for (const t of allTxns) {
-      const resolved = resolveRecurrenceForTransaction(
-        t,
-        categoryMap,
-        merchantOverrideMap,
-        autoRecurringMerchantKeys
-      );
-      if (t.recurrence !== resolved) {
-        await db.update(schema.transactions).set({ recurrence: resolved }).where(eq(schema.transactions.id, t.id!));
-        updated++;
-      }
-    }
-  });
-
-  return { updated };
 }

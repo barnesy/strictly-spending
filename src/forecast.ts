@@ -1,5 +1,4 @@
-import type { Category, Transaction } from './types';
-import { isRecurring, type RecurrenceInfo } from './recurrence';
+import { invoke } from '@tauri-apps/api/core';
 
 export interface MerchantForecast {
   merchantKey: string;
@@ -11,84 +10,27 @@ export interface MerchantForecast {
   lastSeen: string;
 }
 
-const TRAILING_DAYS = 90;
-
-function daysAgoIso(today: Date, days: number): string {
-  const d = new Date(today);
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+export async function buildForecast(isDemo: boolean = false): Promise<MerchantForecast[]> {
+  try {
+    return await invoke<MerchantForecast[]>('build_forecast', { isDemo });
+  } catch (e) {
+    console.error("Failed to build forecast natively:", e);
+    return [];
+  }
 }
 
-export function buildForecast(
-  allTxns: Transaction[],
-  recurrenceMap: Map<string, RecurrenceInfo>,
-  categories: Category[],
-  today: Date = new Date()
-): MerchantForecast[] {
-  const spendCategoryNames = new Set(
-    categories.filter((c) => c.type === 'spend').map((c) => c.name)
-  );
-  const trailingCutoff = daysAgoIso(today, TRAILING_DAYS);
-
-  // Group by merchantKey
-  const byMerchant = new Map<string, Transaction[]>();
-  for (const t of allTxns) {
-    if (!t.merchantKey) continue;
-    const list = byMerchant.get(t.merchantKey);
-    if (list) list.push(t);
-    else byMerchant.set(t.merchantKey, [t]);
+export async function lastMonthActualSpendNative(isDemo: boolean = false): Promise<number> {
+  try {
+    return await invoke<number>('last_month_actual_spend', { isDemo });
+  } catch (e) {
+    console.error("Failed to get last month actual spend natively:", e);
+    return 0;
   }
-
-  const out: MerchantForecast[] = [];
-  for (const [merchantKey, txns] of byMerchant) {
-    // Sort by date asc to compute lastSeen and the most-recent category
-    txns.sort((a, b) => a.date.localeCompare(b.date));
-    const mostRecent = txns[txns.length - 1];
-    const category = mostRecent.category;
-
-    // Exclude non-spend categories (Income, Transfers)
-    if (!spendCategoryNames.has(category)) continue;
-
-    const info = recurrenceMap.get(merchantKey);
-    const recurring = !!info && isRecurring(info.kind);
-
-    if (recurring && info) {
-      // Recurring: use the pre-computed monthly cost
-      if (info.estMonthlyCost <= 0) continue;
-      out.push({
-        merchantKey,
-        category,
-        kind: 'recurring',
-        monthlyEstimate: info.estMonthlyCost,
-        cadenceLabel: info.kind,
-        lastSeen: mostRecent.date,
-      });
-    } else {
-      // Variable: trailing 90-day average / 3 months
-      const trailing = txns.filter(
-        (t) => t.date >= trailingCutoff && t.amount < 0
-      );
-      if (trailing.length === 0) continue;
-      const total = trailing.reduce((s, t) => s + Math.abs(t.amount), 0);
-      const monthlyEstimate = total / 3;
-      if (monthlyEstimate <= 0) continue;
-      out.push({
-        merchantKey,
-        category,
-        kind: 'variable',
-        monthlyEstimate,
-        trailingCount: trailing.length,
-        lastSeen: mostRecent.date,
-      });
-    }
-  }
-
-  return out;
 }
 
 export function lastMonthActualSpend(
-  allTxns: Transaction[],
-  categories: Category[],
+  allTxns: any[],
+  categories: any[],
   today: Date = new Date()
 ): number {
   const spendCategoryNames = new Set(
@@ -111,3 +53,4 @@ export function lastMonthActualSpend(
     )
     .reduce((s, t) => s + Math.abs(t.amount), 0);
 }
+

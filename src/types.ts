@@ -15,6 +15,26 @@ export interface Account {
   currentBalance?: number;
 }
 
+export interface RecurrenceInfo {
+  kind: string;
+  count: number;
+  meanIntervalDays: number;
+  meanAmount: number;
+  estMonthlyCost: number;
+  lastDate?: string;
+  source: string;
+}
+
+export interface SortCard {
+  merchantKey: string;
+  txns: Transaction[];
+  totalAbs: number;
+  sampleTxns: Transaction[];
+  recurrence?: RecurrenceInfo;
+  suggestedCategory: string | null;
+  amountSign: 'spend' | 'income';
+}
+
 export interface Transaction {
   id?: number;
   accountId: number;

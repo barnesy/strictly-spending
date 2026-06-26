@@ -1,7 +1,5 @@
-import { db } from './db/drizzle';
-import * as schema from './db/schema';
-import { eq } from 'drizzle-orm';
-import type { CategoryRule, Source } from './types';
+import { api } from './api';
+import type { CategoryRule, Source, Transaction } from './types';
 
 import { refreshRecurrenceAll } from './recurrence';
 import { normalizeForMatch } from './lib';
@@ -192,25 +190,32 @@ export function inferTypeCategory(
 }
 
 export async function recategorizeAll(): Promise<{ updated: number }> {
-  const rules = await db.select().from(schema.rules);
+  const rules = await api.getRules();
   const ctx: CategorizeContext = { rules };
 
   let updated = 0;
-  await (async () => {
-    const all = await db.select().from(schema.transactions);
-    for (const t of all) {
-      if (t.userOverridden) continue;
-      let category = categorize(t.description, t.merchantKey, t.rawCategory, ctx);
-      if (category === 'Uncategorized') {
-        const inferred = inferTypeCategory(t.amount, t.source, t.rawCategory);
-        if (inferred) category = inferred;
-      }
-      if (category !== t.category) {
-        await db.update(schema.transactions).set({ category }).where(eq(schema.transactions.id, t.id!));
-        updated++;
-      }
+  const all = await api.getTransactions();
+  const txsToUpdate: Transaction[] = [];
+
+  for (const t of all) {
+    if (t.userOverridden) continue;
+    let category = categorize(t.description, t.merchantKey, t.rawCategory, ctx);
+    if (category === 'Uncategorized') {
+      const inferred = inferTypeCategory(t.amount, t.source, t.rawCategory);
+      if (inferred) category = inferred;
     }
-  });
+    if (category !== t.category) {
+      txsToUpdate.push({
+        ...t,
+        category,
+      });
+      updated++;
+    }
+  }
+
+  if (txsToUpdate.length > 0) {
+    await api.bulkUpdateTransactions(txsToUpdate);
+  }
   
   await refreshRecurrenceAll();
   return { updated };
@@ -225,7 +230,7 @@ export async function categorizeBatch(
     source: Source;
   }[]
 ): Promise<string[]> {
-  const rules = await db.select().from(schema.rules);
+  const rules = await api.getRules();
   const ctx: CategorizeContext = { rules };
   return transactions.map((t) => {
     let category = categorize(t.description, t.merchantKey, t.rawCategory, ctx);
