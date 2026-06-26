@@ -13,9 +13,3 @@ export const queryClient = new QueryClient({
   },
 });
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('db-update', () => {
-    queryClient.invalidateQueries();
-  });
-}
-

@@ -1,3 +1,4 @@
+import { queryClient } from '../queryClient';
 import { api } from '../api';
 
 function getTableName(table: any): string {
@@ -39,6 +40,28 @@ export interface DbFilter {
   min?: any;
   max?: any;
   conditions?: DbFilter[];
+}
+
+
+function invalidateTable(t: string) {
+  if (t === 'transactions') {
+    queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    queryClient.invalidateQueries({ queryKey: ['transactions_paginated'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
+    queryClient.invalidateQueries({ queryKey: ['top_merchants'] });
+    queryClient.invalidateQueries({ queryKey: ['uncategorized_count'] });
+    queryClient.invalidateQueries({ queryKey: ['spend_chart_data'] });
+  } else if (t === 'merchant_overrides' || t === 'merchantOverrides') {
+    queryClient.invalidateQueries({ queryKey: ['merchant_overrides'] });
+  } else if (t === 'document_contents' || t === 'documentContents') {
+    queryClient.invalidateQueries({ queryKey: ['documents'] });
+  } else if (t === 'tax_rules' || t === 'taxRules') {
+    queryClient.invalidateQueries({ queryKey: ['tax_rules'] });
+  } else if (t === 'csv_mappings' || t === 'csvMappings') {
+    queryClient.invalidateQueries({ queryKey: ['csv_mappings'] });
+  } else {
+    queryClient.invalidateQueries({ queryKey: [t] });
+  }
 }
 
 export function evaluateFilter(item: any, filter: any): boolean {
@@ -257,6 +280,7 @@ class InsertBuilder {
       }
     }
 
+    invalidateTable(t);
     return results;
   }
 }
@@ -290,11 +314,15 @@ class UpdateBuilder {
   async execute() {
     const t = this.tableName;
     const items = await db.select().from(t).where(this.whereClause);
-    for (const item of items) {
-      const full = { ...item, ...this.updates };
-      if (t === 'transactions') {
-        await api.updateTransaction(item.id, full);
-      } else if (t === 'accounts') {
+    if (t === 'transactions') {
+      const mapped = items.map(item => ({ ...item, ...this.updates }));
+      if (mapped.length > 0) {
+        await api.bulkUpdateTransactions(mapped);
+      }
+    } else {
+      for (const item of items) {
+        const full = { ...item, ...this.updates };
+        if (t === 'accounts') {
         await api.updateAccount(item.id, full);
       } else if (t === 'categories') {
         await api.updateCategory(item.id, full);
@@ -322,6 +350,8 @@ class UpdateBuilder {
         throw new Error(`Unknown table for update: ${t}`);
       }
     }
+    }
+    invalidateTable(t);
   }
 }
 
@@ -381,6 +411,7 @@ class DeleteBuilder {
         throw new Error(`Unknown table for delete: ${t}`);
       }
     }
+    invalidateTable(t);
   }
 }
 
