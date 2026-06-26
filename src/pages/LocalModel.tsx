@@ -1,8 +1,8 @@
 import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq } from 'drizzle-orm';
-import { useState, useEffect, useCallback } from 'react';
-import { useDbQuery } from '../hooks/useDbQuery';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSettings } from '../hooks/queries';
 import {
   Box,
   Stack,
@@ -23,6 +23,7 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Grid,
+  CircularProgress,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -30,6 +31,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DownloadIcon from '@mui/icons-material/Download';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 
 import { useChatStore, formatModelName } from '../chatStore';
@@ -37,17 +39,15 @@ import { useShallow } from 'zustand/react/shallow';
 import { localAI } from '../ai';
 
 const RECOMMENDED_OLLAMA_MODELS = [
-  { name: 'llama3.2:1b', label: 'Llama 3.2 1B (Default)', desc: 'Fast, lightweight (1.3 GB). Ideal for most machines.', size: '1.3 GB' },
-  { name: 'llama3.2:3b', label: 'Llama 3.2 3B', desc: 'Higher quality reasoning (2.0 GB). Recommended if you have 8GB+ RAM.', size: '2.0 GB' },
-  { name: 'gemma4:2b', label: 'Gemma 4 2B', desc: 'Google-developed fast reasoning model. Highly responsive.', size: '1.6 GB' },
-  { name: 'gemma4:9b', label: 'Gemma 4 9B', desc: 'Extremely powerful logic and formatting. Requires 16GB+ RAM.', size: '5.5 GB' },
-  { name: 'gemma2:2b', label: 'Gemma 2 2B', desc: 'Google-developed lightweight model (1.6 GB). Highly responsive.', size: '1.6 GB' },
-  { name: 'mistral:latest', label: 'Mistral 7B', desc: 'High capability model (4.1 GB). Requires 16GB+ RAM.', size: '4.1 GB' },
+  { name: 'gemma2:2b', label: 'Gemma 2 2B (Lightweight)', desc: 'Optimized for mobile, phones, and low-resource devices. Extremely fast with a tiny footprint.', size: '1.6 GB' },
+  { name: 'gemma2:9b', label: 'Gemma 2 9B (Balanced)', desc: 'Excellent for everyday laptops and modern MacBooks. Superb balance of speed and intelligence.', size: '5.5 GB' },
+  { name: 'gemma2:27b', label: 'Gemma 2 27B (High-Performance)', desc: 'Optimized for high-end systems (e.g., RTX 3080, i9, 64GB RAM). Exceptional reasoning and accuracy.', size: '16.0 GB' },
 ];
 
 
 export default function LocalModel() {
-  const licenseSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'license')))[0], []);
+  const { data: settings = [] } = useSettings();
+  const licenseSetting = settings.find(s => s.key === 'license');
   const license = licenseSetting?.value as { active: boolean; key: string } | undefined;
 
   const [licenseKey, setLicenseKey] = useState('');
@@ -64,6 +64,7 @@ export default function LocalModel() {
     checkAIStatus,
     pullModel,
     cancelPullModel,
+    deleteModel,
   } = useChatStore(useShallow((s) => ({
     aiLoaded: s.aiLoaded,
     aiStatus: s.aiStatus,
@@ -75,11 +76,38 @@ export default function LocalModel() {
     checkAIStatus: s.checkAIStatus,
     pullModel: s.pullModel,
     cancelPullModel: s.cancelPullModel,
+    deleteModel: s.deleteModel,
   })));
 
   const [installedModels, setInstalledModels] = useState<any[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [customModelInput, setCustomModelInput] = useState('');
+  const [deletingModelName, setDeletingModelName] = useState<string | null>(null);
+
+  const dropdownItems = useMemo(() => {
+    const items = [...installedModels];
+    if (modelName && !installedModels.some((m) => m.name === modelName)) {
+      items.push({ name: modelName, size: 0, isNotInstalled: true });
+    }
+    return items;
+  }, [installedModels, modelName]);
+
+  const handleDeleteModel = async (name: string) => {
+    const model = installedModels.find(m => m.name === name);
+    const sizeStr = model ? `${Math.round(model.size / 1e6) / 1000} GB` : 'disk space';
+    const confirmed = window.confirm(`Are you sure you want to delete the model "${name}"? This will free up ${sizeStr}.`);
+    if (!confirmed) return;
+
+    setDeletingModelName(name);
+    try {
+      await deleteModel(name);
+      await refreshInstalledModels();
+    } catch (e: any) {
+      alert(`Failed to delete model: ${e.message}`);
+    } finally {
+      setDeletingModelName(null);
+    }
+  };
 
   // Diagnostic Playground State
   const [testPrompt, setTestPrompt] = useState('Hello! Are you online?');
@@ -273,7 +301,7 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
             </Typography>
           </Stack>
 
-          {aiStatus !== 'ready' && aiStatus !== 'pulling' && (
+          {(aiStatus === 'stopped' || aiStatus === 'uninstalled') && (
             <Alert severity="info">
               <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
                 Ollama Server Setup Required
@@ -281,6 +309,15 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
               To use Ollama, ensure you have downloaded and started <strong>Ollama</strong> on your local machine.
               Get Ollama for macOS, Windows, or Linux at <a href="https://ollama.com" target="_blank" rel="noreferrer">ollama.com</a>.
               Once running, Strictly Spending will connect automatically.
+            </Alert>
+          )}
+
+          {aiStatus === 'error' && (
+            <Alert severity="error">
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                Ollama Connection / Download Error
+              </Typography>
+              {aiProgress || 'An unknown error occurred while communicating with the Ollama server.'}
             </Alert>
           )}
 
@@ -304,14 +341,13 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
             </Box>
           )}
 
-          {aiStatus !== 'ready' && aiStatus !== 'pulling' && aiStatus !== 'uninstalled' && (
+          {(aiStatus === 'stopped' || aiStatus === 'uninstalled' || aiStatus === 'error') && (
             <Button
               variant="contained"
               sx={{ alignSelf: 'flex-start' }}
               onClick={initializeAI}
-              disabled={aiStatus === 'checking'}
             >
-              Start Connection Check / Setup
+              {aiStatus === 'uninstalled' ? 'Install Ollama Automatically' : 'Start Connection Check / Setup'}
             </Button>
           )}
         </Stack>
@@ -329,7 +365,7 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
                 Select from models currently downloaded on your local Ollama server.
               </Typography>
 
-              {installedModels.length > 0 ? (
+              {dropdownItems.length > 0 ? (
                 <Stack spacing={2.5}>
                   <FormControl fullWidth size="small">
                     <InputLabel id="active-model-select-label">Active Model</InputLabel>
@@ -339,9 +375,9 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
                       label="Active Model"
                       onChange={(e) => handleSelectModel(e.target.value)}
                     >
-                      {installedModels.map((m) => (
+                      {dropdownItems.map((m) => (
                         <MenuItem key={m.name} value={m.name}>
-                          {m.name} ({Math.round(m.size / 1e6) / 1000} GB)
+                          {m.isNotInstalled ? `${m.name} (Not Downloaded)` : `${m.name} (${Math.round(m.size / 1e6) / 1000} GB)`}
                         </MenuItem>
                       ))}
                     </Select>
@@ -360,6 +396,69 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
                       </Typography>
                     </Paper>
                   </Box>
+
+                  {installedModels.length > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
+                        Downloaded Models:
+                      </Typography>
+                      <List disablePadding sx={{ maxHeight: 200, overflowY: 'auto' }}>
+                        {installedModels.map((m) => {
+                          const isActive = m.name === modelName;
+                          return (
+                            <ListItem key={m.name} divider sx={{ px: 0, py: 1 }}>
+                              <ListItemText
+                                primary={
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: isActive ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>
+                                      {m.name}
+                                    </Typography>
+                                    {isActive && (
+                                      <Chip
+                                        label="Active"
+                                        size="small"
+                                        color="primary"
+                                        sx={{ height: 18, fontSize: 9, fontWeight: 600 }}
+                                      />
+                                    )}
+                                  </Box>
+                                }
+                                secondary={`${Math.round(m.size / 1e6) / 1000} GB`}
+                                secondaryTypographyProps={{ variant: 'caption' }}
+                              />
+                              <ListItemSecondaryAction>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  {!isActive && (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => handleSelectModel(m.name)}
+                                      sx={{ textTransform: 'none', py: 0.25, px: 1, fontSize: '0.72rem' }}
+                                    >
+                                      Select
+                                    </Button>
+                                  )}
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    title={`Delete ${m.name}`}
+                                    onClick={() => handleDeleteModel(m.name)}
+                                    disabled={deletingModelName === m.name}
+                                  >
+                                    {deletingModelName === m.name ? (
+                                      <CircularProgress size={16} color="error" />
+                                    ) : (
+                                      <DeleteIcon sx={{ fontSize: 18 }} />
+                                    )}
+                                  </IconButton>
+                                </Stack>
+                              </ListItemSecondaryAction>
+                            </ListItem>
+                          );
+                        })}
+                      </List>
+                    </Box>
+                  )}
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
@@ -382,8 +481,8 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
                 <TextField
                   fullWidth
                   size="small"
-                  label="Model Tag (e.g. llama3.2:1b)"
-                  placeholder="llama3.2:3b"
+                  label="Model Tag (e.g. gemma2:2b)"
+                  placeholder="gemma2:9b"
                   value={customModelInput}
                   onChange={(e) => setCustomModelInput(e.target.value)}
                 />

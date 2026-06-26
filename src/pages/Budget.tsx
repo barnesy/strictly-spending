@@ -1,9 +1,6 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
-import { useMemo, useState, useEffect, useDeferredValue } from 'react';
-import { useDataStore } from '../dataStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useMemo, useState, useEffect } from 'react';
+import { useCategories, useMerchantOverrides, useBudgets, useCategoryTrailingAverages, useConsolidatedRecurringMerchants, useLastMonthActualSpend, useTransactionCount } from '../hooks/queries';
+import { api } from '../api';
 import {
   Box,
   Paper,
@@ -26,10 +23,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 
 import { usd, usdCents } from '../lib';
-import {
-  lastMonthActualSpend,
-} from '../forecast';
-import { categoryTrailingAvg, getConsolidatedRecurringMerchants, type ConsolidatedMerchant } from '../budgets';
+import { type ConsolidatedMerchant } from '../budgets';
 import { useBudgetStore } from '../budgetStore';
 import { useFilters } from '../store';
 import PageLoader from '../components/PageLoader';
@@ -39,23 +33,16 @@ import { useDeferredRender } from '../hooks/useDeferredRender';
 
 export default function Budget() {
   const demoMode = useFilters((s) => s.demoMode);
-  const { allTransactions, categories, overrides, budgets, isDataLoading } = useDataStore(useShallow((s) => ({
-    allTransactions: s.transactions,
-    categories: s.categories,
-    overrides: s.merchantOverrides,
-    budgets: s.budgets,
-    isDataLoading: s.isLoading,
-  })));
+  const { data: categories = [], isLoading: isCatLoading } = useCategories();
+  const { data: overrides = [], isLoading: isOverridesLoading } = useMerchantOverrides();
+  const { data: budgets = [], isLoading: isBudgetsLoading } = useBudgets();
+  const { data: trailingAverages = [], isLoading: isTrailingLoading } = useCategoryTrailingAverages();
+  const { data: consolidatedMerchants = [], isLoading: isConsolidatedLoading } = useConsolidatedRecurringMerchants();
+  const { data: lastMonth = 0, isLoading: isLastMonthLoading } = useLastMonthActualSpend();
+  const { data: dbTxnCount = 0, isLoading: isCountLoading } = useTransactionCount();
 
-  const deferredAllTxnsAll = useDeferredValue(allTransactions);
-  
-  const allTxns = useMemo(
-    () =>
-      deferredAllTxnsAll && demoMode
-        ? deferredAllTxnsAll.filter((t) => t.source === 'demo')
-        : deferredAllTxnsAll?.filter((t) => t.source !== 'demo'),
-    [deferredAllTxnsAll, demoMode]
-  );
+  const isDataLoading = isCatLoading || isOverridesLoading || isBudgetsLoading || isTrailingLoading || isConsolidatedLoading || isLastMonthLoading || isCountLoading;
+
   const excludedBudgetCategories = useBudgetStore((s) => s.excludedBudgetCategories);
   const excludedMerchants = useBudgetStore((s) => s.excludedMerchants);
   const toggleMerchant = useBudgetStore((s) => s.toggleMerchant);
@@ -67,27 +54,17 @@ export default function Budget() {
     [categories]
   );
 
-
-
-
-
-  const trailingAvgByCategory = useMemo(
-    () =>
-      categoryTrailingAvg(
-        allTxns || [],
-        spendCategories
-      ),
-    [allTxns, spendCategories]
-  );
-
-  const lastMonth = useMemo(
-    () => lastMonthActualSpend(allTxns || [], spendCategories),
-    [allTxns, spendCategories]
-  );
+  const trailingAvgByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of trailingAverages) {
+      map.set(item.category, item.average);
+    }
+    return map;
+  }, [trailingAverages]);
 
   // Auto-seed budgets for any category with trailing spend but no budget row yet.
   useEffect(() => {
-    if (!budgets || !categories) return;
+    if (!budgets || !categories || trailingAvgByCategory.size === 0) return;
     const existing = new Set(budgets.map((b) => b.category));
     const toAdd: BudgetType[] = [];
     for (const [cat, avg] of trailingAvgByCategory) {
@@ -99,19 +76,15 @@ export default function Budget() {
       });
     }
     if (toAdd.length > 0) {
-      db.insert(schema.budgets).values(toAdd).onConflictDoNothing().execute();
+      api.bulkPutBudgets(toAdd);
     }
   }, [budgets, categories, trailingAvgByCategory]);
 
-  const isLoading = isDataLoading || !allTxns || !categories || !overrides || !budgets;
+  const isLoading = isDataLoading || !categories || !overrides || !budgets;
   const recurringCategoryNames = useMemo(() => new Set(
     spendCategories.filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
   ), [spendCategories]);
 
-  const consolidatedMerchants = useMemo(
-    () => getConsolidatedRecurringMerchants(allTxns || [], recurringCategoryNames),
-    [allTxns, recurringCategoryNames]
-  );
 
   const merchantsByCategory = useMemo(() => {
     const map = new Map<string, ConsolidatedMerchant[]>();
@@ -138,7 +111,7 @@ export default function Budget() {
     return <PageLoader isLoading={true}><Box /></PageLoader>;
   }
 
-  if (allTxns && allTxns.length === 0) {
+  if (dbTxnCount === 0) {
     return (
       <PageLoader isLoading={isLoading}>
         <Stack spacing={2}>
@@ -298,8 +271,7 @@ function BudgetAmountInput({
   const saveToDb = async (val: string) => {
     const cleaned = val.replace(/[^0-9.]/g, '');
     const amount = Number(cleaned) || 0;
-    await db.delete(schema.budgets).where(eq(schema.budgets.category, category));
-    await db.insert(schema.budgets).values({ category, monthlyAmount: amount, userSet: true });
+    await api.putBudget({ category, monthlyAmount: amount, userSet: true });
     setValue(amount.toFixed(2));
   };
 
@@ -366,8 +338,7 @@ function BudgetCard({
 
   const onResetRow = async (category: string) => {
     const avg = trailingAvgByCategory.get(category) || 0;
-    await db.delete(schema.budgets).where(eq(schema.budgets.category, category));
-    await db.insert(schema.budgets).values({
+    await api.putBudget({
       category,
       monthlyAmount: Math.round(avg * 100) / 100,
       userSet: false,
@@ -382,9 +353,9 @@ function BudgetCard({
         Math.round((trailingAvgByCategory.get(b.category) || 0) * 100) / 100,
       userSet: false,
     }));
-    await db.delete(schema.budgets);
+    await api.clearBudgets();
     if (next.length > 0) {
-      await db.insert(schema.budgets).values(next);
+      await api.bulkPutBudgets(next);
     }
   };
 

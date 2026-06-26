@@ -2,7 +2,7 @@ import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq, ne } from 'drizzle-orm';
 import { useState, useEffect } from 'react';
-import { useDbQuery } from '../hooks/useDbQuery';
+import { useSettings } from '../hooks/queries';
 import { NavLink } from 'react-router-dom';
 import {
   Box,
@@ -51,7 +51,8 @@ export default function Settings() {
   }, []);
 
   // License state
-  const licenseSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'license')))[0], []);
+  const { data: settings = [] } = useSettings();
+  const licenseSetting = settings.find(s => s.key === 'license');
   const license = licenseSetting?.value as { active: boolean; key: string } | undefined;
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseError, setLicenseError] = useState<string | null>(null);
@@ -79,7 +80,8 @@ export default function Settings() {
     setConfirmOpen(true);
   };
 
-  const { checkAIStatus } = useChatStore();
+  const checkAIStatus = useChatStore((s) => s.checkAIStatus);
+  const aiStatus = useChatStore((s) => s.aiStatus);
 
   useEffect(() => {
     checkAIStatus();
@@ -366,6 +368,44 @@ export default function Settings() {
               {clearImportedMsg}
             </Alert>
           )}
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 3 }}>
+        <Stack spacing={2}>
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <ScienceIcon fontSize="small" color="primary" />
+              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+                System Stability & Diagnostics
+              </Typography>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Configure system-level stability safeguards. If your application freezes or crashes on startup due to WebView2 GPU driver conflicts on Windows, you can launch the app in Safe Mode.
+            </Typography>
+          </Box>
+
+          <Divider />
+
+          <Box>
+            <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
+              Safe Mode Status
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Launch the application via terminal or shortcut with the <code>--safe-mode</code> or <code>-s</code> flag to disable WebView2 GPU hardware acceleration and pause all automatic AI background checks.
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Chip 
+                label={aiStatus === 'safemode' ? 'Safe Mode Active' : 'Safe Mode Inactive'} 
+                color={aiStatus === 'safemode' ? 'warning' : 'default'} 
+                size="small" 
+                sx={{ fontWeight: 600 }}
+              />
+              <Typography variant="caption" color="text.secondary">
+                GPU Hardware Acceleration: <strong>{aiStatus === 'safemode' ? 'OFF (Safe/CPU)' : 'ON (GPU)'}</strong>
+              </Typography>
+            </Box>
+          </Box>
         </Stack>
       </Paper>
 

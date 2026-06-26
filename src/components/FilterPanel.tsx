@@ -18,33 +18,29 @@ import type { Account, Category, Transaction } from '../types';
 import { usd, monthKey, monthsBetween } from '../lib';
 import { useMemo, useState, useEffect } from 'react';
 import { type RecurrenceInfo } from '../recurrence';
-import { useDataStore } from '../dataStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useBudgets, useConsolidatedRecurringMerchants, useSpendChartData } from '../hooks/queries';
 import { useBudgetStore } from '../budgetStore';
-import { buildForecast } from '../forecast';
-import { getConsolidatedRecurringMerchants } from '../budgets';
+import type { DashboardAggregates } from '../api';
 
 export default function FilterPanel({
   accounts,
   categories,
-  allTxns,
-  visibleTxns,
+  dashboardAggregates,
+  allTxnCount,
   recurrenceMap,
 }: {
   accounts: Account[];
   categories: Category[];
-  allTxns: Transaction[];
-  visibleTxns: Transaction[];
+  dashboardAggregates: DashboardAggregates;
+  allTxnCount: number;
   recurrenceMap?: Map<string, RecurrenceInfo>;
 }) {
   const filters = useFilters();
-  const totalSpend = visibleTxns
-    .filter((t) => t.amount < 0)
-    .reduce((s, t) => s + Math.abs(t.amount), 0);
-  const totalIncome = visibleTxns
-    .filter((t) => t.amount > 0)
-    .reduce((s, t) => s + t.amount, 0);
+  const totalSpend = Math.abs(dashboardAggregates.totalSpend);
+  const totalIncome = dashboardAggregates.totalIncome;
   const netFlow = totalIncome - totalSpend;
+  const { data: consolidatedMerchants = [] } = useConsolidatedRecurringMerchants();
+
 
   const [searchInput, setSearchInput] = useState(filters.searchQuery);
 
@@ -65,25 +61,18 @@ export default function FilterPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
-  const budgets = useDataStore(useShallow(s => s.budgets));
+  const { data: budgets } = useBudgets();
   const excludedBudgetCategories = useBudgetStore((s) => s.excludedBudgetCategories);
   const excludedMerchants = useBudgetStore((s) => s.excludedMerchants);
 
-  const forecast = useMemo(
-    () => buildForecast(allTxns || [], recurrenceMap || new Map(), categories || []),
-    [allTxns, recurrenceMap, categories]
-  );
+
 
   const recurringProjected = useMemo(() => {
-    const recurringCategoryNames = new Set(
-      (categories || []).filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
-    );
-    const consolidatedMerchants = getConsolidatedRecurringMerchants(allTxns || [], recurringCategoryNames);
     const disabledSet = new Set(filters.disabledCategories);
     return consolidatedMerchants
       .filter((m) => !disabledSet.has(m.category) && !excludedBudgetCategories.has(m.category) && !excludedMerchants.has(m.merchantKey))
       .reduce((sum, m) => sum + m.monthlyAverage, 0);
-  }, [allTxns, categories, filters.disabledCategories, excludedBudgetCategories, excludedMerchants]);
+  }, [consolidatedMerchants, filters.disabledCategories, excludedBudgetCategories, excludedMerchants]);
 
   const totalBudget = useMemo(() => {
     const recurringCategoryNames = new Set(
@@ -117,92 +106,19 @@ export default function FilterPanel({
   const monthList = useMemo(() => monthsBetween(range.start, range.end), [range.start, range.end]);
   const lastMonthStr = monthList[monthList.length - 1];
 
+  const { data: spendChartData = [] } = useSpendChartData();
+
   const currentMonthSpend = useMemo(() => {
-    if (!allTxns || !lastMonthStr) return 0;
-    const enabledSet = new Set(filters.enabledAccountIds);
-    const disabledSet = new Set(filters.disabledCategories);
-    return allTxns
-      .filter((t) => {
-        if (!enabledSet.has(t.accountId)) return false;
-        if (disabledSet.has(t.category)) return false;
-        if (t.amount >= 0) return false;
-        return monthKey(t.date) === lastMonthStr;
-      })
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  }, [allTxns, lastMonthStr, filters.enabledAccountIds, filters.disabledCategories]);
+    if (!spendChartData || !lastMonthStr) return 0;
+    return spendChartData
+      .filter((d) => d.month === lastMonthStr)
+      .reduce((sum, d) => sum + Math.abs(d.total), 0);
+  }, [spendChartData, lastMonthStr]);
 
   const remainingCurrentMonthBudget = Math.max(0, totalBudget - currentMonthSpend);
   const runwayMonths = totalBudget > 0 ? startingCash / totalBudget : 0;
-  const accountTotals = useMemo(() => {
-    const totals: Record<number, number> = {};
-    if (!allTxns) return totals;
+  const accountTotals = dashboardAggregates.accountTotals;
 
-    const startISO = range.start.toISOString().slice(0, 10);
-    const endISO = range.end.toISOString().slice(0, 10);
-    const disabledCatSet = new Set(filters.disabledCategories);
-    const transferIncomeNames = new Set(
-      categories
-        .filter((c) => c.type !== 'spend')
-        .map((c) => c.name)
-    );
-
-    accounts.forEach((a) => {
-      const accountTxns = allTxns.filter((t) => {
-        if (t.accountId !== a.id) return false;
-        if (disabledCatSet.has(t.category)) return false;
-        if (t.date < startISO || t.date > endISO) return false;
-        if (filters.spendOnly && transferIncomeNames.has(t.category)) return false;
-        if (filters.recurrenceFilter !== 'all') {
-          const isRec = t.recurrence === 'recurring';
-          if (filters.recurrenceFilter === 'recurring' && !isRec) return false;
-          if (filters.recurrenceFilter === 'onetime' && isRec) return false;
-        }
-        if (filters.searchQuery) {
-          const q = filters.searchQuery.toLowerCase();
-          if (
-            !t.description.toLowerCase().includes(q) &&
-            !t.merchantKey.toLowerCase().includes(q)
-          ) {
-            return false;
-          }
-        }
-        if (filters.minPrice !== undefined) {
-          const amt = Math.abs(t.amount);
-          if (amt < filters.minPrice) return false;
-        }
-        if (filters.maxPrice !== undefined) {
-          const amt = Math.abs(t.amount);
-          if (amt > filters.maxPrice) return false;
-        }
-        return true;
-      });
-
-      const total = accountTxns.reduce((sum, t) => {
-        if (filters.spendOnly) {
-          return sum + Math.abs(t.amount);
-        } else {
-          return sum + t.amount;
-        }
-      }, 0);
-
-      totals[a.id!] = total;
-    });
-
-    return totals;
-  }, [
-    allTxns,
-    range.start.getTime(),
-    range.end.getTime(),
-    filters.disabledCategories,
-    categories,
-    filters.spendOnly,
-    filters.recurrenceFilter,
-    recurrenceMap,
-    filters.searchQuery,
-    filters.minPrice,
-    filters.maxPrice,
-    accounts,
-  ]);
 
   return (
     <Stack spacing={2}>

@@ -2,8 +2,7 @@ import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq } from 'drizzle-orm';
 import { useState, useMemo } from 'react';
-import { useDataStore } from '../dataStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useCategories, useMerchantOverrides, useTransactions } from '../hooks/queries';
 import {
   Dialog,
   DialogTitle,
@@ -48,15 +47,9 @@ const AUTO = '__auto__';
 type RecurrenceChoice = RecurrenceKind | typeof AUTO;
 
 export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) {
-  const { categories, overrides, allTransactions } = useDataStore(useShallow((s) => ({
-    categories: s.categories,
-    overrides: s.merchantOverrides,
-    allTransactions: s.transactions,
-  })));
-
-  const matchingTxns = useMemo(() => {
-    return allTransactions.filter(t => t.merchantKey === merchantKey);
-  }, [allTransactions, merchantKey]);
+  const { data: categories = [] } = useCategories();
+  const { data: overrides = [] } = useMerchantOverrides();
+  const { data: matchingTxns = [] } = useTransactions({ merchantKey });
   const existingOverride = useMemo(
     () => overrides?.find((o) => o.merchantKey === merchantKey),
     [overrides, merchantKey]

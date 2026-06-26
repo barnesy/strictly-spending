@@ -2,8 +2,7 @@ import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq } from 'drizzle-orm';
 import { useState, useEffect, useMemo, useDeferredValue } from 'react';
-import { useDataStore } from '../dataStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useRules, useTransactions, useCategories, useRuleMatchCounts } from '../hooks/queries';
 import {
   Box,
   Stack,
@@ -81,30 +80,26 @@ export default function Rules() {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
 
-  const { allRulesUnsorted, allTxns, categories, isDataLoading } = useDataStore(useShallow((s) => ({
-    allRulesUnsorted: s.rules,
-    allTxns: s.transactions,
-    categories: s.categories,
-    isDataLoading: s.isLoading,
-  })));
+  const { data: allRulesUnsorted = [], isLoading: isRuleLoading } = useRules();
+  const { data: matchCounts = {} } = useRuleMatchCounts();
+  const { data: categories = [], isLoading: isCatLoading } = useCategories();
+  const isDataLoading = isRuleLoading || isCatLoading;
 
   const allRules = useMemo(() => {
     if (!allRulesUnsorted) return undefined;
     return [...allRulesUnsorted].sort((a, b) => b.priority - a.priority);
   }, [allRulesUnsorted]);
 
-  const deferredAllTxns = useDeferredValue(allTxns);
-
-  const isLoading = isDataLoading || allRules === undefined || allTxns === undefined || categories === undefined;
+  const isLoading = isDataLoading || allRules === undefined || categories === undefined;
 
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const panelIds = [
+  const panelIds = useMemo(() => [
     ...(filtersOpen ? ['filters'] : []),
     'table'
-  ];
+  ], [filtersOpen]);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `rules-layout-v3-${panelIds.join('-')}`,
     panelIds,
@@ -183,29 +178,7 @@ export default function Rules() {
     setPage(0);
   }
 
-  const matchCounts = useMemo(() => {
-    const stats: Record<number, number> = {};
-    if (!allRules) return stats;
-    for (const r of allRules) stats[r.id!] = 0;
-    if (!deferredAllTxns) return stats;
-
-    const normalizedRules = allRules.map(r => ({
-      id: r.id!,
-      pattern: r.pattern ? normalizeForMatch(r.pattern) : ''
-    }));
-
-    for (const t of deferredAllTxns) {
-      const desc = normalizeForMatch(t.description);
-      const mkey = t.merchantKey ? normalizeForMatch(t.merchantKey as string) : '';
-      for (const r of normalizedRules) {
-        if (r.pattern && (desc.includes(r.pattern) || (mkey && mkey.includes(r.pattern)))) {
-          stats[r.id]++;
-          break; // First matching rule wins
-        }
-      }
-    }
-    return stats;
-  }, [allRules, deferredAllTxns]);
+  // matchCounts are now loaded directly from the backend hook
 
   return (
     <PageLoader isLoading={isLoading}>
@@ -272,6 +245,7 @@ export default function Rules() {
       {/* Main Layout Area */}
       <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>
         <PanelGroup
+          key={`rules-${filtersOpen ? 'open' : 'closed'}`}
           orientation="horizontal"
           defaultLayout={defaultLayout}
           onLayoutChanged={onLayoutChanged}
@@ -427,7 +401,6 @@ export default function Rules() {
         <RuleDialog
           rule={editing === 'new' ? null : editing}
           categories={categories?.map((c) => c.name) || []}
-          allTxns={allTxns || []}
           onClose={() => setEditing(null)}
           onSave={onSave}
         />
@@ -462,16 +435,15 @@ export default function Rules() {
 function RuleDialog({
   rule,
   categories,
-  allTxns,
   onClose,
   onSave,
 }: {
   rule: CategoryRule | null;
   categories: string[];
-  allTxns: Transaction[];
   onClose: () => void;
   onSave: (r: Omit<CategoryRule, 'id' | 'createdAt'> & { id?: number }) => void;
 }) {
+  const { data: allTxns = [] } = useTransactions();
   const [pattern, setPattern] = useState(rule?.pattern || '');
   const [category, setCategory] = useState(rule?.category || categories[0] || '');
   const [priority, setPriority] = useState(rule?.priority || 100);

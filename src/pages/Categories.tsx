@@ -19,8 +19,7 @@ import {
   InputAdornment,
   IconButton,
 } from '@mui/material';
-import { useDataStore } from '../dataStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useCategories, useCategoryTransactionCounts } from '../hooks/queries';
 
 import { refreshRecurrenceAll } from '../recurrence';
 import PageLoader from '../components/PageLoader';
@@ -67,11 +66,8 @@ function PanelScroll({ children }: { children: React.ReactNode }) {
 }
 
 export default function Categories() {
-  const { categories, transactions } = useDataStore(useShallow((s) => ({
-    categories: s.categories,
-    transactions: s.transactions,
-  })));
-  const deferredTransactions = useDeferredValue(transactions);
+  const { data: categories = [], isLoading: isCatLoading } = useCategories();
+  const { data: counts = {} } = useCategoryTransactionCounts();
 
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,10 +76,10 @@ export default function Categories() {
   const [categoryType, setCategoryType] = useState('all');
   const [recurrenceFilter, setRecurrenceFilter] = useState('all');
 
-  const panelIds = [
+  const panelIds = useMemo(() => [
     ...(filtersOpen ? ['filters'] : []),
     'table'
-  ];
+  ], [filtersOpen]);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `categories-layout-v3-${panelIds.join('-')}`,
     panelIds,
@@ -96,16 +92,6 @@ export default function Categories() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchInput]);
-
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {};
-    if (!categories || !deferredTransactions) return c;
-    for (let i = 0; i < deferredTransactions.length; i++) {
-      const t = deferredTransactions[i];
-      c[t.category] = (c[t.category] || 0) + 1;
-    }
-    return c;
-  }, [categories, deferredTransactions]);
 
   const filteredCategories = useMemo(() => {
     if (!categories) return [];
@@ -123,7 +109,7 @@ export default function Categories() {
     await refreshRecurrenceAll();
   };
 
-  const isLoading = !categories || !transactions;
+  const isLoading = isCatLoading || categories === undefined;
 
   return (
     <PageLoader isLoading={isLoading}>
@@ -173,6 +159,7 @@ export default function Categories() {
         {/* Main Layout Area */}
         <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>
           <PanelGroup
+            key={`categories-${filtersOpen ? 'open' : 'closed'}`}
             orientation="horizontal"
             defaultLayout={defaultLayout}
             onLayoutChanged={onLayoutChanged}

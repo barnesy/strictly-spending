@@ -14,7 +14,7 @@ import RepeatIcon from '@mui/icons-material/Repeat';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { usdCents } from '../lib';
 import { recurrenceLabel, isRecurring } from '../recurrence';
-import type { SortCard as SortCardData } from '../sort';
+import type { SortCard as SortCardData } from '../types';
 import AnimatedCard from './AnimatedCard';
 
 interface Props {
@@ -65,8 +65,8 @@ export default function SortCard({
   const displayedTxns = expanded ? sortedTxns : sortedTxns.slice(0, 6);
 
   const cadence =
-    recurrence && isRecurring(recurrence.kind)
-      ? recurrenceLabel(recurrence.kind).toLowerCase()
+    recurrence && isRecurring(recurrence.kind as import('../types').RecurrenceKind)
+      ? recurrenceLabel(recurrence.kind as import('../types').RecurrenceKind).toLowerCase()
       : null;
 
   return (

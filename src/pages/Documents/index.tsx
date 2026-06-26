@@ -1,6 +1,6 @@
 import { db } from "../../db/drizzle";
 import * as schema from "../../db/schema";
-import { eq, desc } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { useState, useCallback } from 'react';
 import { DocumentsList } from './DocumentsList';
 import { useSearchParams } from 'react-router-dom';
@@ -19,17 +19,13 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { useDbQuery } from '../../hooks/useDbQuery';
+import { useDocuments, useCategories } from '../../hooks/queries';
 
 import { open } from '@tauri-apps/plugin-shell';
 import type { AppDocument } from '../../types';
-import { useDataStore } from '../../dataStore';
+
 import { useDocumentContent } from './useDocumentContent';
-import { usePnL } from './usePnL';
-import { DocumentMarkdownView } from './DocumentMarkdownView';
 import { DocumentCsvView } from './DocumentCsvView';
-import { DocumentAuditView } from './DocumentAuditView';
-import Papa from 'papaparse';
 
 export default function Documents() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -40,15 +36,16 @@ export default function Documents() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
 
-  
-  // Smart P&L auditing filters/paging
-  const [selectedAuditCat, setSelectedAuditCat] = useState('All');
-  const [auditSearchQuery, setAuditSearchQuery] = useState('');
-  const [auditPage, setAuditPage] = useState(0);
-  const [auditPageSize, setAuditPageSize] = useState(25);
-
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
+
+  const { data: documents = [] } = useDocuments();
+  const { data: categoriesList = [] } = useCategories();
+
+  // Derive activePreviewDoc from live db state
+  const derivedPreviewDoc = previewId ? (documents.find(d => d.id === previewId) || previewDoc) : null;
+
+  const { loadedContent } = useDocumentContent(previewId);
 
   const handleSaveName = async () => {
     if (!derivedPreviewDoc) return;
@@ -67,51 +64,8 @@ export default function Documents() {
     }
   };
 
-  const { documents, categoriesList } = useDbQuery(async () => {
-    const [docsRes, catsRes] = await Promise.all([
-      db.select().from(schema.documents).orderBy(desc(schema.documents.createdAt)),
-      db.select().from(schema.categories)
-    ]);
-    return {
-      documents: docsRes as AppDocument[],
-      categoriesList: catsRes,
-    };
-  }, []) || { documents: [], categoriesList: [] };
-
-  const allTxns = useDataStore((s) => s.transactions);
-  const allCats = useDataStore((s) => s.categories);
-
-  // Derive activePreviewDoc from live db state
-  const derivedPreviewDoc = previewId ? (documents.find(d => d.id === previewId) || previewDoc) : null;
-
-  const { loadedContent } = useDocumentContent(previewId);
-
-  const {
-    pnlSummary,
-    revenueCats,
-    expenseCats,
-    auditedTxns,
-    paginatedAuditTxns,
-  } = usePnL({
-    derivedPreviewDoc,
-    allTxns,
-    allCats,
-    selectedAuditCat,
-    auditSearchQuery,
-    auditPage,
-    auditPageSize,
-  });
-
-  
-
-  
-
   const handleOpen = async (doc: AppDocument) => {
-    setSelectedAuditCat('All');
-    setAuditSearchQuery('');
-    setAuditPage(0);
-
-    const hasContent = doc.content || doc.metadata?.docType === 'business_pnl' || (await (await db.select().from(schema.documentContents).where(eq(schema.documentContents.id, doc.id)))[0]);
+    const hasContent = doc.content || (await (await db.select().from(schema.documentContents).where(eq(schema.documentContents.id, doc.id)))[0]);
     if (hasContent) {
       setSearchParams({ previewId: doc.id, tab: 'All' });
       return;
@@ -133,9 +87,6 @@ export default function Documents() {
   const handleClosePreview = () => {
     setSearchParams({});
     setPreviewDoc(null);
-    setSelectedAuditCat('All');
-    setAuditSearchQuery('');
-    setAuditPage(0);
     setIsEditingName(false);
   };
 
@@ -161,26 +112,12 @@ export default function Documents() {
       const dbTxns = await db.select().from(schema.transactions).where(eq(schema.transactions.id, txId));
       if (dbTxns.length > 0) {
         await db.update(schema.transactions).set({ category: newCategory }).where(eq(schema.transactions.id, dbTxns[0].id!));
-        useDataStore.getState().refresh();
       }
     } catch (error) {
       console.error('Failed to recategorize transaction:', error);
       setSnackbarMessage('Failed to update category.');
     }
   }, []);
-
-  const handleExport = useCallback(async (format: 'csv' | 'md') => {
-    if (format === 'csv') {
-      const csv = Papa.unparse(auditedTxns);
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'audit_export.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  }, [auditedTxns]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
@@ -255,33 +192,8 @@ export default function Documents() {
 
           {/* Document Content Viewers */}
           <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            {(derivedPreviewDoc.metadata as any)?.docType === 'business_pnl' ? (
-              <DocumentAuditView
-                derivedPreviewDoc={derivedPreviewDoc}
-                pnlSummary={pnlSummary}
-                revenueCats={revenueCats}
-                expenseCats={expenseCats}
-                selectedAuditCat={selectedAuditCat}
-                setSelectedAuditCat={setSelectedAuditCat}
-                auditSearchQuery={auditSearchQuery}
-                setAuditSearchQuery={setAuditSearchQuery}
-                paginatedAuditTxns={paginatedAuditTxns}
-                auditedTxns={auditedTxns}
-                auditPage={auditPage}
-                setAuditPage={setAuditPage}
-                auditPageSize={auditPageSize}
-                setAuditPageSize={setAuditPageSize}
-                categoriesList={categoriesList}
-                handleRecategorize={handleRecategorize}
-                handleExport={handleExport}
-              />
-            ) : loadedContent ? (
-              derivedPreviewDoc.type === 'text/markdown' ? (
-                <DocumentMarkdownView
-                  loadedContent={loadedContent}
-                  setSearchParams={setSearchParams}
-                />
-              ) : derivedPreviewDoc.type === 'text/csv' ? (
+            {loadedContent ? (
+              derivedPreviewDoc.type === 'text/csv' ? (
                 <DocumentCsvView
                   loadedContent={loadedContent}
                   derivedPreviewDoc={derivedPreviewDoc}
@@ -301,8 +213,8 @@ export default function Documents() {
               </Typography>
             )}
 
-            {/* Download/export actions at bottom for non-P&L documents */}
-            {(derivedPreviewDoc.metadata as any)?.docType !== 'business_pnl' && loadedContent && (
+            {/* Download/export actions at bottom */}
+            {loadedContent && (
               <Box sx={{ display: 'flex', gap: 1.5, mt: 3, justifyContent: 'flex-end' }}>
                 <Button
                   variant="outlined"

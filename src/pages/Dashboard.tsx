@@ -10,7 +10,7 @@ import {
 } from 'react-resizable-panels';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useDataStore } from '../dataStore';
+import { useTransactionsPaginated, useTransactionCount, useDashboardAggregates, useSpendChartData, useTopMerchants, useIncomeChartData, useAccounts, useCategories, useRecurrenceMap } from '../hooks/queries';
 import {
   Box,
   Paper,
@@ -63,6 +63,7 @@ import {
   buildRecurrenceMap,
   isRecurring,
   recurrenceLabel,
+  type RecurrenceInfo
 } from '../recurrence';
 import type { Transaction } from '../types';
 import { useDeferredRender } from '../hooks/useDeferredRender';
@@ -146,12 +147,27 @@ export default function Dashboard() {
     );
   });
 
-  const transactions = useDataStore((s) => s.transactions);
-  const accountsAll = useDataStore((s) => s.accounts);
-  const categories = useDataStore((s) => s.categories);
-  const globalRecurrenceMap = useDataStore((s) => s.recurrenceMap);
-  const globalDemoRecurrenceMap = useDataStore((s) => s.demoRecurrenceMap);
-  const dbTxnCount = transactions.length;
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [editTxn, setEditTxn] = useState<Transaction | null>(null);
+  const [taxEditTxn, setTaxEditTxn] = useState<Transaction | null>(null);
+
+  const { data: accountsAll = [] } = useAccounts();
+  const { data: categories = [] } = useCategories();
+  const { data: globalRecurrenceMapObj = {} } = useRecurrenceMap(false);
+  const { data: globalDemoRecurrenceMapObj = {} } = useRecurrenceMap(true);
+
+  const globalRecurrenceMap = useMemo(() => new Map(Object.entries(globalRecurrenceMapObj)), [globalRecurrenceMapObj]);
+  const globalDemoRecurrenceMap = useMemo(() => new Map(Object.entries(globalDemoRecurrenceMapObj)), [globalDemoRecurrenceMapObj]);
+  const recurrenceMap = demoMode ? globalDemoRecurrenceMap : globalRecurrenceMap;
+
+  const { data: pageRows = [] } = useTransactionsPaginated(page, pageSize);
+  const { data: dbTxnCount = 0 } = useTransactionCount();
+  const { data: dashboardAggregates } = useDashboardAggregates();
+  const { data: spendChartData = [] } = useSpendChartData();
+  const { data: topMerchantsData = [] } = useTopMerchants();
+  const { data: incomeChartData = [] } = useIncomeChartData();
+  
   const dbAcctCount = accountsAll.length;
 
   const range = useMemo(() => {
@@ -164,25 +180,11 @@ export default function Dashboard() {
     } as any);
   }, [preset, customStart, customEnd, earliestTransactionDate, latestTransactionDate]);
 
-  const startISO = useMemo(() => range.start.toISOString().slice(0, 10), [range.start]);
-  const endISO = useMemo(() => range.end.toISOString().slice(0, 10), [range.end]);
+  const monthList = useMemo(
+    () => monthsBetween(range.start, range.end),
+    [range.start, range.end]
+  );
 
-  const allTxnsAll = useMemo(() => {
-    return transactions.filter((t) => t.date >= startISO && t.date <= endISO);
-  }, [transactions, startISO, endISO]);
-  const deferredAllTxnsAll = useDeferredValue(allTxnsAll);
-
-  const forecastTxnsAll = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - 24);
-    const cutoffISO = cutoff.toISOString().slice(0, 10);
-    return transactions.filter((t) => t.date >= cutoffISO);
-  }, [transactions]);
-  const deferredForecastTxnsAll = useDeferredValue(forecastTxnsAll);
-
-
-
-  // Demo-mode filter: hide real accounts/transactions.
   const accounts = useMemo(
     () =>
       accountsAll && demoMode
@@ -190,119 +192,33 @@ export default function Dashboard() {
         : accountsAll?.filter((a) => a.source !== 'demo'),
     [accountsAll, demoMode]
   );
-  const allTxns = useMemo(
-    () =>
-      deferredAllTxnsAll && demoMode
-        ? deferredAllTxnsAll.filter((t) => t.source === 'demo')
-        : deferredAllTxnsAll?.filter((t) => t.source !== 'demo'),
-    [deferredAllTxnsAll, demoMode]
-  );
-  const forecastTxns = useMemo(
-    () =>
-      deferredForecastTxnsAll && demoMode
-        ? deferredForecastTxnsAll.filter((t) => t.source === 'demo')
-        : deferredForecastTxnsAll?.filter((t) => t.source !== 'demo'),
-    [deferredForecastTxnsAll, demoMode]
-  );
-  
-  const recurrenceMap = demoMode ? globalDemoRecurrenceMap : globalRecurrenceMap;
 
   const seenAccountIds = useFilters((s) => s.seenAccountIds);
   const setSeenAccounts = useFilters((s) => s.setSeenAccounts);
 
-  // Default-enable any newly-discovered accounts safely.
   useEffect(() => {
     if (!accounts || accounts.length === 0) return;
     const accountIdSet = new Set(accounts.map((a) => a.id!));
-
     const cleanedEnabled = enabledAccountIds.filter((id) => accountIdSet.has(id));
     const cleanedSeen = seenAccountIds.filter((id) => accountIdSet.has(id));
-
     const seenSet = new Set(cleanedSeen);
     const newOnes = accounts.filter((a) => !seenSet.has(a.id!)).map((a) => a.id!);
-
     if (newOnes.length > 0 || cleanedEnabled.length !== enabledAccountIds.length || cleanedSeen.length !== seenAccountIds.length) {
-      setEnabledAccounts([...cleanedEnabled, ...newOnes]);
-      setSeenAccounts([...cleanedSeen, ...newOnes]);
+      const nextEnabled = [...cleanedEnabled, ...newOnes];
+      const nextSeen = [...cleanedSeen, ...newOnes];
+      const enabledChanged = JSON.stringify(nextEnabled) !== JSON.stringify(enabledAccountIds);
+      const seenChanged = JSON.stringify(nextSeen) !== JSON.stringify(seenAccountIds);
+      if (enabledChanged || seenChanged) {
+        if (enabledChanged) setEnabledAccounts(nextEnabled);
+        if (seenChanged) setSeenAccounts(nextSeen);
+      }
     }
   }, [accounts, enabledAccountIds, setEnabledAccounts, seenAccountIds, setSeenAccounts]);
 
-  // Filter transactions globally
-  const visibleTxns = useMemo(() => {
-    if (!allTxns) return [];
-    const enabledSet = new Set(enabledAccountIds);
-    const disabledCatSet = new Set(disabledCategories);
-    const transferIncomeNames = new Set(
-      (categories || [])
-        .filter((c) => c.type !== 'spend')
-        .map((c) => c.name)
-    );
-    return allTxns.filter((t) => {
-      if (!enabledSet.has(t.accountId)) return false;
-      if (disabledCatSet.has(t.category)) return false;
-      if (t.date < startISO || t.date > endISO) return false;
-      if (spendOnly && transferIncomeNames.has(t.category)) return false;
-      if (recurrenceFilter !== 'all') {
-        const isRec = t.recurrence === 'recurring';
-        if (recurrenceFilter === 'recurring' && !isRec) return false;
-        if (recurrenceFilter === 'onetime' && isRec) return false;
-      }
-      if (deferredSearchQuery) {
-        const q = deferredSearchQuery.toLowerCase();
-        if (
-          !t.description.toLowerCase().includes(q) &&
-          !t.merchantKey.toLowerCase().includes(q)
-        ) {
-          return false;
-        }
-      }
-      if (deferredMinPrice !== undefined) {
-        const amt = Math.abs(t.amount);
-        if (amt < deferredMinPrice) return false;
-      }
-      if (deferredMaxPrice !== undefined) {
-        const amt = Math.abs(t.amount);
-        if (amt > deferredMaxPrice) return false;
-      }
-      return true;
-    });
-  }, [
-    allTxns,
-    enabledAccountIds,
-    disabledCategories,
-    spendOnly,
-    recurrenceFilter,
-    startISO,
-    endISO,
-    categories,
-    recurrenceMap,
-    deferredSearchQuery,
-    deferredMinPrice,
-    deferredMaxPrice,
-  ]);
-
-  const monthList = useMemo(
-    () => monthsBetween(range.start, range.end),
-    [range.start, range.end]
-  );
-
-  // Table pagination & edit states
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
-  const [editTxn, setEditTxn] = useState<Transaction | null>(null);
-  const [taxEditTxn, setTaxEditTxn] = useState<Transaction | null>(null);
-
-  const handleTaxClick = (t: Transaction) => {
-    setTaxEditTxn(t);
-  };
-
-  const pageRows = useMemo(() => {
-    return visibleTxns.slice(page * pageSize, page * pageSize + pageSize);
-  }, [visibleTxns, page, pageSize]);
 
   useEffect(() => {
     setPage(0);
-  }, [visibleTxns.length]);
+  }, [dbTxnCount]);
 
   const accountName = (id: number) =>
     accounts?.find((a) => a.id === id)?.name || '–';
@@ -310,11 +226,11 @@ export default function Dashboard() {
     categories?.find((c) => c.name === name)?.color || '#bdbdbd';
 
   // Persist resizable panel layout sizes.
-  const panelIds = [
+  const panelIds = useMemo(() => [
     ...(filterVisible ? ['filter'] : []),
     'chart',
     ...(sidebarVisible ? ['merchants'] : []),
-  ];
+  ], [filterVisible, sidebarVisible]);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `unified-top-row-${panelIds.join('-')}`,
     panelIds,
@@ -324,7 +240,7 @@ export default function Dashboard() {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
-  const isLoading = !accounts || !categories || !allTxns || dbTxnCount === undefined || dbAcctCount === undefined;
+  const isLoading = !accounts || !categories || dbTxnCount === undefined || dbAcctCount === undefined || !dashboardAggregates;
   const shouldRender = useDeferredRender();
 
   if (isLoading || !shouldRender) {
@@ -445,7 +361,6 @@ export default function Dashboard() {
                         size="small"
                         color={chipColor}
                         variant={chipVariant}
-                        onClick={() => handleTaxClick(t)}
                         sx={{
                           cursor: 'pointer',
                           fontWeight: 600,
@@ -490,7 +405,7 @@ export default function Dashboard() {
           <TableFooter>
             <TableRow>
               <TablePagination
-                count={visibleTxns.length}
+                count={dbTxnCount}
                 page={page}
                 onPageChange={(_, p) => setPage(p)}
                 rowsPerPage={pageSize}
@@ -553,7 +468,7 @@ export default function Dashboard() {
 
       {/* Content */}
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', ...subtleScrollSx }}>
-        {(allTxns?.length || 0) === 0 || visibleTxns.length === 0 ? (
+        {dbTxnCount === 0 ? (
           <Box
             sx={{
               display: 'flex',
@@ -571,7 +486,7 @@ export default function Dashboard() {
               No transactions match current filters
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400 }}>
-              Your database has {dbTxnCount} total transactions, but none match the selected date range ({startISO} to {endISO}) or active accounts.
+              Your database has {dbTxnCount} total transactions, but none match the selected date range or active accounts.
             </Typography>
             <Button
               variant="contained"
@@ -588,14 +503,15 @@ export default function Dashboard() {
         ) : viewMode === 'chart' ? (
           <Box sx={{ height: { xs: '75vh', md: '100%' }, minHeight: 400 }}>
             <SpendChart
+              spendChartData={spendChartData}
+              incomeChartData={incomeChartData}
+              dashboardAggregates={dashboardAggregates || { totalSpend: 0, totalIncome: 0, accountTotals: {} }}
               monthList={monthList}
-              transactions={visibleTxns}
               accounts={accounts || []}
               categories={categories || []}
               groupBy={groupBy}
               recurrenceMap={recurrenceMap}
               onMonthClick={(monthKey) => drillToMonth(monthKey)}
-              allTxns={forecastTxns || []}
             />
           </Box>
         ) : (
@@ -609,15 +525,15 @@ export default function Dashboard() {
     <FilterPanel
       accounts={accounts || []}
       categories={categories || []}
-      allTxns={forecastTxns || []}
-      visibleTxns={visibleTxns}
+      dashboardAggregates={dashboardAggregates || { totalSpend: 0, totalIncome: 0, accountTotals: {} }}
+      allTxnCount={dbTxnCount}
       recurrenceMap={recurrenceMap}
     />
   );
 
   const merchantsCard = (
     <TopMerchantsCard
-      visibleTxns={visibleTxns}
+      topMerchantsData={topMerchantsData}
       recurrenceMap={recurrenceMap}
     />
   );
@@ -768,6 +684,7 @@ export default function Dashboard() {
             }}
           >
             <PanelGroup
+              key={`dashboard-${panelIds.join('-')}`}
               orientation="horizontal"
               defaultLayout={defaultLayout}
               onLayoutChanged={onLayoutChanged}
@@ -914,33 +831,23 @@ function PanelScroll({ children }: { children: React.ReactNode }) {
 
 
 
+import type { TopMerchant } from '../api';
+
 function TopMerchantsCard({
-  visibleTxns,
+  topMerchantsData,
   recurrenceMap,
 }: {
-  visibleTxns: Transaction[];
-  recurrenceMap: ReturnType<typeof buildRecurrenceMap>;
+  topMerchantsData: TopMerchant[];
+  recurrenceMap: Map<string, RecurrenceInfo>;
 }) {
   const [editingMerchant, setEditingMerchant] = useState<string | null>(null);
 
-  const byMerchant = visibleTxns.reduce<
-    Record<string, { total: number; count: number; category: string }>
-  >((acc, t) => {
-    if (t.amount >= 0) return acc;
-    const k = t.merchantKey || t.description.slice(0, 30);
-    if (!acc[k]) acc[k] = { total: 0, count: 0, category: t.category };
-    acc[k].total += Math.abs(t.amount);
-    acc[k].count += 1;
-    return acc;
-  }, {});
-
-  const rows = Object.entries(byMerchant)
-    .map(([merchant, info]) => ({
-      merchant,
-      ...info,
-      recurrence: recurrenceMap.get(merchant),
-    }))
-    .sort((a, b) => b.total - a.total);
+  const rows = topMerchantsData.map((m) => ({
+    merchant: m.merchantKey,
+    total: Math.abs(m.total),
+    count: m.count,
+    recurrence: recurrenceMap.get(m.merchantKey),
+  }));
 
   return (
     <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -949,7 +856,7 @@ function TopMerchantsCard({
           Top merchants
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          {rows.length} merchant{rows.length === 1 ? '' : 's'}
+          {rows.length >= 100 ? 'Top 100 ' : `${rows.length} `} merchant{rows.length === 1 ? '' : 's'}
         </Typography>
       </Stack>
       <Typography variant="caption" color="text.secondary">
@@ -1004,7 +911,6 @@ function TopMerchantsCard({
                     <Typography variant="body2">{r.merchant}</Typography>
                   </Stack>
                   <Typography variant="caption" color="text.secondary">
-                    {r.category}
                     {r.recurrence && isRecurring(r.recurrence.kind) && (
                       <>
                         {' · '}

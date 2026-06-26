@@ -1,8 +1,7 @@
 import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
-import React, { useState } from 'react';
-import { useDbQuery } from '../hooks/useDbQuery';
+import React, { useState, useEffect } from 'react';
+import { useSettings } from '../hooks/queries';
 import {
   Stack,
   Typography,
@@ -89,7 +88,8 @@ const FONTS = [
 ];
 
 export default function ThemeManager() {
-  const themeSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'themeConfig')))[0], []);
+  const { data: settings = [] } = useSettings();
+  const themeSetting = settings.find(s => s.key === 'themeConfig');
   const config = (themeSetting?.value as Record<string, unknown>) || {};
 
   const mode = (config.mode as string) || 'light';
@@ -123,18 +123,14 @@ export default function ThemeManager() {
   };
 
   const [localRadius, setLocalRadius] = useState(borderRadius);
-  const [prevRadius, setPrevRadius] = useState(borderRadius);
-  if (borderRadius !== prevRadius) {
-    setPrevRadius(borderRadius);
+  useEffect(() => {
     setLocalRadius(borderRadius);
-  }
+  }, [borderRadius]);
 
   const [localFontSize, setLocalFontSize] = useState(fontSize);
-  const [prevFontSize, setPrevFontSize] = useState(fontSize);
-  if (fontSize !== prevFontSize) {
-    setPrevFontSize(fontSize);
+  useEffect(() => {
     setLocalFontSize(fontSize);
-  }
+  }, [fontSize]);
 
   const handleRadiusChangeCommitted = (_event: Event | React.SyntheticEvent, value: number | number[]) => {
     updateTheme({ borderRadius: value as number });

@@ -2,7 +2,7 @@ import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq } from 'drizzle-orm';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useDbQuery } from '../hooks/useDbQuery';
+import { useSettings } from '../hooks/queries';
 import { Box, Stack, Typography, Paper, Tabs, Tab, Snackbar } from '@mui/material';
 
 import type { AgentSkill, SkillTestCase, AgentSkillStage } from '../types';
@@ -21,20 +21,13 @@ import { SkillEditor } from '../components/AgentSkills/SkillEditor';
 import { AGENT_TOOLS } from '../ai/architecture';
 
 export const AgentSkills: React.FC = () => {
-  const { license, skillsSetting, systemPromptSetting, baselineTestCasesSetting } = useDbQuery(async () => {
-    const [licenseRes, skillsRes, promptRes, testCasesRes] = await Promise.all([
-      db.select().from(schema.settings).where(eq(schema.settings.key, 'license')),
-      db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')),
-      db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPrompt')),
-      db.select().from(schema.settings).where(eq(schema.settings.key, 'app:baselineTestCases'))
-    ]);
-    return {
-      license: licenseRes[0]?.value as { active: boolean; key: string } | undefined,
-      skillsSetting: skillsRes[0],
-      systemPromptSetting: promptRes[0],
-      baselineTestCasesSetting: testCasesRes[0]
-    };
-  }, []) || { license: undefined, skillsSetting: undefined, systemPromptSetting: undefined, baselineTestCasesSetting: undefined };
+  const { data: settings = [] } = useSettings();
+  
+  const licenseSetting = settings.find(s => s.key === 'license');
+  const skillsSetting = settings.find(s => s.key === 'app:agentSkills');
+  const systemPromptSetting = settings.find(s => s.key === 'app:systemPrompt');
+  const baselineTestCasesSetting = settings.find(s => s.key === 'app:baselineTestCases');
+  const license = licenseSetting?.value as { active: boolean; key: string } | undefined;
   const chatMessages = useChatStore((state) => state.messages);
   const activeModel = useChatStore((state) => state.modelName);
   

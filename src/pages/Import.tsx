@@ -234,8 +234,9 @@ export default function Import() {
       setNewUncategorizedCount(newUncategorized);
       setPreviews([]);
       window.dispatchEvent(new Event('db-update'));
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to commit import previews:", e);
+      window.alert("Import Failed: " + (e.message || String(e)));
     } finally {
       setIsProcessing(false);
     }

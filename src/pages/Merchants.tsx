@@ -2,9 +2,7 @@ import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq, inArray } from 'drizzle-orm';
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
-import { useDataStore } from '../dataStore';
-import { useShallow } from 'zustand/react/shallow';
-import { useDbQuery } from '../hooks/useDbQuery';
+import { useTransactions, useCategories, useTaxRules, useMerchantGroups } from '../hooks/queries';
 import { resolveTaxDeduction } from '../taxUtils';
 import {
   Box,
@@ -98,25 +96,21 @@ interface MerchantGroup {
 }
 
 export default function Merchants() {
-  const { allTransactions, allCategories, isDataLoading } = useDataStore(useShallow((s) => ({
-    allTransactions: s.transactions,
-    allCategories: s.categories,
-    isDataLoading: s.isLoading,
-  })));
-  const deferredAllTransactions = useDeferredValue(allTransactions);
-  const taxRules = useDbQuery(async () => db.select().from(schema.taxRules), []) || [];
+  const { data: merchantGroups = [], isLoading: isMerchantsLoading } = useMerchantGroups();
+  const { data: allCategories = [], isLoading: isCatLoading } = useCategories();
+  const { data: taxRules = [] } = useTaxRules();
 
-  const isLoading = isDataLoading || allTransactions === undefined;
+  const isLoading = isMerchantsLoading || isCatLoading;
 
   // Search Debouncing
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const panelIds = [
+  const panelIds = useMemo(() => [
     ...(filtersOpen ? ['filters'] : []),
     'table'
-  ];
+  ], [filtersOpen]);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `merchants-layout-v3-${panelIds.join('-')}`,
     panelIds,
@@ -177,63 +171,12 @@ export default function Merchants() {
   const [viewTransactionsTarget, setViewTransactionsTarget] = useState<MerchantGroup | null>(null);
   
   const targetMerchantKey = viewTransactionsTarget?.merchantKey || '';
-  const viewTransactions = useMemo(() => {
-    return allTransactions ? allTransactions.filter((t) => t.merchantKey === targetMerchantKey) : [];
-  }, [allTransactions, targetMerchantKey]);
+  const { data: viewTransactions = [] } = useTransactions(
+    useMemo(() => ({ merchantKey: targetMerchantKey }), [targetMerchantKey])
+  );
 
   // Group transactions by merchantKey
-  const merchantGroups = useMemo<MerchantGroup[]>(() => {
-    if (!deferredAllTransactions) return [];
-
-    const groups = new Map<string, MerchantGroup>();
-
-    for (let i = 0; i < deferredAllTransactions.length; i++) {
-      const t = deferredAllTransactions[i];
-      const key = t.merchantKey || 'Unknown';
-      const isSpend = t.amount < 0;
-      const amt = isSpend ? -t.amount : 0;
-
-      let g = groups.get(key);
-      if (!g) {
-        g = {
-          merchantKey: key,
-          totalSpend: 0,
-          totalTransactions: 0,
-          categories: {},
-          mostCommonCategory: t.category,
-          earliestDate: t.date,
-          latestDate: t.date,
-        };
-        groups.set(key, g);
-      }
-
-      g.totalTransactions += 1;
-      g.totalSpend += amt;
-
-      // Track categories to find the most common one
-      g.categories[t.category] = (g.categories[t.category] || 0) + 1;
-
-      // Update date boundaries
-      if (t.date < g.earliestDate) g.earliestDate = t.date;
-      if (t.date > g.latestDate) g.latestDate = t.date;
-    }
-
-    // Post-process to resolve most common category and convert to array
-    const result: MerchantGroup[] = [];
-    for (const g of groups.values()) {
-      let maxCount = 0;
-      let commonCat = 'Uncategorized';
-      for (const cat in g.categories) {
-        if (g.categories[cat] > maxCount) {
-          maxCount = g.categories[cat];
-          commonCat = cat;
-        }
-      }
-      g.mostCommonCategory = commonCat;
-      result.push(g);
-    }
-    return result;
-  }, [deferredAllTransactions]);
+  // merchantGroups are now loaded directly from the backend hook
 
   // Filtered groups
   const filteredGroups = useMemo(() => {
@@ -659,6 +602,7 @@ export default function Merchants() {
         {/* Main Layout Area */}
         <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>
           <PanelGroup
+            key={`merchants-${filtersOpen ? 'open' : 'closed'}`}
             orientation="horizontal"
             defaultLayout={defaultLayout}
             onLayoutChanged={onLayoutChanged}

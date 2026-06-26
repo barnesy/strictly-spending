@@ -77,10 +77,10 @@ export function DocumentsList({ documents, handleOpen, handleDeleteClick }: Docu
   const [sourceFilter, setSourceFilter] = useState('all');
   const [checklistFilter, setChecklistFilter] = useState('all');
 
-  const panelIds = [
+  const panelIds = useMemo(() => [
     ...(filtersOpen ? ['filters'] : []),
     'table'
-  ];
+  ], [filtersOpen]);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `documents-layout-v3-${panelIds.join('-')}`,
     panelIds,
@@ -159,6 +159,7 @@ export function DocumentsList({ documents, handleOpen, handleDeleteClick }: Docu
       {/* Main Layout Area */}
       <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>
         <PanelGroup
+          key={`documents-${filtersOpen ? 'open' : 'closed'}`}
           orientation="horizontal"
           defaultLayout={defaultLayout}
           onLayoutChanged={onLayoutChanged}

@@ -2,8 +2,10 @@ import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq, desc } from 'drizzle-orm';
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useDbQuery } from '../hooks/useDbQuery';
-import { useShallow } from 'zustand/react/shallow';
+import { useFilters } from '../store';
+import { useLoans, useUniqueMerchants, useCategories } from '../hooks/queries';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api';
 import {
   Group as PanelGroup,
   Panel,
@@ -62,7 +64,7 @@ import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore
 import { useTheme } from '@mui/material/styles';
 
 
-import { useDataStore } from '../dataStore';
+
 import { usdCents } from '../lib';
 
 import type { Loan } from '../types';
@@ -140,6 +142,7 @@ interface PaymentRow {
 
 export default function Loans() {
   const theme = useTheme();
+  const demoMode = useFilters((s) => s.demoMode);
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [activeLoanId, setActiveLoanId] = useState<number | null>(null);
@@ -164,15 +167,14 @@ export default function Loans() {
     }
   }, [addType]);
 
-  const panelIds = ['loan-parameters', 'loan-graph'];
+  const panelIds = useMemo(() => ['loan-parameters', 'loan-graph'], []);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: `loans-layout-v1-${panelIds.join('-')}`,
     panelIds,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   });
 
-  // Settings DB Query
-  const loans = useDbQuery(async () => db.select().from(schema.loans), []) || [];
+  const { data: loans = [] } = useLoans();
 
   const activeLoans = useMemo(() => {
     return loans.filter((l) => l.enabled !== false);
@@ -234,20 +236,29 @@ export default function Loans() {
   }, [currentConfig, activeLoanId]);
 
   // Global Categories and Transactions
-  const { transactions, categories } = useDataStore(useShallow((s) => ({
-    transactions: s.transactions,
-    categories: s.categories,
-  })));
+  const { data: merchantOptions = [] } = useUniqueMerchants();
+  const { data: categories = [] } = useCategories();
 
-  const merchantOptions = useMemo(() => {
-    const keys = new Set<string>();
-    for (const t of transactions) {
-      if (t.merchantKey) {
-        keys.add(t.merchantKey);
+  const { data: rawTransactions = [] } = useQuery({
+    queryKey: ['active_loan_transactions', activeLoanId, currentConfig?.category, currentConfig?.merchant],
+    queryFn: () => {
+      if (!currentConfig) return [];
+      const filters: any = {};
+      if (currentConfig.merchant) {
+        filters.merchantKey = currentConfig.merchant;
+      } else if (currentConfig.category) {
+        filters.category = currentConfig.category;
+      } else {
+        return [];
       }
-    }
-    return Array.from(keys).sort();
-  }, [transactions]);
+      return api.getTransactions('1970-01-01', '2100-01-01', filters);
+    },
+    enabled: !!currentConfig,
+  });
+
+  const transactions = useMemo(() => {
+    return rawTransactions.filter(t => demoMode ? t.source === 'demo' : t.source !== 'demo');
+  }, [rawTransactions, demoMode]);
 
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [showScheduleDetails, setShowScheduleDetails] = useState(false);
@@ -256,28 +267,33 @@ export default function Loans() {
   const [activeTxDialogDate, setActiveTxDialogDate] = useState<string>('');
 
   // Handler for loading payment details from selected category transactions
-  const handleCategoryChange = (categoryName: string) => {
+  const handleCategoryChange = async (categoryName: string) => {
     setFormCategory(categoryName);
     if (!categoryName) return;
 
-    // Filter transactions for selected category to identify typical payment amount
-    const categoryTxns = transactions.filter((t) => t.category === categoryName);
-    if (categoryTxns.length > 0) {
-      const amounts = categoryTxns.map((t) => Math.abs(t.amount));
-      const counts: Record<number, number> = {};
-      let mostCommonAmt = 0;
-      let maxCount = 0;
-      for (const amt of amounts) {
-        counts[amt] = (counts[amt] || 0) + 1;
-        if (counts[amt] > maxCount) {
-          maxCount = counts[amt];
-          mostCommonAmt = amt;
+    try {
+      // Filter transactions for selected category to identify typical payment amount
+      const categoryTxns = await api.getTransactions('1970-01-01', '2100-01-01', { category: categoryName });
+      const filtered = categoryTxns.filter(t => demoMode ? t.source === 'demo' : t.source !== 'demo');
+      if (filtered.length > 0) {
+        const amounts = filtered.map((t) => Math.abs(t.amount));
+        const counts: Record<number, number> = {};
+        let mostCommonAmt = 0;
+        let maxCount = 0;
+        for (const amt of amounts) {
+          counts[amt] = (counts[amt] || 0) + 1;
+          if (counts[amt] > maxCount) {
+            maxCount = counts[amt];
+            mostCommonAmt = amt;
+          }
+        }
+        if (mostCommonAmt > 0) {
+          setFormMonthlyPayment(String(mostCommonAmt));
+          setSnackbarMsg(`Loaded monthly payment of ${usdCents.format(mostCommonAmt)} from category history.`);
         }
       }
-      if (mostCommonAmt > 0) {
-        setFormMonthlyPayment(String(mostCommonAmt));
-        setSnackbarMsg(`Loaded monthly payment of ${usdCents.format(mostCommonAmt)} from category history.`);
-      }
+    } catch (err) {
+      console.error('Failed to load category history for loan payments:', err);
     }
   };
 
@@ -498,7 +514,7 @@ export default function Loans() {
     };
 
     if (currentConfig && currentConfig.id !== undefined) {
-      await db.update(schema.loans).set(updatedConfig).where(eq(schema.loans.id, currentConfig.id));
+      await api.updateLoan(currentConfig.id, { ...currentConfig, ...updatedConfig } as Loan);
       setSnackbarMsg('Loan settings saved successfully!');
       setMobileSettingsOpen(false);
     }
@@ -523,11 +539,11 @@ export default function Loans() {
       setFormMonthlyPayment(String(resetLoan.monthlyPayment ?? ''));
       setFormPropertyValue(resetLoan.propertyValue ? String(resetLoan.propertyValue) : '');
       setFormDownPayment(resetLoan.downPayment ? String(resetLoan.downPayment) : '');
-      setFormExtraMonthlyPayment(resetLoan.extraMonthlyPayment ? String(resetLoan.extraMonthlyPayment ?? '') : '');
-      setFormExtraOneTimePayment(resetLoan.extraOneTimePayment ? String(resetLoan.extraOneTimePayment ?? '') : '');
-      setFormExtraOneTimeMonth(resetLoan.extraOneTimeMonth ? String(resetLoan.extraOneTimeMonth ?? '') : '');
+      setFormExtraMonthlyPayment(resetLoan.extraMonthlyPayment ? String(resetLoan.extraMonthlyPayment) : '');
+      setFormExtraOneTimePayment(resetLoan.extraOneTimePayment ? String(resetLoan.extraOneTimePayment) : '');
+      setFormExtraOneTimeMonth(resetLoan.extraOneTimeMonth ? String(resetLoan.extraOneTimeMonth) : '');
 
-      await db.update(schema.loans).set(resetLoan).where(eq(schema.loans.id, currentConfig.id));
+      await api.putLoan(resetLoan as Loan);
       setSnackbarMsg('Reset to default values.');
     }
   };
@@ -565,11 +581,12 @@ export default function Loans() {
       createdAt: new Date().toISOString(),
     };
 
-    await db.insert(schema.loans).values(newLoan);
+    await api.putLoan(newLoan as Loan);
     // Fetch the newly inserted loan ID
-    const latest = await db.select().from(schema.loans).orderBy(desc(schema.loans.id)).limit(1);
-    if (latest && latest[0] && latest[0].id !== undefined) {
-      setActiveLoanId(latest[0].id);
+    const loansList = await api.getLoans();
+    const latest = loansList.sort((a, b) => (b.id || 0) - (a.id || 0))[0];
+    if (latest && latest.id !== undefined) {
+      setActiveLoanId(latest.id);
     }
     setAddDialogOpen(false);
     setAddName('');
@@ -582,17 +599,13 @@ export default function Loans() {
 
   const handleRemoveLoan = async () => {
     if (!currentConfig || currentConfig.id === undefined) return;
-    const updated = {
-      ...currentConfig,
-      enabled: false,
-    };
-    await db.update(schema.loans).set({ enabled: false }).where(eq(schema.loans.id, currentConfig.id));
+    await api.putLoan({ ...currentConfig, enabled: false } as Loan);
     setSnackbarMsg(`Loan "${currentConfig.name}" removed from view.`);
   };
 
   const handleRestoreLoan = async (loan: Loan) => {
     if (loan.id === undefined) return;
-    await db.update(schema.loans).set({ enabled: true }).where(eq(schema.loans.id, loan.id));
+    await api.putLoan({ ...loan, enabled: true } as Loan);
     setActiveLoanId(loan.id);
     setSnackbarMsg(`Loan "${loan.name}" restored successfully.`);
   };
@@ -601,7 +614,7 @@ export default function Loans() {
     if (!window.confirm(`Are you sure you want to delete the loan "${name}"? This action cannot be undone.`)) {
       return;
     }
-    await db.delete(schema.loans).where(eq(schema.loans.id, id));
+    await api.deleteLoan(id);
     setSnackbarMsg(`Loan "${name}" deleted permanently.`);
   };
 
@@ -1122,6 +1135,7 @@ export default function Loans() {
       <Box sx={{ width: '100%', height: isDesktop ? 600 : 'auto', display: 'flex', flexDirection: 'column' }}>
         {isDesktop ? (
           <PanelGroup
+            key="loans-panels"
             orientation="horizontal"
             defaultLayout={defaultLayout}
             onLayoutChanged={onLayoutChanged}

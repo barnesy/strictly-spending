@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useDataStore } from '../dataStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useCategories } from '../hooks/queries';
 import {
   Dialog,
   DialogTitle,
@@ -30,7 +29,7 @@ interface Props {
 }
 
 export default function RecategorizeDialog({ txn, onClose }: Props) {
-  const categories = useDataStore(useShallow(s => s.categories));
+  const { data: categories } = useCategories();
   const [category, setCategory] = useState(txn.category);
   const [recurrenceOverride, setRecurrenceOverride] = useState<'recurring' | 'onetime' | 'default'>(
     txn.recurrenceOverride || 'default'

@@ -1,7 +1,7 @@
 import { db } from "../db/drizzle";
 import * as schema from "../db/schema";
 import { eq } from 'drizzle-orm';
-import { useDbQuery } from '../hooks/useDbQuery';
+import { useArtifacts } from '../hooks/queries';
 
 import {
   Box,
@@ -15,7 +15,7 @@ import {
 import { useChatStore } from '../chatStore';
 
 export default function ArtifactsLibrary() {
-  const artifacts = useDbQuery(async () => db.select().from(schema.artifacts));
+  const { data: artifacts } = useArtifacts();
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
 
   if (!artifacts) {

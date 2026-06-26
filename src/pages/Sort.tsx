@@ -12,11 +12,8 @@ import { eq, inArray } from 'drizzle-orm';
 //   - Keyboard shortcuts: Enter (suggested), 1-9 (grid), Cmd/Ctrl-Z (undo),
 //     S (skip), ? (help), Esc (close help).
 
-import { useState, useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
-import { useDataStore } from '../dataStore';
-import { refreshRecurrenceAll } from '../recurrence';
-import { useDbQuery } from '../hooks/useDbQuery';
-import { useShallow } from 'zustand/react/shallow';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useSettings, useCategories, useSortQueue } from '../hooks/queries';
 import PageLoader from '../components/PageLoader';
 import {
   Box,
@@ -43,7 +40,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 
 import { useFilters } from '../store';
-import { buildSortQueue, type SortCard as SortCardData } from '../sort';
+import { type SortCard as SortCardData, type Transaction } from '../types';
 
 import SortCard from '../components/SortCard';
 import SortCategoryGrid from '../components/SortCategoryGrid';
@@ -62,56 +59,10 @@ export default function Sort() {
   const [aiSuggesting, setAiSuggesting] = useState<Record<string, boolean>>({});
   const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
 
-  const { allTransactions, categories, rules, isDataLoading, globalRecurrenceMap, globalDemoRecurrenceMap } = useDataStore(useShallow((s) => ({
-    allTransactions: s.transactions,
-    categories: s.categories,
-    rules: s.rules,
-    isDataLoading: s.isLoading,
-    globalRecurrenceMap: s.recurrenceMap,
-    globalDemoRecurrenceMap: s.demoRecurrenceMap,
-  })));
+  const { data: categories = [], isLoading: isCatLoading } = useCategories();
+  const { data: queue = [], isLoading: isQueueLoading } = useSortQueue(demoMode);
 
-  const uncategorizedAll = useMemo(
-    () => allTransactions.filter((t) => t.category === 'Uncategorized'),
-    [allTransactions]
-  );
-  const deferredUncategorizedAll = useDeferredValue(uncategorizedAll);
-
-  const merchantKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const t of uncategorizedAll || []) if (t.merchantKey) keys.add(t.merchantKey);
-    return Array.from(keys);
-  }, [uncategorizedAll]);
-
-  const relevantTxnsAll = useMemo(() => {
-    if (merchantKeys.length === 0) return [];
-    const keySet = new Set(merchantKeys);
-    return allTransactions.filter((t) => t.merchantKey && keySet.has(t.merchantKey));
-  }, [merchantKeys, allTransactions]);
-
-  const uncategorized = useMemo(
-    () =>
-      deferredUncategorizedAll && demoMode
-        ? deferredUncategorizedAll.filter((t) => t.source === 'demo')
-        : deferredUncategorizedAll?.filter((t) => t.source !== 'demo') || [],
-    [deferredUncategorizedAll, demoMode]
-  );
-
-  const recurrenceMap = demoMode ? globalDemoRecurrenceMap : globalRecurrenceMap;
-
-  // Build queue from current state. useLiveQuery means this rebuilds as the
-  // DB changes (e.g. after a decision commits, the row no longer matches
-  // 'Uncategorized' and drops out).
-  const queue = useMemo(
-    () =>
-      buildSortQueue(
-        uncategorized,
-        recurrenceMap,
-        categories || [],
-        rules || []
-      ),
-    [uncategorized, recurrenceMap, categories, rules]
-  );
+  const isDataLoading = isCatLoading || isQueueLoading;
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const visibleQueue = queue;
@@ -210,7 +161,8 @@ export default function Sort() {
     }
   };
 
-  const scoreSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:aiGuessScore')))[0], []);
+  const { data: settings = [] } = useSettings();
+  const scoreSetting = settings.find(s => s.key === 'app:aiGuessScore');
   const score = scoreSetting?.value as { correctCount: number; totalCount: number } | undefined;
 
   const updateScore = useCallback(async (correct: boolean) => {
@@ -221,8 +173,10 @@ export default function Sort() {
         correctCount: val.correctCount + (correct ? 1 : 0),
         totalCount: val.totalCount + 1,
       };
-      await db.insert(schema.settings).values({ key: 'app:aiGuessScore', value: updated }).onConflictDoNothing();
-    });
+      await import('@tauri-apps/api/core').then(m => 
+        m.invoke('put_setting', { item: { key: 'app:aiGuessScore', value: updated } })
+      ).catch(e => console.error(e));
+    })();
   }, []);
 
   const handleToggleAiSuggest = (enabled: boolean) => {
@@ -359,6 +313,7 @@ export default function Sort() {
     if (selectionKeys.length === 0) return;
 
     await (async () => {
+      const toUpdateTxns: Transaction[] = [];
       for (const key of selectionKeys) {
         const sel = selections[key];
         const card = queue.find(c => c.merchantKey === key);
@@ -369,37 +324,40 @@ export default function Sort() {
         const txs = await db.select().from(schema.transactions).where(inArray(schema.transactions.id, txnIds));
         for (const t of txs) {
           const taxGuess = guessTaxFields(t.description, sel.category);
-          await db.update(schema.transactions).set({
+          toUpdateTxns.push({
+            ...t,
             category: sel.category,
             userOverridden: true,
             isBusiness: taxGuess.isBusiness,
             taxCategory: taxGuess.taxCategory,
             deductionStatus: taxGuess.deductionStatus,
-          }).where(eq(schema.transactions.id, t.id!));
+          });
         }
 
         const patternToSave = sel.rulePattern.trim();
         if (sel.recurrence) {
-          await db.insert(schema.merchantOverrides).values({
-            merchantKey: key,
-            recurrence: sel.recurrence as any
-          }).onConflictDoNothing();
+          await import('@tauri-apps/api/core').then(m => 
+            m.invoke('put_merchant_override', { item: { merchantKey: key, recurrence: sel.recurrence } })
+          ).catch(e => console.error(e));
         }
 
         if (sel.saveRule && patternToSave) {
-          await db.insert(schema.rules).values({
-            pattern: patternToSave,
-            category: sel.category,
-            priority: 1000,
-            createdAt: new Date().toISOString(),
-          });
+          await import('@tauri-apps/api/core').then(m => 
+            m.invoke('add_rule', { item: { pattern: patternToSave, category: sel.category, priority: 1000, createdAt: new Date().toISOString() } })
+          ).catch(e => console.error(e));
         }
+      }
+
+      if (toUpdateTxns.length > 0) {
+        // We use raw invoke to avoid the reactive mut() which spams db-update
+        await import('@tauri-apps/api/core').then(m => 
+          m.invoke('bulk_update_transactions', { transactions: toUpdateTxns })
+        ).catch(e => console.error(e));
       }
     })();
 
     setSelections({});
     setCurrentIndex(0);
-    await refreshRecurrenceAll();
   }, [selections, queue]);
 
   const onPick = useCallback(
@@ -510,10 +468,10 @@ export default function Sort() {
   }, [onPick, isInteractive, helpOpen, activeSuggestion, visibleQueue.length]);
 
 
-  const isLoading = isDataLoading || allTransactions === undefined || categories === undefined;
+  const isLoading = isDataLoading || categories === undefined;
   const shouldRender = useDeferredRender();
 
-  if (!uncategorizedAll || !relevantTxnsAll || !categories || !rules || isLoading || !shouldRender) {
+  if (!categories || isLoading || !shouldRender) {
     return <PageLoader isLoading={true}>{false}</PageLoader>;
   }
 
@@ -624,7 +582,11 @@ export default function Sort() {
       {currentCard ? (
         <>
           {isDesktop ? (
-            <PanelGroup orientation="horizontal" style={{ flex: 1, minHeight: 0 }}>
+            <PanelGroup
+              key="sort-panels"
+              orientation="horizontal"
+              style={{ flex: 1, minHeight: 0 }}
+            >
               <Panel id="sort-controls-panel" defaultSize="45%" minSize="30%" style={{ display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ flex: 1, overflowY: 'auto', pr: 2 }}>
                   <Stack spacing={2}>
