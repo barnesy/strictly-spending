@@ -1,7 +1,4 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
-
+import { api } from '../api';
 import type { ChatMessage } from './types';
 import type { SkillTestCase } from '../types';
 
@@ -76,9 +73,9 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
 
   let basePrompt = GENERAL_SYSTEM_PROMPT;
   try {
-    const dbPrompt = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPrompt')))[0];
-    if (dbPrompt && typeof dbPrompt.value === 'string' && dbPrompt.value.trim() !== '') {
-      basePrompt = dbPrompt.value;
+    const dbPrompt = await api.getSetting<string>('app:systemPrompt');
+    if (dbPrompt && typeof dbPrompt === 'string' && dbPrompt.trim() !== '') {
+      basePrompt = dbPrompt;
     }
   } catch (err) {
     console.error('Failed to load system prompt from database:', err);
@@ -94,8 +91,7 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
 
   let enabledExtensions = '';
   try {
-    const res = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
-    const skills = (res?.value as any[]) || [];
+    const skills = await api.getSetting<any[]>('app:agentSkills') || [];
     enabledExtensions = skills
       .filter((s) => s.enabled)
       .map((s) => `### Skill: ${s.name}\n${s.systemPromptExtension}`)

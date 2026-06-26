@@ -1,6 +1,4 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
+import { api } from '../api';
 import { useState, useMemo } from 'react';
 import { useCategories, useMerchantOverrides, useTransactions } from '../hooks/queries';
 import {
@@ -121,17 +119,17 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
             setSaving(false);
             return;
           }
-          const existing = await (await db.select().from(schema.categories).where(eq(schema.categories.name, name)))[0];
+          const existing = categories.find((c) => c.name.toLowerCase() === name.toLowerCase());
           if (existing) {
             categoryName = existing.name;
           } else {
             const maxSort = Math.max(...categories.map((c) => c.sortOrder), 0);
-            await db.insert(schema.categories).values({
+            await api.addCategory({
               name,
               color: newCategoryColor,
               type: 'spend',
               sortOrder: maxSort + 1,
-            }).returning();
+            } as any);
             categoryName = name;
           }
         }
@@ -139,13 +137,13 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
         // Apply override to all matching transactions
         const finalCat = categoryName;
         await (async () => {
-          for (const t of matchingTxns) {
-            await db.update(schema.transactions).set({
-              category: finalCat,
-              userOverridden: true,
-            }).where(eq(schema.transactions.id, t.id!));
-          }
-        });
+          const toUpdateTxns = matchingTxns.map(t => ({
+            ...t,
+            category: finalCat,
+            userOverridden: true,
+          }));
+          await api.bulkUpdateTransactions(toUpdateTxns);
+        })();
       }
 
       // Persist recurrence override choice. "Auto" deletes any existing
@@ -153,24 +151,24 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
       if (recurrenceChanged) {
         if (recurrenceChoice === AUTO) {
           if (existingOverride) {
-            await db.delete(schema.merchantOverrides).where(eq(schema.merchantOverrides.merchantKey, merchantKey));
+            await api.deleteMerchantOverride(merchantKey);
           }
         } else {
-          await db.insert(schema.merchantOverrides).values({
+          await api.putMerchantOverride({
             merchantKey,
             recurrence: recurrenceChoice,
-          }).onConflictDoNothing();
+          });
         }
       }
 
       // Optionally save a rule so future imports use this category
       if (categoryChosen && categoryName && saveRule && rulePattern.trim()) {
-        await db.insert(schema.rules).values({
+        await api.addRule({
           pattern: rulePattern.trim(),
           category: categoryName,
           priority: 1000,
           createdAt: new Date().toISOString(),
-        });
+        } as any);
         // Re-run categorization for any other non-overridden transactions the
         // new rule might match.
         await recategorizeAll();

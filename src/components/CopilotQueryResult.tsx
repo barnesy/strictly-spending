@@ -1,6 +1,4 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq, between } from 'drizzle-orm';
+import { api } from '../api';
 import { useState, useEffect } from 'react';
 import { Box, Typography, Stack, Chip, Button } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -103,7 +101,7 @@ export default function CopilotQueryResult({
       const startStr = customStart || storeEarliest || '2000-01-01';
       const endStr = customEnd || storeLatest || new Date().toISOString().slice(0, 10);
       
-      db.select().from(schema.transactions).where(between(schema.transactions.date, startStr, endStr)).then(txns => {
+      api.getTransactions(startStr, endStr).then(txns => {
         const filtered = txns.filter(t => {
           if (accounts.length > 0 && !accounts.includes('all')) {
             if (!accounts.includes(t.accountId)) return false;
@@ -245,7 +243,8 @@ export default function CopilotQueryResult({
           txn={selectedTxn}
           onClose={async () => {
             setShowRecategorize(false);
-            const updated = await (await db.select().from(schema.transactions).where(eq(schema.transactions.id, selectedTxn.id)))[0];
+            const allTxns = await api.getTransactions();
+            const updated = allTxns.find(t => t.id === selectedTxn.id);
             if (updated) {
               setSelectedTxn(updated);
             } else {

@@ -1,7 +1,6 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../hooks/queries';
+import { usePutSetting } from '../hooks/mutations';
 import {
   Stack,
   Typography,
@@ -98,6 +97,8 @@ export default function ThemeManager() {
   const fontFamily = (config.fontFamily as string) || FONTS[0].value;
   const fontSize = (config.fontSize as number) ?? 14;
 
+  const putSetting = usePutSetting();
+
   const updateTheme = async (updates: Record<string, unknown>) => {
     const newMode = updates.mode || mode;
     const nextConfig: any = { ...config, mode: newMode, ...updates };
@@ -114,12 +115,7 @@ export default function ThemeManager() {
       }
     }
 
-    await db.insert(schema.settings)
-      .values({ key: 'themeConfig', value: nextConfig })
-      .onConflictDoUpdate({
-        target: schema.settings.key,
-        set: { value: nextConfig },
-      });
+    await putSetting.mutateAsync({ key: 'themeConfig', value: nextConfig });
   };
 
   const [localRadius, setLocalRadius] = useState(borderRadius);

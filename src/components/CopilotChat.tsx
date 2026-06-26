@@ -1,5 +1,3 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
 import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import {
   Box,

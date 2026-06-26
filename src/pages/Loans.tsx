@@ -1,6 +1,3 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq, desc } from 'drizzle-orm';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useFilters } from '../store';
 import { useLoans, useUniqueMerchants, useCategories } from '../hooks/queries';

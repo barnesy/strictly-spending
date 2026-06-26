@@ -2,6 +2,7 @@ import { api } from './api';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { localAI, type ChatMessage } from './ai';
+import { deleteLocalModel, getLocalModels } from './ai/ollamaApi';
 
 import type { WorkspaceConfig, ChatArtifact, ChatThread } from './types';
 
@@ -96,30 +97,15 @@ export const useChatStore = create<ChatStore>()(
 
       deleteModel: async (name: string) => {
         try {
-          const response = await fetch('http://localhost:11434/api/delete', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
-          });
-          if (!response.ok) {
-            throw new Error(`Failed to delete model: ${response.statusText}`);
-          }
+          await deleteLocalModel(name);
           
           // If we deleted the active model, fallback to another model or default
           if (get().modelName === name) {
-            try {
-              const res = await fetch('http://localhost:11434/api/tags');
-              if (res.ok) {
-                const data = await res.json();
-                const remaining = data.models || [];
-                const nextModel = remaining.find((m: any) => m.name !== name);
-                if (nextModel) {
-                  get().setModelName(nextModel.name);
-                } else {
-                  get().setModelName('gemma2:2b');
-                }
-              }
-            } catch {
+            const models = await getLocalModels();
+            const nextModel = models.find((m: any) => m.name !== name);
+            if (nextModel) {
+              get().setModelName(nextModel.name);
+            } else {
               get().setModelName('gemma2:2b');
             }
           }

@@ -1,8 +1,6 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
-import { db } from '../../db/drizzle';
-import * as schema from '../../db/schema';
-import { inArray, sql, and } from 'drizzle-orm';
+import { api } from '../../api';
 import { detectSubscriptionAlerts } from '../../copilotAnalytics';
 
 export class SubscriptionAlertsTool implements AIToolHandler {
@@ -15,28 +13,17 @@ export class SubscriptionAlertsTool implements AIToolHandler {
     const maxPriceVal = currentFilters.maxPrice;
     const enabledSet = new Set(currentFilters.enabledAccountIds);
 
-    const conditions = [];
-    if (enabledSet.size > 0) {
-      conditions.push(inArray(schema.transactions.accountId, Array.from(enabledSet)));
-    }
-    if (searchVal) {
-      const q = `%${searchVal}%`;
-      conditions.push(sql`(LOWER(${schema.transactions.description}) LIKE LOWER(${q}) OR LOWER(${schema.transactions.merchantKey}) LIKE LOWER(${q}))`);
-    }
-    if (minPriceVal !== undefined) {
-      conditions.push(sql`ABS(${schema.transactions.amount}) >= ${minPriceVal}`);
-    }
-    if (maxPriceVal !== undefined) {
-      conditions.push(sql`ABS(${schema.transactions.amount}) <= ${maxPriceVal}`);
-    }
-
-    // We still fetch the transactions here because the alert detection logic is complex and looks at sequences of dates
-    // However, we only fetch the relevant ones filtered by SQL
-    const query = conditions.length > 0 
-      ? db.select().from(schema.transactions).where(and(...conditions))
-      : db.select().from(schema.transactions);
-
-    const filteredTxns = await query;
+    const allTxns = await api.getTransactions();
+    const filteredTxns = allTxns.filter((t) => {
+      if (enabledSet.size > 0 && t.accountId && !enabledSet.has(t.accountId)) return false;
+      if (searchVal) {
+        const q = searchVal.toLowerCase();
+        if (!t.description.toLowerCase().includes(q) && !t.merchantKey.toLowerCase().includes(q)) return false;
+      }
+      if (minPriceVal !== undefined && Math.abs(t.amount) < minPriceVal) return false;
+      if (maxPriceVal !== undefined && Math.abs(t.amount) > maxPriceVal) return false;
+      return true;
+    });
     const store = context.dataStore;
     const overrides = store.merchantOverrides;
     const alerts = detectSubscriptionAlerts(filteredTxns as any, overrides);

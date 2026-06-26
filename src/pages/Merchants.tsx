@@ -1,8 +1,7 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq, inArray } from 'drizzle-orm';
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
+import { api } from '../api';
 import { useTransactions, useCategories, useTaxRules, useMerchantGroups } from '../hooks/queries';
+import { useBulkUpdateTransactions } from '../hooks/mutations';
 import { resolveTaxDeduction } from '../taxUtils';
 import {
   Box,
@@ -99,6 +98,7 @@ export default function Merchants() {
   const { data: merchantGroups = [], isLoading: isMerchantsLoading } = useMerchantGroups();
   const { data: allCategories = [], isLoading: isCatLoading } = useCategories();
   const { data: taxRules = [] } = useTaxRules();
+  const bulkUpdateTransactions = useBulkUpdateTransactions();
 
   const isLoading = isMerchantsLoading || isCatLoading;
 
@@ -249,7 +249,9 @@ export default function Merchants() {
     }
 
     try {
-      await db.update(schema.transactions).set({ merchantKey: trimmedName }).where(eq(schema.transactions.merchantKey, renameTarget.merchantKey));
+      const txs = await api.getTransactions('1970-01-01', '2100-01-01', { merchantKey: renameTarget.merchantKey });
+      const updatedTxs = txs.map((t: any) => ({ ...t, merchantKey: trimmedName }));
+      await bulkUpdateTransactions.mutateAsync(updatedTxs);
       setSnackbarMessage(`Successfully renamed "${renameTarget.merchantKey}" to "${trimmedName}".`);
     } catch (e: unknown) {
       console.error(e);
@@ -269,16 +271,18 @@ export default function Merchants() {
     if (!recategorizeTarget || !selectedCategory) return;
 
     try {
-      const txs = await db.select().from(schema.transactions).where(eq(schema.transactions.merchantKey, recategorizeTarget.merchantKey));
-      for (const t of txs) {
+      const txs = await api.getTransactions('1970-01-01', '2100-01-01', { merchantKey: recategorizeTarget.merchantKey });
+      const updatedTxs = txs.map((t: any) => {
         const taxGuess = resolveTaxDeduction(t.description, selectedCategory, t.merchantKey, taxRules);
-        await db.update(schema.transactions).set({
+        return {
+          ...t,
           category: selectedCategory,
           isBusiness: taxGuess.isBusiness,
           taxCategory: taxGuess.taxCategory,
           deductionStatus: taxGuess.deductionStatus,
-        }).where(eq(schema.transactions.id, t.id!));
-      }
+        };
+      });
+      await bulkUpdateTransactions.mutateAsync(updatedTxs);
       setSnackbarMessage(`Successfully recategorized transactions under "${recategorizeTarget.merchantKey}" to "${selectedCategory}".`);
     } catch (e: unknown) {
       console.error(e);
@@ -303,7 +307,13 @@ export default function Merchants() {
 
     try {
       if (sourceKeys.length > 0) {
-        await db.update(schema.transactions).set({ merchantKey: finalName }).where(inArray(schema.transactions.merchantKey, sourceKeys));
+        let allTxs: any[] = [];
+        for (const key of sourceKeys) {
+          const txs = await api.getTransactions('1970-01-01', '2100-01-01', { merchantKey: key });
+          allTxs = allTxs.concat(txs);
+        }
+        const updatedTxs = allTxs.map(t => ({ ...t, merchantKey: finalName }));
+        await bulkUpdateTransactions.mutateAsync(updatedTxs);
       }
       setSnackbarMessage(`Merged ${selectedKeys.length} merchants into "${finalName}".`);
       setSelectedKeys([]);
@@ -446,12 +456,21 @@ export default function Merchants() {
     setMergingIndex(primarySuggest);
 
     try {
-      const changes: Record<string, unknown> = { merchantKey: trimmedName };
-      if (selectedCat && selectedCat !== 'keep') {
-        changes.category = selectedCat;
+      let allTxs: any[] = [];
+      for (const key of allKeys) {
+        const txs = await api.getTransactions('1970-01-01', '2100-01-01', { merchantKey: key });
+        allTxs = allTxs.concat(txs);
       }
+      
+      const updatedTxs = allTxs.map(t => {
+        const tCopy = { ...t, merchantKey: trimmedName };
+        if (selectedCat && selectedCat !== 'keep') {
+          tCopy.category = selectedCat;
+        }
+        return tCopy;
+      });
 
-      await db.update(schema.transactions).set(changes).where(inArray(schema.transactions.merchantKey, allKeys));
+      await bulkUpdateTransactions.mutateAsync(updatedTxs);
 
       setSnackbarMessage(`Merged duplicate set into "${trimmedName}".`);
       setDuplicateGroups((prev) => prev.filter((g) => g.primarySuggest !== primarySuggest));

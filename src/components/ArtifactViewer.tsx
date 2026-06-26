@@ -1,6 +1,4 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
+import { api } from '../api';
 import { useState } from 'react';
 import {
   Box,
@@ -102,8 +100,8 @@ export default function ArtifactViewer() {
   };
 
   const handleSave = async () => {
-    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
-    const currentSkills = (setting?.value as AgentSkill[]) || [];
+    const setting = await api.getSetting<AgentSkill[]>('app:agentSkills');
+    const currentSkills = setting || [];
     
     // Check if already exists by name
     const existingIndex = currentSkills.findIndex(s => s.name === activeArtifact.title);
@@ -127,8 +125,7 @@ export default function ArtifactViewer() {
         }
       ];
     }
-    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated })
-      .onConflictDoUpdate({ target: schema.settings.key, set: { value: updated } });
+    await api.putSetting('app:agentSkills', updated);
   };
 
   return (

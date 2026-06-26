@@ -1,6 +1,3 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
 import { useMemo, useEffect, useState, useDeferredValue } from 'react';
 import {
   Group as PanelGroup,
@@ -11,6 +8,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTransactionsPaginated, useTransactionCount, useDashboardAggregates, useSpendChartData, useTopMerchants, useIncomeChartData, useAccounts, useCategories, useRecurrenceMap } from '../hooks/queries';
+import { useUpdateTransaction } from '../hooks/mutations';
 import {
   Box,
   Paper,
@@ -71,6 +69,7 @@ import { useDeferredRender } from '../hooks/useDeferredRender';
 export default function Dashboard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const updateTransaction = useUpdateTransaction();
   const viewMode = location.pathname === '/transactions' ? 'table' : 'chart';
 
   const setViewMode = (mode: 'chart' | 'table') => {
@@ -754,7 +753,7 @@ export default function Dashboard() {
                       updates.taxCategory = undefined;
                       updates.deductionStatus = 'pending';
                     }
-                    await db.update(schema.transactions).set(updates).where(eq(schema.transactions.id, taxEditTxn.id!));
+                    await updateTransaction.mutateAsync({ id: taxEditTxn.id!, updates });
                     setTaxEditTxn(prev => prev ? { ...prev, ...updates } : null);
                   }}
                 >
@@ -772,7 +771,7 @@ export default function Dashboard() {
                     value={taxEditTxn.taxCategory || 'other'}
                     onChange={async (e) => {
                       const val = e.target.value;
-                      await db.update(schema.transactions).set({ taxCategory: val }).where(eq(schema.transactions.id, taxEditTxn.id!));
+                      await updateTransaction.mutateAsync({ id: taxEditTxn.id!, updates: { taxCategory: val } });
                       setTaxEditTxn(prev => prev ? { ...prev, taxCategory: val } : null);
                     }}
                   >

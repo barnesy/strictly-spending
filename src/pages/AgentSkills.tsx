@@ -1,8 +1,7 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { api } from '../api';
 import { useSettings } from '../hooks/queries';
+import { usePutSetting } from '../hooks/mutations';
 import { Box, Stack, Typography, Paper, Tabs, Tab, Snackbar } from '@mui/material';
 
 import type { AgentSkill, SkillTestCase, AgentSkillStage } from '../types';
@@ -35,16 +34,18 @@ export const AgentSkills: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0); // 0 = Skills, 1 = Baseline System Prompt, 2 = LLM Output
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
 
+  const putSetting = usePutSetting();
+
   // License state
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseError, setLicenseError] = useState<string | null>(null);
 
   const handleActivateLicense = async () => {
     if (licenseKey.trim() === 'PRO-123') {
-      await db.insert(schema.settings).values({
+      await putSetting.mutateAsync({
         key: 'license',
         value: { active: true, key: 'PRO-123', activatedAt: new Date().toISOString() }
-      }).onConflictDoNothing();
+      });
       setLicenseError(null);
     } else {
       setLicenseError('Invalid license key. Try "PRO-123".');
@@ -198,8 +199,7 @@ export const AgentSkills: React.FC = () => {
   // Seed default skills
   useEffect(() => {
     const seedSkills = async () => {
-      const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
-      const currentSkills = (setting?.value as AgentSkill[]) || [];
+      const currentSkills = await api.getSetting<AgentSkill[]>('app:agentSkills') || [];
       
       let hasChanges = false;
       const updatedSkills = [...currentSkills];
@@ -234,19 +234,16 @@ export const AgentSkills: React.FC = () => {
       const filteredSkills = updatedSkills.filter(s => !s.isBuiltIn || defaultIds.has(s.id));
 
       if (hasChanges || filteredSkills.length !== currentSkills.length) {
-        await db.insert(schema.settings).values({ key: 'app:agentSkills', value: filteredSkills })
-          .onConflictDoUpdate({ target: schema.settings.key, set: { value: filteredSkills } });
+        await api.putSetting('app:agentSkills', filteredSkills);
       }
 
-      const systemPromptVersionDb = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:systemPromptVersion')))[0];
+      const systemPromptVersionDb = await api.getSetting<number>('app:systemPromptVersion');
       
-      const shouldOverwrite = !systemPromptVersionDb || Number(systemPromptVersionDb.value) < CURRENT_PROMPT_VERSION;
+      const shouldOverwrite = !systemPromptVersionDb || Number(systemPromptVersionDb) < CURRENT_PROMPT_VERSION;
 
       if (shouldOverwrite) {
-        await db.insert(schema.settings).values({ key: 'app:systemPrompt', value: GENERAL_SYSTEM_PROMPT })
-          .onConflictDoUpdate({ target: schema.settings.key, set: { value: GENERAL_SYSTEM_PROMPT } });
-        await db.insert(schema.settings).values({ key: 'app:systemPromptVersion', value: CURRENT_PROMPT_VERSION })
-          .onConflictDoUpdate({ target: schema.settings.key, set: { value: CURRENT_PROMPT_VERSION } });
+        await api.putSetting('app:systemPrompt', GENERAL_SYSTEM_PROMPT);
+        await api.putSetting('app:systemPromptVersion', CURRENT_PROMPT_VERSION);
       }
     };
     seedSkills();
@@ -264,11 +261,9 @@ export const AgentSkills: React.FC = () => {
   }, [skills]);
 
   const handleToggleSkill = async (skillId: string) => {
-    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
-    const currentSkills = (setting?.value as AgentSkill[]) || [];
+    const currentSkills = await api.getSetting<AgentSkill[]>('app:agentSkills') || [];
     const updated = currentSkills.map(s => s.id === skillId ? { ...s, enabled: !s.enabled } : s);
-    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated })
-      .onConflictDoUpdate({ target: schema.settings.key, set: { value: updated } });
+    await putSetting.mutateAsync({ key: 'app:agentSkills', value: updated });
   };
 
   const handleDeleteSkill = async (skillId: string) => {
@@ -278,16 +273,13 @@ export const AgentSkills: React.FC = () => {
       console.warn("Prevented deletion of built-in skill:", skillId);
       return;
     }
-    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
-    const currentSkills = (setting?.value as AgentSkill[]) || [];
+    const currentSkills = await api.getSetting<AgentSkill[]>('app:agentSkills') || [];
     const updated = currentSkills.filter(s => s.id !== skillId);
-    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated })
-      .onConflictDoUpdate({ target: schema.settings.key, set: { value: updated } });
+    await putSetting.mutateAsync({ key: 'app:agentSkills', value: updated });
   };
 
   const handleSaveSkill = async (skill: Omit<AgentSkill, 'enabled'> & { enabled?: boolean }) => {
-    const setting = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0];
-    const currentSkills = (setting?.value as AgentSkill[]) || [];
+    const currentSkills = await api.getSetting<AgentSkill[]>('app:agentSkills') || [];
     
     let updated: AgentSkill[];
     const existingIndex = currentSkills.findIndex(s => s.id === skill.id);
@@ -314,8 +306,7 @@ export const AgentSkills: React.FC = () => {
         }
       ];
     }
-    await db.insert(schema.settings).values({ key: 'app:agentSkills', value: updated })
-      .onConflictDoUpdate({ target: schema.settings.key, set: { value: updated } });
+    await putSetting.mutateAsync({ key: 'app:agentSkills', value: updated });
   };
 
   const [sidebarTab, setSidebarTab] = useState(0); 
@@ -437,10 +428,10 @@ export const AgentSkills: React.FC = () => {
         currentCases.push(newTestCase);
       }
  
-      await db.insert(schema.settings).values({
+      await putSetting.mutateAsync({
         key: 'app:baselineTestCases',
         value: currentCases
-      }).onConflictDoNothing();
+      });
       setSnackbarMessage(testCaseDialogIndex !== null ? 'Baseline test case updated!' : 'Baseline test case added!');
     }
  
@@ -480,10 +471,10 @@ export const AgentSkills: React.FC = () => {
 
   const handleDeleteBaselineTestCase = async (index: number) => {
     const currentCases = baselineTestCases.filter((_, idx) => idx !== index);
-    await db.insert(schema.settings).values({
+    await putSetting.mutateAsync({
       key: 'app:baselineTestCases',
       value: currentCases
-    }).onConflictDoNothing();
+    });
 
     const updatedResults = { ...baselineDiagnosticResults };
     delete updatedResults[index];
@@ -674,15 +665,13 @@ export const AgentSkills: React.FC = () => {
     if (confirm("Are you sure you want to reset the baseline system prompt back to defaults?")) {
       setSystemPromptText(GENERAL_SYSTEM_PROMPT);
       setIsPromptDirty(false);
-      db.insert(schema.settings).values({ key: 'app:systemPrompt', value: GENERAL_SYSTEM_PROMPT })
-        .onConflictDoUpdate({ target: schema.settings.key, set: { value: GENERAL_SYSTEM_PROMPT } });
+      putSetting.mutateAsync({ key: 'app:systemPrompt', value: GENERAL_SYSTEM_PROMPT });
       setSnackbarMessage('System prompt reset to default!');
     }
   };
 
   const handleSaveSystemPrompt = async () => {
-    await db.insert(schema.settings).values({ key: 'app:systemPrompt', value: systemPromptText })
-      .onConflictDoUpdate({ target: schema.settings.key, set: { value: systemPromptText } });
+    await putSetting.mutateAsync({ key: 'app:systemPrompt', value: systemPromptText });
     setIsPromptDirty(false);
     setSnackbarMessage('Baseline system prompt saved!');
   };

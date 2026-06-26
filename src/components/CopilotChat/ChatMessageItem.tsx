@@ -1,6 +1,4 @@
-import { db } from "../../db/drizzle";
-import * as schema from "../../db/schema";
-import { eq, asc } from 'drizzle-orm';
+import { api } from '../../api';
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -122,10 +120,11 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
 
       const threadId = useChatStore.getState().activeThreadId;
       if (threadId) {
-        const dbMsgs = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId)).orderBy(asc(schema.messages.id));
-        const dbMsg = dbMsgs.find(m => m.role === targetMsg.role && m.content === targetMsg.content);
+        const dbMsgs = await api.getMessages();
+        const threadMsgs = dbMsgs.filter((m) => m.threadId === threadId);
+        const dbMsg = threadMsgs.find(m => m.role === targetMsg.role && m.content === targetMsg.content);
         if (dbMsg && dbMsg.id) {
-          await db.update(schema.messages).set({ actionResult: newResult }).where(eq(schema.messages.id, dbMsg.id));
+          await api.putMessage({ ...dbMsg, actionResult: newResult });
         }
       }
     }
@@ -736,7 +735,8 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 size="small"
                 onClick={async () => {
                   if (message.actionResult?.id) {
-                    const art = await (await db.select().from(schema.artifacts).where(eq(schema.artifacts.id, message.actionResult.id)))[0];
+                    const artifacts = await api.getArtifacts();
+                    const art = artifacts.find((a) => a.id === message.actionResult.id);
                     if (art) useChatStore.getState().setActiveArtifact(art);
                   }
                 }}

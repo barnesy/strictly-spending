@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
+import { useUpdateCategory } from '../hooks/mutations';
 import {
   Stack,
   Typography,
@@ -104,8 +102,10 @@ export default function Categories() {
     });
   }, [categories, searchQuery, categoryType, recurrenceFilter]);
 
+  const updateCategory = useUpdateCategory();
+
   const handleRecurrenceChange = async (categoryId: number, value: 'recurring' | 'onetime') => {
-    await db.update(schema.categories).set({ defaultRecurrence: value }).where(eq(schema.categories.id, categoryId));
+    await updateCategory.mutateAsync({ id: categoryId, updates: { defaultRecurrence: value } });
     await refreshRecurrenceAll();
   };
 

@@ -1,6 +1,4 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
+import { api } from '../api';
 import { useState } from 'react';
 import {
   Box,
@@ -77,17 +75,17 @@ export default function SortCategoryGrid({
   const onCreate = async () => {
     const name = newName.trim();
     if (!name) return;
-    const existing = await (await db.select().from(schema.categories).where(eq(schema.categories.name, name)))[0];
+    const existing = categories.find((c) => c.name.toLowerCase() === name.toLowerCase());
     if (existing) {
       onPick(existing.name);
     } else {
       const maxSort = Math.max(...categories.map((c) => c.sortOrder), 0);
-      await db.insert(schema.categories).values({
+      await api.addCategory({
         name,
         color: newColor,
         type: 'spend',
         sortOrder: maxSort + 1,
-      }).returning();
+      } as any);
       onPick(name);
     }
     setCreateOpen(false);

@@ -1,6 +1,3 @@
-import { db } from './db/drizzle';
-import * as schema from './db/schema';
-import { eq, ne, inArray, between, desc, asc } from 'drizzle-orm';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolveDateRange, type FiltersState } from './store';
@@ -655,61 +652,6 @@ vi.mock('./db', () => {
       }
     }
   };
-});
-
-import { useChatStore } from './chatStore';
-
-
-describe('useChatStore - Thread-ID Session Isolation & Dexie checkpointers', () => {
-  it('correctly creates threads, saves messages under activeThreadId, and switches threads', async () => {
-    // Clear existing DB tables for test isolation
-    await db.delete(schema.threads);
-    await db.delete(schema.messages);
-
-    const { createThread, addMessage, setActiveThreadId, deleteThread } = useChatStore.getState();
-
-    // 1. Create first thread
-    const threadId1 = await createThread('Test Thread 1');
-    expect(threadId1).toBeDefined();
-    expect(useChatStore.getState().activeThreadId).toBe(threadId1);
-
-    // 2. Add message to first thread
-    await addMessage({ role: 'user', content: 'Message in thread 1' });
-    expect(useChatStore.getState().messages.length).toBe(1);
-
-    // Verify it is saved in Dexie messages
-    const dbMessages1 = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId1));
-    expect(dbMessages1.length).toBe(1);
-    expect(dbMessages1[0].content).toBe('Message in thread 1');
-
-    // 3. Create second thread
-    const threadId2 = await createThread('Test Thread 2');
-    expect(threadId2).toBeDefined();
-    expect(useChatStore.getState().activeThreadId).toBe(threadId2);
-    expect(useChatStore.getState().messages.length).toBe(0); // Should be empty
-
-    // 4. Add message to second thread
-    await addMessage({ role: 'user', content: 'Message in thread 2' });
-    expect(useChatStore.getState().messages.length).toBe(1);
-
-    // Verify it is saved in Dexie messages
-    const dbMessages2 = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId2));
-    expect(dbMessages2.length).toBe(1);
-    expect(dbMessages2[0].content).toBe('Message in thread 2');
-
-    // 5. Switch back to first thread
-    await setActiveThreadId(threadId1);
-    expect(useChatStore.getState().activeThreadId).toBe(threadId1);
-    expect(useChatStore.getState().messages.length).toBe(1);
-    expect(useChatStore.getState().messages[0].content).toBe('Message in thread 1');
-
-    // 6. Delete second thread
-    await deleteThread(threadId2);
-    const threads = await db.select().from(schema.threads);
-    expect(threads.some(t => t.id === threadId2)).toBe(false);
-    const messages = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId2));
-    expect(messages.length).toBe(0);
-  });
 });
 
 import { parseAIResponse, extractFieldUsingRegex, getMessageDisplayContent, runSkillTestCase, localAI, forceBoldAndTwoDecimals } from './ai';

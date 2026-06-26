@@ -1,7 +1,4 @@
-import { db } from './db/drizzle';
-import * as schema from './db/schema';
-import { eq, inArray } from 'drizzle-orm';
-
+import { api } from './api';
 import { categorize, inferTypeCategory } from './categorize';
 import type { CategorizeContext } from './categorize';
 import { refreshRecurrenceAll } from './recurrence';
@@ -43,8 +40,8 @@ export interface CleanupReport {
 }
 
 export async function generateCleanupReport(): Promise<CleanupReport> {
-  const rules = await db.select().from(schema.rules);
-  const allTxns = await db.select().from(schema.transactions);
+  const rules = await api.getRules();
+  const allTxns = await api.getTransactions();
   
   // 1. Mine Suggestions
   const overriddenTxns = allTxns.filter(t => !!t.userOverridden && t.category !== 'Uncategorized');
@@ -153,18 +150,20 @@ export async function executeCleanup(
 ): Promise<void> {
   // 1. Delete redundant rules
   if (approvedRedundantRuleIds.length > 0) {
-    await db.delete(schema.rules).where(inArray(schema.rules.id, approvedRedundantRuleIds));
+    for (const id of approvedRedundantRuleIds) {
+      await api.deleteRule(id);
+    }
   }
 
   // 2. Add suggested rules
   const now = new Date().toISOString();
   for (const sug of approvedSuggestions) {
-    await db.insert(schema.rules).values({
+    await api.addRule({
       pattern: sug.pattern,
       category: sug.category,
       priority: 100, // default priority
       createdAt: now,
-    });
+    } as any);
   }
 
   // Reload rules context if we changed them
@@ -174,25 +173,25 @@ export async function executeCleanup(
   await (async () => {
     // Process retroactive categorizations
     if (approvedRetroactiveTxns.length > 0) {
-      const allTxns = await db.select().from(schema.transactions);
+      const allTxns = await api.getTransactions();
       const approvedMap = new Map(approvedRetroactiveTxns.map(t => [t.transactionId, t.category]));
       
       for (const t of allTxns) {
         const approvedCategory = approvedMap.get(t.id!);
         if (approvedCategory) {
-           await db.update(schema.transactions).set({ category: approvedCategory }).where(eq(schema.transactions.id, t.id!));
+           await api.updateTransaction(t.id!, { category: approvedCategory });
         }
       }
     }
 
     // Clear overrides for the accepted suggestions (consolidation)
     if (approvedSuggestions.length > 0) {
-      const allTxns = await db.select().from(schema.transactions);
+      const allTxns = await api.getTransactions();
       for (const t of allTxns) {
         if (!t.userOverridden) continue;
         for (const sug of approvedSuggestions) {
           if (t.merchantKey && t.merchantKey.toLowerCase() === sug.pattern.toLowerCase() && t.category === sug.category) {
-             await db.update(schema.transactions).set({ userOverridden: false }).where(eq(schema.transactions.id, t.id!));
+             await api.updateTransaction(t.id!, { userOverridden: false });
              break; // done with this transaction
           }
         }

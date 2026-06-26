@@ -12,28 +12,17 @@ import { api } from './api';
 const rulesData: any[] = [];
 const transactionsData: any[] = [];
 
-vi.mock('./db', () => {
+vi.mock('./api', () => {
   return {
-    db: {
-      rules: {
-        toArray: async () => [...rulesData],
+    api: {
+      getRules: async () => [...rulesData],
+      getTransactions: async () => [...transactionsData],
+      bulkUpdateTransactions: async (updates: any[]) => {
+        for (const u of updates) {
+          const t = transactionsData.find(x => x.id === u.id);
+          if (t) Object.assign(t, u);
+        }
       },
-      transactions: {
-        toArray: async () => [...transactionsData],
-        update: async (id: number, updates: any) => {
-          const t = transactionsData.find(x => x.id === id);
-          if (t) Object.assign(t, updates);
-        },
-      },
-      categories: {
-        toArray: async () => [],
-      },
-      merchantOverrides: {
-        toArray: async () => [],
-      },
-      transaction: async (_mode: string, _tables: any, callback: () => Promise<void>) => {
-        await callback();
-      }
     }
   };
 });
@@ -45,8 +34,8 @@ describe('categorize engine', () => {
     vi.clearAllMocks();
   });
 
-  it('database instance is defined', () => {
-    expect(db).toBeDefined();
+  it('api instance is defined', () => {
+    expect(api).toBeDefined();
   });
 
   describe('normalizeRawCategory', () => {

@@ -16,9 +16,7 @@ import {
   Box,
   Alert,
 } from '@mui/material';
-import { db } from '../db/drizzle';
-import * as schema from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { api } from '../api';
 import type { Transaction } from '../types';
 import { recategorizeAll } from '../categorize';
 import { refreshRecurrenceAll } from '../recurrence';
@@ -50,23 +48,25 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
   const onSave = async () => {
     const ro = recurrenceOverride === 'default' ? null : recurrenceOverride;
     if (scope === 'one') {
-      await db.update(schema.transactions).set({
+      await api.updateTransaction(txn.id!, {
+        ...txn,
         category,
         userOverridden: true,
         recurrenceOverride: ro,
-      }).where(eq(schema.transactions.id, txn.id!));
+      });
     } else {
       // Create a high-priority rule
-      await db.insert(schema.rules).values({
+      await api.addRule({
         pattern: pattern.trim(),
         category,
         priority: 1000,
         createdAt: new Date().toISOString(),
-      });
+      } as any);
       // Update recurrence override on this transaction specifically
-      await db.update(schema.transactions).set({
+      await api.updateTransaction(txn.id!, {
+        ...txn,
         recurrenceOverride: ro,
-      }).where(eq(schema.transactions.id, txn.id!));
+      });
       await recategorizeAll();
     }
     await refreshRecurrenceAll();

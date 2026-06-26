@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import type { 
   Transaction, Account, CategoryRule, Category, 
-  MerchantOverride, Budget, AppSetting, Loan, TaxRule
+  MerchantOverride, Budget, AppSetting, Loan, TaxRule, ChatArtifact
 } from '../types';
 
 // TRANSACTIONS
@@ -281,5 +281,39 @@ export const useClearTransactions = () => {
       queryClient.invalidateQueries({ queryKey: ['income_chart_data'] });
       queryClient.invalidateQueries({ queryKey: ['uncategorized_count'] });
     },
+  });
+};
+
+// ARTIFACTS
+export const useDeleteArtifact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteArtifact(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artifacts'] }),
+  });
+};
+
+// DOCUMENTS
+export const usePutDocument = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (item: any) => api.putDocument(item),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
+  });
+};
+
+export const useDeleteDocument = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteDocument(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
+  });
+};
+
+export const useDeleteDocumentContent = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteDocumentContent(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['document_contents'] }), // though usually we just invalidate documents
   });
 };

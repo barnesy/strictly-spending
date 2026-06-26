@@ -1,7 +1,5 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
 import { useArtifacts } from '../hooks/queries';
+import { useDeleteArtifact } from '../hooks/mutations';
 
 import {
   Box,
@@ -16,6 +14,7 @@ import { useChatStore } from '../chatStore';
 
 export default function ArtifactsLibrary() {
   const { data: artifacts } = useArtifacts();
+  const deleteArtifact = useDeleteArtifact();
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
 
   if (!artifacts) {
@@ -68,7 +67,7 @@ export default function ArtifactsLibrary() {
                     size="small" 
                     color="error"
                     onClick={async () => {
-                      await db.delete(schema.artifacts).where(eq(schema.artifacts.id, art.id));
+                      await deleteArtifact.mutateAsync(art.id);
                     }}
                   >
                     Delete

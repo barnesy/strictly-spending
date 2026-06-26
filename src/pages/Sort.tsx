@@ -1,6 +1,3 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq, inArray } from 'drizzle-orm';
 // The Sort view — rapid Uncategorized triage.
 //
 // Architecture:
@@ -13,6 +10,7 @@ import { eq, inArray } from 'drizzle-orm';
 //     S (skip), ? (help), Esc (close help).
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { api } from '../api';
 import { useSettings, useCategories, useSortQueue } from '../hooks/queries';
 import PageLoader from '../components/PageLoader';
 import {
@@ -167,15 +165,13 @@ export default function Sort() {
 
   const updateScore = useCallback(async (correct: boolean) => {
     await (async () => {
-      const existing = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:aiGuessScore')))[0];
-      const val = (existing?.value as { correctCount: number; totalCount: number } | undefined) || { correctCount: 0, totalCount: 0 };
+      const existing = await api.getSetting<{ correctCount: number; totalCount: number }>('app:aiGuessScore');
+      const val = existing || { correctCount: 0, totalCount: 0 };
       const updated = {
         correctCount: val.correctCount + (correct ? 1 : 0),
         totalCount: val.totalCount + 1,
       };
-      await import('@tauri-apps/api/core').then(m => 
-        m.invoke('put_setting', { item: { key: 'app:aiGuessScore', value: updated } })
-      ).catch(e => console.error(e));
+      await api.putSetting('app:aiGuessScore', updated).catch(e => console.error(e));
     })();
   }, []);
 
@@ -319,9 +315,7 @@ export default function Sort() {
         const card = queue.find(c => c.merchantKey === key);
         if (!card) continue;
 
-        const txnIds = card.txns.map((t) => t.id!).filter((x) => x !== undefined);
-
-        const txs = await db.select().from(schema.transactions).where(inArray(schema.transactions.id, txnIds));
+        const txs = card.txns;
         for (const t of txs) {
           const taxGuess = guessTaxFields(t.description, sel.category);
           toUpdateTxns.push({
@@ -336,23 +330,17 @@ export default function Sort() {
 
         const patternToSave = sel.rulePattern.trim();
         if (sel.recurrence) {
-          await import('@tauri-apps/api/core').then(m => 
-            m.invoke('put_merchant_override', { item: { merchantKey: key, recurrence: sel.recurrence } })
-          ).catch(e => console.error(e));
+          await api.putMerchantOverride({ merchantKey: key, recurrence: sel.recurrence as any }).catch(e => console.error(e));
         }
 
         if (sel.saveRule && patternToSave) {
-          await import('@tauri-apps/api/core').then(m => 
-            m.invoke('add_rule', { item: { pattern: patternToSave, category: sel.category, priority: 1000, createdAt: new Date().toISOString() } })
-          ).catch(e => console.error(e));
+          await api.addRule({ pattern: patternToSave, category: sel.category, priority: 1000, createdAt: new Date().toISOString() } as any).catch(e => console.error(e));
         }
       }
 
       if (toUpdateTxns.length > 0) {
         // We use raw invoke to avoid the reactive mut() which spams db-update
-        await import('@tauri-apps/api/core').then(m => 
-          m.invoke('bulk_update_transactions', { transactions: toUpdateTxns })
-        ).catch(e => console.error(e));
+        await api.bulkUpdateTransactions(toUpdateTxns).catch(e => console.error(e));
       }
     })();
 
@@ -516,7 +504,7 @@ export default function Sort() {
               variant="outlined"
               onDelete={async () => {
                 if (window.confirm('Reset AI accuracy statistics?')) {
-                  await db.delete(schema.settings).where(eq(schema.settings.key, 'app:aiGuessScore'));
+                  await api.deleteSetting('app:aiGuessScore');
                 }
               }}
               sx={{ height: 26, borderRadius: 2 }}

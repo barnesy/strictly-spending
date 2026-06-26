@@ -1,8 +1,6 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
-import { db } from '../../db/drizzle';
-import * as schema from '../../db/schema';
-import { inArray, and } from 'drizzle-orm';
+import { api } from '../../api';
 import { resolveDateRange } from '../../store';
 import { matchCategories } from '../../copilotMatcher';
 import { detectSpendingAnomalies } from '../../copilotAnalytics';
@@ -34,24 +32,16 @@ export class SpendingAnomaliesTool implements AIToolHandler {
 
     const enabledSet = new Set(currentFilters.enabledAccountIds);
 
-    const conditions = [];
-    if (enabledSet.size > 0) {
-      conditions.push(inArray(schema.transactions.accountId, Array.from(enabledSet)));
-    }
-    if (resolvedCats.length > 0) {
-      conditions.push(inArray(schema.transactions.category, resolvedCats));
-    }
-
     let effectivePreset = actionObj.preset || currentFilters.preset;
     if (effectivePreset === 'current') effectivePreset = currentFilters.preset;
     const range = resolveDateRange({ ...currentFilters, preset: effectivePreset });
 
-    // Again, fetch relevant transactions directly via Drizzle
-    const query = conditions.length > 0 
-      ? db.select().from(schema.transactions).where(and(...conditions))
-      : db.select().from(schema.transactions);
-      
-    const filteredTxns = await query;
+    const allTxns = await api.getTransactions();
+    const filteredTxns = allTxns.filter((t) => {
+      if (enabledSet.size > 0 && t.accountId && !enabledSet.has(t.accountId)) return false;
+      if (resolvedCats.length > 0 && !resolvedCats.includes(t.category)) return false;
+      return true;
+    });
 
     const anomalies = detectSpendingAnomalies(filteredTxns as any, resolvedCats, range.start.toISOString().slice(0, 10), range.end.toISOString().slice(0, 10), store.budgets);
 

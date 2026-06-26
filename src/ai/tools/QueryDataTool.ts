@@ -1,7 +1,5 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
-import { db } from '../../db/drizzle';
-import * as schema from '../../db/schema';
 import { invoke } from '@tauri-apps/api/core';
 import { resolveDateRange } from '../../store';
 import { useBudgetStore } from '../../budgetStore';

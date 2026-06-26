@@ -1,5 +1,3 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
 
 import type { AgentSkill, SkillTestCase } from '../types';
 import { useFilters } from '../store';
@@ -437,10 +435,9 @@ If no, return {"success": false, "score": 0 to 80, "reasoning": "Explain what is
 }
 
 export async function calculateGlobalRunwayData() {
-  const accounts = await db.select().from(schema.accounts);
-  const budgets = await db.select().from(schema.budgets);
-  const categories = await db.select().from(schema.categories);
-  const overrides = await db.select().from(schema.merchantOverrides);
+  const accounts = await api.getAccounts();
+  const budgets = await api.getBudgets();
+  const categories = await api.getCategories();
 
   const filters = useFilters.getState();
   const demoMode = filters.demoMode;

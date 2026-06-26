@@ -1,9 +1,6 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
 import { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { useRules, useTransactions, useCategories, useRuleMatchCounts } from '../hooks/queries';
-import {
+import { useAddRule, useUpdateRule, useDeleteRule } from '../hooks/mutations';import {
   Box,
   Stack,
   Typography,
@@ -138,18 +135,25 @@ export default function Rules() {
     return filteredRules.slice(start, start + rowsPerPage);
   }, [filteredRules, page, rowsPerPage]);
 
+  const addRule = useAddRule();
+  const updateRule = useUpdateRule();
+  const deleteRule = useDeleteRule();
+
   const [editing, setEditing] = useState<CategoryRule | 'new' | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const onSave = async (rule: Omit<CategoryRule, 'id' | 'createdAt'> & { id?: number }) => {
     if (rule.id) {
-      await db.update(schema.rules).set({
-        pattern: rule.pattern,
-        category: rule.category,
-        priority: rule.priority,
-      }).where(eq(schema.rules.id, rule.id));
+      await updateRule.mutateAsync({
+        id: rule.id,
+        updates: {
+          pattern: rule.pattern,
+          category: rule.category,
+          priority: rule.priority,
+        }
+      });
     } else {
-      await db.insert(schema.rules).values({
+      await addRule.mutateAsync({
         pattern: rule.pattern,
         category: rule.category,
         priority: rule.priority,
@@ -165,7 +169,7 @@ export default function Rules() {
 
   const handleDeleteConfirm = async () => {
     if (deleteRuleId !== null) {
-      await db.delete(schema.rules).where(eq(schema.rules.id, deleteRuleId));
+      await deleteRule.mutateAsync(deleteRuleId);
       setDeleteRuleId(null);
     }
   };

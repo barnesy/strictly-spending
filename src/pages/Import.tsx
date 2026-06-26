@@ -1,6 +1,5 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { api } from '../api';
 import { Link as RouterLink } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
 import { readTextFile } from '@tauri-apps/plugin-fs';
@@ -279,7 +278,7 @@ export default function Import() {
         headers,
       };
       
-      await db.insert(schema.csvMappings).values(fullMapping).returning();
+      await api.putCsvMapping(fullMapping);
       
       const p = await buildPreview(previews[index].filename, rawText, contentHash);
       setPreviews((prev) => {

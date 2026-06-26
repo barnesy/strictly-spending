@@ -1,6 +1,4 @@
-import { db } from "../../db/drizzle";
-import * as schema from "../../db/schema";
-import { eq } from 'drizzle-orm';
+import { api } from '../../api';
 import React, { useState, useEffect } from 'react';
 import { Box, Stack, Paper, Button, TextField, Checkbox, Select, MenuItem, Typography, Divider } from '@mui/material';
 import { useSettings, useCategories } from '../../hooks/queries';
@@ -243,10 +241,7 @@ export function ProposedCategorizationReportUX({
     updated[idx] = { ...updated[idx], approved: !updated[idx].approved };
     setItems(updated);
     // Persist local edit back to settings so it survives reload/navigation
-    db.insert(schema.settings).values({
-      key: 'app:pendingCategorizationReport',
-      value: { ...report, items: updated },
-    }).onConflictDoNothing();
+    api.putSetting('app:pendingCategorizationReport', { ...report, items: updated });
   };
 
   const handleChangeCategory = (idx: number, newCat: string) => {
@@ -254,10 +249,7 @@ export function ProposedCategorizationReportUX({
     updated[idx] = { ...updated[idx], proposedCategory: newCat };
     setItems(updated);
     // Persist local edit back to settings
-    db.insert(schema.settings).values({
-      key: 'app:pendingCategorizationReport',
-      value: { ...report, items: updated },
-    }).onConflictDoNothing();
+    api.putSetting('app:pendingCategorizationReport', { ...report, items: updated });
   };
 
   const handleApply = async () => {
@@ -266,19 +258,17 @@ export function ProposedCategorizationReportUX({
       const approvedItems = items.filter((item) => item.approved);
       if (approvedItems.length > 0) {
         // Write to DB
-        await (async () => {
-          for (const item of approvedItems) {
-            await db.update(schema.transactions).set({
-              category: item.proposedCategory,
-              userOverridden: true, // Mark userOverridden since the user manually reviewed and approved
-            }).where(eq(schema.transactions.id, item.transactionId));
-          }
-        });
+        for (const item of approvedItems) {
+          await api.updateTransaction(item.transactionId, {
+            category: item.proposedCategory,
+            userOverridden: true,
+          });
+        }
         await refreshRecurrenceAll();
       }
 
       // Clear report from settings
-      await db.delete(schema.settings).where(eq(schema.settings.key, 'app:pendingCategorizationReport'));
+      await api.deleteSetting('app:pendingCategorizationReport');
 
       // Update message status
       await onUpdateMessageResult({
@@ -297,7 +287,7 @@ export function ProposedCategorizationReportUX({
     setIsSubmitting(true);
     try {
       // Clear report from settings
-      await db.delete(schema.settings).where(eq(schema.settings.key, 'app:pendingCategorizationReport'));
+      await api.deleteSetting('app:pendingCategorizationReport');
 
       // Update message status
       await onUpdateMessageResult({

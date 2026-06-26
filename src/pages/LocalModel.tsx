@@ -1,8 +1,6 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq } from 'drizzle-orm';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSettings } from '../hooks/queries';
+import { usePutSetting } from '../hooks/mutations';
 import {
   Box,
   Stack,
@@ -49,6 +47,8 @@ export default function LocalModel() {
   const { data: settings = [] } = useSettings();
   const licenseSetting = settings.find(s => s.key === 'license');
   const license = licenseSetting?.value as { active: boolean; key: string } | undefined;
+
+  const putSetting = usePutSetting();
 
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseError, setLicenseError] = useState<string | null>(null);
@@ -143,9 +143,7 @@ export default function LocalModel() {
   const onActivateLicense = async () => {
     setLicenseError(null);
     if (licenseKey.trim().toUpperCase() === 'PRO-123') {
-      await db.insert(schema.settings)
-        .values({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } })
-        .onConflictDoNothing();
+      await putSetting.mutateAsync({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } });
       setLicenseKey('');
     } else {
       setLicenseError("Invalid license key. For testing, try 'PRO-123'.");

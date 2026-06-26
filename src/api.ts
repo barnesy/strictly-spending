@@ -16,12 +16,6 @@ export interface DocumentContent {
   content: string;
 }
 
-// Helper to wrap mutation calls so they trigger our reactivity hook
-async function mut<T>(promise: Promise<T>): Promise<T> {
-  const result = await promise;
-  window.dispatchEvent(new CustomEvent('db-update'));
-  return result;
-}
 
 export interface DashboardFilters {
   startDate?: string;
@@ -86,6 +80,7 @@ export const api = {
     return invoke<void>('update_account', { id, updates: full });
   },
   deleteAccount: (id: number) => invoke<void>('delete_account', { id }),
+  clearAccounts: () => invoke<void>('clear_accounts'),
 
   // Transactions
   getTransactions: (
@@ -155,6 +150,7 @@ export const api = {
     return invoke<void>('update_category', { id, updates: full });
   },
   deleteCategory: (id: number) => invoke<void>('delete_category', { id }),
+  clearCategories: () => invoke<void>('clear_categories'),
 
   // Imports
   getImports: () => invoke<ImportBatch[]>('get_imports'),
@@ -166,6 +162,7 @@ export const api = {
   getMerchantOverrides: () => invoke<MerchantOverride[]>('get_merchant_overrides'),
   putMerchantOverride: (item: MerchantOverride) => invoke<void>('put_merchant_override', { item }),
   deleteMerchantOverride: (key: string) => invoke<void>('delete_merchant_override', { key }),
+  clearMerchantOverrides: () => invoke<void>('clear_merchant_overrides'),
 
   // Budgets
   getBudgets: () => invoke<Budget[]>('get_budgets'),

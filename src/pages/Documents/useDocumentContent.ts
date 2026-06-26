@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from '../../db/drizzle';
-import * as schema from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { api } from '../../api';
 
 export function useDocumentContent(previewId: string | null) {
   const [loadedContent, setLoadedContent] = useState<string | null>(null);
@@ -20,18 +18,19 @@ export function useDocumentContent(previewId: string | null) {
     let isMounted = true;
     setTimeout(() => { if (isMounted) setIsContentLoading(true); }, 0);
 
-    db.select().from(schema.documentContents).where(eq(schema.documentContents.id, previewId))
+    api.getDocumentContents()
       .then((records) => {
         if (!isMounted) return;
-        const record = records[0];
+        const record = records.find(r => r.id === previewId);
         if (record) {
           setLoadedContent(record.content);
           setIsContentLoading(false);
         } else {
-          db.select().from(schema.documents).where(eq(schema.documents.id, previewId))
+          api.getDocuments()
             .then((docRecords) => {
               if (!isMounted) return;
-              setLoadedContent((docRecords[0] as any)?.content || null);
+              const docRecord = docRecords.find(d => d.id === previewId);
+              setLoadedContent((docRecord as any)?.content || null);
               setIsContentLoading(false);
             })
             .catch(() => {

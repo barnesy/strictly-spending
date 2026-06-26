@@ -1,8 +1,7 @@
-import { db } from "../db/drizzle";
-import * as schema from "../db/schema";
-import { eq, ne } from 'drizzle-orm';
 import { useState, useEffect } from 'react';
+import { api } from '../api';
 import { useSettings } from '../hooks/queries';
+import { usePutSetting, useDeleteSetting } from '../hooks/mutations';
 import { NavLink } from 'react-router-dom';
 import {
   Box,
@@ -45,10 +44,13 @@ export default function Settings() {
 
   const [hasImportedData, setHasImportedData] = useState(false);
   useEffect(() => {
-    db.select().from(schema.transactions).where(ne(schema.transactions.source, 'demo')).then(rows => {
-      setHasImportedData(rows.length > 0);
+    api.getTransactions().then(rows => {
+      setHasImportedData(rows.some(t => t.source !== 'demo'));
     });
   }, []);
+
+  const putSetting = usePutSetting();
+  const deleteSetting = useDeleteSetting();
 
   // License state
   const { data: settings = [] } = useSettings();
@@ -60,9 +62,7 @@ export default function Settings() {
   const onActivateLicense = async () => {
     setLicenseError(null);
     if (licenseKey.trim().toUpperCase() === 'PRO-123') {
-      await db.insert(schema.settings)
-        .values({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } })
-        .onConflictDoNothing();
+      await putSetting.mutateAsync({ key: 'license', value: { active: true, key: licenseKey.trim().toUpperCase() } });
       setLicenseKey('');
     } else {
       setLicenseError("Invalid license key. For testing, try 'PRO-123'.");
@@ -433,7 +433,7 @@ export default function Settings() {
               } else if (confirmType === 'clearImported') {
                 await executeClearImported();
               } else if (confirmType === 'deactivateLicense') {
-                await db.delete(schema.settings).where(eq(schema.settings.key, 'license'));
+                await deleteSetting.mutateAsync('license');
               }
               setConfirmType(null);
             }}

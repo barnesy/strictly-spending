@@ -1,7 +1,6 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
-import { db } from '../../db/drizzle';
-import * as schema from '../../db/schema';
+import { api } from '../../api';
 import Papa from 'papaparse';
 
 export class GenerateDocumentTool implements AIToolHandler {
@@ -18,7 +17,7 @@ export class GenerateDocumentTool implements AIToolHandler {
     const { start, end, cats, accts, search, minPrice, maxPrice } = lastQuery;
 
     try {
-      let results = await db.select().from(schema.transactions);
+      let results = await api.getTransactions();
 
       if (start) {
         results = results.filter(tx => tx.date >= start);
@@ -66,20 +65,20 @@ export class GenerateDocumentTool implements AIToolHandler {
 
       // Save to database
       const filename = `Export_${new Date().toISOString().slice(0, 10)}.csv`;
-      await db.insert(schema.documents).values({
+      await api.putDocument({
         id: mdDocId,
         name: filename,
         path: `~/Documents/${filename}`,
         type: 'text/csv',
         source: 'generated',
-        associatedChecklistId: null,
+        associatedChecklistId: undefined,
         createdAt: new Date().toISOString()
-      }).onConflictDoNothing();
+      });
 
-      await db.insert(schema.documentContents).values({
+      await api.putDocumentContent({
         id: mdDocId,
         content: csvString
-      }).onConflictDoNothing();
+      });
 
       return {
         systemResultsMsg: `Successfully generated CSV document.`,

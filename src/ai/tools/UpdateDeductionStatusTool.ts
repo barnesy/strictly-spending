@@ -1,8 +1,6 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
-import { db } from '../../db/drizzle';
-import * as schema from '../../db/schema';
-import { inArray } from 'drizzle-orm';
+import { api } from '../../api';
 
 export class UpdateDeductionStatusTool implements AIToolHandler {
   name = 'update_deduction_status';
@@ -14,7 +12,7 @@ export class UpdateDeductionStatusTool implements AIToolHandler {
     const filter = actionObj.filter || {};
 
     let updatedCount = 0;
-    const txns = await db.select().from(schema.transactions);
+    const txns = await api.getTransactions();
     const matched = txns.filter(t => {
       if (filter.transactionId && t.id !== filter.transactionId) return false;
       if (filter.accountId && t.accountId !== filter.accountId) return false;
@@ -29,10 +27,10 @@ export class UpdateDeductionStatusTool implements AIToolHandler {
     if (isBusiness === false) updates.taxCategory = null; // Clear category if not business
     updates.deductionStatus = deductionStatus;
 
-    const matchedIds = matched.map(t => t.id!).filter(Boolean);
-    if (matchedIds.length > 0) {
-      await db.update(schema.transactions).set(updates).where(inArray(schema.transactions.id, matchedIds));
-      updatedCount = matchedIds.length;
+    if (matched.length > 0) {
+      const toUpdate = matched.map((t) => ({ ...t, ...updates }));
+      await api.bulkUpdateTransactions(toUpdate);
+      updatedCount = matched.length;
     }
 
     return {

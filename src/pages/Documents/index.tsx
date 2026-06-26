@@ -1,7 +1,5 @@
-import { db } from "../../db/drizzle";
-import * as schema from "../../db/schema";
-import { eq } from 'drizzle-orm';
 import { useState, useCallback } from 'react';
+import { api } from '../../api';
 import { DocumentsList } from './DocumentsList';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -20,7 +18,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { useDocuments, useCategories } from '../../hooks/queries';
-
+import { usePutDocument, useDeleteDocument, useDeleteDocumentContent, useUpdateTransaction } from '../../hooks/mutations';
 import { open } from '@tauri-apps/plugin-shell';
 import type { AppDocument } from '../../types';
 
@@ -42,6 +40,10 @@ export default function Documents() {
   const { data: documents = [] } = useDocuments();
   const { data: categoriesList = [] } = useCategories();
 
+  const putDocument = usePutDocument();
+  const deleteDocument = useDeleteDocument();
+  const deleteDocumentContent = useDeleteDocumentContent();
+  const updateTransaction = useUpdateTransaction();
   // Derive activePreviewDoc from live db state
   const derivedPreviewDoc = previewId ? (documents.find(d => d.id === previewId) || previewDoc) : null;
 
@@ -55,7 +57,7 @@ export default function Documents() {
       return;
     }
     try {
-      await db.update(schema.documents).set({ name: trimmed }).where(eq(schema.documents.id, derivedPreviewDoc.id));
+      await putDocument.mutateAsync({ ...derivedPreviewDoc, name: trimmed });
       setIsEditingName(false);
       setSnackbarMessage('Document renamed successfully.');
     } catch (err) {
@@ -65,7 +67,8 @@ export default function Documents() {
   };
 
   const handleOpen = async (doc: AppDocument) => {
-    const hasContent = doc.content || (await (await db.select().from(schema.documentContents).where(eq(schema.documentContents.id, doc.id)))[0]);
+    const docContents = await api.getDocumentContents();
+    const hasContent = doc.content || docContents.find(dc => dc.id === doc.id);
     if (hasContent) {
       setSearchParams({ previewId: doc.id, tab: 'All' });
       return;
@@ -96,8 +99,8 @@ export default function Documents() {
 
   const confirmDelete = async () => {
     if (deleteConfirmId) {
-      await db.delete(schema.documents).where(eq(schema.documents.id, deleteConfirmId));
-      await db.delete(schema.documentContents).where(eq(schema.documentContents.id, deleteConfirmId));
+      await deleteDocument.mutateAsync(deleteConfirmId);
+      await deleteDocumentContent.mutateAsync(deleteConfirmId);
       setDeleteConfirmId(null);
       setSnackbarMessage('Document record removed.');
     }
@@ -109,10 +112,7 @@ export default function Documents() {
 
   const handleRecategorize = useCallback(async (txId: number, newCategory: string) => {
     try {
-      const dbTxns = await db.select().from(schema.transactions).where(eq(schema.transactions.id, txId));
-      if (dbTxns.length > 0) {
-        await db.update(schema.transactions).set({ category: newCategory }).where(eq(schema.transactions.id, dbTxns[0].id!));
-      }
+      await updateTransaction.mutateAsync({ id: txId, updates: { category: newCategory } });
     } catch (error) {
       console.error('Failed to recategorize transaction:', error);
       setSnackbarMessage('Failed to update category.');
