@@ -11,6 +11,9 @@
     "fs:read-all",
     "fs:write-all",
     "dialog:default",
+    "dialog:allow-confirm",
+    "dialog:allow-ask",
+    "dialog:allow-message",
     {
       "identifier": "http:default",
       "allow": [
@@ -30,10 +33,6 @@
         }
       ]
     },
-    "sql:default",
-    "sql:allow-load",
-    "sql:allow-execute",
-    "sql:allow-close",
     "playwright:default"
   ]
 }

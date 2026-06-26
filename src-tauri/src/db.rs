@@ -6,9 +6,10 @@ use std::path::PathBuf;
 
 pub struct DbState {
     pub conn: Mutex<Connection>,
+    pub recurrence_cache: Mutex<Option<std::collections::HashMap<String, crate::tools::recurrence::RecurrenceInfo>>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub id: Option<i64>,
     #[serde(rename = "accountId")]
@@ -254,6 +255,40 @@ pub fn get_transactions(
     }
     
     Ok(transactions)
+}
+
+#[tauri::command]
+pub fn get_transaction(state: State<DbState>, id: i64) -> Result<Option<Transaction>, String> {
+    let conn = state.conn.lock().unwrap();
+    let mut stmt = conn.prepare("SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status FROM transactions WHERE id = ?1").map_err(|e| e.to_string())?;
+    
+    let mut iter = stmt.query_map([id], |row| {
+        Ok(Transaction {
+            id: row.get(0)?,
+            account_id: row.get(1)?,
+            date: row.get(2)?,
+            description: row.get(3)?,
+            amount: row.get(4)?,
+            raw_category: row.get(5)?,
+            category: row.get(6)?,
+            source: row.get(7)?,
+            merchant_key: row.get(8)?,
+            user_overridden: row.get(9)?,
+            dedup_key: row.get(10)?,
+            import_batch_id: row.get(11)?,
+            recurrence: row.get(12)?,
+            recurrence_override: row.get(13)?,
+            is_business: row.get(14)?,
+            tax_category: row.get(15)?,
+            deduction_status: row.get(16)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    if let Some(res) = iter.next() {
+        Ok(Some(res.map_err(|e| e.to_string())?))
+    } else {
+        Ok(None)
+    }
 }
 
 #[tauri::command]

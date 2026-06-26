@@ -3,6 +3,12 @@ use tauri::State;
 use crate::db::{DbState, Transaction, Account, Category, MerchantOverride, Budget, CategoryRule};
 
 #[tauri::command]
+fn invalidate_recurrence_cache(state: &State<DbState>) {
+    let mut cache = state.recurrence_cache.lock().unwrap();
+    *cache = None;
+}
+
+#[tauri::command]
 pub fn add_transaction(state: State<DbState>, item: Transaction) -> Result<i64, String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
@@ -11,6 +17,7 @@ pub fn add_transaction(state: State<DbState>, item: Transaction) -> Result<i64, 
             item.account_id, item.date, item.description, item.amount, item.raw_category, item.category, item.source, item.merchant_key, item.user_overridden, item.dedup_key, item.import_batch_id, item.recurrence, item.recurrence_override, item.is_business, item.tax_category, item.deduction_status
         ],
     ).map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
     Ok(conn.last_insert_rowid())
 }
 
@@ -29,6 +36,7 @@ pub fn bulk_add_transactions(state: State<DbState>, transactions: Vec<Transactio
         ]).map_err(|e| e.to_string())?;
     }
     tx.commit().map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
     Ok(())
 }
 
@@ -42,6 +50,26 @@ pub fn update_transaction(state: State<DbState>, id: i64, updates: Transaction) 
             updates.account_id, updates.date, updates.description, updates.amount, updates.raw_category, updates.category, updates.source, updates.merchant_key, updates.user_overridden, updates.dedup_key, updates.import_batch_id, updates.recurrence, updates.recurrence_override, updates.is_business, updates.tax_category, updates.deduction_status, id
         ],
     ).map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn bulk_update_transactions(state: State<DbState>, transactions: Vec<Transaction>) -> Result<(), String> {
+    let mut conn = state.conn.lock().unwrap();
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    for item in transactions {
+        if let Some(id) = item.id {
+            tx.execute(
+                "UPDATE transactions SET account_id=?1, date=?2, description=?3, amount=?4, raw_category=?5, category=?6, source=?7, merchant_key=?8, user_overridden=?9, dedup_key=?10, import_batch_id=?11, recurrence=?12, recurrence_override=?13, is_business=?14, tax_category=?15, deduction_status=?16 WHERE id=?17",
+                params![
+                    item.account_id, item.date, item.description, item.amount, item.raw_category, item.category, item.source, item.merchant_key, item.user_overridden, item.dedup_key, item.import_batch_id, item.recurrence, item.recurrence_override, item.is_business, item.tax_category, item.deduction_status, id
+                ],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
     Ok(())
 }
 
@@ -49,6 +77,7 @@ pub fn update_transaction(state: State<DbState>, id: i64, updates: Transaction) 
 pub fn delete_transaction(state: State<DbState>, id: i64) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute("DELETE FROM transactions WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
     Ok(())
 }
 
@@ -56,6 +85,7 @@ pub fn delete_transaction(state: State<DbState>, id: i64) -> Result<(), String> 
 pub fn clear_transactions(state: State<DbState>) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute("DELETE FROM transactions", []).map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
     Ok(())
 }
 
@@ -95,6 +125,13 @@ pub fn clear_accounts(state: State<DbState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn delete_account(state: State<DbState>, id: i64) -> Result<(), String> {
+    let conn = state.conn.lock().unwrap();
+    conn.execute("DELETE FROM accounts WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn add_category(state: State<DbState>, item: Category) -> Result<i64, String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
@@ -122,12 +159,20 @@ pub fn clear_categories(state: State<DbState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn delete_category(state: State<DbState>, id: i64) -> Result<(), String> {
+    let conn = state.conn.lock().unwrap();
+    conn.execute("DELETE FROM categories WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn put_merchant_override(state: State<DbState>, item: MerchantOverride) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
         "INSERT INTO merchant_overrides (merchant_key, recurrence) VALUES (?1, ?2) ON CONFLICT(merchant_key) DO UPDATE SET recurrence=excluded.recurrence",
         params![item.merchant_key, item.recurrence],
     ).map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
     Ok(())
 }
 
@@ -135,6 +180,7 @@ pub fn put_merchant_override(state: State<DbState>, item: MerchantOverride) -> R
 pub fn delete_merchant_override(state: State<DbState>, merchant_key: String) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute("DELETE FROM merchant_overrides WHERE merchant_key = ?1", params![merchant_key]).map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
     Ok(())
 }
 
@@ -142,6 +188,7 @@ pub fn delete_merchant_override(state: State<DbState>, merchant_key: String) -> 
 pub fn clear_merchant_overrides(state: State<DbState>) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute("DELETE FROM merchant_overrides", []).map_err(|e| e.to_string())?;
+    invalidate_recurrence_cache(&state);
     Ok(())
 }
 

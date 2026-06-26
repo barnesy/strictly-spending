@@ -59,9 +59,16 @@ fn is_installed(app: &AppHandle) -> bool {
         }
         
         // Check if ollama is on system PATH
-        std::process::Command::new("where")
-            .arg("ollama")
-            .status()
+        let mut cmd = std::process::Command::new("where");
+        cmd.arg("ollama");
+        
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        cmd.status()
             .map(|s| s.success())
             .unwrap_or(false)
     }
@@ -126,39 +133,81 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         tauri::async_runtime::spawn_blocking(move || {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+
             let app_data = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
             std::fs::create_dir_all(&app_data).map_err(|e| e.to_string())?;
             
             let zip_path = app_data.join("ollama.zip");
             
-            // Download using powershell WebClient to avoid memory buffering and force TLS 1.2
-            let status = std::process::Command::new("powershell")
-                .arg("-Command")
-                .arg(format!(
-                    "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; \
-                     (New-Object System.Net.WebClient).DownloadFile('https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip', '{}')",
-                    zip_path.to_string_lossy()
-                ))
-                .status()
-                .map_err(|e| e.to_string())?;
-                
-            if !status.success() {
-                return Err("Failed to download Ollama package via PowerShell".to_string());
+            // Try downloading with curl.exe first (faster, natively handles redirects and large files without memory buffering)
+            let mut downloaded = false;
+            let mut curl_cmd = std::process::Command::new("curl.exe");
+            curl_cmd
+                .arg("-L")
+                .arg("-o")
+                .arg(&zip_path)
+                .arg("https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip")
+                .creation_flags(CREATE_NO_WINDOW);
+
+            if let Ok(status) = curl_cmd.status() {
+                if status.success() {
+                    downloaded = true;
+                }
+            }
+
+            if !downloaded {
+                // Fallback to powershell WebClient
+                let mut ps_cmd = std::process::Command::new("powershell");
+                ps_cmd
+                    .arg("-Command")
+                    .arg(format!(
+                        "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; \
+                         (New-Object System.Net.WebClient).DownloadFile('https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip', '{}')",
+                        zip_path.to_string_lossy()
+                    ))
+                    .creation_flags(CREATE_NO_WINDOW);
+
+                let status = ps_cmd.status().map_err(|e| e.to_string())?;
+                if !status.success() {
+                    return Err("Failed to download Ollama package via both curl.exe and PowerShell".to_string());
+                }
             }
             
-            // Extract using powershell Expand-Archive
-            let status = std::process::Command::new("powershell")
-                .arg("-Command")
-                .arg(format!(
-                    "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
-                    zip_path.to_string_lossy(),
-                    app_data.to_string_lossy()
-                ))
-                .status()
-                .map_err(|e| e.to_string())?;
-                
-            if !status.success() {
-                return Err("Failed to extract Ollama zip package".to_string());
+            // Try extracting with tar.exe first (native, extremely fast, low memory overhead)
+            let mut extracted = false;
+            let mut tar_cmd = std::process::Command::new("tar.exe");
+            tar_cmd
+                .arg("-x")
+                .arg("-f")
+                .arg(&zip_path)
+                .arg("-C")
+                .arg(&app_data)
+                .creation_flags(CREATE_NO_WINDOW);
+
+            if let Ok(status) = tar_cmd.status() {
+                if status.success() {
+                    extracted = true;
+                }
+            }
+
+            if !extracted {
+                // Fallback to powershell Expand-Archive
+                let mut ps_extract_cmd = std::process::Command::new("powershell");
+                ps_extract_cmd
+                    .arg("-Command")
+                    .arg(format!(
+                        "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                        zip_path.to_string_lossy(),
+                        app_data.to_string_lossy()
+                    ))
+                    .creation_flags(CREATE_NO_WINDOW);
+
+                let status = ps_extract_cmd.status().map_err(|e| e.to_string())?;
+                if !status.success() {
+                    return Err("Failed to extract Ollama zip package via both tar.exe and PowerShell".to_string());
+                }
             }
             
             // Clean up the ZIP file
