@@ -1,8 +1,7 @@
 import { db } from './db/drizzle';
 import * as schema from './db/schema';
-import { eq } from 'drizzle-orm';
 import { Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
-import { useDbQuery } from './hooks/useDbQuery';
+import { useSettings } from './hooks/queries';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, ThemeProvider, CssBaseline, Drawer, Tooltip, IconButton, List, ListItem, ListItemButton, ListItemText, Divider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -40,8 +39,8 @@ import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import CopilotChat from './components/CopilotChat';
 
 import { useFilters } from './store';
-import { useDataStore } from './dataStore';
 import { useChatStore } from './chatStore';
+import { useTransactionBounds, useUncategorizedCount } from './hooks/queries';
 import { PageTransition } from './components/PageTransition';
 import AnimatedLogo from './components/AnimatedLogo';
 import Landing from './pages/Landing';
@@ -79,10 +78,12 @@ const SETTINGS_NAV = [
 ];
 
 export default function App() {
-  const themeSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'themeConfig')))[0], []);
+  const { data: settings = [] } = useSettings();
+  const themeSetting = settings.find(s => s.key === 'themeConfig');
   const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string; backgroundColor?: string; paperColor?: string; textColor?: string; borderRadius?: number; fontFamily?: string; fontSize?: number } | undefined;
 
-  const fontSize = themeConfig?.fontSize ?? 14;
+  const parsedFontSize = Number(themeConfig?.fontSize);
+  const fontSize = !isNaN(parsedFontSize) && parsedFontSize > 0 ? parsedFontSize : 14;
   useEffect(() => {
     const rootSize = (fontSize / 14) * 16;
     document.documentElement.style.fontSize = `${rootSize}px`;
@@ -107,7 +108,17 @@ export default function App() {
       fontFamily: themeConfig?.fontFamily,
       fontSize,
     });
-  }, [themeConfig, fontSize]);
+  }, [
+    themeConfig?.mode,
+    themeConfig?.primaryColor,
+    themeConfig?.secondaryColor,
+    themeConfig?.backgroundColor,
+    themeConfig?.paperColor,
+    themeConfig?.textColor,
+    themeConfig?.borderRadius,
+    themeConfig?.fontFamily,
+    fontSize,
+  ]);
 
   const location = useLocation();
   const theme = useTheme();
@@ -209,46 +220,21 @@ export default function App() {
   }, [isChatOpen, isDesktop]);
 
   const demoMode = useFilters((s) => s.demoMode);
-  const initStore = useDataStore((s) => s.init);
-  useEffect(() => {
-    initStore();
-  }, [initStore]);
-
-  const transactions = useDataStore((s) => s.transactions);
-
-  // Find database date boundaries in memory using transactions store
-  const bounds = useMemo(() => {
-    const activeTxns = demoMode
-      ? transactions.filter((t) => t.source === 'demo')
-      : transactions.filter((t) => t.source !== 'demo');
-    if (activeTxns.length === 0) return { earliest: undefined, latest: undefined };
-
-    let earliest = activeTxns[0].date;
-    let latest = activeTxns[0].date;
-    for (let i = 1; i < activeTxns.length; i++) {
-      const d = activeTxns[i].date;
-      if (d < earliest) earliest = d;
-      if (d > latest) latest = d;
-    }
-    return { earliest, latest };
-  }, [transactions, demoMode]);
+  const earliestTransactionDate = useFilters((s) => s.earliestTransactionDate);
+  const latestTransactionDate = useFilters((s) => s.latestTransactionDate);
+  const { data: dbBounds } = useTransactionBounds(demoMode);
+  const { data: uncategorizedCount = 0 } = useUncategorizedCount(demoMode);
 
   const setTransactionDataBounds = useFilters((s) => s.setTransactionDataBounds);
 
   useEffect(() => {
-    if (bounds) {
-      setTransactionDataBounds(bounds.earliest, bounds.latest);
+    if (dbBounds) {
+      const [earliest, latest] = dbBounds;
+      if (earliest !== earliestTransactionDate || latest !== latestTransactionDate) {
+        setTransactionDataBounds(earliest ?? undefined, latest ?? undefined);
+      }
     }
-  }, [bounds, setTransactionDataBounds]);
-
-  // Live count of Uncategorized transactions for the nav badge, optimized in memory
-  const uncategorizedCount = useMemo(() => {
-    return transactions.filter(
-      (t) =>
-        t.category === 'Uncategorized' &&
-        (demoMode ? t.source === 'demo' : t.source !== 'demo')
-    ).length;
-  }, [transactions, demoMode]);
+  }, [dbBounds, earliestTransactionDate, latestTransactionDate, setTransactionDataBounds]);
 
   if (LANDING_ONLY_BUILD) {
     return (

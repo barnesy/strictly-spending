@@ -1,6 +1,5 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-
 // Prevent browser devtools from leaking DOM elements printed in warning logs
 if (typeof window !== 'undefined') {
   const originalWarn = console.warn;
@@ -25,6 +24,8 @@ import { seedAndMigrate } from './seed';
 import { hasDemoData, seedDemoData } from './demoData';
 import { useFilters } from './store';
 import './testBridge';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './queryClient';
 /**
  * In demo-only builds (see env.ts for the flag), the app:
  *   - is mounted with HashRouter so the bundle works under any static host
@@ -48,9 +49,11 @@ const Router = BrowserRouter;
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <Router>
-        <App />
-      </Router>
+      <QueryClientProvider client={queryClient}>
+        <Router>
+          <App />
+        </Router>
+      </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>
 );

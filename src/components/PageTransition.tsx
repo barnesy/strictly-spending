@@ -1,37 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import { Box } from '@mui/material';
+import React from 'react';
+import { Box, keyframes } from '@mui/material';
 
 interface PageTransitionProps {
   children: React.ReactNode;
   transitionKey?: string;
 }
 
+const pageEnter = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
 export function PageTransition({ children, transitionKey }: PageTransitionProps) {
-  const [active, setActive] = useState(false);
-
-  useEffect(() => {
-    // Reset active state to re-trigger the transition
-    setActive(false);
-    
-    // Use a small timeout to guarantee execution even if the browser tab goes idle or sleeps
-    const timer = setTimeout(() => {
-      setActive(true);
-    }, 35);
-    
-    return () => {
-      clearTimeout(timer);
-      setActive(false);
-    };
-  }, [transitionKey]);
-
   return (
     <Box
+      key={transitionKey}
       sx={{
-        opacity: active ? 1 : 0,
-        transform: active ? 'translateY(0)' : 'translateY(8px)',
-        transition: 
-          'opacity var(--transition-duration) var(--transition-easing), ' +
-          'transform var(--transition-duration) var(--transition-easing)',
+        animation: `${pageEnter} var(--transition-duration) var(--transition-easing) forwards`,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
