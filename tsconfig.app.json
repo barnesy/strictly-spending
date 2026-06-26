@@ -18,7 +18,13 @@
     /* Linting */
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* Path mappings for Drizzle compatibility */
+    "baseUrl": ".",
+    "paths": {
+      "drizzle-orm": ["./src/db/drizzle.ts"]
+    }
   },
   "include": ["src"]
 }

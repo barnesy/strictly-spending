@@ -18,38 +18,83 @@ A local-first household spending dashboard. Multi-bank CSV ingestion, rule-based
 
 ## Privacy & data
 
-Everything lives in your browser's IndexedDB. The app never makes network requests with your financial data. There is no account, no login, no telemetry. If you `Clear site data` in DevTools, your data is gone. Use the JSON Backup tool on the Import page to keep a copy outside the browser sandbox.
+Strictly Spending is a local-first desktop application. Everything lives in a local SQLite database (`spending-viz.sqlite`) stored in your system's standard application data directory. 
 
-CSV exports stay on your machine; the parsers run client-side. The watch-folder integration uses the browser's File System Access API, which holds a permission-scoped directory handle persistently in IndexedDB. Re-grant once, then drops in just work.
+The application never makes network requests with your financial data. There is no account, no login, and no telemetry. All CSV exports are parsed client-side and committed directly to the database. To back up your data or move it between machines, use the JSON Backup tool on the Import page.
+
+---
+
+## Architecture
+
+Strictly Spending uses a modern, local-first hybrid architecture combining a high-performance native systems backend with a rich web frontend:
+
+```mermaid
+graph TD
+    subgraph Frontend (Vite + React + TS)
+        UI[React Pages & Hooks] -->|Drizzle Queries| COMPAT[Drizzle Compatibility Layer]
+        COMPAT -->|Method Calls| API[API Wrapper]
+    end
+    
+    subgraph IPC Bridge (Tauri v2)
+        API -->|Invoke Command| TAURI[Tauri Command Router]
+    end
+    
+    subgraph Backend (Rust + SQLite)
+        TAURI -->|Invokes| COMMANDS[Rust Commands]
+        COMMANDS -->|Connection Pool| RUSQLITE[rusqlite Database Layer]
+        RUSQLITE -->|Read / Write| SQLITE[(spending-viz.sqlite)]
+    end
+```
+
+### Key Architectural Highlights:
+- **Native Rust Backend**: Built on Tauri v2 and powered by Rust. All database connection pooling, transactions, and mutations are handled by Rust using `rusqlite` with thread-safe connection locks.
+- **Transparent Drizzle Compatibility Layer**: An ultra-lightweight, mock Drizzle ORM implementation (`src/db/drizzle.ts`) intercepts all Drizzle-style queries in our React pages. It maps them to native Rust IPC commands on the fly. This keeps our frontend bundle tiny, free of heavy ORM libraries, and avoids the need to rewrite 30+ React pages.
+- **Transactional Safety**: Database mutations (inserts, updates, bulk operations) run inside acid-compliant SQLite transactions in Rust, ensuring database consistency even under heavy loads.
+- **High-Fidelity Testing**: 
+  - **Unit Tests**: Run in Vitest using the real `drizzle-orm` package against a real in-memory SQLite database, providing 100% authentic DB assertions.
+  - **E2E Integration Tests**: Run in Playwright using Chrome DevTools Protocol (CDP) mode to test the compiled Tauri application natively on Windows.
+
+---
 
 ## Stack
 
-- **Vite** + **React 19** + **TypeScript**
-- **MUI v7** + **MUI X Charts** for UI and the stacked-bar visualization
-- **Dexie** wrapping IndexedDB
-- **Zustand** for filter / forecast / sort session state
-- **PapaParse** for CSV
-- **react-resizable-panels** for the Figma-style 3-panel dashboard layout
+- **Backend**: **Rust** + **Tauri v2** + **rusqlite** (SQLite)
+- **Frontend**: **Vite** + **React 19** + **TypeScript**
+- **UI & Styling**: **MUI v7** + **MUI X Charts** (stacked-bar visualization) + **react-resizable-panels**
+- **State Management**: **Zustand** (filters, forecast, sort session state)
+- **Parser**: **PapaParse** (CSV parsing)
+
+---
+
 ## Quick start
 
+To build and run the desktop application:
+
 ```bash
+# Install dependencies
 npm install
-npm run dev
-# open http://localhost:5173
+
+# Run the app in Tauri dev mode
+npm run tauri dev
 ```
 
 Then open **Settings → Load demo data → Demo mode** to explore the app without importing your real CSVs. The demo dataset spans 5 months across 3 synthetic accounts with realistic recurring + variable patterns.
 
+---
+
 ## Scripts
 
-| | |
+| Command | Description |
 |---|---|
-| `npm run dev` | Vite dev server |
-| `npm run build` | Type-check + production build |
-| `npm run preview` | Preview the production build |
-| `npm run lint` | ESLint |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest unit tests |
+| `npm run dev` | Run Vite development server |
+| `npm run build` | Compile TypeScript and build production web assets |
+| `npm run tsc` | Run TypeScript typechecking (`tsc --noEmit`) |
+| `npm run test` | Run Vitest unit tests |
+| `npx playwright test` | Run Playwright E2E tests (CDP mode on Windows) |
+| `npm run tauri dev` | Run the Tauri application in developer mode |
+| `npm run tauri build` | Package the Tauri application into a production installer |
+
+---
 
 ### Personal merchant rules (private, not committed)
 
@@ -63,45 +108,58 @@ cp src/seed.local.example.ts src/seed.local.ts
 
 Edit `src/seed.local.ts` and add your rules. The file is in `.gitignore`, so it stays on your machine. The build merges its `LOCAL_RULES` array into the starter pack automatically (Vite resolves the optional import at build time).
 
-You can also add merchants through the **Sort** or **Rules** page at runtime; those are stored in IndexedDB. Use the **Backup** button on the Import page to preserve them across browsers.
+You can also add merchants through the **Sort** or **Rules** page at runtime; those are stored in SQLite. Use the **Backup** button on the Import page to preserve them across devices.
 
-### Parser tests
+---
 
-The CSV parser tests under `src/parsers/parsers.test.ts` need real bank exports as fixtures. They're skipped automatically when the fixtures aren't present.
+### Parser and E2E tests
 
-To run them locally:
+To run the unit and integration tests:
 
 ```bash
-STRICTLY_SPENDING_FIXTURES=/path/to/bank-csvs npm test
+# Run unit tests
+npm run test
+
+# Run E2E tests (requires tauri app to compile and launch)
+npx playwright test
 ```
 
-Layout expected:
+The CSV parser tests under `src/parsers/parsers.test.ts` need real bank exports as fixtures. They're skipped automatically when the fixtures aren't present. To run them locally:
+
+```bash
+STRICTLY_SPENDING_FIXTURES=/path/to/bank-csvs npm run test
 ```
-<fixtures>/Chase/Chase1060_Activity20260101_20260523_20260523.CSV
-<fixtures>/BOA/stmt-5.csv
-<fixtures>/BOA/stmt-6.csv
-```
+
+---
 
 ## Project layout
 
 ```
-src/
-├── pages/              Top-level route components (Dashboard, Sort, Forecast, …)
-├── components/         Reusable pieces (SortCard, SpendChart, ChartTooltip, …)
-├── parsers/            Per-bank CSV parsers (Chase, BoA credit, BoA checking, Truist)
-├── db.ts               Dexie schema + migration
-├── categorize.ts       Rule engine + merchantKey extraction
-├── recurrence.ts       Recurring-charge detection
-├── forecast.ts         Next-month projection (recurring + budgets)
-├── sort.ts             Sort queue + smart-suggest heuristic
-├── store.ts            Zustand: filters + demo mode
-├── sortStore.ts        Zustand: in-session undo history
-├── forecastStore.ts    Zustand: forecast exclusions
-├── seed.ts             Default categories + rules
-├── demoData.ts         Synthetic demo dataset (3 accounts, ~200 txns / 5mo)
-├── backup.ts           JSON export / restore
-├── watchFolder.ts      File System Access API integration
-└── import.ts           Drop-zone preview + commit pipeline
+strictly-spending/
+├── src-tauri/            Native Rust backend
+│   ├── Cargo.toml        Rust dependencies (tauri, rusqlite, serde)
+│   └── src/
+│       ├── lib.rs        App entry point, state initialization, command routing
+│       ├── db.rs         rusqlite schema setup and read-only commands
+│       ├── db_mut.rs     rusqlite transaction-safe mutation commands
+│       └── db_extra.rs   rusqlite auxiliary tables and commands
+├── src/                  React frontend
+│   ├── pages/            Top-level routes (Dashboard, Sort, Forecast, Rules, …)
+│   ├── components/       Reusable UI components (SortCard, SpendChart, …)
+│   ├── db/
+│   │   ├── drizzle.ts    Transparent Drizzle-to-IPC compatibility layer
+│   │   └── schema.ts     Drizzle database schema (used by Vitest and compatibility layer)
+│   ├── api.ts            Tauri command invoke wrapper
+│   ├── testBridge.ts     E2E test bridge for injecting mock data
+│   ├── main.tsx          Frontend bootstrapper
+│   ├── categorize.ts     Rule engine + merchantKey extraction
+│   ├── recurrence.ts     Recurring-charge detection
+│   ├── forecast.ts       Next-month projection (recurring + budgets)
+│   ├── seed.ts           Default categories + rules
+│   ├── demoData.ts       Synthetic demo dataset generator
+│   └── backup.ts         JSON export / restore pipeline
+├── e2e/                  Playwright E2E specs and setup
+└── playwright.config.ts  Playwright configuration (configured for CDP mode on Windows)
 ```
 
 ## License
