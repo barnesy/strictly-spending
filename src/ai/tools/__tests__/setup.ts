@@ -2,7 +2,6 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../../../db/schema';
 import type { FiltersState } from '../../../store';
-import type { DataState } from '../../../dataStore';
 import type { AIToolContext } from '../index';
 
 export function setupTestDb() {
@@ -65,22 +64,7 @@ export function createMockContext(filters: Partial<FiltersState> = {}): AIToolCo
       minPrice: undefined,
       maxPrice: undefined,
     } as unknown as FiltersState,
-    dataStore: {
-      categories: [
-        { name: 'Travel', color: 'blue', type: 'expense', sortOrder: 1 },
-        { name: 'Shopping', color: 'red', type: 'expense', sortOrder: 2 },
-        { name: 'Utilities', color: 'yellow', type: 'expense', sortOrder: 3 },
-      ],
-      accounts: [
-        { id: 1, name: 'Chase', type: 'checking', institution: 'Chase', source: 'plaid', enabled: true },
-        { id: 2, name: 'Amex', type: 'credit', institution: 'Amex', source: 'plaid', enabled: true },
-      ],
-      transactions: [],
-      budgets: [],
-      merchantOverrides: [],
-      rules: [],
-      importBatches: [],
-    } as unknown as DataState,
+    dataStore: {} as any,
     budgetStore: {
       excludedMerchants: [],
       excludedBudgetCategories: []

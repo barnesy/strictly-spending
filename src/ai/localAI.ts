@@ -17,7 +17,7 @@ export class LocalAI implements AIProvider {
       if (savedModel) {
         this.activeProvider.modelName = savedModel;
       } else {
-        this.activeProvider.modelName = 'llama3.2:3b';
+        this.activeProvider.modelName = 'gemma2:2b';
       }
     }
   }
@@ -65,10 +65,11 @@ export class LocalAI implements AIProvider {
     overrideSystemPrompt?: string,
     responseSchema?: any,
     onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    directMode?: boolean
   ): Promise<string> {
     this.syncActiveProvider();
-    return this.activeProvider.chatCopilot(messages, stateContext, overrideSystemPrompt, responseSchema, onChunk, signal);
+    return this.activeProvider.chatCopilot(messages, stateContext, overrideSystemPrompt, responseSchema, onChunk, signal, directMode);
   }
 
   async reviewTransactions(transactions: any[], availableCategories: string[], signal?: AbortSignal): Promise<string[]> {

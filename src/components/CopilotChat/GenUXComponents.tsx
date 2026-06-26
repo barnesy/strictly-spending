@@ -3,10 +3,7 @@ import * as schema from "../../db/schema";
 import { eq } from 'drizzle-orm';
 import React, { useState, useEffect } from 'react';
 import { Box, Stack, Paper, Button, TextField, Checkbox, Select, MenuItem, Typography, Divider } from '@mui/material';
-import { useDbQuery } from '../../hooks/useDbQuery';
-
-import { useDataStore } from '../../dataStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useSettings, useCategories } from '../../hooks/queries';
 import { refreshRecurrenceAll } from '../../recurrence';
 import type { ProposedCategorizationItem, ProposedCategorizationReport } from '../../types';
 import type { ChatMessage } from '../../ai';
@@ -148,8 +145,9 @@ export function ProposedCategorizationReportUX({
   const [initialized, setInitialized] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const categories = useDataStore(useShallow(s => s.categories));
-  const reportSetting = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:pendingCategorizationReport')))[0], []);
+  const { data: categories = [] } = useCategories();
+  const { data: settings = [] } = useSettings();
+  const reportSetting = settings.find(s => s.key === 'app:pendingCategorizationReport');
   const report = reportSetting?.value as ProposedCategorizationReport | undefined;
 
   const status = message.actionResult?.status || 'pending';

@@ -9,7 +9,7 @@ export class OllamaProvider implements AIProvider {
   public id = 'ollama';
   public name = 'Local Ollama';
   public isLoaded = false;
-  public modelName = 'llama3.2:1b';
+  public modelName = 'gemma2:2b';
   private pullAbortController: AbortController | null = null;
 
   async init(progressCallback?: (progress: string, percent?: number) => void): Promise<void> {
@@ -90,22 +90,29 @@ export class OllamaProvider implements AIProvider {
 
         for (const line of lines) {
           if (!line.trim()) continue;
+          let progressInfo;
           try {
-            const progressInfo = JSON.parse(line);
-            if (progressInfo.status === 'success') {
-              this.isLoaded = true;
-              progressCallback?.(100, 'success');
-              return;
-            }
-            
-            if (progressInfo.total) {
-              const pct = Math.round((progressInfo.completed / progressInfo.total) * 100);
-              progressCallback?.(pct, progressInfo.status || 'downloading');
-            } else {
-              progressCallback?.(0, progressInfo.status || 'initializing');
-            }
+            progressInfo = JSON.parse(line);
           } catch (e) {
             console.error('Failed to parse pull progress line:', e);
+            continue;
+          }
+
+          if (progressInfo.error) {
+            throw new Error(progressInfo.error);
+          }
+
+          if (progressInfo.status === 'success') {
+            this.isLoaded = true;
+            progressCallback?.(100, 'success');
+            return;
+          }
+          
+          if (progressInfo.total) {
+            const pct = Math.round((progressInfo.completed / progressInfo.total) * 100);
+            progressCallback?.(pct, progressInfo.status || 'downloading');
+          } else {
+            progressCallback?.(0, progressInfo.status || 'initializing');
           }
         }
       }
@@ -136,34 +143,43 @@ export class OllamaProvider implements AIProvider {
     overrideSystemPrompt?: string,
     responseSchema?: any,
     onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    directMode?: boolean
   ): Promise<string> {
     if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
 
     try {
-      const extendedSystemPrompt = await getSystemPrompt(stateContext, overrideSystemPrompt);
-      const cleanedMessages = cleanChatHistory(messages);
-      
-      const fullMessages = overrideSystemPrompt
-        ? [
-            { role: 'system' as const, content: extendedSystemPrompt },
-            ...cleanedMessages
-          ]
-        : [
-            { role: 'system' as const, content: extendedSystemPrompt },
-            ...fewShots,
-            ...cleanedMessages
-          ];
+      let fullMessages;
+      if (directMode) {
+        fullMessages = [
+          { role: 'system' as const, content: "You are a helpful general-purpose AI assistant." },
+          ...cleanChatHistory(messages)
+        ];
+      } else {
+        const extendedSystemPrompt = await getSystemPrompt(stateContext, overrideSystemPrompt);
+        const cleanedMessages = cleanChatHistory(messages);
+        
+        fullMessages = overrideSystemPrompt
+          ? [
+              { role: 'system' as const, content: extendedSystemPrompt },
+              ...cleanedMessages
+            ]
+          : [
+              { role: 'system' as const, content: extendedSystemPrompt },
+              ...fewShots,
+              ...cleanedMessages
+            ];
+      }
 
       const isGemma = this.modelName.toLowerCase().includes('gemma');
       const numCtx = isGemma ? 8192 : 4096; // Adjust context based on model
 
-      const schema = responseSchema !== undefined ? responseSchema : COPILOT_RESPONSE_SCHEMA;
+      const schema = directMode ? null : (responseSchema !== undefined ? responseSchema : COPILOT_RESPONSE_SCHEMA);
       const body: any = {
         model: this.modelName,
         messages: fullMessages,
         stream: !!onChunk,
-        options: { temperature: 0.2, num_predict: 1024, num_ctx: numCtx }
+        options: { temperature: directMode ? 0.7 : 0.2, num_predict: 1024, num_ctx: numCtx }
       };
 
       if (schema) {
@@ -177,87 +193,40 @@ export class OllamaProvider implements AIProvider {
         console.error("Failed to save debug payload", e);
       }
 
-      const response = await safeFetch('http://localhost:11434/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal
-      });
-
-      if (!response.ok) throw new Error(`Ollama chat error: ${response.statusText}`);
-
       if (onChunk) {
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error('Response body is not readable.');
-        }
+        const { listen } = await import('@tauri-apps/api/event');
+        const { invoke } = await import('@tauri-apps/api/core');
+        
+        const unlistenChunk = await listen<string>('llm_chunk', (event) => {
+          onChunk(event.payload);
+        });
+        
+        const unlistenDone = await listen<any>('llm_done', (event) => {
+          const payload = event.payload;
+          onChunk('', { promptTokens: payload.prompt_eval_count || 0, completionTokens: payload.eval_count || 0 });
+        });
 
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '';
-        let accumulatedContent = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-            try {
-              const parsedChunk = JSON.parse(trimmed);
-              const content = parsedChunk.message?.content || '';
-              if (content) {
-                accumulatedContent += content;
-                onChunk(content);
-              }
-              if (parsedChunk.done) {
-                const pCount = parsedChunk.prompt_eval_count;
-                const eCount = parsedChunk.eval_count;
-                if (pCount !== undefined || eCount !== undefined) {
-                  onChunk('', { promptTokens: pCount || 0, completionTokens: eCount || 0 });
-                }
-              }
-            } catch (e) {
-              console.warn('Failed to parse streaming line:', trimmed, e);
-            }
-          }
-        }
-
-        if (buffer.trim()) {
-          try {
-            const parsedChunk = JSON.parse(buffer.trim());
-            const content = parsedChunk.message?.content || '';
-            if (content) {
-              accumulatedContent += content;
-              onChunk(content);
-            }
-            if (parsedChunk.done) {
-              const pCount = parsedChunk.prompt_eval_count;
-              const eCount = parsedChunk.eval_count;
-              if (pCount !== undefined || eCount !== undefined) {
-                onChunk('', { promptTokens: pCount || 0, completionTokens: eCount || 0 });
-              }
-            }
-          } catch (e) {
-            // ignore
-          }
-        }
-
-        return accumulatedContent;
-      } else {
-        const text = await response.text();
-        let data;
         try {
-          data = JSON.parse(text);
-        } catch (parseErr) {
-          throw new Error('Failed to parse Ollama chat response as JSON.');
+          const accumulatedContent = await invoke<string>('run_copilot_chat', {
+            model: body.model,
+            messages: body.messages,
+            format: body.format || null,
+            options: body.options
+          });
+          return accumulatedContent;
+        } finally {
+          unlistenChunk();
+          unlistenDone();
         }
-        return data.message?.content || '';
+      } else {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const text = await invoke<string>('run_copilot_chat', {
+          model: body.model,
+          messages: body.messages,
+          format: body.format || null,
+          options: body.options
+        });
+        return text;
       }
     } catch (e: any) {
       throw handleOllamaError(e);
@@ -287,29 +256,18 @@ Example valid JSON output:
 }
 `;
 
-      const response = await safeFetch('http://localhost:11434/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { invoke } = await import('@tauri-apps/api/core');
+      let content = '{"results":[]}';
+      try {
+        content = await invoke<string>('run_copilot_chat', {
           model: this.modelName,
           messages: [{ role: 'user', content: prompt }],
           format: 'json',
-          stream: false,
           options: { temperature: 0.1 }
-        }),
-        signal
-      });
-
-      if (!response.ok) throw new Error(`Ollama error: ${response.statusText}`);
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (parseErr) {
-        console.error('Ollama raw response was:', text);
-        throw new Error('Failed to parse Ollama classification response as JSON.');
+        });
+      } catch (err) {
+        throw new Error(`Ollama error: ${err}`);
       }
-      const content = data.message?.content || '{"results":[]}';
 
       let parsed = null;
       try {
@@ -374,29 +332,18 @@ Example valid JSON output:
 }
 `;
 
-      const response = await safeFetch('http://localhost:11434/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { invoke } = await import('@tauri-apps/api/core');
+      let content = '{"results":[]}';
+      try {
+        content = await invoke<string>('run_copilot_chat', {
           model: this.modelName,
           messages: [{ role: 'user', content: prompt }],
           format: 'json',
-          stream: false,
           options: { temperature: 0.1 }
-        }),
-        signal
-      });
-
-      if (!response.ok) throw new Error(`Ollama error: ${response.statusText}`);
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (parseErr) {
-        console.error('Ollama raw response was:', text);
-        throw new Error('Failed to parse Ollama classification response as JSON.');
+        });
+      } catch (err) {
+        throw new Error(`Ollama error: ${err}`);
       }
-      const content = data.message?.content || '{"results":[]}';
 
       let parsed = null;
       try {

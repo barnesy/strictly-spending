@@ -28,7 +28,7 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
-import { useDbQuery } from '../hooks/useDbQuery';
+import { useSettings } from '../hooks/queries';
 
 import type { AgentSkill } from '../types';
 import SimpleMarkdown from './SimpleMarkdown';
@@ -39,7 +39,8 @@ export default function ArtifactViewer() {
     setActiveArtifact: s.setActiveArtifact,
   })));
   const navigate = useNavigate();
-  const activeSkills = useDbQuery(async () => (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills')))[0], [])?.value as AgentSkill[] || [];
+  const { data: settings = [] } = useSettings();
+  const activeSkills = settings.find(s => s.key === 'app:agentSkills')?.value as AgentSkill[] || [];
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 

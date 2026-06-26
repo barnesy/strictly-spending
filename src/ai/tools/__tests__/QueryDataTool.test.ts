@@ -5,8 +5,10 @@ import { setupTestDb, createMockContext } from './setup';
 // Global variable to hold our mocked test DB
 let currentTestDb: any;
 
-vi.mock('../../../db/drizzle', () => {
+vi.mock('../../../db/drizzle', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../db/drizzle')>();
   return {
+    ...actual,
     get db() {
       return currentTestDb;
     }

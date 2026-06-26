@@ -1,11 +1,14 @@
 import { useChatStore, formatModelName } from '../chatStore';
-import { useDataStore } from '../dataStore';
+
 import { useFilters } from '../store';
 import { useBudgetStore } from '../budgetStore';
 import { localAI, parseAIResponse, calculateGlobalRunwayData, COPILOT_RESPONSE_SCHEMA } from './index';
 import type { ChatMessage } from './index';
 import { toolRegistry } from './tools';
 import { executeCopilotCommand } from '../copilotMatcher';
+import { queryClient } from '../queryClient';
+import { api } from '../api';
+import { buildRecurrenceMap } from '../recurrence';
 
 export interface OrchestratorContext {
   navigate: (path: string) => void;
@@ -61,11 +64,62 @@ export class CopilotOrchestrator {
     const { addMessage, startStreamingMessage, appendStreamingToken, updateStreamingMetadata, finalizeStreamingMessage, messages } = chatStore;
     const { signal, navigate, location } = context;
 
+    if (chatStore.directLlmMode) {
+      startStreamingMessage([], 'explanation');
+
+      const cleanedHistory = messages.map((m) => {
+        if (m.role === 'assistant') {
+          try {
+            const parsed = parseAIResponse(m.content);
+            if (parsed && parsed.body) {
+              return { ...m, content: parsed.body };
+            }
+          } catch {}
+        }
+        return m;
+      });
+
+      const conversationHistory = [...cleanedHistory, userMsg];
+      const localAIModel = localAI;
+      let currentResponse = '';
+
+      try {
+        currentResponse = await localAIModel.chatCopilot(
+          conversationHistory,
+          "Direct LLM Mode Active.",
+          undefined,
+          null,
+          (chunk) => {
+            appendStreamingToken(chunk);
+          },
+          signal,
+          true
+        );
+      } catch (err: any) {
+        if (err.name === 'AbortError') throw err;
+        throw new Error(`LLM Error: ${err.message}`);
+      }
+
+      await finalizeStreamingMessage(
+        currentResponse,
+        null,
+        [],
+        { prompt: 0, completion: 0, total: 0 },
+        'explanation'
+      );
+      return;
+    }
+
     // Use already cached agent skills
     const allSkills = chatStore.agentSkills || [];
 
     const filters = useFilters.getState();
-    const dataStore = useDataStore.getState();
+    const categories = await queryClient.fetchQuery({ queryKey: ['categories'], queryFn: api.getCategories });
+    const accounts = await queryClient.fetchQuery({ queryKey: ['accounts'], queryFn: api.getAccounts });
+    const transactions = await queryClient.fetchQuery({ queryKey: ['transactions', undefined], queryFn: () => api.getTransactions() });
+    const recurrenceMapObj = await queryClient.fetchQuery({ queryKey: ['recurrence', filters.demoMode], queryFn: () => buildRecurrenceMap(filters.demoMode) });
+    const recurrenceMap = new Map(Object.entries(recurrenceMapObj));
+    const dataStore = { categories, accounts, transactions, recurrenceMap };
 
     let currentSkillId: string | undefined = undefined;
     let currentCompletedStages: string[] = [];

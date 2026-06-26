@@ -42,7 +42,12 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
     desc: "Update the user's tax settings and form fields based on their chat input.",
     insertTemplate: '- Set the "action" to "update_tax_settings" in your agent_action response to edit tax details.'
   },
-
+  {
+    name: 'generate_csv',
+    label: 'Generate CSV Export',
+    desc: 'Export the currently queried transactions to a CSV document.',
+    insertTemplate: '- Set the "action" to "generate_csv" in your agent_action response to create a CSV from the last query.'
+  },
   {
     name: 'audit_accessibility',
     label: 'Accessibility Audit',

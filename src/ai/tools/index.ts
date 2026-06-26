@@ -1,9 +1,8 @@
 import type { FiltersState } from '../../store';
-import type { DataState } from '../../dataStore';
 
 export interface AIToolContext {
   filters: FiltersState;
-  dataStore: DataState;
+  dataStore: any;
   budgetStore: any;
   lastQueryState?: any;
 }
@@ -44,5 +43,7 @@ export class ToolRegistry {
 export const toolRegistry = new ToolRegistry();
 
 import { QueryDataTool } from './QueryDataTool';
+import { GenerateDocumentTool } from './GenerateDocumentTool';
 
 toolRegistry.register(new QueryDataTool());
+toolRegistry.register(new GenerateDocumentTool());

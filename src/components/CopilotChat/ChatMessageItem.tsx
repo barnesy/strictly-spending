@@ -44,41 +44,39 @@ function renderMessageContent(m: ChatMessage): string {
   if (m.role !== 'assistant') {
     content = m.content;
   } else {
-    try {
-      const parsed = parseAIResponse(m.content);
-      if (parsed) {
-        content = getMessageDisplayContent(parsed, m.isStreaming);
+    const trimmed = m.content.trim();
+    const isJsonLike = trimmed.startsWith('{') || trimmed.includes('```json') || trimmed.includes('"body"') || trimmed.includes('"agent_action"');
+    
+    if (isJsonLike) {
+      try {
+        const parsed = parseAIResponse(m.content);
+        if (parsed) {
+          content = getMessageDisplayContent(parsed, m.isStreaming);
+        }
+      } catch {
+        // Ignore and fall through
       }
-    } catch {
-      // Ignore and fall through
-    }
 
-    if (!content) {
-      // Regex safety net
-      const bodyField =
-        extractFieldUsingRegex(m.content, 'body') ||
-        extractFieldUsingRegex(m.content, 'explanation') ||
-        extractFieldUsingRegex(m.content, 'message') ||
-        extractFieldUsingRegex(m.content, 'text');
-      content = bodyField || '';
-    }
+      if (!content) {
+        // Regex safety net
+        const bodyField =
+          extractFieldUsingRegex(m.content, 'body') ||
+          extractFieldUsingRegex(m.content, 'explanation') ||
+          extractFieldUsingRegex(m.content, 'message') ||
+          extractFieldUsingRegex(m.content, 'text');
+        content = bodyField || '';
+      }
 
-    if (!content && m.isStreaming) {
-      content = "*Thinking...*";
-    }
+      if (!content && m.isStreaming) {
+        content = "*Thinking...*";
+      }
 
-    if (!content) {
-      // Last fallback if it looks like JSON but failed to parse/extract
-      const trimmed = m.content.trim();
-      if (
-        trimmed.startsWith('{') ||
-        trimmed.includes('```json') ||
-        trimmed.includes('"body"')
-      ) {
+      if (!content) {
+        // Last fallback if it looks like JSON but failed to parse/extract
         content = 'I processed your request, but encountered a formatting issue while rendering the response.';
-      } else {
-        content = m.content;
       }
+    } else {
+      content = m.content;
     }
   }
 

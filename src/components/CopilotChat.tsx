@@ -10,17 +10,19 @@ import {
   CircularProgress,
   LinearProgress,
   Button,
+  Alert,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BugReportIcon from '@mui/icons-material/BugReport';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFilters } from '../store';
 import { useChatStore, formatModelName } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { parseAIResponse } from '../ai';
-import { useDbQuery } from '../hooks/useDbQuery';
+import { useCategories, useAccounts } from '../hooks/queries';
 
 import { executeCopilotCommand } from '../copilotMatcher';
 import { useCopilotActionHandler } from './CopilotChat/useCopilotActionHandler';
@@ -58,6 +60,8 @@ export default function CopilotChat({
     loadThreads,
     createThread,
     deleteThread,
+    directLlmMode,
+    setDirectLlmMode,
   } = useChatStore(useShallow((s) => ({
     messages: s.messages,
     clearMessages: s.clearMessages,
@@ -74,6 +78,8 @@ export default function CopilotChat({
     loadThreads: s.loadThreads,
     createThread: s.createThread,
     deleteThread: s.deleteThread,
+    directLlmMode: s.directLlmMode,
+    setDirectLlmMode: s.setDirectLlmMode,
   })));
 
   useEffect(() => {
@@ -94,13 +100,8 @@ export default function CopilotChat({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { categories, accounts } = useDbQuery(async () => {
-    const [catRes, accRes] = await Promise.all([
-      db.select().from(schema.categories),
-      db.select().from(schema.accounts)
-    ]);
-    return { categories: catRes, accounts: accRes };
-  }, []) || { categories: [], accounts: [] };
+  const { data: categories = [] } = useCategories();
+  const { data: accounts = [] } = useAccounts();
 
   const [debugModalOpen, setDebugModalOpen] = useState(false);
 
@@ -215,10 +216,33 @@ export default function CopilotChat({
         justifyContent="space-between"
         sx={{ px: 2, height: 64, borderBottom: 0, flexShrink: 0, bgcolor: 'background.default' }}
       >
-        <Stack direction="row" alignItems="center" spacing={0.75}>
+        <Stack direction="row" alignItems="center" spacing={1}>
           <Box component="span" sx={{ fontWeight: 900, textShadow: '0 0 0.5px currentColor', color: 'primary.main', fontSize: '0.9rem' }}>
             AI
           </Box>
+          {aiLoaded && (
+            <Button
+              variant={directLlmMode ? "contained" : "outlined"}
+              color={directLlmMode ? "info" : "primary"}
+              size="small"
+              onClick={() => setDirectLlmMode(!directLlmMode)}
+              sx={{
+                fontSize: '0.72rem',
+                py: 0.25,
+                px: 1,
+                borderRadius: 2,
+                textTransform: 'none',
+                height: 22,
+                fontWeight: 700,
+                boxShadow: 'none',
+                '&:hover': {
+                  boxShadow: 'none'
+                }
+              }}
+            >
+              {directLlmMode ? "Direct LLM" : "Copilot"}
+            </Button>
+          )}
         </Stack>
         <Stack direction="row" spacing={0.5}>
           <IconButton onClick={() => setDebugModalOpen(true)} title="View System Context">
@@ -299,6 +323,7 @@ export default function CopilotChat({
       )}
 
       <ThreadFiltersBanner />
+      <DirectLlmModeBanner />
 
       {/* Main Body */}
       {!aiLoaded ? (
@@ -337,6 +362,25 @@ export default function CopilotChat({
           {aiStatus === 'pulling' && (
             <Box sx={{ width: '100%', mt: 1 }}>
               <LinearProgress variant="determinate" value={aiProgressPercent} sx={{ mb: 1.5, borderRadius: 1, height: 6 }} />
+            </Box>
+          )}
+
+          {aiStatus === 'safemode' && (
+            <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <Alert severity="warning" sx={{ textAlign: 'left', width: '100%' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  Safe Mode Active
+                </Typography>
+                Automatic Ollama pings and background process launches are disabled on startup to prevent Windows crash loops. GPU acceleration is also turned off.
+              </Alert>
+              <Button 
+                variant="outlined" 
+                onClick={() => checkAIStatus(true)} 
+                startIcon={<RefreshIcon />}
+                size="small"
+              >
+                Run Diagnostic Check
+              </Button>
             </Box>
           )}
 
@@ -453,6 +497,50 @@ function ThreadFiltersBanner() {
         }}
       >
         Reset Filters
+      </Button>
+    </Box>
+  );
+}
+
+function DirectLlmModeBanner() {
+  const directLlmMode = useChatStore((s) => s.directLlmMode);
+  const setDirectLlmMode = useChatStore((s) => s.setDirectLlmMode);
+
+  if (!directLlmMode) return null;
+
+  return (
+    <Box
+      sx={{
+        px: 2,
+        py: 0.5,
+        borderBottom: '1px solid',
+        borderColor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(2, 136, 209, 0.3)' : '#b3e5fc'),
+        bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'rgba(2, 136, 209, 0.15)' : '#e1f5fe'),
+        color: (theme) => (theme.palette.mode === 'dark' ? '#29b6f6' : '#0288d1'),
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0,
+      }}
+    >
+      <Typography variant="caption" sx={{ fontWeight: 500 }}>
+        Direct LLM Mode active (System prompt & financial tools disabled).
+      </Typography>
+      <Button
+        size="small"
+        variant="text"
+        color="info"
+        onClick={() => setDirectLlmMode(false)}
+        sx={{
+          py: 0,
+          px: 1,
+          minWidth: 0,
+          fontSize: '0.72rem',
+          textTransform: 'none',
+          fontWeight: 700,
+        }}
+      >
+        Switch to Copilot
       </Button>
     </Box>
   );

@@ -57,8 +57,6 @@ export const COPILOT_RESPONSE_SCHEMA = {
         type: { type: "string", enum: ["skill", "markdown", "spreadsheet"] },
         title: { type: "string" },
         content: { type: "string" },
-        documentType: { type: "string", description: "Target document checklist ID if a tax document (e.g. 'business_pnl')." },
-        documentContent: { type: "string", description: "The raw content of the document to be saved." },
         explanation: { type: "string" }
       },
       required: ["action"]
@@ -89,7 +87,8 @@ export interface AIProvider {
     overrideSystemPrompt?: string,
     responseSchema?: any,
     onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    directMode?: boolean
   ): Promise<string>;
   reviewTransactions(transactions: { desc: string; ruleCategory: string }[], availableCategories: string[], signal?: AbortSignal): Promise<string[]>;
   reviewTransactionsWithRules(

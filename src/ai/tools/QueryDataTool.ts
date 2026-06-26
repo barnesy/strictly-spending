@@ -2,7 +2,7 @@ import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
 import { db } from '../../db/drizzle';
 import * as schema from '../../db/schema';
-import { inArray, between, sql, and, desc } from 'drizzle-orm';
+import { invoke } from '@tauri-apps/api/core';
 import { resolveDateRange } from '../../store';
 import { useBudgetStore } from '../../budgetStore';
 import { buildRecurrenceMap } from '../../recurrence';
@@ -74,10 +74,9 @@ export class QueryDataTool implements AIToolHandler {
     }
 
     const budgets = store.budgets;
-    const overrides = store.merchantOverrides;
-    const allTxns = store.transactions; // Only needed for forecast right now, could be optimized later
-    const recurrenceMap = buildRecurrenceMap(allTxns, overrides);
-    const forecast = buildForecast(allTxns, recurrenceMap, allCats);
+    const recurrenceMapObj = await buildRecurrenceMap(false);
+    const recurrenceMap = new Map(Object.entries(recurrenceMapObj));
+    const forecast = await buildForecast(false);
     const recurring = forecast.filter((f) => f.kind === 'recurring');
 
     const budgetStore = useBudgetStore.getState();
@@ -112,84 +111,24 @@ export class QueryDataTool implements AIToolHandler {
 
     const numMonths = getMonthsInRange(start, end);
 
-    // Build SQLite/Drizzle conditions for the aggregation query
-    const conditions = [];
-    conditions.push(between(schema.transactions.date, start, end));
-    
-    if (resolvedAccts.length > 0 && (!queryAccts.includes('all') && queryAccts.length > 0)) {
-      conditions.push(inArray(schema.transactions.accountId, resolvedAccts));
-    }
-    
-    if (searchVal) {
-      const q = `%${searchVal}%`;
-      conditions.push(sql`(LOWER(${schema.transactions.description}) LIKE LOWER(${q}) OR LOWER(${schema.transactions.merchantKey}) LIKE LOWER(${q}))`);
-    }
-    
-    if (minPriceVal !== undefined) {
-      conditions.push(sql`ABS(${schema.transactions.amount}) >= ${minPriceVal}`);
-    }
-    if (maxPriceVal !== undefined) {
-      conditions.push(sql`ABS(${schema.transactions.amount}) <= ${maxPriceVal}`);
-    }
-    
-    if (!queryCats.includes('all') && queryCats.length > 0) {
-      conditions.push(inArray(schema.transactions.category, resolvedCats));
-    }
-
-    // Run Aggregate Query in SQLite
-    const aggRows = await db.select({
-      category: schema.transactions.category,
-      amount: schema.transactions.amount,
-      count: sql<number>`COUNT(${schema.transactions.id})`
-    }).from(schema.transactions)
-      .where(and(...conditions))
-      .groupBy(schema.transactions.category, sql`${schema.transactions.amount} > 0`); // group by category and whether it's positive/negative
-
-    let totalSpend = 0;
-    let totalIncome = 0;
-    let spendCount = 0;
-    let incomeCount = 0;
-    const categorySpendMap = new Map<string, number>();
-
-    for (const row of aggRows) {
-      const type = categoryTypes[row.category.toLowerCase()] || 'spend';
-      const isPositive = row.amount > 0;
-      
-      const catVal = isPositive ? row.amount : -row.amount; // Adjust mapping for map
-      
-      if (type === 'income') {
-        totalIncome += row.amount * row.count; // Wait, amount here is aggregated? No, the SQL was wrong if amount isn't SUM.
-        // Actually, my SQL above had category, amount, count. I should have SUM(amount).
+    const result: any = await invoke('ai_query_data', {
+      params: {
+        start,
+        end,
+        resolvedCats: resolvedCats,
+        resolvedAccts: resolvedAccts,
+        searchVal: searchVal || null,
+        minPrice: minPriceVal !== undefined ? Number(minPriceVal) : null,
+        maxPrice: maxPriceVal !== undefined ? Number(maxPriceVal) : null,
+        queryCats: queryCats,
+        queryAccts: queryAccts
       }
-    }
-    
-    // Let's refine the SQL query to do proper SUMs
-    const statsRows = await db.select({
-      category: schema.transactions.category,
-      sumAmount: sql<number>`SUM(${schema.transactions.amount})`,
-      count: sql<number>`COUNT(${schema.transactions.id})`
-    }).from(schema.transactions)
-      .where(and(...conditions))
-      .groupBy(schema.transactions.category);
+    });
 
-    for (const row of statsRows) {
-      const type = categoryTypes[row.category.toLowerCase()] || 'spend';
-      if (type === 'income') {
-        totalIncome += row.sumAmount;
-        incomeCount += row.count;
-      } else if (type === 'spend') {
-        totalSpend += -row.sumAmount;
-        spendCount += row.count;
-      } else {
-        if (row.sumAmount < 0) {
-          totalSpend += -row.sumAmount;
-          spendCount += row.count;
-        }
-      }
-      
-      const isRevenue = row.category.toLowerCase() === 'income' || row.sumAmount > 0;
-      categorySpendMap.set(row.category, (categorySpendMap.get(row.category) || 0) + (isRevenue ? row.sumAmount : -row.sumAmount));
-    }
+    const totalSpend = result.total_spend;
+    const totalIncome = result.total_income;
+    const spendCount = result.spend_count;
+    const incomeCount = result.income_count;
 
     const spendAverage = spendCount > 0 ? totalSpend / spendCount : 0;
     const incomeAverage = incomeCount > 0 ? totalIncome / incomeCount : 0;
@@ -219,42 +158,20 @@ export class QueryDataTool implements AIToolHandler {
 
     let breakdownText = '';
     
-    // For Monthly breakdown we need a second query if months > 1
     if (numMonths > 1.0) {
-      const monthRows = await db.select({
-        monthKey: sql<string>`SUBSTR(${schema.transactions.date}, 1, 7)`,
-        yearKey: sql<string>`SUBSTR(${schema.transactions.date}, 1, 4)`,
-        sumAmount: sql<number>`SUM(${schema.transactions.amount})`
-      }).from(schema.transactions)
-        .where(and(
-          ...conditions,
-          sql`LOWER(${schema.transactions.category}) != 'income'`
-        ))
-        .groupBy(sql`SUBSTR(${schema.transactions.date}, 1, 7)`);
-
-      const monthsMap = new Map<string, number>();
-      const yearsMap = new Map<string, number>();
-
-      for (const row of monthRows) {
-        monthsMap.set(row.monthKey, -row.sumAmount);
-        yearsMap.set(row.yearKey, (yearsMap.get(row.yearKey) || 0) + -row.sumAmount);
-      }
-
       const monthlyTable = [
         '| Month | Spend Amount |',
         '| :--- | ---: |',
-        ...Array.from(monthsMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([mKey, amt]) => {
-          const formattedLabel = new Date(mKey + '-02').toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
-          return `| ${formattedLabel} | $${amt.toFixed(2)} |`;
+        ...result.monthly_breakdown.map((row: any) => {
+          const formattedLabel = new Date(row.month + '-02').toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+          return `| ${formattedLabel} | $${row.amount.toFixed(2)} |`;
         })
       ].join('\\n');
 
       const yearlyTable = [
         '| Year | Spend Amount |',
         '| :--- | ---: |',
-        ...Array.from(yearsMap.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([yKey, amt]) => {
-          return `| ${yKey} | $${amt.toFixed(2)} |`;
-        })
+        ...result.yearly_breakdown.map((row: any) => `| ${row.year} | $${row.amount.toFixed(2)} |`)
       ].join('\\n');
 
       breakdownText = `\\n\\nMonthly Spend Breakdown:\\n${monthlyTable}\\n\\nYearly Spend Breakdown:\\n${yearlyTable}`;
@@ -264,27 +181,13 @@ export class QueryDataTool implements AIToolHandler {
       const catTable = [
         '| Category | Spend Amount |',
         '| :--- | ---: |',
-        ...Array.from(categorySpendMap.entries())
-          .sort((a,b) => b[1] - a[1])
-          .map(([cat, amt]) => `| ${cat} | $${amt.toFixed(2)} |`)
+        ...result.category_breakdown.map((row: any) => `| ${row.category} | $${row.amount.toFixed(2)} |`)
       ].join('\\n');
       breakdownText += `\\n\\nCategory Breakdown:\\n${catTable}`;
     }
 
-    const hasIncome = resolvedCats.some(c => c.toLowerCase() === 'income');
-
-    const recentTxns = await db.select({
-      date: schema.transactions.date,
-      description: schema.transactions.description,
-      amount: schema.transactions.amount,
-      category: schema.transactions.category
-    }).from(schema.transactions)
-      .where(and(...conditions))
-      .orderBy(desc(schema.transactions.date))
-      .limit(10);
-
-    if (recentTxns.length > 0) {
-      const recentList = recentTxns.map(t => `- ${t.date} | ${t.description} | ${t.category} | $${Math.abs(t.amount).toFixed(2)}`).join('\\n');
+    if (result.recent_transactions.length > 0) {
+      const recentList = result.recent_transactions.map((t: any) => `- ${t.date} | ${t.description} | ${t.category} | $${Math.abs(t.amount).toFixed(2)}`).join('\\n');
       breakdownText += `\\n\\nRecent Transactions (Top 10):\\n${recentList}`;
     }
 

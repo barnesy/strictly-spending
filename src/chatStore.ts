@@ -1,6 +1,4 @@
-import { db } from './db/drizzle';
-import * as schema from './db/schema';
-import { eq, desc, asc } from 'drizzle-orm';
+import { api } from './api';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { localAI, type ChatMessage } from './ai';
@@ -19,9 +17,11 @@ async function getTauriInvoke() {
 export function formatModelName(name: string): string {
   if (!name) return 'AI';
   let label = name;
-  if (name === 'llama3.2:1b') label = 'Llama 3.2 1B';
+  if (name === 'gemma2:2b') label = 'Gemma 2 2B';
+  else if (name === 'gemma2:9b') label = 'Gemma 2 9B';
+  else if (name === 'gemma2:27b') label = 'Gemma 2 27B';
+  else if (name === 'llama3.2:1b') label = 'Llama 3.2 1B';
   else if (name === 'llama3.2:3b') label = 'Llama 3.2 3B';
-  else if (name === 'gemma2:2b') label = 'Gemma 2 2B';
   else if (name === 'mistral:latest') label = 'Mistral 7B';
   else {
     const parts = name.split(':');
@@ -31,7 +31,7 @@ export function formatModelName(name: string): string {
   return label;
 }
 
-export type AIStatus = 'checking' | 'uninstalled' | 'stopped' | 'running' | 'pulling' | 'ready' | 'error';
+export type AIStatus = 'checking' | 'uninstalled' | 'stopped' | 'running' | 'pulling' | 'ready' | 'error' | 'safemode';
 
 interface ChatStore {
   messages: ChatMessage[];
@@ -48,7 +48,7 @@ interface ChatStore {
   finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: string[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation', activeSkillId?: string, completedStages?: string[]) => Promise<void>;
   setMessages: (messages: ChatMessage[]) => void;
   clearMessages: () => void;
-  checkAIStatus: () => Promise<void>;
+  checkAIStatus: (force?: boolean) => Promise<void>;
   installOllama: () => Promise<void>;
   startOllama: () => Promise<void>;
   pullModel: () => Promise<void>;
@@ -73,7 +73,12 @@ interface ChatStore {
   setLastDebugPayload: (payload: string) => void;
   agentSkills: any[];
   loadAgentSkills: () => Promise<void>;
+  directLlmMode: boolean;
+  setDirectLlmMode: (enabled: boolean) => void;
+  deleteModel: (name: string) => Promise<void>;
 }
+
+let lastStatusCheckTime = 0;
 
 export const useChatStore = create<ChatStore>()(
   persist(
@@ -85,11 +90,50 @@ export const useChatStore = create<ChatStore>()(
       aiProgressPercent: 0,
       modelName: localAI.modelName,
       agentSkills: [],
+      directLlmMode: false,
+
+      setDirectLlmMode: (enabled: boolean) => set({ directLlmMode: enabled }),
+
+      deleteModel: async (name: string) => {
+        try {
+          const response = await fetch('http://localhost:11434/api/delete', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to delete model: ${response.statusText}`);
+          }
+          
+          // If we deleted the active model, fallback to another model or default
+          if (get().modelName === name) {
+            try {
+              const res = await fetch('http://localhost:11434/api/tags');
+              if (res.ok) {
+                const data = await res.json();
+                const remaining = data.models || [];
+                const nextModel = remaining.find((m: any) => m.name !== name);
+                if (nextModel) {
+                  get().setModelName(nextModel.name);
+                } else {
+                  get().setModelName('gemma2:2b');
+                }
+              }
+            } catch {
+              get().setModelName('gemma2:2b');
+            }
+          }
+          
+          await get().checkAIStatus(true);
+        } catch (err: any) {
+          console.error('Failed to delete model:', err);
+          throw err;
+        }
+      },
 
       loadAgentSkills: async () => {
         try {
-          const res = await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:agentSkills'));
-          const skills = res[0]?.value as any[] || [];
+          const skills = await api.getSetting<any[]>('app:agentSkills') || [];
           set({ agentSkills: skills });
         } catch (e) {
           console.error('Failed to load agent skills', e);
@@ -106,7 +150,7 @@ export const useChatStore = create<ChatStore>()(
         set((state) => ({ messages: [...state.messages, msg] }));
         const threadId = get().activeThreadId;
         if (threadId) {
-          await db.insert(schema.messages).values({
+          await api.putMessage({
             threadId,
             role: msg.role,
             content: msg.content,
@@ -118,14 +162,20 @@ export const useChatStore = create<ChatStore>()(
           if (thread && thread.title === 'New Chat' && msg.role === 'user') {
             const firstLine = msg.content.trim().split('\n')[0];
             const newTitle = firstLine.length > 25 ? firstLine.slice(0, 25) + '...' : firstLine;
-            await db.update(schema.threads)
-              .set({ title: newTitle, updatedAt: new Date().toISOString() })
-              .where(eq(schema.threads.id, threadId));
+            await api.putThread({
+              ...thread,
+              title: newTitle,
+              updatedAt: new Date().toISOString()
+            });
             await get().loadThreads();
           } else {
-            await db.update(schema.threads)
-              .set({ updatedAt: new Date().toISOString() })
-              .where(eq(schema.threads.id, threadId));
+            if (thread) {
+              await api.putThread({
+                ...thread,
+                updatedAt: new Date().toISOString()
+              });
+              await get().loadThreads();
+            }
           }
         }
       },
@@ -204,11 +254,11 @@ export const useChatStore = create<ChatStore>()(
         const threadId = get().activeThreadId;
         if (threadId) {
           const lastMsg = get().messages[get().messages.length - 1];
-          await db.insert(schema.messages).values({
+          await api.putMessage({
             threadId,
             role: 'assistant',
             content: finalContent,
-            actionResult: actionResult as any,
+            actionResult: actionResult !== undefined && actionResult !== null ? actionResult : lastMsg?.actionResult,
             steps: steps || lastMsg?.steps,
             tokenUsage: tokenUsage || lastMsg?.tokenUsage,
             purpose: purpose || lastMsg?.purpose,
@@ -217,28 +267,63 @@ export const useChatStore = create<ChatStore>()(
             createdAt: new Date().toISOString()
           });
 
-          await db.update(schema.threads)
-            .set({ updatedAt: new Date().toISOString() })
-            .where(eq(schema.threads.id, threadId));
+          const thread = get().threads.find(t => t.id === threadId);
+          if (thread) {
+            await api.putThread({
+              ...thread,
+              updatedAt: new Date().toISOString()
+            });
+            await get().loadThreads();
+          }
         }
       },
       setMessages: (messages) => set({ messages }),
       clearMessages: async () => {
         const threadId = get().activeThreadId;
         if (threadId) {
-          await db.delete(schema.messages).where(eq(schema.messages.threadId, threadId));
+          await api.deleteThreadMessages(threadId);
         }
         set({ messages: [] });
       },
 
-      checkAIStatus: async () => {
+      checkAIStatus: async (force) => {
         const isTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
+
+        // Skip background checks if a model is currently downloading
+        if (get().aiStatus === 'pulling' && !force) {
+          console.log('[checkAIStatus] Skipped status check because pulling is active.');
+          return;
+        }
+
+        // Cooldown/Throttle check: prevent calling more than once every 2 seconds unless forced
+        const now = Date.now();
+        if (!force && (now - lastStatusCheckTime < 2000)) {
+          console.log('[checkAIStatus] Throttled to prevent rapid render loop.');
+          return;
+        }
+        lastStatusCheckTime = now;
 
         // Otherwise check Ollama status
         set({ aiStatus: 'checking', aiProgress: 'Checking Ollama status...' });
         try {
           if (isTauri) {
             const invoke = await getTauriInvoke();
+            
+            // Check if application is running in Safe Mode
+            let safeMode = false;
+            if (!force) {
+              try {
+                safeMode = await invoke('is_safe_mode');
+              } catch (e) {
+                console.error('Failed to check safe mode status:', e);
+              }
+            }
+
+            if (safeMode) {
+              set({ aiStatus: 'safemode', aiProgress: 'Safe Mode Active. Automatic checks disabled for stability.', aiLoaded: false, aiProgressPercent: 0 });
+              return;
+            }
+
             const status: { installed: boolean; running: boolean } = await invoke('check_ollama_status');
             
             if (status.running) {
@@ -367,8 +452,8 @@ export const useChatStore = create<ChatStore>()(
       savedWorkspaces: [],
       setActiveWorkspaceId: (id: string) => set({ activeWorkspaceId: id }),
       loadSavedWorkspaces: async () => {
-        const res = await (await db.select().from(schema.settings).where(eq(schema.settings.key, 'app:workspaces')))[0];
-        set({ savedWorkspaces: (res?.value as any) || [] });
+        const list = await api.getSetting<WorkspaceConfig[]>('app:workspaces') || [];
+        set({ savedWorkspaces: list });
       },
       saveWorkspace: async (updatedWorkspace: WorkspaceConfig) => {
         const isTemplate = ['tpl-budget-audit', 'tpl-sub-check', 'tpl-groceries-plan'].includes(updatedWorkspace.id);
@@ -378,7 +463,7 @@ export const useChatStore = create<ChatStore>()(
         const filtered = currentSaved.filter((w) => w.id !== workspaceToSave.id);
         const nextList = [...filtered, workspaceToSave];
 
-        await db.insert(schema.settings).values({ key: 'app:workspaces', value: nextList }).onConflictDoNothing();
+        await api.putSetting('app:workspaces', nextList);
         set({ savedWorkspaces: nextList });
         if (isTemplate) {
           set({ activeWorkspaceId: workspaceToSave.id });
@@ -387,7 +472,7 @@ export const useChatStore = create<ChatStore>()(
       deleteWorkspace: async (id: string) => {
         const currentSaved = get().savedWorkspaces;
         const nextList = currentSaved.filter((w) => w.id !== id);
-        await db.insert(schema.settings).values({ key: 'app:workspaces', value: nextList }).onConflictDoNothing();
+        await api.putSetting('app:workspaces', nextList);
         set({ savedWorkspaces: nextList });
         if (get().activeWorkspaceId === id) {
           set({ activeWorkspaceId: 'tpl-budget-audit' });
@@ -411,7 +496,8 @@ export const useChatStore = create<ChatStore>()(
       },
 
       loadThreads: async () => {
-        const list = await db.select().from(schema.threads).orderBy(desc(schema.threads.createdAt));
+        const list = await api.getThreads();
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         set({ threads: list });
         const activeId = get().activeThreadId;
         if (activeId && get().messages.length === 0) {
@@ -427,15 +513,15 @@ export const useChatStore = create<ChatStore>()(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        await db.insert(schema.threads).values(newThread).onConflictDoNothing();
+        await api.putThread(newThread);
         const currentThreads = get().threads;
         set({ threads: [newThread, ...currentThreads], activeThreadId: id, messages: [] });
         return id;
       },
 
       deleteThread: async (id) => {
-        await db.delete(schema.threads).where(eq(schema.threads.id, id));
-        await db.delete(schema.messages).where(eq(schema.messages.threadId, id));
+        await api.deleteThread(id);
+        await api.deleteThreadMessages(id);
         const nextThreads = get().threads.filter(t => t.id !== id);
         set({ threads: nextThreads });
         if (get().activeThreadId === id) {
@@ -448,11 +534,15 @@ export const useChatStore = create<ChatStore>()(
       },
 
       loadThreadMessages: async (threadId) => {
-        const list = await db.select().from(schema.messages).where(eq(schema.messages.threadId, threadId)).orderBy(asc(schema.messages.id));
-        const formatted = list.map((m: any) => {
-          if (m.actionResult?.metrics?.transactions) {
-            delete m.actionResult.metrics.transactions;
-            db.insert(schema.messages).values(m).onConflictDoNothing().execute(); // scrub legacy data from db
+        const allMessages = await api.getMessages();
+        const list = allMessages.filter(m => m.threadId === threadId);
+        list.sort((a, b) => (a.id || 0) - (b.id || 0));
+
+        const formatted = await Promise.all(list.map(async (m) => {
+          const actionResult = m.actionResult as any;
+          if (actionResult?.metrics?.transactions) {
+            delete actionResult.metrics.transactions;
+            await api.putMessage(m);
           }
           return {
             role: m.role,
@@ -464,13 +554,16 @@ export const useChatStore = create<ChatStore>()(
             activeSkillId: m.activeSkillId,
             completedStages: m.completedStages
           };
-        });
+        }));
         set({ messages: formatted });
       }
     }),
     {
       name: 'spending-viz:chat',
-      partialize: (state) => ({ activeThreadId: state.activeThreadId }),
+      partialize: (state) => ({
+        activeThreadId: state.activeThreadId,
+        directLlmMode: state.directLlmMode,
+      }),
     }
   )
 );

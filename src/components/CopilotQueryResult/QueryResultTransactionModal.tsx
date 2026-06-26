@@ -1,6 +1,5 @@
 import { Box, Typography, Stack, Grid, Chip, Dialog, DialogTitle, DialogContent, DialogActions, Button, Divider } from '@mui/material';
-import { useDataStore } from '../../dataStore';
-import { useShallow } from 'zustand/react/shallow';
+import { useAccounts, useCategories } from '../../hooks/queries';
 
 interface Props {
   selectedTxn: any;
@@ -15,10 +14,8 @@ export function QueryResultTransactionModal({
   showRecategorize,
   setShowRecategorize,
 }: Props) {
-  const { dbAccounts, dbCategories } = useDataStore(useShallow((s) => ({
-    dbAccounts: s.accounts,
-    dbCategories: s.categories,
-  })));
+  const { data: dbAccounts = [] } = useAccounts();
+  const { data: dbCategories = [] } = useCategories();
 
   if (!selectedTxn) return null;
 
