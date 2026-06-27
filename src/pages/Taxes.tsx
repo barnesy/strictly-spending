@@ -25,11 +25,14 @@ import {
   DialogActions,
   Button,
   Stack,
+  CircularProgress
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DownloadIcon from '@mui/icons-material/Download';
 import Papa from 'papaparse';
-import { useSettings, useTaxTransactions, useCategories, useTaxRules, useAccounts, useDocuments } from '../hooks/queries';
+import { useDeferredRender } from '../hooks/useDeferredRender';
+import PageLoader from '../components/PageLoader';
+import { useSettings, useTaxTransactions, useCategories, useTaxRules, useAccounts, useDocuments, useTransactions } from '../hooks/queries';
 import { api } from '../api';
 import type { TaxSettings, AppDocument } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
@@ -96,8 +99,9 @@ export default function Taxes() {
   const currentTaxYear = taxSettings.taxYear;
 
   const { data: documents = [] } = useDocuments();
-  const { data: taxRules = [] } = useTaxRules();
-  const { data: transactions = [] } = useTaxTransactions(currentTaxYear);
+  const shouldRender = useDeferredRender();
+  const { data: taxRules = [], isLoading: isRulesLoading } = useTaxRules();
+  const { data: transactions = [], isLoading: isTransactionsLoading } = useTransactions();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
 
@@ -698,6 +702,8 @@ export default function Taxes() {
 
     setIsCompiling(false);
   };
+
+  if (!shouldRender) return <PageLoader isLoading={true}><div /></PageLoader>;
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, md: 0 } }}>

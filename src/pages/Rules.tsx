@@ -39,6 +39,7 @@ import {
   useDefaultLayout,
 } from 'react-resizable-panels';
 import { subtleScrollSx } from '../styles';
+import { useDeferredRender } from '../hooks/useDeferredRender';
 
 import type { CategoryRule, Transaction } from '../types';
 import { normalizeForMatch } from '../lib';
@@ -92,6 +93,7 @@ export default function Rules() {
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const shouldRender = useDeferredRender();
 
   const panelIds = useMemo(() => [
     ...(filtersOpen ? ['filters'] : []),
@@ -182,7 +184,9 @@ export default function Rules() {
     setPage(0);
   }
 
-  // matchCounts are now loaded directly from the backend hook
+  if (!shouldRender) {
+    return <PageLoader isLoading={true}><div /></PageLoader>;
+  }
 
   return (
     <PageLoader isLoading={isLoading}>

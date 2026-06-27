@@ -1,5 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { api } from '../../api';
+import PageLoader from '../../components/PageLoader';
+import { useDeferredRender } from '../../hooks/useDeferredRender';
+import { useTheme } from '@mui/material/styles';
 import { DocumentsList } from './DocumentsList';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -17,7 +20,7 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { useDocuments, useCategories } from '../../hooks/queries';
+import { useDocuments, useCategories, useAccounts } from '../../hooks/queries';
 import { usePutDocument, useDeleteDocument, useDeleteDocumentContent, useUpdateTransaction } from '../../hooks/mutations';
 import { open } from '@tauri-apps/plugin-shell';
 import type { AppDocument } from '../../types';
@@ -37,8 +40,12 @@ export default function Documents() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
 
-  const { data: documents = [] } = useDocuments();
+  const { data: documents = [], isLoading } = useDocuments();
   const { data: categoriesList = [] } = useCategories();
+  const { data: accounts = [] } = useAccounts();
+  const theme = useTheme();
+  const shouldRender = useDeferredRender();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const putDocument = usePutDocument();
   const deleteDocument = useDeleteDocument();
@@ -118,6 +125,8 @@ export default function Documents() {
       setSnackbarMessage('Failed to update category.');
     }
   }, []);
+
+  if (!shouldRender) return <PageLoader isLoading={true}><div /></PageLoader>;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>

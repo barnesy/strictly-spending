@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
+import { useTheme } from '@mui/material/styles';
 import { useUpdateCategory } from '../hooks/mutations';
 import {
   Stack,
@@ -25,6 +26,7 @@ import DataTable from '../components/DataTable';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
+import { useDeferredRender } from '../hooks/useDeferredRender';
 import {
   Group as PanelGroup,
   Panel,
@@ -68,6 +70,10 @@ export default function Categories() {
   const { data: counts = {} } = useCategoryTransactionCounts();
 
   const [searchInput, setSearchInput] = useState('');
+  const theme = useTheme();
+
+  const shouldRender = useDeferredRender();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -110,6 +116,10 @@ export default function Categories() {
   };
 
   const isLoading = isCatLoading || categories === undefined;
+
+  if (!shouldRender) {
+    return <PageLoader isLoading={true}><div /></PageLoader>;
+  }
 
   return (
     <PageLoader isLoading={isLoading}>

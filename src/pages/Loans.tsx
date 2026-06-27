@@ -60,7 +60,8 @@ import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore
 
 import { useTheme } from '@mui/material/styles';
 
-
+import { useDeferredRender } from '../hooks/useDeferredRender';
+import PageLoader from '../components/PageLoader';
 
 import { usdCents } from '../lib';
 
@@ -141,6 +142,7 @@ export default function Loans() {
   const theme = useTheme();
   const demoMode = useFilters((s) => s.demoMode);
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+  const shouldRender = useDeferredRender();
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [activeLoanId, setActiveLoanId] = useState<number | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -171,7 +173,7 @@ export default function Loans() {
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   });
 
-  const { data: loans = [] } = useLoans();
+  const { data: loans = [], isLoading } = useLoans();
 
   const activeLoans = useMemo(() => {
     return loans.filter((l) => l.enabled !== false);
@@ -854,6 +856,7 @@ export default function Loans() {
     );
   }
 
+  if (!shouldRender) return <PageLoader isLoading={true}><div /></PageLoader>;
   if (!scheduleData || !currentConfig) return null;
 
   const cardWidth = currentConfig.propertyValue ? 2.4 : 3;

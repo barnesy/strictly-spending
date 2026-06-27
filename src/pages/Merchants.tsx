@@ -53,6 +53,7 @@ import {
 import { usd, usdCents } from '../lib';
 import PageLoader from '../components/PageLoader';
 import AnimatedLogo from '../components/AnimatedLogo';
+import { useDeferredRender } from '../hooks/useDeferredRender';
 
 function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
   return (
@@ -96,6 +97,7 @@ interface MerchantGroup {
 
 export default function Merchants() {
   const { data: merchantGroups = [], isLoading: isMerchantsLoading } = useMerchantGroups();
+  const shouldRender = useDeferredRender();
   const { data: allCategories = [], isLoading: isCatLoading } = useCategories();
   const { data: taxRules = [] } = useTaxRules();
   const bulkUpdateTransactions = useBulkUpdateTransactions();
@@ -481,6 +483,8 @@ export default function Merchants() {
       setMergingIndex(null);
     }
   };
+
+  if (!shouldRender) return <PageLoader isLoading={true}><div /></PageLoader>;
 
   return (
     <PageLoader isLoading={isLoading}>
