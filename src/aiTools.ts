@@ -6,8 +6,8 @@ export interface AITool {
 }
 
 export const AVAILABLE_TOOLS: AITool[] = AGENT_TOOLS.map(t => ({
-  name: t.name,
-  description: t.desc
+  name: t.function.name,
+  description: t.function.description
 }));
 
 export function getToolsXmlBlock(): string {

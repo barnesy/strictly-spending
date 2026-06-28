@@ -66,10 +66,20 @@ export class LocalAI implements AIProvider {
     responseSchema?: any,
     onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void,
     signal?: AbortSignal,
-    directMode?: boolean
-  ): Promise<string> {
+    directMode?: boolean,
+    toolsOverride?: any[]
+  ): Promise<{ content: string; tool_calls?: any[] }> {
     this.syncActiveProvider();
-    return this.activeProvider.chatCopilot(messages, stateContext, overrideSystemPrompt, responseSchema, onChunk, signal, directMode);
+    return await this.activeProvider.chatCopilot(
+      messages,
+      stateContext,
+      overrideSystemPrompt,
+      responseSchema,
+      onChunk,
+      signal,
+      directMode,
+      toolsOverride
+    );
   }
 
   async reviewTransactions(transactions: any[], availableCategories: string[], signal?: AbortSignal): Promise<string[]> {

@@ -1,5 +1,4 @@
 import type { AIProvider, ChatMessage } from '../types';
-import { COPILOT_RESPONSE_SCHEMA } from '../types';
 import { handleOllamaError, safeFetch } from '../utils';
 import { getSystemPrompt, fewShots } from '../prompts';
 import { parseAIResponse } from '../utils';
@@ -63,61 +62,23 @@ export class OllamaProvider implements AIProvider {
   async pullModel(progressCallback?: (progress: number, status: string) => void): Promise<void> {
     this.pullAbortController = new AbortController();
     try {
-      const response = await safeFetch('http://localhost:11434/api/pull', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: this.modelName }),
-        signal: this.pullAbortController.signal as any,
+      const { invoke } = await import('@tauri-apps/api/core');
+      const { listen } = await import('@tauri-apps/api/event');
+      
+      const unlisten = await listen<{ pct: number; status: string }>('ollama_pull_progress', (event) => {
+        const payload = event.payload;
+        if (payload.status === 'success') {
+            this.isLoaded = true;
+        }
+        progressCallback?.(payload.pct, payload.status);
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to pull model: ${response.statusText}`);
+      try {
+        await invoke('pull_ollama_model', { name: this.modelName });
+        this.isLoaded = true;
+      } finally {
+        unlisten();
       }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('ReadableStream not supported in this browser.');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          let progressInfo;
-          try {
-            progressInfo = JSON.parse(line);
-          } catch (e) {
-            console.error('Failed to parse pull progress line:', e);
-            continue;
-          }
-
-          if (progressInfo.error) {
-            throw new Error(progressInfo.error);
-          }
-
-          if (progressInfo.status === 'success') {
-            this.isLoaded = true;
-            progressCallback?.(100, 'success');
-            return;
-          }
-          
-          if (progressInfo.total) {
-            const pct = Math.round((progressInfo.completed / progressInfo.total) * 100);
-            progressCallback?.(pct, progressInfo.status || 'downloading');
-          } else {
-            progressCallback?.(0, progressInfo.status || 'initializing');
-          }
-        }
-      }
-      
-      this.isLoaded = true;
     } catch (e: any) {
       this.isLoaded = false;
       if (e.name === 'AbortError') {
@@ -144,8 +105,9 @@ export class OllamaProvider implements AIProvider {
     responseSchema?: any,
     onChunk?: (text: string, meta?: { promptTokens: number; completionTokens: number }) => void,
     signal?: AbortSignal,
-    directMode?: boolean
-  ): Promise<string> {
+    directMode?: boolean,
+    toolsOverride?: any[]
+  ): Promise<{ content: string; tool_calls?: any[]; thinking?: string }> {
     if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
 
     try {
@@ -174,16 +136,23 @@ export class OllamaProvider implements AIProvider {
       const isGemma = this.modelName.toLowerCase().includes('gemma');
       const numCtx = isGemma ? 8192 : 4096; // Adjust context based on model
 
-      const schema = directMode ? null : (responseSchema !== undefined ? responseSchema : COPILOT_RESPONSE_SCHEMA);
+      const schema = responseSchema || null;
+      
+      const { AGENT_TOOLS } = await import('../architecture');
+      const tools = toolsOverride || AGENT_TOOLS;
+      const stream = !!onChunk;
+
       const body: any = {
         model: this.modelName,
         messages: fullMessages,
-        stream: !!onChunk,
-        options: { temperature: directMode ? 0.7 : 0.2, num_predict: 1024, num_ctx: numCtx }
+        stream: stream,
+        options: { temperature: directMode ? 0.7 : 0.2, num_predict: 1024, num_ctx: numCtx },
+        tools: tools
       };
 
       if (schema) {
         body.format = schema;
+        body.tools = undefined; // If explicit format is requested, disable native tools
       }
 
       try {
@@ -207,26 +176,31 @@ export class OllamaProvider implements AIProvider {
         });
 
         try {
-          const accumulatedContent = await invoke<string>('run_copilot_chat', {
+          const result = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
             model: body.model,
             messages: body.messages,
             format: body.format || null,
-            options: body.options
+            tools: body.tools || null,
+            options: body.options,
+            stream: body.stream
           });
-          return accumulatedContent;
+          
+          return result;
         } finally {
           unlistenChunk();
           unlistenDone();
         }
       } else {
         const { invoke } = await import('@tauri-apps/api/core');
-        const text = await invoke<string>('run_copilot_chat', {
+        const result = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
           model: body.model,
           messages: body.messages,
           format: body.format || null,
-          options: body.options
+          tools: body.tools || null,
+          options: body.options,
+          stream: body.stream
         });
-        return text;
+        return result;
       }
     } catch (e: any) {
       throw handleOllamaError(e);

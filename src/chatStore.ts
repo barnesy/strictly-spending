@@ -18,7 +18,11 @@ async function getTauriInvoke() {
 export function formatModelName(name: string): string {
   if (!name) return 'AI';
   let label = name;
-  if (name === 'gemma2:2b') label = 'Gemma 2 2B';
+  if (name === 'gemma4:2b') label = 'Gemma 4 2B';
+  else if (name === 'gemma4:e4b') label = 'Gemma 4 E4B';
+  else if (name === 'gemma4:9b') label = 'Gemma 4 9B';
+  else if (name === 'gemma4:27b') label = 'Gemma 4 27B';
+  else if (name === 'gemma2:2b') label = 'Gemma 2 2B';
   else if (name === 'gemma2:9b') label = 'Gemma 2 9B';
   else if (name === 'gemma2:27b') label = 'Gemma 2 27B';
   else if (name === 'llama3.2:1b') label = 'Llama 3.2 1B';
@@ -43,10 +47,10 @@ interface ChatStore {
   modelName: string;
   setModelName: (name: string) => void;
   addMessage: (msg: ChatMessage) => void;
-  startStreamingMessage: (initialSteps?: string[], purpose?: 'tool_select' | 'explanation', resumeLastMessage?: boolean) => void;
+  startStreamingMessage: (initialSteps?: any[], purpose?: 'tool_select' | 'explanation', resumeLastMessage?: boolean) => void;
   appendStreamingToken: (token: string) => void;
-  updateStreamingMetadata: (steps: string[], tokenUsage?: { prompt: number; completion: number; total: number }) => void;
-  finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: string[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation', activeSkillId?: string, completedStages?: string[]) => Promise<void>;
+  updateStreamingMetadata: (steps: any[], tokenUsage?: { prompt: number; completion: number; total: number }) => void;
+  finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: any[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation', activeSkillId?: string, completedStages?: string[], isAborted?: boolean, error?: string) => Promise<void>;
   setMessages: (messages: ChatMessage[]) => void;
   clearMessages: () => void;
   checkAIStatus: (force?: boolean) => Promise<void>;
@@ -72,14 +76,13 @@ interface ChatStore {
   setActiveArtifact: (art: ChatArtifact | null) => void;
   lastDebugPayload: string;
   setLastDebugPayload: (payload: string) => void;
-  agentSkills: any[];
-  loadAgentSkills: () => Promise<void>;
   directLlmMode: boolean;
   setDirectLlmMode: (enabled: boolean) => void;
   deleteModel: (name: string) => Promise<void>;
 }
 
 let lastStatusCheckTime = 0;
+let currentCheckId = 0;
 
 export const useChatStore = create<ChatStore>()(
   persist(
@@ -90,7 +93,6 @@ export const useChatStore = create<ChatStore>()(
       aiProgress: '',
       aiProgressPercent: 0,
       modelName: localAI.modelName,
-      agentSkills: [],
       directLlmMode: false,
 
       setDirectLlmMode: (enabled: boolean) => set({ directLlmMode: enabled }),
@@ -117,14 +119,7 @@ export const useChatStore = create<ChatStore>()(
         }
       },
 
-      loadAgentSkills: async () => {
-        try {
-          const skills = await api.getSetting<any[]>('app:agentSkills') || [];
-          set({ agentSkills: skills });
-        } catch (e) {
-          console.error('Failed to load agent skills', e);
-        }
-      },
+
 
       setModelName: (name: string) => {
         localAI.setModelName(name);
@@ -168,13 +163,26 @@ export const useChatStore = create<ChatStore>()(
 
       startStreamingMessage: (initialSteps, purpose, resumeLastMessage) => {
         set((state) => {
+          if (resumeLastMessage) {
+            for (let i = state.messages.length - 1; i >= 0; i--) {
+              if (state.messages[i].role === 'assistant') {
+                const updated = [...state.messages];
+                updated[i] = {
+                  ...updated[i],
+                  content: '',
+                  isStreaming: true,
+                  steps: initialSteps || updated[i].steps,
+                  purpose: purpose || updated[i].purpose
+                };
+                return { messages: updated };
+              }
+            }
+          }
           const lastMsg = state.messages[state.messages.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant' && (lastMsg.isStreaming || resumeLastMessage)) {
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
             const updated = [...state.messages];
             updated[updated.length - 1] = {
               ...lastMsg,
-              content: resumeLastMessage ? '' : lastMsg.content,
-              isStreaming: true,
               steps: initialSteps || [],
               purpose: purpose || lastMsg.purpose
             };
@@ -188,14 +196,15 @@ export const useChatStore = create<ChatStore>()(
 
       appendStreamingToken: (token) => {
         set((state) => {
-          const lastMsg = state.messages[state.messages.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
-            const updated = [...state.messages];
-            updated[updated.length - 1] = {
-              ...lastMsg,
-              content: lastMsg.content + token
-            };
-            return { messages: updated };
+          for (let i = state.messages.length - 1; i >= 0; i--) {
+            if (state.messages[i].role === 'assistant' && state.messages[i].isStreaming) {
+              const updated = [...state.messages];
+              updated[i] = {
+                ...updated[i],
+                content: updated[i].content + token
+              };
+              return { messages: updated };
+            }
           }
           return {};
         });
@@ -203,53 +212,55 @@ export const useChatStore = create<ChatStore>()(
 
       updateStreamingMetadata: (steps, tokenUsage) => {
         set((state) => {
-          const lastMsg = state.messages[state.messages.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
-            const updated = [...state.messages];
-            updated[updated.length - 1] = {
-              ...lastMsg,
-              steps,
-              tokenUsage: tokenUsage || lastMsg.tokenUsage
-            };
-            return { messages: updated };
+          for (let i = state.messages.length - 1; i >= 0; i--) {
+            if (state.messages[i].role === 'assistant' && state.messages[i].isStreaming) {
+              const updated = [...state.messages];
+              updated[i] = {
+                ...updated[i],
+                steps,
+                tokenUsage: tokenUsage || updated[i].tokenUsage
+              };
+              return { messages: updated };
+            }
           }
           return {};
         });
       },
 
-      finalizeStreamingMessage: async (finalContent, actionResult, steps, tokenUsage, purpose, activeSkillId, completedStages) => {
+      finalizeStreamingMessage: async (finalContent, actionResult, steps, tokenUsage, purpose, activeSkillId, completedStages, isAborted, error) => {
+        let targetMsg: any = null;
         set((state) => {
-          const lastMsg = state.messages[state.messages.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant') {
-            const updated = [...state.messages];
-            updated[updated.length - 1] = {
-              role: 'assistant',
-              content: finalContent,
-              actionResult: actionResult !== undefined && actionResult !== null ? actionResult : lastMsg.actionResult,
-              steps: steps || lastMsg.steps,
-              tokenUsage: tokenUsage || lastMsg.tokenUsage,
-              purpose: purpose || lastMsg.purpose,
-              activeSkillId: activeSkillId !== undefined ? activeSkillId : lastMsg.activeSkillId,
-              completedStages: completedStages !== undefined ? completedStages : lastMsg.completedStages
-            };
-            return { messages: updated };
+          for (let i = state.messages.length - 1; i >= 0; i--) {
+            if (state.messages[i].role === 'assistant') {
+              const updated = [...state.messages];
+              updated[i] = {
+                ...updated[i],
+                content: finalContent,
+                actionResult: actionResult !== undefined && actionResult !== null ? actionResult : updated[i].actionResult,
+                steps: steps || updated[i].steps,
+                tokenUsage: tokenUsage || updated[i].tokenUsage,
+                purpose: purpose || updated[i].purpose,
+                isStreaming: false,
+                isAborted: isAborted || updated[i].isAborted,
+                error: error || updated[i].error,
+              };
+              targetMsg = updated[i];
+              return { messages: updated };
+            }
           }
           return {};
         });
 
         const threadId = get().activeThreadId;
-        if (threadId) {
-          const lastMsg = get().messages[get().messages.length - 1];
+        if (threadId && targetMsg) {
           await api.putMessage({
             threadId,
             role: 'assistant',
-            content: finalContent,
-            actionResult: actionResult !== undefined && actionResult !== null ? actionResult : lastMsg?.actionResult,
-            steps: steps || lastMsg?.steps,
-            tokenUsage: tokenUsage || lastMsg?.tokenUsage,
-            purpose: purpose || lastMsg?.purpose,
-            activeSkillId,
-            completedStages,
+            content: targetMsg.content,
+            thinking: targetMsg.thinking,
+            actionResult: targetMsg.actionResult,
+            steps: targetMsg.steps,
+            tokenUsage: targetMsg.tokenUsage,
             createdAt: new Date().toISOString()
           });
 
@@ -290,7 +301,15 @@ export const useChatStore = create<ChatStore>()(
         lastStatusCheckTime = now;
 
         // Otherwise check Ollama status
+        const myCheckId = ++currentCheckId;
         set({ aiStatus: 'checking', aiProgress: 'Checking Ollama status...' });
+        
+        const setIfNotPulling = (newState: any) => {
+          if (myCheckId === currentCheckId && get().aiStatus !== 'pulling') {
+            set(newState);
+          }
+        };
+
         try {
           if (isTauri) {
             const invoke = await getTauriInvoke();
@@ -306,7 +325,7 @@ export const useChatStore = create<ChatStore>()(
             }
 
             if (safeMode) {
-              set({ aiStatus: 'safemode', aiProgress: 'Safe Mode Active. Automatic checks disabled for stability.', aiLoaded: false, aiProgressPercent: 0 });
+              setIfNotPulling({ aiStatus: 'safemode', aiProgress: 'Safe Mode Active. Automatic checks disabled for stability.', aiLoaded: false, aiProgressPercent: 0 });
               return;
             }
 
@@ -315,34 +334,34 @@ export const useChatStore = create<ChatStore>()(
             if (status.running) {
               try {
                 await localAI.init();
-                set({ aiStatus: 'ready', aiProgress: 'AI Ready', aiLoaded: true, aiProgressPercent: 100 });
+                setIfNotPulling({ aiStatus: 'ready', aiProgress: 'AI Ready', aiLoaded: true, aiProgressPercent: 100 });
               } catch (e: any) {
                 if (e.message.includes('is not installed')) {
-                  set({ aiStatus: 'running', aiProgress: 'Model needs download', aiLoaded: false, aiProgressPercent: 0 });
+                  setIfNotPulling({ aiStatus: 'running', aiProgress: 'Model needs download', aiLoaded: false, aiProgressPercent: 0 });
                 } else {
-                  set({ aiStatus: 'error', aiProgress: e.message, aiLoaded: false });
+                  setIfNotPulling({ aiStatus: 'error', aiProgress: e.message, aiLoaded: false });
                 }
               }
             } else if (status.installed) {
-              set({ aiStatus: 'stopped', aiProgress: 'Ollama is installed but not running.', aiLoaded: false });
+              setIfNotPulling({ aiStatus: 'stopped', aiProgress: 'Ollama is installed but not running.', aiLoaded: false });
             } else {
-              set({ aiStatus: 'uninstalled', aiProgress: 'Ollama is not installed.', aiLoaded: false });
+              setIfNotPulling({ aiStatus: 'uninstalled', aiProgress: 'Ollama is not installed.', aiLoaded: false });
             }
           } else {
             // Web browser connection ping
             try {
               await localAI.init();
-              set({ aiStatus: 'ready', aiProgress: 'AI Ready', aiLoaded: true, aiProgressPercent: 100 });
+              setIfNotPulling({ aiStatus: 'ready', aiProgress: 'AI Ready', aiLoaded: true, aiProgressPercent: 100 });
             } catch (e: any) {
               if (e.message.includes('is not installed')) {
-                set({ aiStatus: 'running', aiProgress: 'Model needs download', aiLoaded: false, aiProgressPercent: 0 });
+                setIfNotPulling({ aiStatus: 'running', aiProgress: 'Model needs download', aiLoaded: false, aiProgressPercent: 0 });
               } else {
-                set({ aiStatus: 'stopped', aiProgress: 'Cannot connect to Ollama. Make sure it is running on http://localhost:11434.', aiLoaded: false });
+                setIfNotPulling({ aiStatus: 'stopped', aiProgress: 'Cannot connect to Ollama. Make sure it is running on http://localhost:11434.', aiLoaded: false });
               }
             }
           }
         } catch (err: any) {
-          set({ aiStatus: 'error', aiProgress: `Status check failed: ${err.message}`, aiLoaded: false });
+          setIfNotPulling({ aiStatus: 'error', aiProgress: `Status check failed: ${err.message}`, aiLoaded: false });
         }
       },
 
@@ -392,6 +411,7 @@ export const useChatStore = create<ChatStore>()(
       },
 
       pullModel: async () => {
+        currentCheckId++; // cancel any pending checks
         set({ aiStatus: 'pulling', aiProgress: 'Requesting model download...', aiProgressPercent: 0 });
         try {
           await localAI.pullModel((pct, statusText) => {
@@ -413,13 +433,14 @@ export const useChatStore = create<ChatStore>()(
       },
 
       cancelPullModel: () => {
+        currentCheckId++; // cancel pending checks
         localAI.abortPull?.();
         set({ aiStatus: 'stopped', aiProgress: 'Download cancelled.', aiLoaded: false, aiProgressPercent: 0 });
         get().checkAIStatus();
       },
 
       initializeAI: async () => {
-        await get().checkAIStatus();
+        await get().checkAIStatus(true);
         const status = get().aiStatus;
 
         const isTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
@@ -427,10 +448,6 @@ export const useChatStore = create<ChatStore>()(
           await get().installOllama();
         } else if (status === 'stopped' && isTauri) {
           await get().startOllama();
-        } else if (status === 'running') {
-          await get().pullModel();
-        } else if (status === 'ready') {
-          // Already ready
         }
       },
 
@@ -533,12 +550,10 @@ export const useChatStore = create<ChatStore>()(
           return {
             role: m.role,
             content: m.content,
+            thinking: m.thinking,
             actionResult: m.actionResult,
             steps: m.steps,
-            tokenUsage: m.tokenUsage,
-            purpose: m.purpose,
-            activeSkillId: m.activeSkillId,
-            completedStages: m.completedStages
+            tokenUsage: m.tokenUsage
           };
         }));
         set({ messages: formatted });

@@ -33,7 +33,7 @@ export class SubscriptionAlertsTool implements AIToolHandler {
 - Duplicate Charges: ${alerts.duplicateCharges.length}
 - Overlapping Subscriptions: ${alerts.overlappingSubscriptions.length}
 
-If these results are sufficient to answer the user's question, explain them to the user in a detailed response in the 'body' field and set 'agent_action.action' to 'none'. Cite the exact numbers of spikes, duplicates, and overlaps found. ALL numbers in your final answer MUST be bolded and formatted to exactly the second decimal place (.00) (e.g. **1.00** spike, **2.00** duplicates).`;
+If you need to perform more actions, use the appropriate tool. If these results are sufficient to answer the user's question, explain them to the user in a detailed response. Cite the exact numbers of spikes, duplicates, and overlaps found. ALL numbers in your final answer MUST be bolded and formatted to exactly the second decimal place (.00) (e.g. **1.00** spike, **2.00** duplicates).`;
 
     return {
       systemResultsMsg,

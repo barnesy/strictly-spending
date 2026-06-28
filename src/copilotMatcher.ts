@@ -105,44 +105,19 @@ export function cleanChatHistory(messages: ChatMessage[]): ChatMessage[] {
       continue;
     }
 
-    if (m.role === 'system') {
-      // Skip all system results messages from previous turns.
+    if (m.role === 'system' || m.role === 'tool') {
+      // Skip all system and tool results messages from previous turns.
       continue;
     }
 
     if (m.role === 'assistant') {
-      try {
-        let jsonStr = m.content.trim();
-        const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (match) {
-          jsonStr = match[1].trim();
-        } else {
-          const start = jsonStr.indexOf('{');
-          const end = jsonStr.lastIndexOf('}');
-          if (start >= 0 && end >= 0) {
-            jsonStr = jsonStr.slice(start, end + 1);
-          }
-        }
-        const parsed = JSON.parse(jsonStr);
-        const action = parsed?.agent_action?.action || parsed?.action;
-
-        // Skip Stage 1 intermediate assistant query messages (which have a query action but no actionResult)
-        if (action && action !== 'none' && action !== 'filter' && action !== 'navigate' && !m.actionResult) {
-          continue;
-        }
-
-        // Clean Stage 2 assistant messages or final responses to plain text body/explanation
-        if (parsed.body) {
-          cleaned.push({ role: 'assistant' as const, content: parsed.body });
-          continue;
-        }
-        if (parsed.explanation) {
-          cleaned.push({ role: 'assistant' as const, content: parsed.explanation });
-          continue;
-        }
-      } catch {
-        // Fall back to original content if not JSON
-      }
+      // Strip any thinking blocks from previous turns to prevent context loops
+      const strippedContent = m.content.replace(/<thinking>[\s\S]*?(?:<\/thinking>|$)/g, '').trim();
+      
+      // Preserve the message, keeping tool_calls intact if they exist natively.
+      // We no longer manually parse JSON because native tools use the API payload directly.
+      cleaned.push({ ...m, content: strippedContent });
+      continue;
     }
 
     cleaned.push(m);

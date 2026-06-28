@@ -49,7 +49,7 @@ export class SpendingAnomaliesTool implements AIToolHandler {
 - Outlier Transactions: ${anomalies.outliers.length}
 - High Growth Categories: ${anomalies.categorySpikes.length}
 
-If these results are sufficient to answer the user's question, explain them to the user in a detailed response in the 'body' field and set 'agent_action.action' to 'none'. Cite the exact numbers of outliers and growth categories found. ALL numbers in your final answer MUST be bolded and formatted to exactly the second decimal place (.00) (e.g. **1.00** outlier, **2.00** categories).`;
+If you need to perform more actions, use the appropriate tool. If these results are sufficient to answer the user's question, explain them to the user in a detailed response. Cite the exact numbers of outliers and growth categories found. ALL numbers in your final answer MUST be bolded and formatted to exactly the second decimal place (.00) (e.g. **1.00** outlier, **2.00** categories).`;
 
     return {
       systemResultsMsg,

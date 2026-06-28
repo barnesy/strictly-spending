@@ -71,7 +71,7 @@ export class QueryDataTool implements AIToolHandler {
       categoryTypes[c.name.toLowerCase()] = c.type;
     }
 
-    const budgets = store.budgets;
+    const budgets = store.budgets || [];
     const recurrenceMapObj = await buildRecurrenceMap(false);
     const recurrenceMap = new Map(Object.entries(recurrenceMapObj));
     const forecast = await buildForecast(false);
@@ -195,9 +195,9 @@ export class QueryDataTool implements AIToolHandler {
 - Average Transaction: $${metrics.spendAverage.toFixed(2)}
 - Total Monthly Budget Limit: $${metrics.totalBudget.toFixed(2)}${breakdownText}
 
-Proceed with your final response by setting 'agent_action.action' to 'none'.
-Your final answer MUST be detailed and insightful, using the exact aggregated numbers returned above (dollar amounts, averages). Focus on summarizing the high-level insights. Do NOT output a list or table of the Recent Transactions. Never use placeholders like $XXX or generalize. Explicitly compute differences and percentages when comparing periods.
-ALL numbers in your final answer MUST be bolded (e.g. **$391.29**, **6.00** transactions, **+56.50%**). Numbers, counts, percentages, and currency values MUST never be rounded to a whole integer, except to the second decimal place (.00) (e.g. write **$250.00**, NEVER $250; write **6.00** transactions, NEVER 6).`;
+Analyze these results and determine your next step. If you need to perform more actions, use the appropriate tool. If you are ready to provide a final response, do so.
+When providing your final answer, it MUST be detailed and insightful, using the exact aggregated numbers returned above (dollar amounts, averages). Focus on summarizing the high-level insights. Do NOT output a list or table of the Recent Transactions. Explicitly compute differences and percentages when comparing periods.
+ALL numbers in your final answer MUST be bolded (e.g. **$391.29**, **6.00** transactions, **+56.50%**).`;
 
     const actionResult = {
       action: 'query_data',

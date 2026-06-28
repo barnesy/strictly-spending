@@ -43,7 +43,11 @@ export class ToolRegistry {
 export const toolRegistry = new ToolRegistry();
 
 import { QueryDataTool } from './QueryDataTool';
-import { GenerateDocumentTool } from './GenerateDocumentTool';
+import { ExportTransactionsTool } from './ExportTransactionsTool';
+import { CreateArtifactTool } from './CreateArtifactTool';
+import { UpdateArtifactTool } from './UpdateArtifactTool';
 
 toolRegistry.register(new QueryDataTool());
-toolRegistry.register(new GenerateDocumentTool());
+toolRegistry.register(new ExportTransactionsTool());
+toolRegistry.register(new CreateArtifactTool());
+toolRegistry.register(new UpdateArtifactTool());

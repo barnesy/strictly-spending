@@ -37,13 +37,13 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
       const messages = parsed.messages || [];
       const systemMsg = messages.find((m: any) => m.role === 'system');
       
-      // 1. Missing Schema
-      if (!parsed.format) {
-        issues.push({ type: 'warning', title: 'Missing JSON Schema', message: 'No JSON schema is enforced for this request. The model may output unstructured text.' });
+      // 1. Missing Native Tools
+      if (!parsed.tools || parsed.tools.length === 0) {
+        issues.push({ type: 'warning', title: 'Missing Agent Tools', message: 'No native tools are configured for this request. The model will not be able to interact with the application or access live data.' });
       }
       
       // 2. Missing Skills
-      if (systemMsg && !systemMsg.content.includes('## Custom Capabilities')) {
+      if (systemMsg && !systemMsg.content.includes('<custom_capabilities>')) {
          issues.push({ type: 'warning', title: 'No Agent Skills', message: 'There are no active custom agent skills injected into the system prompt.' });
       }
 
@@ -112,7 +112,7 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
                 <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
                   <Chip label={`Model: ${parsed.model || 'Unknown'}`} color="primary" variant="outlined" />
                   <Chip label={`Temperature: ${parsed.options?.temperature ?? 'Default'}`} variant="outlined" />
-                  <Chip label={`Format: ${parsed.format ? 'Strict JSON Schema' : 'Text/Markdown'}`} variant="outlined" color={parsed.format ? "success" : "default"} />
+                  <Chip label={`Format: ${parsed.tools ? 'Native Tool Calling' : 'Text/Markdown'}`} variant="outlined" color={parsed.tools ? "success" : "default"} />
                 </Box>
 
                 <Typography variant="h6" gutterBottom>Detected Context Keywords</Typography>
@@ -165,9 +165,34 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
                           {m.role} {m.role === 'assistant' && i < parsed.messages.length - 2 ? '(Few-Shot Example)' : ''}
                         </Typography>
                         <Box sx={{ maxHeight: m.role === 'system' ? 300 : 'none', overflowY: 'auto' }}>
-                           <Typography variant="body2" component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 12 }}>
-                             {m.content}
-                           </Typography>
+                           {(() => {
+                             let content = m.content;
+                             let thinking = '';
+                             if (typeof content === 'string') {
+                               const thinkMatch = content.match(/<(?:thinking|\|channel>thought|\|think\|>)(?:>)?([\s\S]*?)(?:<\/(?:thinking|\|?think\|?>)|<channel\|>|$)/);
+                               if (thinkMatch) {
+                                 thinking = thinkMatch[1].trim();
+                                 content = content.replace(thinkMatch[0], '').trim();
+                               }
+                             }
+                             return (
+                               <>
+                                 {thinking && (
+                                   <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(0,0,0,0.03)', borderLeft: '3px solid #888', borderRadius: 1 }}>
+                                     <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', display: 'block', mb: 0.5 }}>
+                                       [Thinking Process]
+                                     </Typography>
+                                     <Typography variant="body2" component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 11, color: 'text.secondary' }}>
+                                       {thinking}
+                                     </Typography>
+                                   </Box>
+                                 )}
+                                 <Typography variant="body2" component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 12 }}>
+                                   {content}
+                                 </Typography>
+                               </>
+                             );
+                           })()}
                         </Box>
                       </Box>
                     );
@@ -181,15 +206,15 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
               <Box sx={{ p: 3 }}>
                 <Accordion defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography fontWeight="bold">Enforced JSON Schema</Typography>
+                    <Typography fontWeight="bold">Configured Agent Tools</Typography>
                   </AccordionSummary>
                   <AccordionDetails sx={{ bgcolor: 'background.paper', p: 2 }}>
-                    {parsed.format ? (
+                    {parsed.tools ? (
                       <Typography variant="body2" component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12 }}>
-                        {JSON.stringify(parsed.format, null, 2)}
+                        {JSON.stringify(parsed.tools, null, 2)}
                       </Typography>
                     ) : (
-                      <Typography variant="body2" color="text.secondary">No schema provided.</Typography>
+                      <Typography variant="body2" color="text.secondary">No native tools configured.</Typography>
                     )}
                   </AccordionDetails>
                 </Accordion>

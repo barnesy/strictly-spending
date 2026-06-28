@@ -28,8 +28,11 @@ export function useCopilotActionHandler() {
         signal
       });
     } catch (e: any) {
-      if (e.name !== 'AbortError' && !e.message?.includes('aborted')) {
+      if (e.name === 'AbortError' || e.message?.includes('aborted') || e.message?.includes('AbortError')) {
+        useChatStore.getState().finalizeStreamingMessage('', null, undefined, undefined, undefined, undefined, undefined, true, undefined);
+      } else {
         console.error('Copilot Execution Error:', e);
+        useChatStore.getState().finalizeStreamingMessage('', null, undefined, undefined, undefined, undefined, undefined, false, e.message || 'An error occurred during execution.');
       }
     } finally {
       setLoading(false);

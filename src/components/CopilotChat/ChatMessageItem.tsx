@@ -10,11 +10,14 @@ import {
   Stack,
   Chip,
   Collapse,
+  CircularProgress,
 } from '@mui/material';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import CheckIcon from '@mui/icons-material/Check';
 
 import {
   type ChatMessage,
@@ -28,7 +31,6 @@ import { useChatStore } from '../../chatStore';
 import SimpleMarkdown from '../SimpleMarkdown';
 import CopilotQueryResult from '../CopilotQueryResult';
 import { GenUXConfirmation, GenUXForm, ProposedCategorizationReportUX } from './GenUXComponents';
-import AnimatedLogo from '../AnimatedLogo';
 
 interface ChatMessageItemProps {
   message: ChatMessage;
@@ -94,7 +96,8 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
   const navigate = useNavigate();
   const [showInspector, setShowInspector] = useState(false);
   const [isLogsExpanded, setIsLogsExpanded] = useState<boolean | null>(null);
-  const logsExpanded = isLogsExpanded !== null ? isLogsExpanded : false;
+  const autoExpandLogs = !!message.thinking || !!message.content.match(/<(?:thinking|\|channel>thought|\|think\|>)/) || !message.content;
+  const shouldExpand = isLogsExpanded !== null ? isLogsExpanded : autoExpandLogs;
 
   const handleChatMessageLinkClick = (url: string) => {
     const match = url.match(/^doc:\/\/([^#]+)(?:#tab=(.+))?$/);
@@ -146,89 +149,67 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
     );
 
   // Memoize parsed JSON so it is only computed once per message content change
-  const parsedJson = useMemo(() => {
-    if (message.role === 'assistant') {
-      return parseAIResponse(message.content);
-    }
-    return null;
-  }, [message.content, message.role]);
-
   const hasAgentAction = useMemo(() => {
     if (isUser) return false;
-    
-    // Explicit purpose checks first
     if (message.purpose === 'tool_select') return true;
     if (message.purpose === 'explanation') return false;
-
-    // Legacy/heuristic backup
-    const trimmed = message.content.trim();
-    const isJsonLike = trimmed.startsWith('{') || trimmed.includes('"agent_action"');
-    if (isJsonLike) {
-      const action = parsedJson?.agent_action?.action || parsedJson?.action;
-      if (action) {
-        return action !== 'none';
-      }
-      const bodyText = parsedJson?.body || parsedJson?.explanation || parsedJson?.agent_action?.explanation;
-      if (bodyText && typeof bodyText === 'string') {
-        const lower = bodyText.toLowerCase();
-        return lower.includes('querying') || lower.includes('calculating') || lower.includes('scanning') || lower.includes('auditing');
-      }
-      return true; // Default while streaming json
-    }
+    // For native tool calls without explicit purpose tracking yet
+    if (message.tool_calls && message.tool_calls.length > 0) return true;
+    if (message.actionResult) return true;
+    if (Array.isArray(message.steps) && message.steps.length > 0) return true;
     return false;
-  }, [message.purpose, message.content, parsedJson, isUser]);
-
-  const streamedLogMessage = useMemo(() => {
-    if (!parsedJson) return null;
-    const bodyText = parsedJson.body || parsedJson.explanation || parsedJson.agent_action?.explanation;
-    if (bodyText && typeof bodyText === 'string') {
-      const trimmed = bodyText.trim();
-      // Don't shove giant paragraphs into the tiny execution log
-      if (trimmed.length > 100) return null;
-      return trimmed;
-    }
-    return null;
-  }, [parsedJson]);
+  }, [message.purpose, message.tool_calls, message.actionResult, message.steps, isUser]);
 
   const stepsList = useMemo(() => {
-    const baseSteps = Array.isArray(message.steps) ? [...message.steps] : [];
-    if (hasAgentAction && streamedLogMessage) {
-      const trimmedExpl = streamedLogMessage.trim();
-      if (trimmedExpl && !baseSteps.some(s => s.toLowerCase().includes(trimmedExpl.toLowerCase()))) {
-        const toolCallIdx = baseSteps.findIndex(s => s.startsWith('Tool Call:'));
-        if (toolCallIdx !== -1) {
-          baseSteps.splice(toolCallIdx, 0, trimmedExpl);
-        } else {
-          baseSteps.push(trimmedExpl);
-        }
-      }
-    }
-    return baseSteps;
-  }, [message.steps, hasAgentAction, streamedLogMessage]);
+    return Array.isArray(message.steps) ? [...message.steps] : [];
+  }, [message.steps]);
 
   const hasSteps = !isUser && stepsList.length > 0;
 
-  const hasChoices =
-    parsedJson?.gen_ux?.type === 'choices' &&
-    Array.isArray(parsedJson.gen_ux.options) &&
-    parsedJson.gen_ux.options.length > 0;
+  const hasChoices = message.actionResult?.action === 'request_user_choice' && Array.isArray(message.actionResult?.options);
+  const isConfirmation = message.actionResult?.action === 'request_user_confirmation';
+  const hasForm = message.actionResult?.action === 'request_user_form' && Array.isArray(message.actionResult?.options);
     
-  const hasSuggestedActions =
-    Array.isArray(parsedJson?.suggested_actions) &&
-    parsedJson.suggested_actions.length > 0;
+  const hasSuggestedActions = false; // Deprecated with native tool calls
 
-  const displayContent = useMemo(() => {
-    const content = renderMessageContent(message);
-    if (hasAgentAction) {
-      // If the LLM output a substantial answer but forgot to set action: 'none', 
-      // still show it to the user so it doesn't get hidden.
-      if (content.length > 100) {
-        return content;
+  const { displayContent, thinkingContent } = useMemo(() => {
+    let content = message.content || '';
+    let thinking = message.thinking || '';
+    
+    // Extract <thinking> or <|channel>thought or <|think|> block, or just 'thought' at the very beginning of the response
+    // if native thinking is not provided (for backwards compatibility with legacy chat history)
+    if (!thinking) {
+      const thinkingMatch = content.match(/^(?:<(?:thinking|\|channel>thought|\|think\|>)(?:>)?|thought[\r\n]+)([\s\S]*?)(?:<\/(?:thinking|\|?think\|?>)|<channel\|>|$)/);
+      if (thinkingMatch) {
+        thinking = thinkingMatch[1].trim();
+        content = content.replace(/^(?:<(?:thinking|\|channel>thought|\|think\|>)(?:>)?|thought[\r\n]+)[\s\S]*?(?:<\/(?:thinking|\|?think\|?>)|<channel\|>|$)/, '').trim();
       }
-      return '';
     }
-    return content;
-  }, [message, hasAgentAction]);
+    
+    // Strip leading markdown blockquotes or dots that might be leftover from LLM artifacts
+    content = content.replace(/^[\s>.]+/, '');
+
+    if (hasAgentAction) {
+      if (content.length > 50) {
+        return { displayContent: content, thinkingContent: thinking };
+      }
+      return { displayContent: '', thinkingContent: thinking };
+    }
+    return { displayContent: content, thinkingContent: thinking };
+  }, [message.content, message.thinking, hasAgentAction]);
+
+  let logLabel = "Thought process";
+  if (message.isStreaming && thinkingContent) {
+    logLabel = "Thinking...";
+  } else if (message.isStreaming && !displayContent) {
+    logLabel = "Processing...";
+  } else if (hasSteps && !thinkingContent) {
+    logLabel = "Executed tools";
+  } else if (hasSteps && thinkingContent) {
+    logLabel = "Analyzed and queried data";
+  } else if (thinkingContent) {
+    logLabel = "Analyzed request";
+  }
 
   return (
     <Box
@@ -241,140 +222,143 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
     >
       {/* Skill stages are now embedded directly in the execution log steps */}
 
-      {hasSteps && (
+      {(hasSteps || thinkingContent) && (
         <Box sx={{ width: '85%', mb: 0.5 }}>
-
-
-          {/* Collapsible Chip */}
-          <Chip
-            icon={logsExpanded ? <ExpandLessIcon sx={{ fontSize: '16px !important' }} /> : <ExpandMoreIcon sx={{ fontSize: '16px !important' }} />}
-            label={message.isStreaming ? `LLM Progress (${stepsList.length} steps)` : `Execution Log (${stepsList.length} steps)`}
-            onClick={() => setIsLogsExpanded(!logsExpanded)}
-            variant="outlined"
-            size="small"
-            clickable
-            color={message.isStreaming ? "primary" : "default"}
+          {/* Subtle Log Toggle */}
+          <Box
+            onClick={() => setIsLogsExpanded(!shouldExpand)}
             sx={{
-              fontSize: '11px',
-              fontWeight: 600,
-              height: 26,
-              borderColor: 'divider',
-              '& .MuiChip-icon': {
-                color: message.isStreaming ? 'primary.main' : 'text.secondary',
-              },
-              '&:hover': {
-                bgcolor: 'action.hover',
-              }
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.75,
+              cursor: 'pointer',
+              userSelect: 'none',
+              color: 'text.secondary',
+              opacity: 0.8,
+              transition: 'opacity 0.2s',
+              '&:hover': { opacity: 1 },
+              mb: 1
             }}
-          />
+          >
+            <ExpandMoreIcon 
+              sx={{ 
+                fontSize: '18px', 
+                transform: shouldExpand ? 'none' : 'rotate(-90deg)',
+                transition: 'transform 0.2s'
+              }} 
+            />
+            <Typography variant="body2" sx={{ fontSize: '13px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {logLabel}
+              {message.isStreaming && !displayContent && (
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'inline-block',
+                    width: '6px',
+                    height: '6px',
+                    bgcolor: 'text.secondary',
+                    borderRadius: '50%',
+                    animation: 'pulse 1.5s infinite ease-in-out',
+                    '@keyframes pulse': {
+                      '0%, 100%': { opacity: 0.3, transform: 'scale(0.8)' },
+                      '50%': { opacity: 1, transform: 'scale(1.2)' },
+                    }
+                  }}
+                />
+              )}
+            </Typography>
+            {!message.isStreaming && <CheckIcon sx={{ fontSize: '14px' }} />}
+          </Box>
 
           {/* Collapsible List Container */}
-          <Collapse in={logsExpanded} timeout="auto" unmountOnExit>
-            <Paper
-              variant="outlined"
+          <Collapse in={shouldExpand} timeout="auto" unmountOnExit>
+            <Box
               sx={{
-                p: 1.5,
-                mt: 1,
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50',
+                pl: 1.5,
+                mb: 1.5,
+                borderLeft: '2px solid',
                 borderColor: 'divider',
-                borderRadius: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 1,
+                gap: 1.5,
                 overflowY: 'auto',
                 transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                maxHeight: 150,
+                maxHeight: 400,
               }}
             >
+              {thinkingContent && (
+                <Box sx={{ color: 'text.secondary', '& p': { m: 0, mb: 1, fontStyle: 'italic' }, fontSize: '13px', lineHeight: 1.6 }}>
+                  <SimpleMarkdown content={thinkingContent} />
+                </Box>
+              )}
+
               {/* Steps List */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                {stepsList.map((step, idx) => {
-                  const isToolCall = step.includes('Tool Call:');
-                  const isError = step.startsWith('Error:');
-                  const isCorrection = step.startsWith('Self-Correction');
-                  const isLast = idx === stepsList.length - 1;
-                  const isPending = message.isStreaming && isLast;
+              {hasSteps && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: thinkingContent ? 1 : 0 }}>
+                  {stepsList.map((stepRaw, idx) => {
+                    const isObj = typeof stepRaw === 'object' && stepRaw !== null;
+                    const stepText = isObj ? stepRaw.text : stepRaw;
+                    const isToolCall = isObj ? stepRaw.type === 'tool_execution' : (stepText.includes('Executing action:') || stepText.includes('Tool Call:'));
+                    const isError = isObj ? stepRaw.type === 'error' : stepText.startsWith('Error:');
+                    const isLast = idx === stepsList.length - 1;
+                    const isPending = message.isStreaming && isLast && !displayContent;
 
-                  const isSkillStage = step.startsWith('Skill Stage:');
+                    let dotColor = 'text.secondary';
+                    let textColor: any = 'text.secondary';
+                    let fontWeight = 400;
 
-                  let dotColor = 'text.secondary';
-                  let textColor: any = 'text.primary';
-                  let fontWeight = 400;
+                    if (isToolCall) {
+                      dotColor = 'info.main';
+                      textColor = (theme: any) => theme.palette.mode === 'dark' ? 'info.light' : 'info.dark';
+                      fontWeight = 600;
+                    } else if (isError) {
+                      dotColor = 'error.main';
+                      textColor = 'error.main';
+                    }
 
-                  if (isSkillStage) {
-                    dotColor = 'success.main';
-                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'success.light' : 'success.dark';
-                    fontWeight = 600;
-                  } else if (isToolCall) {
-                    dotColor = 'info.main';
-                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'info.light' : 'info.dark';
-                    fontWeight = 500;
-                  } else if (isError) {
-                    dotColor = 'error.main';
-                    textColor = 'error.main';
-                  } else if (isCorrection) {
-                    dotColor = 'warning.main';
-                    textColor = (theme: any) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark';
-                  } else if (isLast && !message.isStreaming) {
-                    dotColor = 'success.main';
-                  }
-
-                  return (
-                    <Box
-                      key={idx}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        fontSize: '11px',
-                        color: textColor,
-                        fontWeight: fontWeight,
-                        overflow: 'hidden',
-                        animation: (message.isStreaming && isLast) ? 'slideDownAndFade 300ms ease-out forwards' : 'none',
-                        '@keyframes slideDownAndFade': {
-                          '0%': {
-                            opacity: 0,
-                            maxHeight: 0,
-                            transform: 'translateY(-4px)'
-                          },
-                          '100%': {
-                            opacity: 1,
-                            maxHeight: '60px',
-                            transform: 'translateY(0)'
+                    return (
+                      <Box
+                        key={idx}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 1.5,
+                          fontSize: '12px',
+                          color: textColor,
+                          fontWeight: fontWeight,
+                          opacity: (isPending && !isToolCall) ? 0.7 : 1,
+                          animation: (message.isStreaming && isLast) ? 'slideDownAndFade 300ms ease-out forwards' : 'none',
+                          '@keyframes slideDownAndFade': {
+                            '0%': { opacity: 0, transform: 'translateY(-4px)' },
+                            '100%': { opacity: 1, transform: 'translateY(0)' }
                           }
-                        }
-                      }}
-                    >
-                      {/* Step Indicator */}
-                      {isSkillStage ? (
-                        <Box sx={{ color: 'success.main', fontWeight: 900, flexShrink: 0, fontSize: '11px', lineHeight: 1 }}>✓</Box>
-                      ) : isPending ? (
-                        <AnimatedLogo scale={0.9} spinSpeed={0.04} />
-                      ) : (
-                        <Box
-                          sx={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            bgcolor: dotColor,
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '11px', lineHeight: 1.2 }}>
-                        {step}
-                      </Typography>
-                    </Box>
-                  );
-                })}
-              </Box>
+                        }}
+                      >
+                          <Box
+                            sx={{
+                              width: 6,
+                              height: 6,
+                              mt: 0.75,
+                              borderRadius: '50%',
+                              bgcolor: dotColor,
+                              flexShrink: 0,
+                            }}
+                          />
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '11px', lineHeight: 1.5 }}>
+                          {stepText}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
 
               {/* Token Usage Block */}
               {message.tokenUsage && (
                 <Box
                   sx={{
-                    mt: 0.5,
-                    pt: 1,
+                    mt: 1,
+                    pt: 1.5,
                     borderTop: '1px dashed',
                     borderColor: 'divider',
                     display: 'flex',
@@ -384,33 +368,33 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                   }}
                 >
                   <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '10px', fontWeight: 600 }}>
-                    Token Usage:
+                    Tokens:
                   </Typography>
                   <Chip
-                    label={`Prompt: ${message.tokenUsage.prompt}`}
+                    label={`P: ${message.tokenUsage.prompt}`}
                     size="small"
                     variant="outlined"
-                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', color: 'text.secondary' }}
+                    sx={{ fontSize: '10px', height: 20, fontFamily: 'monospace', color: 'text.secondary' }}
                   />
                   <Chip
-                    label={`Response: ${message.tokenUsage.completion}`}
+                    label={`C: ${message.tokenUsage.completion}`}
                     size="small"
                     variant="outlined"
-                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', color: 'text.secondary' }}
+                    sx={{ fontSize: '10px', height: 20, fontFamily: 'monospace', color: 'text.secondary' }}
                   />
                   <Chip
-                    label={`Total: ${message.tokenUsage.total}`}
+                    label={`T: ${message.tokenUsage.total}`}
                     size="small"
                     color="primary"
                     variant="outlined"
-                    sx={{ fontSize: '9px', height: 18, fontFamily: 'monospace', fontWeight: 600 }}
+                    sx={{ fontSize: '10px', height: 20, fontFamily: 'monospace', fontWeight: 600 }}
                   />
                 </Box>
               )}
 
               {/* Raw Tool Call Inspection inside collapsed area if exists */}
               {message.actionResult && (
-                <Box sx={{ mt: 0.5, pt: 0.5, borderTop: '1px dashed', borderColor: 'divider' }}>
+                <Box sx={{ mt: 0.5, pt: 1, borderTop: '1px dashed', borderColor: 'divider' }}>
                   <Box
                     onClick={() => setShowInspector(!showInspector)}
                     sx={{
@@ -433,12 +417,12 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                       sx={{
                         m: 0,
                         mt: 0.5,
-                        p: 1,
+                        p: 1.5,
                         bgcolor: 'background.paper',
-                        borderRadius: 1,
+                        borderRadius: 2,
                         border: '1px solid',
                         borderColor: 'divider',
-                        fontSize: '9px',
+                        fontSize: '10px',
                         fontFamily: 'monospace',
                         color: 'text.secondary',
                         overflowX: 'auto',
@@ -463,7 +447,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                   )}
                 </Box>
               )}
-            </Paper>
+            </Box>
           </Collapse>
         </Box>
       )}
@@ -472,45 +456,69 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         <Paper
           elevation={0}
           sx={{
-            p: 1.5,
-            maxWidth: '85%',
-            bgcolor: isUser ? 'primary.main' : (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'grey.100',
+            p: isUser ? 1.5 : 2,
+            maxWidth: '90%',
+            bgcolor: isUser ? 'primary.main' : 'background.paper',
+            border: isUser ? 'none' : '1px solid',
+            borderColor: 'divider',
             color: isUser ? 'primary.contrastText' : 'text.primary',
-            borderRadius: 1,
-            width: !isUser && displayContent.includes('|') ? '85%' : 'auto',
+            borderRadius: 2,
+            width: !isUser && displayContent.includes('|') ? '90%' : 'auto',
           }}
         >
           {isUser ? (
             <Typography
               className="copilot-msg-text"
-              variant="body2"
-              sx={{ whiteSpace: 'pre-wrap' }}
+              variant="body1"
+              sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}
             >
               {message.content}
             </Typography>
           ) : (
-            <SimpleMarkdown content={displayContent} onLinkClick={handleChatMessageLinkClick} />
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', textTransform: 'uppercase', fontSize: '11px', letterSpacing: 0.5 }}>
+                  {message.purpose && message.purpose !== 'tool_select' ? message.purpose : 'Response'}
+                </Typography>
+              </Box>
+              <Box sx={{ overflowX: 'auto', '& p': { mt: 0 } }}>
+                <SimpleMarkdown content={displayContent} onLinkClick={handleChatMessageLinkClick} />
+              </Box>
+              {message.isStreaming && (
+                 <Box sx={{ pl: 1, pr: 1, mt: 1, mb: 1, display: 'flex', alignItems: 'center' }}>
+                   <CircularProgress size={16} thickness={5} sx={{ color: 'primary.main' }} />
+                 </Box>
+              )}
+            </Box>
           )}
         </Paper>
-      ) : (!displayContent && message.isStreaming && !isUser && !hasAgentAction) ? (
-        <Paper
-          elevation={0}
+      ) : (!displayContent && message.isStreaming && !isUser && !hasAgentAction && !hasSteps && !thinkingContent) ? (
+        <Box
           sx={{
             p: 1.5,
-            maxWidth: '85%',
-            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'grey.100',
-            color: 'text.primary',
-            borderRadius: 1,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: 'flex-start',
             minHeight: '40px',
-            minWidth: '60px'
           }}
         >
-          <AnimatedLogo scale={0.8} spinSpeed={0.08} />
-        </Paper>
+          <CircularProgress size={18} thickness={5} sx={{ color: 'primary.main' }} />
+        </Box>
       ) : null}
+
+      {message.isAborted && (
+        <Paper elevation={0} sx={{ p: 1, pl: 1.5, pr: 1.5, mt: 0.5, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(237, 108, 2, 0.2)' : '#fff3e0', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 1, borderRadius: 2, maxWidth: '90%' }}>
+          <Typography variant="caption" sx={{ fontWeight: 600 }}>Generation interrupted.</Typography>
+          <Button size="small" color="warning" onClick={() => onSendPromptText("Continue from where you left off")} sx={{ ml: 'auto', textTransform: 'none', py: 0, minHeight: 0 }}>Continue</Button>
+        </Paper>
+      )}
+
+      {message.error && (
+        <Paper elevation={0} sx={{ p: 1, pl: 1.5, pr: 1.5, mt: 0.5, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(211, 47, 47, 0.2)' : '#ffebee', color: 'error.main', display: 'flex', alignItems: 'center', gap: 1, borderRadius: 2, maxWidth: '90%' }}>
+          <Typography variant="caption" sx={{ fontWeight: 600 }}>Error: {message.error}</Typography>
+          <Button size="small" color="error" onClick={() => onSendPromptText("Retry")} sx={{ ml: 'auto', textTransform: 'none', py: 0, minHeight: 0 }}>Retry</Button>
+        </Paper>
+      )}
 
       {hasChoices && (
         <Box
@@ -522,7 +530,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
             gap: 1,
           }}
         >
-          {parsedJson.gen_ux.options.map((opt: any, idx: number) => {
+          {message.actionResult.options.map((opt: any, idx: number) => {
             const optText =
               typeof opt === 'string'
                 ? opt
@@ -563,53 +571,24 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         </Box>
       )}
 
-      {parsedJson?.gen_ux?.type === 'confirmation' && (
+      {isConfirmation && (
         <GenUXConfirmation
-          options={parsedJson.gen_ux.options || []}
+          options={message.actionResult.options || []}
           onConfirm={(txt) => onSendPromptText(txt)}
           disabled={loading}
         />
       )}
 
-      {parsedJson?.gen_ux?.type === 'form' &&
-        Array.isArray(parsedJson.gen_ux.options) &&
-        parsedJson.gen_ux.options.length > 0 && (
+      {hasForm && (
           <GenUXForm
-            options={parsedJson.gen_ux.options}
+            options={message.actionResult.options}
             onSubmit={(txt) => onSendPromptText(txt)}
             disabled={loading}
           />
-        )}
+      )}
 
       {hasSuggestedActions && (
         <Box sx={{ width: '85%', mt: 0.5 }}>
-          <Stack direction="row" flexWrap="wrap" gap={1}>
-            {parsedJson.suggested_actions.map((act: any, idx: number) => {
-              const actText =
-                typeof act === 'string'
-                  ? act
-                  : act &&
-                    typeof act === 'object' &&
-                    ('label' in act || 'text' in act || 'content' in act)
-                  ? act.label || act.text || act.content
-                  : JSON.stringify(act);
-              return (
-                <Chip
-                  key={idx}
-                  label={actText}
-                  size="small"
-                  onClick={() => onSendPromptText(actText)}
-                  disabled={loading}
-                  clickable
-                  sx={{
-                    fontSize: '11px',
-                    fontWeight: 500,
-                    height: 24,
-                  }}
-                />
-              );
-            })}
-          </Stack>
         </Box>
       )}
 
@@ -640,66 +619,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         />
       )}
 
-      {message.actionResult?.action === 'generate_document' && (
-        <Box sx={{ width: '85%', mt: 0.5 }}>
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 2,
-              borderRadius: (theme) => `${theme.shape.borderRadius}px`,
-              borderColor: 'divider',
-              bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'grey.50',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 1.5
-            }}
-          >
-            <Box sx={{ overflow: 'hidden' }}>
-              <Typography variant="subtitle2" fontWeight="700" noWrap>
-                {message.actionResult.documentName || 'Tax Document'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" display="block">
-                Generated Document
-              </Typography>
-            </Box>
 
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {message.actionResult.content && (
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<VisibilityIcon />}
-                  onClick={() => {
-                    const docId = message.actionResult.documentId || message.actionResult.id || '';
-                    navigate(`/documents?previewId=${docId}`);
-                  }}
-                  sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}
-                >
-                  View Content
-                </Button>
-              )}
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => {
-                  const blob = new Blob([message.actionResult.content || ''], { type: 'text/markdown' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = message.actionResult.documentName || 'Tax_Document.md';
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                }}
-                sx={{ textTransform: 'none', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}
-              >
-                Download
-              </Button>
-            </Box>
-          </Paper>
-        </Box>
-      )}
 
       {isArtifact && message.actionResult && (
         <Box sx={{ width: '85%', mt: 0.5 }}>
@@ -734,9 +654,10 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 variant="contained"
                 size="small"
                 onClick={async () => {
-                  if (message.actionResult?.id) {
+                  const targetId = message.actionResult?.artifactId || message.actionResult?.id;
+                  if (targetId) {
                     const artifacts = await api.getArtifacts();
-                    const art = artifacts.find((a) => a.id === message.actionResult.id);
+                    const art = artifacts.find((a) => a.id === targetId);
                     if (art) useChatStore.getState().setActiveArtifact(art);
                   }
                 }}
@@ -775,7 +696,7 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
               sx={{
                 p: 1,
                 mt: 0.5,
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'grey.50',
+                bgcolor: 'background.default',
                 borderColor: 'divider',
                 borderRadius: 1,
                 overflowX: 'auto',
