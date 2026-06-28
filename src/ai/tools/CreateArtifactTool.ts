@@ -16,7 +16,7 @@ export class CreateArtifactTool implements AIToolHandler {
     }
 
     try {
-      const artifactId = identifier || crypto.randomUUID();
+      const artifactId = identifier || `art_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
       const now = new Date().toISOString();
       
       let oldArtifact = null;
@@ -25,12 +25,19 @@ export class CreateArtifactTool implements AIToolHandler {
         oldArtifact = artifacts.find(a => a.id === identifier);
       }
 
+      // VULNERABILITY PATCH: Prevent HITL bypass.
+      if (oldArtifact) {
+        return { 
+          feedbackError: 'SECURITY EXCEPTION: Artifact already exists. You must use the `update_artifact` tool to modify it, which requires explicit user confirmation.' 
+        };
+      }
+
       const newArtifact = {
         id: artifactId,
         type: type as 'skill' | 'markdown' | 'spreadsheet',
-        title: title || oldArtifact?.title || 'Untitled Document',
+        title: title || 'Untitled Document',
         content,
-        createdAt: oldArtifact?.createdAt || now,
+        createdAt: now,
         updatedAt: now,
       };
 

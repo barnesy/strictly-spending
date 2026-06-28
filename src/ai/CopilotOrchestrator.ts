@@ -50,13 +50,13 @@ Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}
 Global Cash Runway:
 ${JSON.stringify(runwayData, null, 2)}`;
 
-    // Evict older messages to prevent context window overflow, keeping last 10
-    const maxHistoryLength = 10;
+    // Evict older messages to prevent context window overflow, keeping last 100 for long workflows
+    const maxHistoryLength = 100;
     let conversationHistory = messages.length > maxHistoryLength 
       ? [...messages.slice(messages.length - maxHistoryLength), userMsg]
       : [...messages, userMsg];
     let loops = 0;
-    const maxLoops = 5;
+    const maxLoops = 15;
     const currentSteps: any[] = [];
     let lastQueryState: any = null;
     let lastExecutedAction: string = '';
@@ -78,6 +78,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
           ]
         : conversationHistory;
 
+      console.log("BEFORE CHAT COPILOT LOOP ITERATION", loops);
       currentSteps.push({ type: 'process', status: 'running', text: `Running ${modelName}...` });
       let currentResponse = '';
       let chatResult: { content: string; tool_calls?: any[]; thinking?: string } | null = null;
@@ -96,9 +97,12 @@ ${JSON.stringify(runwayData, null, 2)}`;
         currentResponse = chatResult.content || '';
         // Thinking is kept native, no longer wrapped in XML
       } catch (err: any) {
+        console.error("CHAT COPILOT THREW ERROR", err);
         if (err.name === 'AbortError') throw err;
         throw new Error(`LLM Error: ${err.message}`);
       }
+      
+      console.log("AFTER CHAT COPILOT, RESULT:", chatResult);
 
       // Check if provider returned a native tool call
       let actionObj: any = null;
@@ -253,6 +257,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
 
       if (systemResultsMsg) {
         // Pass tool responses back cleanly as tool messages
+        console.log("LOOP ITERATION - Pushing systemResultsMsg", systemResultsMsg);
         const contentStr = typeof systemResultsMsg.content === 'string' ? systemResultsMsg.content : JSON.stringify(systemResultsMsg.content);
         systemResultsMsg.content = systemResultsMsg.role === 'tool' ? contentStr : `Tool '${action}' returned:\n${contentStr}`;
 

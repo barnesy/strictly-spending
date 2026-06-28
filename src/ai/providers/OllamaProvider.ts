@@ -134,7 +134,7 @@ export class OllamaProvider implements AIProvider {
       }
 
       const isGemma = this.modelName.toLowerCase().includes('gemma');
-      const numCtx = isGemma ? 8192 : 4096; // Adjust context based on model
+      const numCtx = isGemma ? 131072 : 32768; // Adjust context based on model
 
       const schema = responseSchema || null;
       
@@ -146,7 +146,7 @@ export class OllamaProvider implements AIProvider {
         model: this.modelName,
         messages: fullMessages,
         stream: stream,
-        options: { temperature: directMode ? 0.7 : 0.2, num_predict: 1024, num_ctx: numCtx },
+        options: { temperature: directMode ? 0.7 : 0.2, num_predict: 8192, num_ctx: numCtx },
         tools: tools
       };
 

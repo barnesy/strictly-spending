@@ -7,9 +7,15 @@ export class UpdateArtifactTool implements AIToolHandler {
   name = 'update_artifact';
 
   async execute(actionObj: any, context: AIToolContext): Promise<ToolExecutionResult> {
-    const { id, content } = actionObj;
+    const { id, content, confirmed } = actionObj;
     if (!id || !content) {
       return { feedbackError: 'Missing required parameters: id and content are required.' };
+    }
+    
+    if (confirmed !== true) {
+      return { 
+        feedbackError: 'SECURITY EXCEPTION: You attempted to overwrite an artifact without user confirmation. You MUST call the `request_user_confirmation` tool first to ask the user if they want to proceed with the artifact update. Only after the user confirms should you call this tool again with `confirmed: true`.' 
+      };
     }
 
     try {

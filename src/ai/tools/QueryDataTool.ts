@@ -189,15 +189,11 @@ export class QueryDataTool implements AIToolHandler {
       breakdownText += `\\n\\nRecent Transactions (Top 10):\\n${recentList}`;
     }
 
-    const systemResultsMsg = `Database Query Results for categories [${queryCats.join(', ')}] between ${start} and ${end}:
-- Total Spent: $${metrics.totalSpend.toFixed(2)}
-- Number of Transactions: ${metrics.spendCount}
-- Average Transaction: $${metrics.spendAverage.toFixed(2)}
-- Total Monthly Budget Limit: $${metrics.totalBudget.toFixed(2)}${breakdownText}
+    const systemResultsMsg = `Database Query Results for categories [${queryCats.join(', ')}] between ${start} and ${end} have been successfully retrieved and automatically rendered as interactive charts/tables in the UI for the user.
 
-Analyze these results and determine your next step. If you need to perform more actions, use the appropriate tool. If you are ready to provide a final response, do so.
-When providing your final answer, it MUST be detailed and insightful, using the exact aggregated numbers returned above (dollar amounts, averages). Focus on summarizing the high-level insights. Do NOT output a list or table of the Recent Transactions. Explicitly compute differences and percentages when comparing periods.
-ALL numbers in your final answer MUST be bolded (e.g. **$391.29**, **6.00** transactions, **+56.50%**).`;
+${breakdownText}
+
+Please analyze these results and provide a 1-2 sentence high-level insight or conclusion based on the data.`;
 
     const actionResult = {
       action: 'query_data',

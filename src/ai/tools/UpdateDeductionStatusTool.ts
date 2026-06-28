@@ -11,6 +11,12 @@ export class UpdateDeductionStatusTool implements AIToolHandler {
     const deductionStatus = actionObj.deductionStatus || 'confirmed';
     const filter = actionObj.filter || {};
 
+    if (actionObj.confirmed !== true) {
+      return { 
+        feedbackError: 'SECURITY EXCEPTION: You attempted to modify financial records without user confirmation. You MUST call the `request_user_confirmation` tool first. Only after the user confirms should you call this tool again with `confirmed: true`.' 
+      };
+    }
+
     let updatedCount = 0;
     const txns = await api.getTransactions();
     const matched = txns.filter(t => {

@@ -34,7 +34,8 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
         type: "object",
         properties: {
           id: { type: "string", description: "The unique identifier of the artifact to update." },
-          content: { type: "string", description: "The updated complete content of the artifact." }
+          content: { type: "string", description: "The updated complete content of the artifact." },
+          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." }
         },
         required: ["id", "content"]
       }
@@ -142,14 +143,104 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
   {
     type: "function",
     function: {
-      name: "request_user_form",
-      description: "Render multi-field inputs for complex user parameters or onboarding. Execution pauses until submitted.",
+      name: "export_transactions",
+      description: "Export transactions to CSV or PDF.",
       parameters: {
         type: "object",
         properties: {
-          options: { type: "array", items: { type: "string" }, description: "The list of text fields to show the user." }
+          format: { type: "string", enum: ["csv", "pdf"] },
+          customStart: { type: "string" },
+          customEnd: { type: "string" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_tax_settings",
+      description: "Update the user's global tax settings.",
+      parameters: {
+        type: "object",
+        properties: {
+          taxData: { type: "object", description: "The new tax settings data." },
+          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." }
         },
-        required: ["options"]
+        required: ["taxData"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_deduction_status",
+      description: "Bulk update transaction tax deduction status.",
+      parameters: {
+        type: "object",
+        properties: {
+          isBusiness: { type: "boolean" },
+          taxCategory: { type: "string" },
+          deductionStatus: { type: "string" },
+          filter: { type: "object" },
+          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "categorize_transactions",
+      description: "Automatically categorize all uncategorized transactions.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "subscription_alerts",
+      description: "Scan transactions for subscription price spikes, duplicates, and overlaps.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "spending_anomalies",
+      description: "Scan transactions for unusual spending outliers and high-growth categories.",
+      parameters: {
+        type: "object",
+        properties: {
+          categories: { type: "array", items: { type: "string" } }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "audit_accessibility",
+      description: "Run an accessibility audit on the current dashboard page.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "project_runway",
+      description: "Calculate global financial runway based on cash, debt, and outflow.",
+      parameters: {
+        type: "object",
+        properties: {}
       }
     }
   }

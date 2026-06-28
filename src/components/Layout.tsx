@@ -39,6 +39,7 @@ const AI_NAV = [
   { to: '/artifacts', label: 'Artifacts' },
   { to: '/local-model', label: 'Local Model' },
   { to: '/ai-reference', label: 'AI Reference' },
+  { to: '/api-playground', label: 'API Playground' },
 ];
 
 const SETTINGS_NAV = [
@@ -80,7 +81,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const isPlanningActive = ['/loans', '/taxes'].includes(location.pathname);
   const isOrganizeActive = ['/categories', '/rules', '/merchants'].includes(location.pathname);
-  const isAiToolsActive = ['/artifacts', '/local-model', '/ai-reference'].includes(location.pathname);
+  const isAiToolsActive = ['/artifacts', '/local-model', '/ai-reference', '/api-playground'].includes(location.pathname);
   const isSettingsActive = ['/import', '/settings', '/animation-playground', '/theme'].includes(location.pathname);
 
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);

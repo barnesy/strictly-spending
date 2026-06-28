@@ -131,16 +131,12 @@ describe('copilotMatcher - Account Matching', () => {
 });
 
 describe('copilotMatcher - Chat History Cleaning', () => {
-  it('extracts natural language explanation from assistant JSON commands in history', () => {
+  it('strips thinking tags from assistant messages in history', () => {
     const rawMessages = [
       { role: 'user' as const, content: 'Filter to food' },
       {
         role: 'assistant' as const,
-        content: JSON.stringify({
-          action: 'filter',
-          categories: ['Groceries', 'Restaurants & Coffee'],
-          explanation: 'Showing food spending.',
-        }),
+        content: '<thinking>\nI should filter to food.\n</thinking>\nShowing food spending.',
       },
       { role: 'user' as const, content: 'Filter to credit card also' },
     ];
@@ -160,46 +156,31 @@ describe('copilotMatcher - Chat History Cleaning', () => {
     expect(cleaned).toEqual(rawMessages);
   });
 
-  it('correctly handles multi-turn two-stage query histories containing Stage 1 and Stage 2 responses', () => {
+  it('removes system and tool messages from previous turns', () => {
     const rawMessages = [
       { role: 'user' as const, content: 'How much did I spend on dining out last month?' },
       {
         role: 'assistant' as const,
-        content: JSON.stringify({
-          title: 'Dining Out',
-          body: 'Querying last month dining spend.',
-          gen_ux: { type: 'none', options: [] },
-          suggested_actions: ['Reset filters'],
-          agent_action: { action: 'query_data', categories: ['Restaurants & Coffee'], preset: 'lastMonth' }
-        })
+        content: 'I will check that for you.',
+        tool_calls: [{ id: '1', type: 'function', function: { name: 'query_data', arguments: '{}' } }]
       },
       {
-        role: 'system' as const,
-        content: 'Database Query Results for categories [Restaurants & Coffee] between ...: - Total Spent: $252.78'
+        role: 'tool' as const,
+        content: 'Total Spent: $252.78'
       },
       {
         role: 'assistant' as const,
-        content: JSON.stringify({
-          title: 'Dining Out Spend',
-          body: 'You spent $252.78 on dining out last month.',
-          gen_ux: { type: 'none', options: [] },
-          suggested_actions: ['Reset filters'],
-          agent_action: { action: 'none' }
-        }),
-        actionResult: {
-          action: 'query_data',
-          categories: ['Restaurants & Coffee'],
-          metrics: { totalSpend: 252.78 }
-        }
+        content: 'You spent $252.78 on dining out last month.'
       },
       { role: 'user' as const, content: 'Show me groceries for the year' }
     ];
 
     const cleaned = cleanChatHistory(rawMessages);
-    expect(cleaned.length).toBe(3);
+    expect(cleaned.length).toBe(4);
     expect(cleaned[0]).toEqual({ role: 'user', content: 'How much did I spend on dining out last month?' });
-    expect(cleaned[1]).toEqual({ role: 'assistant', content: 'You spent $252.78 on dining out last month.' });
-    expect(cleaned[2]).toEqual({ role: 'user', content: 'Show me groceries for the year' });
+    expect(cleaned[1]).toEqual({ role: 'assistant', content: 'I will check that for you.', tool_calls: rawMessages[1].tool_calls });
+    expect(cleaned[2]).toEqual({ role: 'assistant', content: 'You spent $252.78 on dining out last month.' });
+    expect(cleaned[3]).toEqual({ role: 'user', content: 'Show me groceries for the year' });
   });
 
   it('preserves all active loop messages that appear at or after the last user message', () => {

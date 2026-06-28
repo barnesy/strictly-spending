@@ -17,6 +17,7 @@ const Merchants = React.lazy(() => import('./pages/Merchants'));
 const Taxes = React.lazy(() => import('./pages/Taxes'));
 const Loans = React.lazy(() => import('./pages/Loans'));
 const ToolsReference = React.lazy(() => import('./pages/ToolsReference'));
+const ApiPlayground = React.lazy(() => import('./pages/ApiPlayground'));
 const Artifacts = React.lazy(() => import('./pages/Artifacts'));
 import PageLoader from './components/PageLoader';
 
@@ -40,6 +41,7 @@ export function AppRoutes() {
           <Route path="/theme" element={<ThemeManager />} />
           <Route path="/local-model" element={<LocalModel />} />
           <Route path="/ai-reference" element={<ToolsReference />} />
+          <Route path="/api-playground" element={<ApiPlayground />} />
           <Route path="/animation-playground" element={<AnimationSettings />} />
           <Route path="/merchants" element={<Merchants />} />
           <Route path="/taxes" element={<Taxes />} />

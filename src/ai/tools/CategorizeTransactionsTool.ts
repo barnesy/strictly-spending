@@ -14,7 +14,7 @@ export class CategorizeTransactionsTool implements AIToolHandler {
 
       if (result.processed_count > 0) {
         return {
-          systemResultsMsg: `Categorization Proposed Report Generated:\n- Total Transactions Analyzed: ${result.processed_count}\n- Status: ${result.interrupted ? 'Interrupted (Partial Report)' : 'Complete'}\n- Report ID: ${result.report_id}\n\nInform the user that you have generated a categorization proposal report for **${result.processed_count}.00** transactions. Bold all numbers and format to exactly the second decimal place (.00) (e.g. **12.00** transactions). Explain that they can review, edit, and approve these changes before they are applied.`,
+          systemResultsMsg: `Categorization Proposed Report Generated:\n- Total Transactions Analyzed: ${result.processed_count}\n- Status: ${result.interrupted ? 'Interrupted (Partial Report)' : 'Complete'}\n- Report ID: ${result.report_id}\n\nInform the user that you have generated a categorization proposal report for ${result.processed_count} transactions. Explain that they can review, edit, and approve these changes before they are applied.`,
           actionResult: {
             action: 'categorize_transactions',
             processedCount: result.processed_count,
