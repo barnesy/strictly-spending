@@ -52,6 +52,7 @@ export default function ArtifactViewer() {
 
   const isSkill = activeArtifact.type === 'skill';
   const isSpreadsheet = activeArtifact.type === 'spreadsheet';
+  const isPdf = activeArtifact.type === 'pdf';
   const isSaved = isSkill && activeSkills.some(s => s.name === activeArtifact.title);
 
   const parseSpreadsheet = (content: string): { headers: string[]; rows: string[][] } | null => {
@@ -163,6 +164,8 @@ export default function ArtifactViewer() {
             <PsychologyIcon color="secondary" />
           ) : isSpreadsheet ? (
             <GridOnIcon color="success" />
+          ) : isPdf ? (
+            <ArticleIcon color="error" />
           ) : (
             <ArticleIcon color="primary" />
           )}
@@ -171,7 +174,7 @@ export default function ArtifactViewer() {
               {activeArtifact.title}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: 9, letterSpacing: 0.5, fontWeight: 600 }}>
-              AI Reference {isSkill ? 'Capability' : isSpreadsheet ? 'Spreadsheet' : 'Document'}
+              AI Reference {isSkill ? 'Capability' : isSpreadsheet ? 'Spreadsheet' : isPdf ? 'PDF Document' : 'Document'}
             </Typography>
           </Box>
         </Stack>
@@ -188,7 +191,7 @@ export default function ArtifactViewer() {
             >
               Export CSV
             </Button>
-          ) : (
+          ) : isPdf ? null : (
             <Button
               size="small"
               variant="outlined"
@@ -249,7 +252,36 @@ export default function ArtifactViewer() {
 
       {/* Content Area */}
       <Box sx={{ flex: 1, p: 3, overflowY: 'auto' }}>
-        {isSkill ? (
+        {isPdf ? (
+          <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <ArticleIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+            <Typography variant="h6" color="text.primary" gutterBottom>PDF Document</Typography>
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ maxWidth: 400, mb: 3 }}>
+              This is an uploaded PDF document. To view it, please open it externally in your system's default PDF viewer.
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<OpenInNewIcon />}
+              onClick={async () => {
+                if (activeArtifact.path) {
+                  const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+                  if (isTauri) {
+                    try {
+                      const { open } = await import('@tauri-apps/plugin-shell');
+                      await open(activeArtifact.path);
+                    } catch (err) {
+                      console.error("Failed to open file", err);
+                    }
+                  } else {
+                    window.open(activeArtifact.path, '_blank');
+                  }
+                }
+              }}
+            >
+              Open PDF
+            </Button>
+          </Box>
+        ) : isSkill ? (
           <Paper
             variant="outlined"
             sx={(theme) => ({
