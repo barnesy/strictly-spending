@@ -4,6 +4,7 @@ use tauri::State;
 use crate::db::DbState;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueryDataParams {
     pub start: String,
     pub end: String,

@@ -39,6 +39,10 @@ pub struct ChatArtifact {
     pub created_at: String,
     #[serde(rename = "updatedAt")]
     pub updated_at: String,
+    pub path: Option<String>,
+    pub source: Option<String>,
+    #[serde(rename = "associatedChecklistId")]
+    pub associated_checklist_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -98,27 +102,6 @@ pub struct CsvMapping {
     pub institution: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AppDocument {
-    pub id: String,
-    pub name: String,
-    pub path: String,
-    #[serde(rename = "type")]
-    pub type_val: String,
-    pub source: String,
-    #[serde(rename = "associatedChecklistId")]
-    pub associated_checklist_id: Option<String>,
-    pub content: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: String,
-    pub metadata: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DocumentContent {
-    pub id: String,
-    pub content: String,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaxRule {
@@ -167,12 +150,11 @@ pub struct Loan {
 pub fn init_extra_tables(conn: &Connection) -> Result<()> {
     conn.execute("CREATE TABLE IF NOT EXISTS imports (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT, source TEXT, imported_at TEXT, row_count INTEGER, new_count INTEGER, duplicate_count INTEGER, content_hash TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)", [])?;
-    conn.execute("CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, type TEXT, title TEXT, content TEXT, explanation TEXT, created_at TEXT, updated_at TEXT)", [])?;
+    conn.execute("CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, type TEXT, title TEXT, content TEXT, explanation TEXT, created_at TEXT, updated_at TEXT, path TEXT, source TEXT, associated_checklist_id TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, title TEXT, created_at TEXT, updated_at TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT, role TEXT, content TEXT, action_result TEXT, created_at TEXT, active_skill_id TEXT, completed_stages TEXT, steps TEXT, token_usage TEXT, purpose TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS csv_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, header_hash TEXT, headers TEXT, date_column TEXT, description_column TEXT, amount_column TEXT, debit_column TEXT, credit_column TEXT, balance_column TEXT, account_name TEXT, account_type TEXT, institution TEXT)", [])?;
-    conn.execute("CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, name TEXT, path TEXT, type TEXT, source TEXT, associated_checklist_id TEXT, content TEXT, created_at TEXT, metadata TEXT)", [])?;
-    conn.execute("CREATE TABLE IF NOT EXISTS document_contents (id TEXT PRIMARY KEY, content TEXT)", [])?;
+
     conn.execute("CREATE TABLE IF NOT EXISTS tax_rules (id INTEGER PRIMARY KEY AUTOINCREMENT, pattern TEXT, is_business BOOLEAN, tax_category TEXT, priority INTEGER, created_at TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS loans (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, type TEXT, principal REAL, rate REAL, term_years INTEGER, start_date TEXT, category TEXT, merchant TEXT, monthly_payment REAL, property_value REAL, down_payment REAL, extra_monthly_payment REAL, extra_one_time_payment REAL, extra_one_time_month INTEGER, created_at TEXT, enabled BOOLEAN)", [])?;
     Ok(())
@@ -313,7 +295,7 @@ pub fn clear_settings(state: State<DbState>) -> Result<(), String> {
 #[tauri::command]
 pub fn get_artifacts(state: State<DbState>) -> Result<Vec<ChatArtifact>, String> {
     let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, type, title, content, explanation, created_at, updated_at FROM artifacts").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, type, title, content, explanation, created_at, updated_at, path, source, associated_checklist_id FROM artifacts").map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(ChatArtifact {
             id: row.get(0)?,
@@ -323,6 +305,9 @@ pub fn get_artifacts(state: State<DbState>) -> Result<Vec<ChatArtifact>, String>
             explanation: row.get(4)?,
             created_at: row.get(5)?,
             updated_at: row.get(6)?,
+            path: row.get(7)?,
+            source: row.get(8)?,
+            associated_checklist_id: row.get(9)?,
         })
     }).map_err(|e| e.to_string())?;
     let mut results = Vec::new();
@@ -334,8 +319,8 @@ pub fn get_artifacts(state: State<DbState>) -> Result<Vec<ChatArtifact>, String>
 pub fn add_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "INSERT INTO artifacts (id, type, title, content, explanation, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![item.id, item.type_val, item.title, item.content, item.explanation, item.created_at, item.updated_at],
+        "INSERT INTO artifacts (id, type, title, content, explanation, created_at, updated_at, path, source, associated_checklist_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![item.id, item.type_val, item.title, item.content, item.explanation, item.created_at, item.updated_at, item.path, item.source, item.associated_checklist_id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -344,8 +329,8 @@ pub fn add_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), Str
 pub fn put_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "INSERT OR REPLACE INTO artifacts (id, type, title, content, explanation, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![item.id, item.type_val, item.title, item.content, item.explanation, item.created_at, item.updated_at],
+        "INSERT OR REPLACE INTO artifacts (id, type, title, content, explanation, created_at, updated_at, path, source, associated_checklist_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![item.id, item.type_val, item.title, item.content, item.explanation, item.created_at, item.updated_at, item.path, item.source, item.associated_checklist_id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -354,8 +339,8 @@ pub fn put_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), Str
 pub fn update_artifact(state: State<DbState>, id: String, updates: ChatArtifact) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "UPDATE artifacts SET type=?1, title=?2, content=?3, explanation=?4, created_at=?5, updated_at=?6 WHERE id = ?7",
-        params![updates.type_val, updates.title, updates.content, updates.explanation, updates.created_at, updates.updated_at, id],
+        "UPDATE artifacts SET type=?1, title=?2, content=?3, explanation=?4, created_at=?5, updated_at=?6, path=?7, source=?8, associated_checklist_id=?9 WHERE id = ?10",
+        params![updates.type_val, updates.title, updates.content, updates.explanation, updates.created_at, updates.updated_at, updates.path, updates.source, updates.associated_checklist_id, id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -580,130 +565,6 @@ pub fn clear_csv_mappings(state: State<DbState>) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn get_documents(state: State<DbState>) -> Result<Vec<AppDocument>, String> {
-    let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, name, path, type, source, associated_checklist_id, content, created_at, metadata FROM documents").map_err(|e| e.to_string())?;
-    let iter = stmt.query_map([], |row| {
-        Ok(AppDocument {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            path: row.get(2)?,
-            type_val: row.get(3)?,
-            source: row.get(4)?,
-            associated_checklist_id: row.get(5)?,
-            content: row.get(6)?,
-            created_at: row.get(7)?,
-            metadata: row.get::<_, Option<String>>(8)?.map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null)),
-        })
-    }).map_err(|e| e.to_string())?;
-    let mut results = Vec::new();
-    for i in iter { results.push(i.map_err(|e| e.to_string())?); }
-    Ok(results)
-}
-
-#[tauri::command]
-pub fn add_document(state: State<DbState>, item: AppDocument) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "INSERT INTO documents (id, name, path, type, source, associated_checklist_id, content, created_at, metadata) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![item.id, item.name, item.path, item.type_val, item.source, item.associated_checklist_id, item.content, item.created_at, serde_json::to_string(&item.metadata).unwrap_or_default()],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn put_document(state: State<DbState>, item: AppDocument) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "INSERT OR REPLACE INTO documents (id, name, path, type, source, associated_checklist_id, content, created_at, metadata) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![item.id, item.name, item.path, item.type_val, item.source, item.associated_checklist_id, item.content, item.created_at, serde_json::to_string(&item.metadata).unwrap_or_default()],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn update_document(state: State<DbState>, id: String, updates: AppDocument) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "UPDATE documents SET name=?1, path=?2, type=?3, source=?4, associated_checklist_id=?5, content=?6, created_at=?7, metadata=?8 WHERE id = ?9",
-        params![updates.name, updates.path, updates.type_val, updates.source, updates.associated_checklist_id, updates.content, updates.created_at, serde_json::to_string(&updates.metadata).unwrap_or_default(), id],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn delete_document(state: State<DbState>, id: String) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute("DELETE FROM documents WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn clear_documents(state: State<DbState>) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute("DELETE FROM documents", []).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn get_document_contents(state: State<DbState>) -> Result<Vec<DocumentContent>, String> {
-    let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, content FROM document_contents").map_err(|e| e.to_string())?;
-    let iter = stmt.query_map([], |row| {
-        Ok(DocumentContent {
-            id: row.get(0)?,
-            content: row.get(1)?,
-        })
-    }).map_err(|e| e.to_string())?;
-    let mut results = Vec::new();
-    for i in iter { results.push(i.map_err(|e| e.to_string())?); }
-    Ok(results)
-}
-
-#[tauri::command]
-pub fn add_document_content(state: State<DbState>, item: DocumentContent) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "INSERT INTO document_contents (id, content) VALUES (?1, ?2)",
-        params![item.id, item.content],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn put_document_content(state: State<DbState>, item: DocumentContent) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "INSERT OR REPLACE INTO document_contents (id, content) VALUES (?1, ?2)",
-        params![item.id, item.content],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn update_document_content(state: State<DbState>, id: String, updates: DocumentContent) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "UPDATE document_contents SET content=?1 WHERE id = ?2",
-        params![updates.content, id],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn delete_document_content(state: State<DbState>, id: String) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute("DELETE FROM document_contents WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn clear_document_contents(state: State<DbState>) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute("DELETE FROM document_contents", []).map_err(|e| e.to_string())?;
-    Ok(())
-}
 
 #[tauri::command]
 pub fn get_tax_rules(state: State<DbState>) -> Result<Vec<TaxRule>, String> {

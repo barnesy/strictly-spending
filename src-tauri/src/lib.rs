@@ -24,6 +24,8 @@ pub fn run() {
             ollama::check_ollama_status,
             ollama::install_ollama,
             ollama::start_ollama,
+            ollama::pull_ollama_model,
+            ollama::delete_ollama_model,
             is_safe_mode,
             
             // ai.rs
@@ -128,18 +130,7 @@ pub fn run() {
             db_extra::update_csv_mapping,
             db_extra::delete_csv_mapping,
             db_extra::clear_csv_mappings,
-            db_extra::get_documents,
-            db_extra::add_document,
-            db_extra::put_document,
-            db_extra::update_document,
-            db_extra::delete_document,
-            db_extra::clear_documents,
-            db_extra::get_document_contents,
-            db_extra::add_document_content,
-            db_extra::put_document_content,
-            db_extra::update_document_content,
-            db_extra::delete_document_content,
-            db_extra::clear_document_contents,
+
             db_extra::get_tax_rules,
             db_extra::add_tax_rule,
             db_extra::put_tax_rule,

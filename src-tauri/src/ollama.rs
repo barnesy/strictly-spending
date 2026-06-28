@@ -302,6 +302,9 @@ pub async fn start_ollama(app: AppHandle) -> Result<(), String> {
             }
             
             let _child = cmd
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .stdin(std::process::Stdio::null())
                 .spawn()
                 .map_err(|e| e.to_string())?;
                 
@@ -313,5 +316,77 @@ pub async fn start_ollama(app: AppHandle) -> Result<(), String> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err("Starting Ollama is currently only supported on macOS and Windows. Please start it manually.".into())
+    }
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct PullProgress {
+    pub pct: f64,
+    pub status: String,
+}
+
+#[derive(serde::Deserialize)]
+struct OllamaPullResponse {
+    status: String,
+    completed: Option<u64>,
+    total: Option<u64>,
+}
+
+#[tauri::command]
+pub async fn pull_ollama_model(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    use futures_util::StreamExt;
+    use tauri::Emitter;
+    
+    let client = reqwest::Client::new();
+    let res = client.post("http://127.0.0.1:11434/api/pull")
+        .json(&serde_json::json!({ "name": name }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    let mut stream = res.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        if let Ok(bytes) = chunk {
+            // Split by newline since Ollama sends NDJSON
+            let s = String::from_utf8_lossy(&bytes);
+            for line in s.lines() {
+                if let Ok(msg) = serde_json::from_str::<OllamaPullResponse>(line) {
+                    let mut pct = 0.0;
+                    if let (Some(completed), Some(total)) = (msg.completed, msg.total) {
+                        if total > 0 {
+                            pct = (completed as f64 / total as f64) * 100.0;
+                        }
+                    }
+                    
+                    let _ = app.emit("ollama_pull_progress", PullProgress {
+                        pct,
+                        status: msg.status,
+                    });
+                }
+            }
+        }
+    }
+    
+    let _ = app.emit("ollama_pull_progress", PullProgress {
+        pct: 100.0,
+        status: "success".to_string(),
+    });
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_ollama_model(name: String) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let res = client.delete("http://127.0.0.1:11434/api/delete")
+        .json(&serde_json::json!({ "name": name }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+        
+    if res.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("Failed to delete model: {}", res.status()))
     }
 }
