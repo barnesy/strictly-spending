@@ -198,6 +198,10 @@ ${JSON.stringify(runwayData, null, 2)}`;
           lastExecutedAction = '';
         } else {
           actionResult = result.actionResult;
+          
+          // Invalidate TanStack query cache since the LLM tools may have mutated data
+          await queryClient.invalidateQueries();
+
           if (action === 'create_artifact' || action === 'update_artifact') {
              systemResultsMsg = null;
           } else {

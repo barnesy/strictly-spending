@@ -40,12 +40,10 @@ export default function ArtifactViewer() {
   const { data: settings = [] } = useSettings();
   const activeSkills = settings.find(s => s.key === 'app:agentSkills')?.value as AgentSkill[] || [];
   const [copied, setCopied] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [prevArtifact, setPrevArtifact] = useState(activeArtifact);
   if (activeArtifact !== prevArtifact) {
     setPrevArtifact(activeArtifact);
-    setIsFullscreen(false);
   }
 
   if (!activeArtifact) return null;
@@ -136,15 +134,6 @@ export default function ArtifactViewer() {
         flexDirection: 'column',
         height: '100%',
         bgcolor: 'background.default',
-        ...(isFullscreen && {
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          zIndex: 1300,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
-        }),
       }}
     >
       {/* Header */}
@@ -234,15 +223,6 @@ export default function ArtifactViewer() {
               </Button>
             </>
           )}
-
-          <IconButton
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            size="small"
-            sx={{ ml: 0.5 }}
-            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-          >
-            {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
-          </IconButton>
 
           <IconButton onClick={() => setActiveArtifact(null)} size="small" sx={{ ml: 0.5 }}>
             <CloseIcon fontSize="small" />

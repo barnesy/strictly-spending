@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, Drawer, Tooltip, IconButton, List, ListItem, ListItemButton, ListItemText, Divider } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Container, Button, Chip, Menu, MenuItem, Slide, Drawer, Tooltip, IconButton, List, ListItem, ListItemButton, ListItemText, Divider, Dialog } from '@mui/material';
 import { NavLink, useLocation } from 'react-router-dom';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -15,7 +15,10 @@ import {
 
 import AnimatedLogo from './AnimatedLogo';
 import CopilotChat from './CopilotChat';
+import ArtifactViewer from './ArtifactViewer';
 import { useFilters } from '../store';
+import { useChatStore } from '../chatStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useTransactionBounds, useUncategorizedCount } from '../hooks/queries';
 
 const PRIMARY_NAV = [
@@ -55,6 +58,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const layoutPages = ['/', '/dashboard', '/transactions', '/categories', '/rules', '/merchants', '/artifacts'];
   const isLayoutPage = layoutPages.includes(location.pathname) && isDesktop;
+
+  const { activeArtifact, setActiveArtifact } = useChatStore(useShallow(s => ({
+    activeArtifact: s.activeArtifact,
+    setActiveArtifact: s.setActiveArtifact
+  })));
   
   const [planningAnchorEl, setPlanningAnchorEl] = useState<null | HTMLElement>(null);
   const [organizeAnchorEl, setOrganizeAnchorEl] = useState<null | HTMLElement>(null);
@@ -586,7 +594,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         sx={{
           flex: 1,
           minHeight: 0,
+          minWidth: { md: 900 },
           overflowY: isLayoutPage ? 'hidden' : 'auto',
+          overflowX: 'auto',
           display: isLayoutPage ? 'flex' : 'block',
           flexDirection: isLayoutPage ? 'column' : undefined,
         }}
@@ -701,6 +711,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Drawer>
         </>
       )}
+
+      {/* Artifact Modal */}
+      <Dialog
+        fullScreen
+        open={Boolean(activeArtifact)}
+        onClose={() => setActiveArtifact(null)}
+        PaperProps={{
+          sx: {
+            bgcolor: 'background.default',
+          }
+        }}
+      >
+        {activeArtifact && <ArtifactViewer />}
+      </Dialog>
     </Box>
   );
 }

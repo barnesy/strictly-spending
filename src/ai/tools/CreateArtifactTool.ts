@@ -52,7 +52,8 @@ export class CreateArtifactTool implements AIToolHandler {
         data: { artifactId }
       };
     } catch (e: any) {
-      return { feedbackError: `Error creating artifact: ${e.message}` };
+      const errMsg = e instanceof Error ? e.message : String(e);
+      return { feedbackError: `Error creating artifact: ${errMsg}` };
     }
   }
 }
