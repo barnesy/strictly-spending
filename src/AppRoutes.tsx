@@ -11,14 +11,13 @@ const Categories = React.lazy(() => import('./pages/Categories'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const ThemeManager = React.lazy(() => import('./pages/ThemeManager'));
 const LocalModel = React.lazy(() => import('./pages/LocalModel'));
-const AgentSkills = React.lazy(() => import('./pages/AgentSkills').then(m => ({ default: m.AgentSkills })));
 const Sort = React.lazy(() => import('./pages/Sort'));
 const AnimationSettings = React.lazy(() => import('./pages/AnimationSettings'));
 const Merchants = React.lazy(() => import('./pages/Merchants'));
 const Taxes = React.lazy(() => import('./pages/Taxes'));
 const Loans = React.lazy(() => import('./pages/Loans'));
-const Documents = React.lazy(() => import('./pages/Documents'));
 const ToolsReference = React.lazy(() => import('./pages/ToolsReference'));
+const Artifacts = React.lazy(() => import('./pages/Artifacts'));
 import PageLoader from './components/PageLoader';
 
 export function AppRoutes() {
@@ -40,13 +39,12 @@ export function AppRoutes() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/theme" element={<ThemeManager />} />
           <Route path="/local-model" element={<LocalModel />} />
-          <Route path="/agent-skills" element={<AgentSkills />} />
           <Route path="/ai-reference" element={<ToolsReference />} />
           <Route path="/animation-playground" element={<AnimationSettings />} />
           <Route path="/merchants" element={<Merchants />} />
           <Route path="/taxes" element={<Taxes />} />
           <Route path="/loans" element={<Loans />} />
-          <Route path="/documents" element={<Documents />} />
+          <Route path="/artifacts" element={<Artifacts />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

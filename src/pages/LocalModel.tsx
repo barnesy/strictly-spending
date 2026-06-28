@@ -37,9 +37,16 @@ import { useShallow } from 'zustand/react/shallow';
 import { localAI } from '../ai';
 
 const RECOMMENDED_OLLAMA_MODELS = [
-  { name: 'gemma2:2b', label: 'Gemma 2 2B (Lightweight)', desc: 'Optimized for mobile, phones, and low-resource devices. Extremely fast with a tiny footprint.', size: '1.6 GB' },
-  { name: 'gemma2:9b', label: 'Gemma 2 9B (Balanced)', desc: 'Excellent for everyday laptops and modern MacBooks. Superb balance of speed and intelligence.', size: '5.5 GB' },
-  { name: 'gemma2:27b', label: 'Gemma 2 27B (High-Performance)', desc: 'Optimized for high-end systems (e.g., RTX 3080, i9, 64GB RAM). Exceptional reasoning and accuracy.', size: '16.0 GB' },
+  { name: 'gemma4:e2b', label: 'Gemma 4 E2B (Lightweight)', desc: 'Optimized for mobile and low-resource devices. Fast with a tiny footprint.', size: '7.2 GB' },
+  { name: 'gemma4:e4b', label: 'Gemma 4 E4B (Efficient)', desc: 'Efficient 4B parameter model optimized for everyday tasks.', size: '9.6 GB' },
+  { name: 'gemma4:12b', label: 'Gemma 4 12B (Balanced)', desc: 'Excellent for everyday laptops and modern MacBooks. Superb balance.', size: '25 GB' },
+  { name: 'gemma4:26b', label: 'Gemma 4 26B (High-Performance)', desc: 'Exceptional reasoning and accuracy.', size: '55 GB' },
+  { name: 'gemma4:31b', label: 'Gemma 4 31B (Ultra-Performance)', desc: 'The most advanced model in the Gemma 4 series.', size: '65 GB' },
+  { name: 'llama3:8b', label: 'Llama 3 8B (Balanced)', desc: 'Extremely popular model by Meta. Great balance of speed and capabilities.', size: '4.7 GB' },
+  { name: 'llama3:70b', label: 'Llama 3 70B (High-Performance)', desc: 'Massive model offering near GPT-4 level intelligence. Requires high-end hardware.', size: '40.0 GB' },
+  { name: 'phi3:mini', label: 'Phi-3 Mini (Lightweight)', desc: 'Microsoft’s incredibly efficient small language model. Great for quick tasks.', size: '2.3 GB' },
+  { name: 'mistral:7b', label: 'Mistral 7B (Balanced)', desc: 'High-quality 7B model by Mistral AI. Excellent alternative to Llama 3.', size: '4.1 GB' },
+  { name: 'mixtral:8x7b', label: 'Mixtral 8x7B (High-Performance)', desc: 'Powerful Mixture of Experts (MoE) model. Very capable but requires significant RAM.', size: '26.0 GB' }
 ];
 
 
@@ -174,7 +181,7 @@ export default function LocalModel() {
 Active Filters: {}
 Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
       );
-      setTestResponse(reply);
+      setTestResponse(reply.content);
     } catch (e: unknown) {
       setTestError((e as Error).message);
     } finally {

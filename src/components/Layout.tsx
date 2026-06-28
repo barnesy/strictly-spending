@@ -27,7 +27,6 @@ const PRIMARY_NAV = [
 const PLANNING_NAV = [
   { to: '/loans', label: 'Loans' },
   { to: '/taxes', label: 'Taxes' },
-  { to: '/documents', label: 'Documents' },
 ];
 
 const ORGANIZE_NAV = [
@@ -37,8 +36,8 @@ const ORGANIZE_NAV = [
 ];
 
 const AI_NAV = [
+  { to: '/artifacts', label: 'Artifacts' },
   { to: '/local-model', label: 'Local Model' },
-  { to: '/agent-skills', label: 'Agent Skills' },
   { to: '/ai-reference', label: 'AI Reference' },
 ];
 
@@ -53,7 +52,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-  const layoutPages = ['/', '/dashboard', '/transactions', '/documents', '/categories', '/rules', '/merchants'];
+  const layoutPages = ['/', '/dashboard', '/transactions', '/categories', '/rules', '/merchants', '/artifacts'];
   const isLayoutPage = layoutPages.includes(location.pathname) && isDesktop;
   
   const [planningAnchorEl, setPlanningAnchorEl] = useState<null | HTMLElement>(null);
@@ -79,9 +78,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const handleSettingsClick = (event: React.MouseEvent<HTMLButtonElement>) => setSettingsAnchorEl(event.currentTarget);
   const handleSettingsClose = () => setSettingsAnchorEl(null);
 
-  const isPlanningActive = ['/loans', '/taxes', '/documents'].includes(location.pathname);
+  const isPlanningActive = ['/loans', '/taxes'].includes(location.pathname);
   const isOrganizeActive = ['/categories', '/rules', '/merchants'].includes(location.pathname);
-  const isAiToolsActive = ['/local-model', '/agent-skills', '/ai-reference'].includes(location.pathname);
+  const isAiToolsActive = ['/artifacts', '/local-model', '/ai-reference'].includes(location.pathname);
   const isSettingsActive = ['/import', '/settings', '/animation-playground', '/theme'].includes(location.pathname);
 
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);

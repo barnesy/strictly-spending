@@ -32,9 +32,9 @@ import DownloadIcon from '@mui/icons-material/Download';
 import Papa from 'papaparse';
 import { useDeferredRender } from '../hooks/useDeferredRender';
 import PageLoader from '../components/PageLoader';
-import { useSettings, useTaxTransactions, useCategories, useTaxRules, useAccounts, useDocuments, useTransactions } from '../hooks/queries';
+import { useSettings, useTaxTransactions, useCategories, useTaxRules, useAccounts, useArtifacts, useTransactions } from '../hooks/queries';
 import { api } from '../api';
-import type { TaxSettings, AppDocument } from '../types';
+import type { TaxSettings, ChatArtifact } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
 import { SCHEDULE_C_CATEGORIES, resolveTaxDeduction } from '../taxUtils';
 
@@ -98,7 +98,7 @@ export default function Taxes() {
   const taxSettings: TaxSettings = rawSettings?.value || DEFAULT_TAX_SETTINGS;
   const currentTaxYear = taxSettings.taxYear;
 
-  const { data: documents = [] } = useDocuments();
+  const { data: artifacts = [] } = useArtifacts();
   const shouldRender = useDeferredRender();
   const { data: taxRules = [], isLoading: isRulesLoading } = useTaxRules();
   const { data: transactions = [], isLoading: isTransactionsLoading } = useTransactions();
@@ -227,14 +227,16 @@ export default function Taxes() {
 
   const handleDocumentUpload = async (documentId: string, fileInfo: { filename: string; type: string; path: string; uploadedAt: string }) => {
     const newDocId = crypto.randomUUID();
-    await api.putDocument({
+    await api.putArtifact({
       id: newDocId,
-      name: fileInfo.filename,
+      title: fileInfo.filename,
       path: fileInfo.path,
       type: fileInfo.type,
       source: 'uploaded',
       associatedChecklistId: documentId,
-      createdAt: fileInfo.uploadedAt
+      createdAt: fileInfo.uploadedAt,
+      updatedAt: fileInfo.uploadedAt,
+      content: ''
     });
 
     handleUpdateSettings({
@@ -246,9 +248,9 @@ export default function Taxes() {
   };
 
   const handleDocumentRemove = async (documentId: string) => {
-    const docToRemove = documents.find((d) => d.associatedChecklistId === documentId);
+    const docToRemove = artifacts.find((d) => d.associatedChecklistId === documentId);
     if (docToRemove) {
-      await api.deleteDocument(docToRemove.id);
+      await api.deleteArtifact(docToRemove.id);
     }
     
     const checklistCopy = { ...(taxSettings.checklist || {}) };
@@ -292,7 +294,7 @@ export default function Taxes() {
 
   const activeDocuments = REQUIRED_DOCUMENTS.filter(doc => taxSettings.hasBusiness || !doc.category.startsWith('business'));
   const totalChecklist = activeDocuments.length;
-  const completedChecklist = activeDocuments.filter(i => documents.some(d => d.associatedChecklistId === i.id)).length;
+  const completedChecklist = activeDocuments.filter(i => artifacts.some(d => d.associatedChecklistId === i.id)).length;
   const progressPercent = totalChecklist === 0 ? 0 : (completedChecklist / totalChecklist) * 100;
   const downloadFile = async (content: string | Uint8Array, filename: string, contentType: string) => {
     const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
@@ -397,11 +399,11 @@ export default function Taxes() {
     }[taxSettings.personalInfo?.filingStatus || 'single'] || 'Single';
 
     const checklistItems = activeDocuments.map(item => {
-      const doc = documents.find(d => d.associatedChecklistId === item.id);
+      const doc = artifacts.find(d => d.associatedChecklistId === item.id);
       return {
         label: item.label,
         status: doc ? 'Uploaded' : 'Missing',
-        filename: doc ? doc.name : 'N/A'
+        filename: doc ? doc.title : 'N/A'
       };
     });
 
@@ -543,8 +545,8 @@ export default function Taxes() {
     );
 
     activeDocuments.forEach(item => {
-      const doc = documents.find(d => d.associatedChecklistId === item.id);
-      lines.push([item.label, doc ? 'Uploaded' : 'Missing', doc ? doc.name : 'N/A']);
+      const doc = artifacts.find(d => d.associatedChecklistId === item.id);
+      lines.push([item.label, doc ? 'Uploaded' : 'Missing', doc ? doc.title : 'N/A']);
     });
     lines.push([]);
 
@@ -659,30 +661,27 @@ export default function Taxes() {
 
       // 5. Checklist Documents
       for (const item of activeDocuments) {
-        const doc = documents.find(d => d.associatedChecklistId === item.id);
+        const doc = artifacts.find(d => d.associatedChecklistId === item.id);
         if (doc) {
           try {
             if (doc.source === 'generated') {
-              const contentsRes = await api.getDocumentContents();
-              const contentRecord = contentsRes.find(c => c.id === doc.id);
-              const docContent = contentRecord ? contentRecord.content : (doc as any).content || '';
-              if (docContent) {
-                zip.file(doc.name, docContent);
+              if (doc.content) {
+                zip.file(doc.title, doc.content);
               }
-            } else if (doc.source === 'uploaded') {
+            } else if (doc.source === 'uploaded' && doc.path) {
               const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
               if (isTauri) {
                 try {
                   const { readFile } = await import('@tauri-apps/plugin-fs');
                   const fileBytes = await readFile(doc.path);
-                  zip.file(doc.name, fileBytes);
+                  zip.file(doc.title, fileBytes);
                 } catch (fsErr) {
                   console.error(`Could not read uploaded file at ${doc.path}:`, fsErr);
                 }
               }
             }
           } catch (docErr) {
-            console.error(`Error adding document ${doc.name} to zip:`, docErr);
+            console.error(`Error adding document ${doc.title} to zip:`, docErr);
           }
         }
       }
@@ -834,7 +833,7 @@ export default function Taxes() {
                       label={item.label}
                       accept={item.accept}
                       aiStatus={item.aiStatus}
-                      doc={documents.find(d => d.associatedChecklistId === item.id)}
+                      doc={artifacts.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
                       onRemove={handleDocumentRemove}
                       onGenerateAi={handleDocumentGenerateAi}
@@ -998,7 +997,7 @@ export default function Taxes() {
                         label={item.label}
                         accept={item.accept}
                         aiStatus={item.aiStatus}
-                        doc={documents.find(d => d.associatedChecklistId === item.id)}
+                        doc={artifacts.find(d => d.associatedChecklistId === item.id)}
                         onUpload={handleDocumentUpload}
                         onRemove={handleDocumentRemove}
                         onGenerateAi={handleDocumentGenerateAi}
@@ -1052,7 +1051,7 @@ export default function Taxes() {
                         label={item.label}
                         accept={item.accept}
                         aiStatus={item.aiStatus}
-                        doc={documents.find(d => d.associatedChecklistId === item.id)}
+                        doc={artifacts.find(d => d.associatedChecklistId === item.id)}
                         onUpload={handleDocumentUpload}
                         onRemove={handleDocumentRemove}
                         onGenerateAi={handleDocumentGenerateAi}
@@ -1109,7 +1108,7 @@ export default function Taxes() {
                       label={item.label}
                       accept={item.accept}
                       aiStatus={item.aiStatus}
-                      doc={documents.find(d => d.associatedChecklistId === item.id)}
+                      doc={artifacts.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
                       onRemove={handleDocumentRemove}
                       onGenerateAi={handleDocumentGenerateAi}
@@ -1150,7 +1149,7 @@ export default function Taxes() {
                       label={item.label}
                       accept={item.accept}
                       aiStatus={item.aiStatus}
-                      doc={documents.find(d => d.associatedChecklistId === item.id)}
+                      doc={artifacts.find(d => d.associatedChecklistId === item.id)}
                       onUpload={handleDocumentUpload}
                       onRemove={handleDocumentRemove}
                       onGenerateAi={handleDocumentGenerateAi}

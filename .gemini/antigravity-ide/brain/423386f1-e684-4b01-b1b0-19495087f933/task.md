@@ -1,0 +1,32 @@
+# Tasks: Refactor to Native Rust Backend
+
+- `[x]` Backend Implementation
+  - `[x]` Add `rusqlite` and remove `tauri-plugin-sql` in `Cargo.toml`
+  - `[x]` Implement `delete_account` and `delete_category` in `db_mut.rs`
+  - `[x]` Set up database path resolution, managed state connection, and register all commands in `lib.rs`
+- `[x]` Frontend Core Migration
+  - `[x]` Review and align `src/api.ts` with all Rust commands and ensure mutation reactivity
+  - `[x]` Refactor `src/dataStore.ts` to use `api` calls instead of Drizzle
+  - `[x]` Refactor `src/chatStore.ts` to use `api` calls and fix the legacy JSON scrubbing loop
+- `[x]` Business Logic Migration
+  - `[x]` Refactor database operations in `import.ts`, `categorize.ts`, and `recurrence.ts`
+  - `[x]` Refactor database operations in `pnlGenerator.ts` and `ruleMiner.ts`
+  - `[x]` Refactor database operations in `autoCleanup.ts` and `backup.ts`
+  - `[x]` Refactor database operations in `seed.ts` and `demoData.ts`
+- `[x]` Page Refactoring
+  - `[x]` Refactor `Dashboard.tsx` and `Budget.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `Sort.tsx` and `Categories.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `Rules.tsx` and `Merchants.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `Taxes.tsx` and `Loans.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `Settings.tsx` and `LocalModel.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `AgentSkills.tsx` and `ArtifactsLibrary.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `Documents/index.tsx` and `Documents/useDocumentContent.ts` (Migrated via transparent compatibility layer)
+- `[x]` Component Refactoring
+  - `[x]` Refactor `CopilotChat.tsx`, `ChatMessageItem.tsx`, and `GenUXComponents.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `ArtifactViewer.tsx` and `RecurringBurnCard.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `SortCategoryGrid.tsx` and `RecategorizeDialog.tsx` (Migrated via transparent compatibility layer)
+  - `[x]` Refactor `BulkRecategorizeDialog.tsx` and `CopilotQueryResult.tsx` (Migrated via transparent compatibility layer)
+- `[x]` Verification
+  - `[x]` Build the Rust backend with `cargo build`
+  - `[x]` Build the frontend with `npm run tsc`
+  - `[x]` Verify application runs correctly in dev mode

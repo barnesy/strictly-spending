@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AGENT_TOOLS, GEN_UX_COMPONENTS } from '../ai/architecture';
+import { AGENT_TOOLS } from '../ai/architecture';
 import { Box, Typography, Card, CardContent, Grid, Stack, Chip, Divider, useTheme, Tabs, Tab, Paper } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
@@ -26,7 +26,6 @@ export default function ToolsReference() {
         <Tabs value={tabValue} onChange={(_, val) => setTabValue(val)}>
           <Tab label="Architecture Overview" sx={{ textTransform: 'none', fontWeight: 600 }} />
           <Tab label="AI Tools" sx={{ textTransform: 'none', fontWeight: 600 }} />
-          <Tab label="Gen UX Components" sx={{ textTransform: 'none', fontWeight: 600 }} />
         </Tabs>
       </Box>
 
@@ -43,21 +42,21 @@ export default function ToolsReference() {
                 </Typography>
               </Stack>
               <Typography variant="body2" color="text.secondary" paragraph>
-                The Copilot AI operates using an orchestrator that evaluates a <strong>System Prompt</strong>, executes <strong>Tools</strong>, responds with <strong>Gen UX Components</strong>, and can run multi-step <strong>Skills</strong>.
+                The Copilot AI operates using an orchestrator that evaluates a <strong>System Prompt</strong>, executes native <strong>Tools</strong>, responds with generated UI, and can run multi-step <strong>Skills</strong>.
               </Typography>
               
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom mt={2}>
                 1. System Prompt
               </Typography>
               <Typography variant="body2" color="text.secondary" paragraph>
-                The System Prompt acts as the foundation of the AI's behavior. It instructs the LLM on how to format its JSON responses, which tools are available, and how to maintain a helpful financial tone without hallucinating data. The prompt also dynamically injects the user's current application state (e.g., active budgets, current route).
+                The System Prompt acts as the foundation of the AI's behavior. It instructs the LLM on which tools are available and how to maintain a helpful financial tone without hallucinating data. The prompt also dynamically injects the user's current application state (e.g., active budgets, current route).
               </Typography>
               
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom mt={2}>
                 2. Tools (Actions)
               </Typography>
               <Typography variant="body2" color="text.secondary" paragraph>
-                Tools are explicit capabilities the LLM can invoke to interact with the application. When the LLM outputs an <code>agent_action</code> with a specific tool name (like <code>query_data</code> or <code>navigate</code>), the local Copilot Orchestrator executes that tool to either modify the UI or fetch data from the local SQLite database.
+                Tools are explicit capabilities the LLM can invoke to interact with the application. When the LLM outputs a native tool call with a specific tool name (like <code>query_data</code> or <code>navigate</code>), the local Copilot Orchestrator executes that tool to either modify the UI or fetch data from the local SQLite database.
               </Typography>
 
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom mt={2}>
@@ -80,8 +79,11 @@ export default function ToolsReference() {
 
       {tabValue === 1 && (
         <Grid container spacing={3}>
-          {AGENT_TOOLS.map((tool) => (
-            <Grid size={{ xs: 12, md: 6 }} key={tool.name}>
+          {AGENT_TOOLS.map((tool) => {
+            const fn = tool.function;
+            const signature = `${fn.name}(${Object.keys(fn.parameters.properties || {}).join(', ')})`;
+            return (
+            <Grid size={{ xs: 12, md: 6 }} key={fn.name}>
               <Card 
                 variant="outlined" 
                 sx={{ 
@@ -97,7 +99,7 @@ export default function ToolsReference() {
               >
                 <CardContent sx={{ flexGrow: 1 }}>
                   <Typography variant="h6" fontWeight="600" sx={{ wordBreak: 'break-all', mb: 0.5 }}>
-                    {tool.label}
+                    {fn.name}
                   </Typography>
                   <Typography variant="caption" component="code" sx={{ 
                     fontFamily: 'monospace', 
@@ -106,59 +108,20 @@ export default function ToolsReference() {
                     display: 'inline-block', mb: 2, 
                     color: 'primary.main', fontWeight: 600 
                   }}>
-                    action: "{tool.name}"
+                    {signature}
                   </Typography>
                   
                   <Typography variant="body2" color="text.secondary" mb={3}>
-                    {tool.desc}
+                    {fn.description}
                   </Typography>
                 </CardContent>
               </Card>
             </Grid>
-          ))}
+          )})}
         </Grid>
       )}
 
-      {tabValue === 2 && (
-        <Grid container spacing={3}>
-          {GEN_UX_COMPONENTS.map((comp) => (
-            <Grid size={{ xs: 12, md: 6 }} key={comp.name}>
-              <Card 
-                variant="outlined" 
-                sx={{ 
-                  height: '100%', 
-                  display: 'flex', 
-                  flexDirection: 'column',
-                  transition: 'transform 0.2s, box-shadow 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: theme.shadows[4]
-                  }
-                }}
-              >
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" fontWeight="600" sx={{ wordBreak: 'break-all', mb: 0.5 }}>
-                    {comp.label}
-                  </Typography>
-                  <Typography variant="caption" component="code" sx={{ 
-                    fontFamily: 'monospace', 
-                    bgcolor: 'action.selected', 
-                    px: 1, py: 0.5, borderRadius: 1, 
-                    display: 'inline-block', mb: 2, 
-                    color: 'success.main', fontWeight: 600 
-                  }}>
-                    gen_ux.type: "{comp.name}"
-                  </Typography>
-                  
-                  <Typography variant="body2" color="text.secondary" mb={3}>
-                    {comp.desc}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      )}
+
 
 
     </Box>

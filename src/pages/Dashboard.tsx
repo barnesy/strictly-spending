@@ -246,7 +246,7 @@ export default function Dashboard() {
     return <PageLoader isLoading={true}>{false}</PageLoader>;
   }
 
-  if (dbTxnCount === 0) {
+  if (dbAcctCount === 0) {
     return (
       <PageLoader isLoading={isLoading}>
         <Stack spacing={3} alignItems="flex-start" sx={{ width: '100%' }}>
@@ -485,7 +485,7 @@ export default function Dashboard() {
               No transactions match current filters
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400 }}>
-              Your database has {dbTxnCount} total transactions, but none match the selected date range or active accounts.
+              None of your transactions match the selected date range or active accounts.
             </Typography>
             <Button
               variant="contained"

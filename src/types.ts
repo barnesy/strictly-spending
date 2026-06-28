@@ -305,6 +305,7 @@ export interface AgentSkill {
   name: string;
   description: string;
   systemPromptExtension: string;
+  tools?: any[];
   enabled: boolean;
   isBuiltIn?: boolean;
   isModified?: boolean;
@@ -314,12 +315,15 @@ export interface AgentSkill {
 
 export interface ChatArtifact {
   id: string;
-  type: 'skill' | 'markdown' | 'spreadsheet';
+  type: 'skill' | 'markdown' | 'spreadsheet' | 'pdf' | string;
   title: string;
   content: string;
   explanation?: string;
   createdAt: string;
   updatedAt: string;
+  path?: string;
+  source?: 'generated' | 'uploaded';
+  associatedChecklistId?: string;
 }
 
 export interface ChatThread {
@@ -329,28 +333,17 @@ export interface ChatThread {
   updatedAt: string;
 }
 
-export interface AppDocument {
-  id: string;
-  name: string;
-  path: string;
-  type: string;
-  source: 'generated' | 'uploaded';
-  associatedChecklistId?: string;
-  content?: string;
-  createdAt: string;
-  metadata?: Record<string, unknown>;
-}
-
 export interface DbChatMessage {
   id?: number;
   threadId: string;
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   actionResult?: Record<string, unknown>;
   createdAt: string;
   activeSkillId?: string;
   completedStages?: string[];
-  steps?: string[];
+  steps?: any[];
+  thinking?: string;
   tokenUsage?: {
     prompt: number;
     completion: number;

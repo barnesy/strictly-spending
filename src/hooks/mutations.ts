@@ -293,27 +293,3 @@ export const useDeleteArtifact = () => {
   });
 };
 
-// DOCUMENTS
-export const usePutDocument = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (item: any) => api.putDocument(item),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
-  });
-};
-
-export const useDeleteDocument = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => api.deleteDocument(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
-  });
-};
-
-export const useDeleteDocumentContent = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => api.deleteDocumentContent(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['document_contents'] }), // though usually we just invalidate documents
-  });
-};

@@ -194,12 +194,6 @@ export const useMessages = () => {
   });
 };
 
-export const useDocuments = () => {
-  return useQuery({
-    queryKey: ['documents'],
-    queryFn: () => api.getDocuments(),
-  });
-};
 
 export const useLoans = () => {
   return useQuery({

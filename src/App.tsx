@@ -26,7 +26,6 @@ export default function App() {
   }, [fontSize]);
 
   useEffect(() => {
-    useChatStore.getState().loadAgentSkills();
   }, []);
 
   const dynamicTheme = useMemo(() => {

@@ -6,14 +6,14 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DeleteIcon from '@mui/icons-material/Delete';
 
 import { open } from '@tauri-apps/plugin-dialog';
-import type { AppDocument } from '../types';
+import type { ChatArtifact } from '../types';
 
 interface TaxDocumentUploadProps {
   documentId: string;
   label: string;
   accept: 'pdf' | 'spreadsheet';
-  doc?: AppDocument;
-  aiStatus?: 'supported' | 'coming_soon' | 'manual';
+  aiStatus: 'supported' | 'manual' | 'coming_soon';
+  doc?: ChatArtifact;
   onUpload: (documentId: string, fileInfo: { filename: string; type: string; path: string; uploadedAt: string }) => void;
   onRemove?: (documentId: string) => void;
   onGenerateAi?: (documentId: string, label: string) => void;

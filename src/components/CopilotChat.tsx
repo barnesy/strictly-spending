@@ -19,7 +19,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useFilters } from '../store';
 import { useChatStore, formatModelName } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
-import { parseAIResponse } from '../ai';
 import { useCategories, useAccounts } from '../hooks/queries';
 
 import { executeCopilotCommand } from '../copilotMatcher';
@@ -28,7 +27,6 @@ import { ChatInput } from './CopilotChat/ChatInput';
 import { ChatMessageItem } from './CopilotChat/ChatMessageItem';
 import { DebugPromptModal } from './CopilotChat/DebugPromptModal';
 import { CONTROL_HEIGHT } from '../theme';
-import AnimatedLogo from './AnimatedLogo';
 
 
 interface CopilotChatProps {
@@ -102,8 +100,21 @@ export default function CopilotChat({
   const { data: accounts = [] } = useAccounts();
 
   const [debugModalOpen, setDebugModalOpen] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const { sendPromptText, stopPromptExecution, loading } = useCopilotActionHandler();
+
+  useEffect(() => {
+    let interval: any;
+    if (loading) {
+      interval = setInterval(() => {
+        setElapsedSeconds(s => s + 1);
+      }, 1000);
+    } else {
+      setElapsedSeconds(0);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
 
   useEffect(() => {
     const handleRunAiCategorization = () => {
@@ -127,12 +138,12 @@ export default function CopilotChat({
 
   const visibleMessages = useMemo(() => {
     return messages.filter((m) => {
-      if (m.role === 'system') return false;
+      if (m.role === 'system' || m.role === 'tool') return false;
       if (m.role === 'assistant') {
-        const parsed = parseAIResponse(m.content);
-        const action = parsed?.agent_action?.action || parsed?.action;
+        const isToolCall = m.purpose === 'tool_select' || (m.tool_calls && m.tool_calls.length > 0);
+        const action = m.actionResult?.action;
         if (
-          action &&
+          isToolCall &&
           action !== 'none' &&
           action !== 'filter' &&
           action !== 'navigate' &&
@@ -148,7 +159,12 @@ export default function CopilotChat({
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      // Only auto-scroll if we are within 150px of the bottom (Sticky Scroll)
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      if (isNearBottom) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
     }
   }, [visibleMessages, loading, aiStatus]);
 
@@ -423,12 +439,26 @@ export default function CopilotChat({
                 onApplyFilters={stableHandleApplyFilters}
               />
             ))}
-            {loading && !visibleMessages.some((m) => m.isStreaming) && (
-              <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <AnimatedLogo scale={0.8} spinSpeed={0.04} sx={{ ml: 1.5, my: 1 }} />
-              </Box>
-            )}
           </Box>
+
+          {/* Global LLM Processing Indicator */}
+          {loading && (
+             <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                px: 2,
+                py: 1.5,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.default',
+             }}>
+                <CircularProgress size={16} thickness={5} sx={{ color: 'primary.main' }} />
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, fontFamily: 'monospace', fontSize: '13px' }}>
+                  Processing... {Math.floor(elapsedSeconds / 60).toString().padStart(2, '0')}:{(elapsedSeconds % 60).toString().padStart(2, '0')}
+                </Typography>
+             </Box>
+          )}
 
           {/* Text Input */}
           <ChatInput

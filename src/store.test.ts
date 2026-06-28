@@ -654,7 +654,7 @@ vi.mock('./db', () => {
   };
 });
 
-import { parseAIResponse, extractFieldUsingRegex, getMessageDisplayContent, runSkillTestCase, localAI, forceBoldAndTwoDecimals } from './ai';
+import { parseAIResponse, extractFieldUsingRegex, getMessageDisplayContent, localAI, forceBoldAndTwoDecimals } from './ai';
 
 describe('parseAIResponse & cleanJSONString', () => {
   it('raw input formatting checks', () => {
@@ -751,99 +751,6 @@ describe('parseAIResponse & cleanJSONString', () => {
       expect(forceBoldAndTwoDecimals('[link](file:///path/to/file#L123)')).toBe('[link](file:///path/to/file#L123)');
       expect(forceBoldAndTwoDecimals('`code 123` and `<div id="1">`')).toBe('`code 123` and `<div id="1">`');
     });
-  });
-});
-
-describe('runSkillTestCase', () => {
-  beforeEach(() => {
-    localAI.isLoaded = true;
-  });
-
-  afterEach(() => {
-    localAI.isLoaded = false;
-  });
-
-  it('correctly runs execution and evaluation flow on success', async () => {
-    const chatCopilotSpy = vi.spyOn(localAI, 'chatCopilot')
-      .mockResolvedValueOnce('Assistant output for Netflix duplicates.')
-      .mockResolvedValueOnce(JSON.stringify({
-        success: true,
-        score: 95,
-        reasoning: 'The model correctly analyzed the subscription charges.'
-      }));
-
-    const skill = {
-      id: 'builtin:subscriptions',
-      name: 'Subscriptions Audit',
-      description: '...',
-      systemPromptExtension: 'Must analyze subscriptions.',
-      enabled: true
-    };
-    const testCase = {
-      prompt: 'Check subscriptions',
-      criteria: 'Must mention Netflix duplicates'
-    };
-
-    const result = await runSkillTestCase(skill, testCase);
-
-    expect(result.success).toBe(true);
-    expect(result.score).toBe(95);
-    expect(result.reasoning).toBe('The model correctly analyzed the subscription charges.');
-    expect(result.output).toBe('Assistant output for Netflix duplicates.');
-
-    expect(chatCopilotSpy).toHaveBeenCalledTimes(2);
-    chatCopilotSpy.mockRestore();
-  });
-
-  it('correctly handles fallback regex parser if evaluator output is malformed JSON', async () => {
-    const chatCopilotSpy = vi.spyOn(localAI, 'chatCopilot')
-      .mockResolvedValueOnce('Assistant response.')
-      .mockResolvedValueOnce('Evaluator response that is plain text but mentions "success": true and "score": 85 and "reasoning": "Criteria was met successfully."');
-
-    const skill = {
-      id: 'builtin:accessibility',
-      name: 'Accessibility',
-      description: '...',
-      systemPromptExtension: 'Run audit.',
-      enabled: true
-    };
-    const testCase = {
-      prompt: 'Audit page',
-      criteria: 'Must flag headings structure'
-    };
-
-    const result = await runSkillTestCase(skill, testCase);
-
-    expect(result.success).toBe(true);
-    expect(result.score).toBe(85);
-    expect(result.reasoning).toBe('Criteria was met successfully.');
-
-    chatCopilotSpy.mockRestore();
-  });
-
-  it('returns failure details when assistant execution fails', async () => {
-    const chatCopilotSpy = vi.spyOn(localAI, 'chatCopilot')
-      .mockRejectedValueOnce(new Error('Model loading timeout'));
-
-    const skill = {
-      id: 'builtin:accessibility',
-      name: 'Accessibility',
-      description: '...',
-      systemPromptExtension: 'Run audit.',
-      enabled: true
-    };
-    const testCase = {
-      prompt: 'Audit page',
-      criteria: 'Must flag headings structure'
-    };
-
-    const result = await runSkillTestCase(skill, testCase);
-
-    expect(result.success).toBe(false);
-    expect(result.score).toBe(0);
-    expect(result.reasoning).toContain('Assistant execution failure: Model loading timeout');
-
-    chatCopilotSpy.mockRestore();
   });
 });
 

@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { 
   Account, Transaction, CategoryRule, TaxRule, Category, 
   ImportBatch, MerchantOverride, Budget, ChatArtifact, ChatThread, 
-  DbChatMessage, CsvMapping, AppDocument, Loan, SortCard 
+  DbChatMessage, CsvMapping, Loan, SortCard 
 } from './types';
 
 // For settings which can be arbitrary types
@@ -11,10 +11,6 @@ export interface AppSetting {
   value: any;
 }
 
-export interface DocumentContent {
-  id: string;
-  content: string;
-}
 
 
 export interface DashboardFilters {
@@ -201,15 +197,6 @@ export const api = {
   putCsvMapping: (item: CsvMapping) => invoke<void>('put_csv_mapping', { item }),
   deleteCsvMapping: (id: number) => invoke<void>('delete_csv_mapping', { id }),
 
-  // Documents
-  getDocuments: () => invoke<AppDocument[]>('get_documents'),
-  putDocument: (item: AppDocument) => invoke<void>('put_document', { item }),
-  deleteDocument: (id: string) => invoke<void>('delete_document', { id }),
-
-  // Document Contents
-  getDocumentContents: () => invoke<DocumentContent[]>('get_document_contents'),
-  putDocumentContent: (item: DocumentContent) => invoke<void>('put_document_content', { item }),
-  deleteDocumentContent: (id: string) => invoke<void>('delete_document_content', { id }),
 
   // Tax Rules
   getTaxRules: () => invoke<TaxRule[]>('get_tax_rules'),
