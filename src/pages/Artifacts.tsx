@@ -82,7 +82,7 @@ export default function Artifacts() {
       ) : (
         <Grid container spacing={3} mt={1}>
           {sortedArtifacts.map((art) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={art.id}>
+            <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={art.id}>
               <Card
                 variant="outlined"
                 sx={{

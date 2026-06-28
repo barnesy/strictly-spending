@@ -9,6 +9,9 @@ import { queryClient } from '../queryClient';
 import { api } from '../api';
 import { buildRecurrenceMap } from '../recurrence';
 import { AGENT_TOOLS } from './architecture';
+import { invoke } from '@tauri-apps/api/core';
+import { parseAIResponse } from './utils';
+import { API_WORKFLOWS, type ApiWorkflow } from '../apiWorkflows';
 
 export interface OrchestratorContext {
   navigate: (path: string) => void;
@@ -17,6 +20,41 @@ export interface OrchestratorContext {
 }
 
 export class CopilotOrchestrator {
+  static async routeToPlaybooks(userQuery: string, modelName: string): Promise<ApiWorkflow[]> {
+    const catalog = API_WORKFLOWS.map(w => ({ id: w.id, title: w.title, description: w.description }));
+    const prompt = `You are a semantic router for an AI agent.
+Given the user query, return a JSON object with a "playbook_ids" array containing up to 2 playbook IDs that are highly relevant to helping the user accomplish their goal.
+If none are highly relevant, return an empty array.
+
+User Query: "${userQuery}"
+
+Available Playbooks:
+${JSON.stringify(catalog, null, 2)}
+
+Example output:
+{
+  "playbook_ids": ["onboard_new_user"]
+}`;
+
+    try {
+      const content = await invoke<string>('run_copilot_chat', {
+        model: modelName,
+        messages: [{ role: 'user', content: prompt }],
+        format: 'json',
+        options: { temperature: 0.1 }
+      });
+      
+      const parsed = parseAIResponse(content);
+      if (parsed && Array.isArray(parsed.playbook_ids)) {
+        const ids = new Set(parsed.playbook_ids);
+        return API_WORKFLOWS.filter(w => ids.has(w.id));
+      }
+    } catch (e) {
+      console.error("Failed to route playbooks:", e);
+    }
+    return [];
+  }
+
   static async run(
     userMsg: ChatMessage,
     context: OrchestratorContext
@@ -68,6 +106,14 @@ ${JSON.stringify(runwayData, null, 2)}`;
       loops++;
       const isLastLoop = loops === maxLoops;
 
+      if (loops === 1) {
+        currentSteps.push({ type: 'process', status: 'running', text: `Routing semantic intent...` });
+        const activePlaybooks = await this.routeToPlaybooks(userMsg.content, localAIModel.modelName);
+        const overrideSystemPrompt = await import('./prompts').then(m => m.getSystemPrompt(stateContext, undefined, JSON.stringify(activePlaybooks, null, 2)));
+        // We will pass overrideSystemPrompt below
+        (this as any)._cachedSystemPrompt = overrideSystemPrompt;
+      }
+
       const activeHistory = isLastLoop
         ? [
             ...conversationHistory,
@@ -87,7 +133,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
         chatResult = await localAIModel.chatCopilot(
           activeHistory,
           stateContext,
-          undefined, // no override system prompt
+          (this as any)._cachedSystemPrompt, // override system prompt
           undefined, // no schema
           (chunk) => { appendStreamingToken(chunk); },
           signal,
@@ -235,7 +281,13 @@ ${JSON.stringify(runwayData, null, 2)}`;
              currentResponse,
              actionResult,
              currentSteps,
-             undefined
+             undefined,
+             undefined,
+             undefined,
+             undefined,
+             undefined,
+             undefined,
+             chatResult?.thinking
            );
            break;
          } else {
@@ -271,7 +323,13 @@ ${JSON.stringify(runwayData, null, 2)}`;
           currentResponse,
           actionResult,
           currentSteps,
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          chatResult?.thinking
         );
 
         await addMessage(systemResultsMsg);
@@ -288,7 +346,13 @@ ${JSON.stringify(runwayData, null, 2)}`;
           currentResponse,
           actionResult,
           currentSteps,
-          undefined
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          chatResult?.thinking
         );
         break;
       }

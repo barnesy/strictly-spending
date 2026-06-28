@@ -117,6 +117,7 @@ export default function Settings() {
     try {
       const r = await clearDemoData();
       setDemoMode(false);
+      window.dispatchEvent(new Event('db-update'));
       setDemoMsg(
         `Removed ${r.removedTransactions} demo transactions and ${r.removedAccounts} demo accounts`
       );
@@ -148,6 +149,7 @@ export default function Settings() {
     setClearImportedMsg(null);
     try {
       const r = await clearImportedData();
+      window.dispatchEvent(new Event('db-update'));
       setClearImportedMsg(
         `Successfully removed ${r.removedTransactions} imported transactions and ${r.removedAccounts} imported accounts.`
       );

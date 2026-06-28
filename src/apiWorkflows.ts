@@ -23,7 +23,7 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
       {
         endpoint: 'addAccount',
         description: 'Create a new checking or credit account.',
-        defaultArgs: '[\n  {\n    "name": "My New Checking",\n    "type": "checking",\n    "institution": "Chase",\n    "source": "custom",\n    "enabled": true\n  }\n]',
+        defaultArgs: '[\n  {\n    "name": "My New Checking",\n    "type": "checking",\n    "institution": "Chase",\n    "source": "playground_test",\n    "enabled": true\n  }\n]',
         phase: 'setup'
       },
       {
@@ -35,19 +35,19 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
       {
         endpoint: 'addTransaction',
         description: 'Add an initial transaction to the newly created account. Replace accountId with the ID from the previous step.',
-        defaultArgs: '[\n  {\n    "accountId": 1,\n    "date": "2024-06-15",\n    "description": "Initial Deposit",\n    "amount": 1000.00,\n    "category": "Income",\n    "source": "custom",\n    "merchantKey": "Deposit",\n    "userOverridden": true,\n    "dedupKey": "deposit_123",\n    "recurrence": "onetime"\n  }\n]',
+        defaultArgs: '[\n  {\n    "accountId": 99999,\n    "date": "2024-06-15",\n    "description": "Initial Deposit",\n    "amount": 1000.00,\n    "category": "Income",\n    "source": "playground_test",\n    "merchantKey": "Deposit",\n    "userOverridden": true,\n    "dedupKey": "deposit_123",\n    "recurrence": "onetime"\n  }\n]',
         phase: 'execution'
       },
       {
         endpoint: 'getTransactions',
         description: 'Verify the transactions for the new account (pass the accountId retrieved from getAccounts).',
-        defaultArgs: '[\n  "2024-01-01",\n  "2024-12-31",\n  { "accountId": 1 }\n]',
+        defaultArgs: '[\n  "2024-01-01",\n  "2024-12-31",\n  { "accountId": 99999 }\n]',
         phase: 'execution'
       },
       {
         endpoint: 'deleteAccount',
         description: 'Clean up test data by deleting the account created during setup. Replace the ID with the one retrieved earlier.',
-        defaultArgs: '[\n  1\n]',
+        defaultArgs: '[\n  99999\n]',
         phase: 'teardown'
       }
     ]
@@ -59,26 +59,26 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
     steps: [
       {
         endpoint: 'getSettings',
-        description: 'Retrieve the current app:taxSettings object to inspect existing deductions (Setup: Backup existing state).',
-        defaultArgs: '[]',
+        description: 'Retrieve the current app:testTaxSettings object to inspect existing deductions (Setup: Backup existing state).',
+        defaultArgs: '[\n  "app:testTaxSettings"\n]',
         phase: 'setup'
       },
       {
         endpoint: 'updateSetting',
-        description: 'Update the app:taxSettings object with a new deduction value.',
-        defaultArgs: '[\n  "app:taxSettings",\n  {\n    "businessDeductions": {\n      "general": {\n        "software": 500\n      }\n    }\n  }\n]',
+        description: 'Update the app:testTaxSettings object with a new deduction value.',
+        defaultArgs: '[\n  "app:testTaxSettings",\n  {\n    "businessDeductions": {\n      "general": {\n        "software": 500\n      }\n    }\n  }\n]',
         phase: 'execution'
       },
       {
         endpoint: 'getSettings',
         description: 'Verify the deduction value was successfully updated in the database.',
-        defaultArgs: '[]',
+        defaultArgs: '[\n  "app:testTaxSettings"\n]',
         phase: 'execution'
       },
       {
         endpoint: 'updateSetting',
-        description: 'Restore the original app:taxSettings object that was backed up in the setup phase.',
-        defaultArgs: '[\n  "app:taxSettings",\n  {}\n]',
+        description: 'Restore the original app:testTaxSettings object that was backed up in the setup phase.',
+        defaultArgs: '[\n  "app:testTaxSettings",\n  {}\n]',
         phase: 'teardown'
       }
     ]
@@ -117,6 +117,69 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
         description: 'Delete the test budget report artifact.',
         defaultArgs: '[\n  "budget_report_1"\n]',
         phase: 'teardown'
+      }
+    ]
+  },
+  {
+    id: 'end_of_month_review',
+    title: 'End-of-Month Review Playbook',
+    description: 'An AI Copilot playbook for conducting an end-of-month financial review, finding anomalies, and generating a report.',
+    steps: [
+      {
+        endpoint: 'query_data',
+        description: 'First, retrieve aggregate data for the last month to understand high-level spending patterns.',
+        defaultArgs: '[\n  { "preset": "lastMonth" }\n]',
+        phase: 'execution'
+      },
+      {
+        endpoint: 'spending_anomalies',
+        description: 'Next, scan for spending outliers and high-growth categories within that same period.',
+        defaultArgs: '[]',
+        phase: 'execution'
+      },
+      {
+        endpoint: 'create_artifact',
+        description: 'Finally, synthesize the queried data and anomalies into a comprehensive markdown report for the user.',
+        defaultArgs: '[\n  {\n    "title": "End of Month Review",\n    "type": "markdown",\n    "content": "# End of Month Review\\n..."\n  }\n]',
+        phase: 'execution'
+      }
+    ]
+  },
+  {
+    id: 'subscription_audit',
+    title: 'Subscription Audit Playbook',
+    description: 'An AI Copilot playbook to help users identify, review, and manage their recurring subscriptions.',
+    steps: [
+      {
+        endpoint: 'subscription_alerts',
+        description: 'Run the subscription scanner to detect price spikes, duplicates, or overlapping subscriptions.',
+        defaultArgs: '[]',
+        phase: 'execution'
+      },
+      {
+        endpoint: 'filter_ui',
+        description: 'Update the dashboard view to show the user the specific transactions flagged in the audit.',
+        defaultArgs: '[\n  { "categories": ["Subscriptions"] }\n]',
+        phase: 'execution'
+      }
+    ]
+  },
+  {
+    id: 'categorization_triage',
+    title: 'Categorization Triage Playbook',
+    description: 'An AI Copilot playbook for automatically categorizing uncategorized transactions and guiding the user to review them.',
+    steps: [
+      {
+        endpoint: 'categorize_transactions',
+        description: 'Invoke the local AI model to propose categories for all currently uncategorized transactions.',
+        defaultArgs: '[]',
+        phase: 'execution'
+      },
+      {
+        endpoint: 'navigate',
+        description: "Navigate the user to the /sort view where they can quickly review, approve, or override the AI's suggestions.",
+        defaultArgs: '[\n  { "page": "/sort" }\n]',
+        phase: 'execution'
       }
     ]
   }

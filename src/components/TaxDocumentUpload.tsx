@@ -114,7 +114,7 @@ export default function TaxDocumentUpload({
 
   const getHelperText = () => {
     if (isUploaded) {
-      return `Attached: ${doc.name}`;
+      return `Attached: ${doc.title}`;
     }
     if (aiStatus === 'supported') {
       return "Ask the AI Copilot to generate this statement using your audited data.";

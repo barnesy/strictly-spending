@@ -7,9 +7,10 @@ export class CategorizeTransactionsTool implements AIToolHandler {
 
   async execute(actionObj: any, context: AIToolContext): Promise<ToolExecutionResult> {
     try {
+      const modelName = localStorage.getItem('app:modelName') || 'llama3:8b';
       const result: any = await invoke('ai_categorize_transactions', {
         demoMode: context.filters?.demoMode || false,
-        modelName: 'llama3:8b' // default model or ideally from store
+        modelName: modelName
       });
 
       if (result.processed_count > 0) {

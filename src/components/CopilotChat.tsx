@@ -9,6 +9,7 @@ import {
   LinearProgress,
   Button,
   Alert,
+  Paper,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -92,6 +93,13 @@ export default function CopilotChat({
   }, [threads, activeThreadId, setActiveThreadId, createThread]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef(true);
+
+  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+    autoScrollRef.current = isAtBottom;
+  };
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -158,13 +166,8 @@ export default function CopilotChat({
   }, [messages]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      // Only auto-scroll if we are within 150px of the bottom (Sticky Scroll)
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-      if (isNearBottom) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
+    if (scrollRef.current && autoScrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [visibleMessages, loading, aiStatus]);
 
@@ -414,6 +417,7 @@ export default function CopilotChat({
           {/* Chat Stream */}
           <Box
             ref={scrollRef}
+            onScroll={handleScroll}
             sx={{
               flex: 1,
               overflowY: 'auto',
@@ -424,10 +428,48 @@ export default function CopilotChat({
             }}
           >
             {visibleMessages.length === 0 && (
-              <Box sx={{ textAlign: 'center', mt: 4, color: 'text.secondary' }}>
-                <Typography variant="body2">
-                  Ask me to filter your spending, navigate to a different view, or search for a specific transaction!
-                </Typography>
+              <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 3, px: 1 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
+                    How can I help you today?
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Ask me to analyze your spending, navigate to a different view, or generate financial reports.
+                  </Typography>
+                </Box>
+                
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {[
+                    "Create an artifact summarizing my recent expenses with a bar chart.",
+                    "What are my top spending categories this month?",
+                    "Find any subscriptions under $10.",
+                    "Draft a monthly budget plan based on my income."
+                  ].map((suggestion, idx) => (
+                    <Paper
+                      key={idx}
+                      variant="outlined"
+                      onClick={() => stableSendPromptText(suggestion)}
+                      sx={{
+                        p: 1.5,
+                        cursor: 'pointer',
+                        borderRadius: 2,
+                        transition: 'all 0.2s ease-in-out',
+                        borderColor: 'divider',
+                        bgcolor: 'background.paper',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          bgcolor: 'primary.50',
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                        }
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                        {suggestion}
+                      </Typography>
+                    </Paper>
+                  ))}
+                </Box>
               </Box>
             )}
             {visibleMessages.map((m, i) => (

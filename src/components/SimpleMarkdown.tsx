@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import ArtifactChart from './ArtifactChart';
 import {
   Box,
   Typography,
@@ -20,6 +21,7 @@ type MarkdownBlock =
   | { type: 'divider' }
   | { type: 'table'; headers: string[]; rows: string[][]; alignments?: ('left' | 'center' | 'right')[] }
   | { type: 'text'; text: string }
+  | { type: 'code'; language: string; text: string }
   | { type: 'empty' };
 
 function parseMarkdown(content: string): MarkdownBlock[] {
@@ -98,6 +100,19 @@ function parseMarkdown(content: string): MarkdownBlock[] {
         });
         continue;
       }
+    }
+
+    if (trimmed.startsWith('```')) {
+      const language = trimmed.substring(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      blocks.push({ type: 'code', language, text: codeLines.join('\n') });
+      i++;
+      continue;
     }
 
     if (trimmed.startsWith('# ')) {
@@ -310,6 +325,34 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
                     </TableBody>
                   </Table>
                 </TableContainer>
+              );
+            case 'code':
+              if (block.language === 'echarts') {
+                try {
+                  const parsedOption = JSON.parse(block.text);
+                  if (parsedOption && typeof parsedOption === 'object') {
+                    return <ArtifactChart key={idx} option={parsedOption} />;
+                  }
+                } catch (e) {
+                  // fall back to rendering as normal code block
+                }
+              }
+              return (
+                <Box 
+                  key={idx} 
+                  sx={{ 
+                    my: 2, 
+                    p: 2, 
+                    bgcolor: '#f5f5f5', 
+                    borderRadius: 2, 
+                    fontFamily: 'monospace', 
+                    fontSize: '0.85rem',
+                    overflowX: 'auto',
+                    border: '1px solid rgba(0,0,0,0.08)'
+                  }}
+                >
+                  <pre style={{ margin: 0 }}>{block.text}</pre>
+                </Box>
               );
             case 'text':
             default:

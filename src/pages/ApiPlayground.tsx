@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Box, Typography, Card, CardContent, Grid, Stack, TextField, Button, MenuItem, useTheme, Tabs, Tab, Divider, Chip } from '@mui/material';
+import { Box, Typography, Card, CardContent, Grid, Stack, TextField, Button, MenuItem, useTheme, Tabs, Tab, Divider, Chip, Alert } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
@@ -132,11 +132,17 @@ export default function ApiPlayground() {
           <Tab label="API Workflows" sx={{ fontWeight: 600, textTransform: 'none' }} />
         </Tabs>
       </Box>
+      
+      <Box sx={{ p: 2 }}>
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <strong>WARNING:</strong> The API Playground executes against your live database. Ensure you use test IDs (e.g., 99999) and test settings when running Setup and Teardown mutations to avoid deleting your real data.
+        </Alert>
+      </Box>
 
       {/* --- SINGLE ENDPOINT TAB --- */}
       {tabValue === 0 && (
         <Grid container spacing={3}>
-          <Grid item xs={12} md={5}>
+          <Grid size={{ xs: 12, md: 5 }}>
             <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flexGrow: 1 }}>
                 <Stack spacing={3}>
@@ -186,7 +192,7 @@ export default function ApiPlayground() {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={7}>
+          <Grid size={{ xs: 12, md: 7 }}>
             <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: theme.palette.mode === 'dark' ? 'background.default' : '#f5f5f5' }}>
               <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <DataObjectIcon fontSize="small" color="action" />
@@ -219,7 +225,7 @@ export default function ApiPlayground() {
       {/* --- WORKFLOWS TAB --- */}
       {tabValue === 1 && activeWorkflow && (
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card variant="outlined" sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" fontWeight="bold" gutterBottom>
@@ -257,7 +263,7 @@ export default function ApiPlayground() {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={8}>
+          <Grid size={{ xs: 12, md: 8 }}>
             <Stack spacing={3}>
               <Box>
                 <Typography variant="h5" fontWeight="bold">{activeWorkflow.title}</Typography>
@@ -308,7 +314,7 @@ export default function ApiPlayground() {
                             </Box>
                             <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
                               <Grid container>
-                                <Grid item xs={12} sm={5} sx={{ borderRight: 1, borderColor: 'divider', p: 2 }}>
+                                <Grid size={{ xs: 12, sm: 5 }} sx={{ borderRight: 1, borderColor: 'divider', p: 2 }}>
                                   <Typography variant="body2" color="text.secondary" paragraph>
                                     {step.description}
                                   </Typography>
@@ -324,7 +330,7 @@ export default function ApiPlayground() {
                                     InputProps={{ sx: { fontFamily: 'monospace', fontSize: '13px' } }}
                                   />
                                 </Grid>
-                                <Grid item xs={12} sm={7} sx={{ p: 2, bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : '#f8f9fa' }}>
+                                <Grid size={{ xs: 12, sm: 7 }} sx={{ p: 2, bgcolor: theme.palette.mode === 'dark' ? 'background.paper' : '#f8f9fa' }}>
                                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                     <Typography variant="caption" fontWeight="bold" color="text.secondary">
                                       Output

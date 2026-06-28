@@ -6,8 +6,6 @@ import type { SkillTestCase } from '../types';
 import typesRaw from '../types.ts?raw';
 // @ts-ignore
 import apiRaw from '../api.ts?raw';
-// @ts-ignore
-import apiWorkflowsRaw from '../apiWorkflows.ts?raw';
 
 export const GENERAL_SYSTEM_PROMPT = `<identity>
 You are an expert AI financial agent managing a user's private financial data. 
@@ -18,17 +16,18 @@ You are an expert AI financial agent managing a user's private financial data.
 2. TONE: Be friendly, concise, and focus on summarizing high-level insights.
 3. DATA INTEGRITY: Do not provide totals or summaries until you successfully execute a tool to retrieve the data.
 4. UI NAVIGATION: Use 'navigate' to move the user (e.g., "/settings"). Use 'filter_ui' to update their dashboard view.
-5. GENERATIVE UI: When you use 'query_data', the UI automatically renders charts and tables for the user. Do not repeat raw numbers, lists, or tables in chat. Simply provide a 1-2 sentence high-level insight based on the data.
+5. GENERATIVE UI: When you use 'query_data', the UI automatically renders charts and tables for the user. Do not repeat raw numbers, lists, or tables in chat. If you were just asked a question, provide a 1-2 sentence high-level insight. If you need to generate a report, proceed to use 'create_artifact' instead of stopping.
 6. ARTIFACTS: For long reports, budgets, or extensive plans, use the 'create_artifact' tool instead of outputting walls of text.
 7. AGENTIC WORKFLOWS: For complex requests, use your internal reasoning to break the problem into smaller steps. Execute one tool per step, observe the result, and decide on the next action until the overall goal is fully achieved.
 8. API PLAYBOOK: When chaining tools together, refer to the <api_playbook> provided below to understand the required sequence and dependencies of verified API workflows.
+9. CHARTS AND GRAPHS: When the user asks you to visualize data or draw a chart inside an artifact, you can natively render interactive graphs by outputting an Apache ECharts JSON configuration wrapped in an \`\`\`echarts markdown code block.
 </instructions>`;
 
 export const fewShots: ChatMessage[] = []; // ReAct tools don't need these manual JSON few-shots.
 
 export const CURRENT_PROMPT_VERSION = 18;
 
-export async function getSystemPrompt(stateContext: string, overrideSystemPrompt?: string): Promise<string> {
+export async function getSystemPrompt(stateContext: string, overrideSystemPrompt?: string, activePlaybooksJson?: string): Promise<string> {
   const basePrompt = overrideSystemPrompt || GENERAL_SYSTEM_PROMPT;
   
   let enabledExtensions = '';
@@ -46,7 +45,9 @@ export async function getSystemPrompt(stateContext: string, overrideSystemPrompt
   const stateBlock = `\n\n<current_state>\n${stateContext}\n</current_state>`;
   
   const schemaBlock = `\n\n<database_schema>\n${typesRaw}\n</database_schema>\n\n<api_definitions>\n${apiRaw}\n</api_definitions>`;
-  const playbookBlock = `\n\n<api_playbook>\n${apiWorkflowsRaw}\n</api_playbook>`;
+  const playbookBlock = activePlaybooksJson 
+    ? `\n\n<api_playbook>\n${activePlaybooksJson}\n</api_playbook>` 
+    : '';
 
   return `${basePrompt}${schemaBlock}${playbookBlock}${extensionsBlock}${stateBlock}`;
 }

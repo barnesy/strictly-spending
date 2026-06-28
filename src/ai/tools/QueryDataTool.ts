@@ -193,7 +193,7 @@ export class QueryDataTool implements AIToolHandler {
 
 ${breakdownText}
 
-Please analyze these results and provide a 1-2 sentence high-level insight or conclusion based on the data.`;
+Please review this data. If your current task was simply to answer a question or filter the UI, provide a 1-2 sentence high-level insight to the user. If your current task is to generate a report, budget, or artifact, proceed to call the 'create_artifact' tool using this data.`;
 
     const actionResult = {
       action: 'query_data',

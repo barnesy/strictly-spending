@@ -1,5 +1,6 @@
 import { useSettings } from './hooks/queries';
 import { useEffect, useMemo } from 'react';
+import { queryClient } from './queryClient';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
@@ -26,6 +27,11 @@ export default function App() {
   }, [fontSize]);
 
   useEffect(() => {
+    const handleDbUpdate = () => {
+      queryClient.invalidateQueries();
+    };
+    window.addEventListener('db-update', handleDbUpdate);
+    return () => window.removeEventListener('db-update', handleDbUpdate);
   }, []);
 
   const dynamicTheme = useMemo(() => {

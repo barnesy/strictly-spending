@@ -50,7 +50,7 @@ interface ChatStore {
   startStreamingMessage: (initialSteps?: any[], purpose?: 'tool_select' | 'explanation', resumeLastMessage?: boolean) => void;
   appendStreamingToken: (token: string) => void;
   updateStreamingMetadata: (steps: any[], tokenUsage?: { prompt: number; completion: number; total: number }) => void;
-  finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: any[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation', activeSkillId?: string, completedStages?: string[], isAborted?: boolean, error?: string) => Promise<void>;
+  finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: any[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation', activeSkillId?: string, completedStages?: string[], isAborted?: boolean, error?: string, thinking?: string) => Promise<void>;
   setMessages: (messages: ChatMessage[]) => void;
   clearMessages: () => void;
   checkAIStatus: (force?: boolean) => Promise<void>;
@@ -227,7 +227,7 @@ export const useChatStore = create<ChatStore>()(
         });
       },
 
-      finalizeStreamingMessage: async (finalContent, actionResult, steps, tokenUsage, purpose, activeSkillId, completedStages, isAborted, error) => {
+      finalizeStreamingMessage: async (finalContent, actionResult, steps, tokenUsage, purpose, activeSkillId, completedStages, isAborted, error, thinking) => {
         let targetMsg: any = null;
         set((state) => {
           for (let i = state.messages.length - 1; i >= 0; i--) {
@@ -240,6 +240,7 @@ export const useChatStore = create<ChatStore>()(
                 steps: steps || updated[i].steps,
                 tokenUsage: tokenUsage || updated[i].tokenUsage,
                 purpose: purpose || updated[i].purpose,
+                thinking: thinking || updated[i].thinking,
                 isStreaming: false,
                 isAborted: isAborted || updated[i].isAborted,
                 error: error || updated[i].error,
