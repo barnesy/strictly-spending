@@ -53,6 +53,10 @@ import { SubscriptionAlertsTool } from './SubscriptionAlertsTool';
 import { SpendingAnomaliesTool } from './SpendingAnomaliesTool';
 import { AuditAccessibilityTool } from './AuditAccessibilityTool';
 import { ProjectRunwayTool } from './ProjectRunwayTool';
+import { ManageLoansTool } from './ManageLoansTool';
+import { ManageBudgetsTool } from './ManageBudgetsTool';
+import { CreateAutoRuleTool } from './CreateAutoRuleTool';
+import { ReadPdfTool } from './ReadPdfTool';
 
 toolRegistry.register(new QueryDataTool());
 toolRegistry.register(new ExportTransactionsTool());
@@ -65,3 +69,7 @@ toolRegistry.register(new SubscriptionAlertsTool());
 toolRegistry.register(new SpendingAnomaliesTool());
 toolRegistry.register(new AuditAccessibilityTool());
 toolRegistry.register(new ProjectRunwayTool());
+toolRegistry.register(new ManageLoansTool());
+toolRegistry.register(new ManageBudgetsTool());
+toolRegistry.register(new CreateAutoRuleTool());
+toolRegistry.register(new ReadPdfTool());
