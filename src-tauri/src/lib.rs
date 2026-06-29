@@ -150,6 +150,13 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
             let db_path = app_data_dir.join("spending-viz.sqlite");
             
+            // Backup the database before applying migrations or initializing
+            if db_path.exists() {
+                let backup_name = format!("spending-viz_{}.sqlite.bak", chrono::Local::now().format("%Y%m%d_%H%M%S"));
+                let backup_path = app_data_dir.join(backup_name);
+                let _ = std::fs::copy(&db_path, &backup_path);
+            }
+
             let conn = db::init_db(db_path).map_err(|e| e.to_string())?;
             app.manage(db::DbState {
                 conn: std::sync::Mutex::new(conn),

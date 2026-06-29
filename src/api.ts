@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { z } from 'zod';
 import type { 
   Account, Transaction, CategoryRule, TaxRule, Category, 
   ImportBatch, MerchantOverride, Budget, ChatArtifact, ChatThread, 
@@ -65,15 +66,81 @@ export interface MerchantGroup {
   latestDate: string;
 }
 
+export const accountSchema = z.object({
+  id: z.number().optional(),
+  name: z.string().min(1),
+  type: z.enum(['checking', 'credit', 'savings']),
+  institution: z.string().min(1),
+  last4: z.string().optional(),
+  source: z.enum(['chase', 'boa-credit', 'boa-checking', 'truist-checking', 'demo', 'custom']),
+  enabled: z.boolean(),
+  currentBalance: z.number().optional()
+});
+
+export const transactionSchema = z.object({
+  id: z.number().optional(),
+  accountId: z.number(),
+  date: z.string().min(10),
+  description: z.string().min(1),
+  amount: z.number(),
+  rawCategory: z.string().optional(),
+  category: z.string().min(1),
+  source: z.enum(['chase', 'boa-credit', 'boa-checking', 'truist-checking', 'demo', 'custom']),
+  merchantKey: z.string().min(1),
+  userOverridden: z.boolean(),
+  dedupKey: z.string().min(1),
+  importBatchId: z.number().optional(),
+  recurrence: z.enum(['recurring', 'onetime']),
+  recurrenceOverride: z.enum(['recurring', 'onetime']).nullable().optional(),
+  isBusiness: z.boolean().optional(),
+  taxCategory: z.string().optional(),
+  deductionStatus: z.enum(['pending', 'confirmed', 'rejected']).optional()
+});
+
+export const budgetSchema = z.object({
+  category: z.string().min(1),
+  monthlyAmount: z.number().min(0),
+  userSet: z.boolean()
+});
+
+export const categorySchema = z.object({
+  id: z.number().optional(),
+  name: z.string().min(1),
+  color: z.string().min(1),
+  type: z.enum(['spend', 'income', 'transfer']),
+  sortOrder: z.number(),
+  defaultRecurrence: z.enum(['recurring', 'onetime']).optional()
+});
+
+export const loanSchema = z.object({
+  id: z.number().optional(),
+  name: z.string().min(1),
+  type: z.enum(['house', 'car', 'student']),
+  principal: z.number().min(0),
+  rate: z.number().min(0),
+  termYears: z.number().min(1),
+  startDate: z.string().min(10),
+  category: z.string().min(1),
+  merchant: z.string().optional(),
+  monthlyPayment: z.number().optional(),
+  propertyValue: z.number().optional(),
+  downPayment: z.number().optional(),
+  extraMonthlyPayment: z.number().optional(),
+  extraOneTimePayment: z.number().optional(),
+  extraOneTimeMonth: z.number().optional(),
+  createdAt: z.string().min(1),
+  enabled: z.boolean().optional()
+});
+
 export const api = {
   // Accounts
   getAccounts: () => invoke<Account[]>('get_accounts'),
-  addAccount: (item: Account) => invoke<number>('add_account', { item }),
+  addAccount: (item: Account) => invoke<number>('add_account', { item: accountSchema.parse(item) }),
   updateAccount: async (id: number, updates: Partial<Account>) => {
     const existing = (await invoke<Account[]>('get_accounts')).find(a => a.id === id);
     if (!existing) throw new Error(`Account ${id} not found`);
     const full = { ...existing, ...updates };
-    return invoke<void>('update_account', { id, updates: full });
+    return invoke<void>('update_account', { id, updates: accountSchema.parse(full) });
   },
   deleteAccount: (id: number) => invoke<void>('delete_account', { id }),
   clearAccounts: () => invoke<void>('clear_accounts'),
@@ -110,18 +177,18 @@ export const api = {
     invoke<string[]>('get_unique_merchants', { isDemo }),
   lastMonthActualSpend: (isDemo: boolean) => 
     invoke<number>('last_month_actual_spend', { isDemo }),
-  addTransaction: (item: Transaction) => invoke<number>('add_transaction', { item }),
+  addTransaction: (item: Transaction) => invoke<number>('add_transaction', { item: transactionSchema.parse(item) }),
   updateTransaction: async (id: number, updates: Partial<Transaction>) => {
     const existing = await invoke<Transaction | null>('get_transaction', { id });
     if (!existing) throw new Error(`Transaction ${id} not found`);
     const full = { ...existing, ...updates };
-    return invoke<void>('update_transaction', { id, updates: full });
+    return invoke<void>('update_transaction', { id, updates: transactionSchema.parse(full) });
   },
   deleteTransaction: (id: number) => invoke<void>('delete_transaction', { id }),
   bulkAddTransactions: (transactions: Transaction[], ignoreErrors: boolean = false) => 
-    invoke<void>('bulk_add_transactions', { transactions, ignoreErrors }),
+    invoke<void>('bulk_add_transactions', { transactions: transactions.map(t => transactionSchema.parse(t)), ignoreErrors }),
   bulkUpdateTransactions: (transactions: Transaction[]) => 
-    invoke<void>('bulk_update_transactions', { transactions }),
+    invoke<void>('bulk_update_transactions', { transactions: transactions.map(t => transactionSchema.parse(t)) }),
   getSortQueue: (demoMode: boolean) => invoke<SortCard[]>('get_sort_queue', { demoMode }),
 
   // Rules
@@ -138,12 +205,12 @@ export const api = {
 
   // Categories
   getCategories: () => invoke<Category[]>('get_categories'),
-  addCategory: (item: Category) => invoke<number>('add_category', { item }),
+  addCategory: (item: Category) => invoke<number>('add_category', { item: categorySchema.parse(item) }),
   updateCategory: async (id: number, updates: Partial<Category>) => {
     const existing = (await invoke<Category[]>('get_categories')).find(c => c.id === id);
     if (!existing) throw new Error(`Category ${id} not found`);
     const full = { ...existing, ...updates };
-    return invoke<void>('update_category', { id, updates: full });
+    return invoke<void>('update_category', { id, updates: categorySchema.parse(full) });
   },
   deleteCategory: (id: number) => invoke<void>('delete_category', { id }),
   clearCategories: () => invoke<void>('clear_categories'),
@@ -162,8 +229,8 @@ export const api = {
 
   // Budgets
   getBudgets: () => invoke<Budget[]>('get_budgets'),
-  putBudget: (item: Budget) => invoke<void>('put_budget', { item }),
-  bulkPutBudgets: (budgets: Budget[]) => invoke<void>('bulk_put_budgets', { budgets }),
+  putBudget: (item: Budget) => invoke<void>('put_budget', { item: budgetSchema.parse(item) }),
+  bulkPutBudgets: (budgets: Budget[]) => invoke<void>('bulk_put_budgets', { budgets: budgets.map(b => budgetSchema.parse(b)) }),
   clearBudgets: () => invoke<void>('clear_budgets'),
 
   // Settings
@@ -205,9 +272,9 @@ export const api = {
 
   // Loans
   getLoans: () => invoke<Loan[]>('get_loans'),
-  addLoan: (item: Loan) => invoke<number>('add_loan', { item }),
-  putLoan: (item: Loan) => invoke<void>('put_loan', { item }),
-  updateLoan: (id: number, updates: Loan) => invoke<void>('update_loan', { id, updates }),
+  addLoan: (item: Loan) => invoke<number>('add_loan', { item: loanSchema.parse(item) }),
+  putLoan: (item: Loan) => invoke<void>('put_loan', { item: loanSchema.parse(item) }),
+  updateLoan: (id: number, updates: Loan) => invoke<void>('update_loan', { id, updates: loanSchema.parse(updates) }),
   deleteLoan: (id: number) => invoke<void>('delete_loan', { id }),
 
   // Data Management

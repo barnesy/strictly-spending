@@ -93,9 +93,7 @@ pub struct CategoryRule {
     pub created_at: String,
 }
 
-pub fn init_db(db_path: PathBuf) -> Result<Connection> {
-    let conn = Connection::open(db_path)?;
-
+pub fn init_tables(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,8 +181,24 @@ pub fn init_db(db_path: PathBuf) -> Result<Connection> {
         [],
     )?;
 
-    crate::db_extra::init_extra_tables(&conn)?;
+    crate::db_extra::init_extra_tables(conn)?;
+    Ok(())
+}
 
+pub fn run_migrations(conn: &mut Connection) -> std::result::Result<(), rusqlite_migration::Error> {
+    use rusqlite_migration::{Migrations, M};
+    let migrations = Migrations::new(vec![
+        M::up("CREATE TABLE IF NOT EXISTS __migration_init_sentinel (id INTEGER PRIMARY KEY);"),
+        M::up("CREATE INDEX IF NOT EXISTS idx_transactions_merchant_key ON transactions(merchant_key);"),
+    ]);
+    migrations.to_latest(conn)?;
+    Ok(())
+}
+
+pub fn init_db(db_path: PathBuf) -> Result<Connection> {
+    let mut conn = Connection::open(db_path)?;
+    init_tables(&conn)?;
+    run_migrations(&mut conn).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
     Ok(conn)
 }
 
@@ -448,4 +462,28 @@ pub fn get_rules(state: State<DbState>) -> Result<Vec<CategoryRule>, String> {
     let mut results = Vec::new();
     for i in iter { results.push(i.map_err(|e| e.to_string())?); }
     Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    pub fn setup_test_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        init_tables(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_init_tables_creates_schema() {
+        let conn = setup_test_db();
+        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'").unwrap();
+        let mut table_names: Vec<String> = stmt.query_map([], |row| row.get(0)).unwrap().map(|r| r.unwrap()).collect();
+        table_names.sort();
+        
+        assert!(table_names.contains(&"transactions".to_string()));
+        assert!(table_names.contains(&"accounts".to_string()));
+        assert!(table_names.contains(&"categories".to_string()));
+        assert!(table_names.contains(&"budgets".to_string()));
+    }
 }

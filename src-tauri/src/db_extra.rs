@@ -35,6 +35,7 @@ pub struct ChatArtifact {
     pub title: String,
     pub content: String,
     pub explanation: Option<String>,
+    pub summary: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
     #[serde(rename = "updatedAt")]
@@ -150,12 +151,13 @@ pub struct Loan {
 pub fn init_extra_tables(conn: &Connection) -> Result<()> {
     conn.execute("CREATE TABLE IF NOT EXISTS imports (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT, source TEXT, imported_at TEXT, row_count INTEGER, new_count INTEGER, duplicate_count INTEGER, content_hash TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)", [])?;
-    conn.execute("CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, type TEXT, title TEXT, content TEXT, explanation TEXT, created_at TEXT, updated_at TEXT, path TEXT, source TEXT, associated_checklist_id TEXT)", [])?;
+    conn.execute("CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, type TEXT, title TEXT, content TEXT, explanation TEXT, summary TEXT, created_at TEXT, updated_at TEXT, path TEXT, source TEXT, associated_checklist_id TEXT)", [])?;
     
     // Migrations for older schemas
     let _ = conn.execute("ALTER TABLE artifacts ADD COLUMN path TEXT", []);
     let _ = conn.execute("ALTER TABLE artifacts ADD COLUMN source TEXT", []);
     let _ = conn.execute("ALTER TABLE artifacts ADD COLUMN associated_checklist_id TEXT", []);
+    let _ = conn.execute("ALTER TABLE artifacts ADD COLUMN summary TEXT", []);
 
     conn.execute("CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, title TEXT, created_at TEXT, updated_at TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT, role TEXT, content TEXT, action_result TEXT, created_at TEXT, active_skill_id TEXT, completed_stages TEXT, steps TEXT, token_usage TEXT, purpose TEXT)", [])?;
@@ -301,7 +303,7 @@ pub fn clear_settings(state: State<DbState>) -> Result<(), String> {
 #[tauri::command]
 pub fn get_artifacts(state: State<DbState>) -> Result<Vec<ChatArtifact>, String> {
     let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, type, title, content, explanation, created_at, updated_at, path, source, associated_checklist_id FROM artifacts").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, type, title, content, explanation, summary, created_at, updated_at, path, source, associated_checklist_id FROM artifacts").map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(ChatArtifact {
             id: row.get(0)?,
@@ -309,11 +311,12 @@ pub fn get_artifacts(state: State<DbState>) -> Result<Vec<ChatArtifact>, String>
             title: row.get(2)?,
             content: row.get(3)?,
             explanation: row.get(4)?,
-            created_at: row.get(5)?,
-            updated_at: row.get(6)?,
-            path: row.get(7)?,
-            source: row.get(8)?,
-            associated_checklist_id: row.get(9)?,
+            summary: row.get(5)?,
+            created_at: row.get(6)?,
+            updated_at: row.get(7)?,
+            path: row.get(8)?,
+            source: row.get(9)?,
+            associated_checklist_id: row.get(10)?,
         })
     }).map_err(|e| e.to_string())?;
     let mut results = Vec::new();
@@ -325,8 +328,8 @@ pub fn get_artifacts(state: State<DbState>) -> Result<Vec<ChatArtifact>, String>
 pub fn add_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "INSERT INTO artifacts (id, type, title, content, explanation, created_at, updated_at, path, source, associated_checklist_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![item.id, item.type_val, item.title, item.content, item.explanation, item.created_at, item.updated_at, item.path, item.source, item.associated_checklist_id],
+        "INSERT INTO artifacts (id, type, title, content, explanation, summary, created_at, updated_at, path, source, associated_checklist_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![item.id, item.type_val, item.title, item.content, item.explanation, item.summary, item.created_at, item.updated_at, item.path, item.source, item.associated_checklist_id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -335,8 +338,8 @@ pub fn add_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), Str
 pub fn put_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "INSERT OR REPLACE INTO artifacts (id, type, title, content, explanation, created_at, updated_at, path, source, associated_checklist_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![item.id, item.type_val, item.title, item.content, item.explanation, item.created_at, item.updated_at, item.path, item.source, item.associated_checklist_id],
+        "INSERT OR REPLACE INTO artifacts (id, type, title, content, explanation, summary, created_at, updated_at, path, source, associated_checklist_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![item.id, item.type_val, item.title, item.content, item.explanation, item.summary, item.created_at, item.updated_at, item.path, item.source, item.associated_checklist_id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -345,8 +348,8 @@ pub fn put_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), Str
 pub fn update_artifact(state: State<DbState>, id: String, updates: ChatArtifact) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "UPDATE artifacts SET type=?1, title=?2, content=?3, explanation=?4, created_at=?5, updated_at=?6, path=?7, source=?8, associated_checklist_id=?9 WHERE id = ?10",
-        params![updates.type_val, updates.title, updates.content, updates.explanation, updates.created_at, updates.updated_at, updates.path, updates.source, updates.associated_checklist_id, id],
+        "UPDATE artifacts SET type=?1, title=?2, content=?3, explanation=?4, summary=?5, created_at=?6, updated_at=?7, path=?8, source=?9, associated_checklist_id=?10 WHERE id = ?11",
+        params![updates.type_val, updates.title, updates.content, updates.explanation, updates.summary, updates.created_at, updates.updated_at, updates.path, updates.source, updates.associated_checklist_id, id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }

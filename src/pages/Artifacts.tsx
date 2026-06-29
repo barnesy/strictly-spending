@@ -16,17 +16,14 @@ import ArticleIcon from '@mui/icons-material/Article';
 import GridOnIcon from '@mui/icons-material/GridOn';
 import { useArtifacts } from '../hooks/queries';
 import { useDeleteArtifact } from '../hooks/mutations';
-import { useChatStore } from '../chatStore';
-import { useShallow } from 'zustand/react/shallow';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 
 export default function Artifacts() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { data: artifacts = [], isLoading } = useArtifacts();
   const deleteArtifact = useDeleteArtifact();
-  const { setActiveArtifact } = useChatStore(useShallow(s => ({
-    setActiveArtifact: s.setActiveArtifact
-  })));
 
   const sortedArtifacts = [...artifacts].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
@@ -37,16 +34,7 @@ export default function Artifacts() {
     }
   };
 
-  const getIconForType = (type: string) => {
-    switch (type) {
-      case 'skill': return <PsychologyIcon sx={{ fontSize: 40, color: theme.palette.secondary.main }} />;
-      case 'spreadsheet': return <GridOnIcon sx={{ fontSize: 40, color: theme.palette.success.main }} />;
-      case 'pdf': return <ArticleIcon sx={{ fontSize: 40, color: theme.palette.error.main }} />;
-      case 'markdown':
-      default:
-        return <ArticleIcon sx={{ fontSize: 40, color: theme.palette.primary.main }} />;
-    }
-  };
+
 
   const getLabelForType = (type: string) => {
     switch (type) {
@@ -97,21 +85,11 @@ export default function Artifacts() {
                   }
                 }}
               >
-                <CardActionArea 
-                  onClick={() => setActiveArtifact(art)}
-                  sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', p: 3 }}
+                <Box
+                  onClick={() => navigate(`/artifacts/${art.id}`)}
+                  sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', p: 3, cursor: 'pointer' }}
                 >
-                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" width="100%" mb={2}>
-                    <Box sx={{
-                      p: 1.5,
-                      borderRadius: 2,
-                      bgcolor: alpha(theme.palette.background.default, 0.8),
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      {getIconForType(art.type)}
-                    </Box>
+                  <Stack direction="row" justifyContent="flex-end" width="100%" mb={2}>
                     <IconButton 
                       size="small" 
                       color="error" 
@@ -143,6 +121,22 @@ export default function Artifacts() {
                     >
                       {art.title}
                     </Typography>
+                    {art.summary && (
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        sx={{ 
+                          mb: 1,
+                          fontSize: 12,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {art.summary}
+                      </Typography>
+                    )}
                     <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.5, fontWeight: 600, mb: 1 }}>
                       {getLabelForType(art.type)}
                     </Typography>
@@ -150,7 +144,7 @@ export default function Artifacts() {
                       Updated {format(new Date(art.updatedAt), 'MMM d, yyyy h:mm a')}
                     </Typography>
                   </CardContent>
-                </CardActionArea>
+                </Box>
               </Card>
             </Grid>
           ))}

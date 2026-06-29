@@ -7,7 +7,7 @@ export class UpdateArtifactTool implements AIToolHandler {
   name = 'update_artifact';
 
   async execute(actionObj: any, context: AIToolContext): Promise<ToolExecutionResult> {
-    const { id, content, confirmed } = actionObj;
+    const { id, content, confirmed, summary } = actionObj;
     if (!id || !content) {
       return { feedbackError: 'Missing required parameters: id and content are required.' };
     }
@@ -30,6 +30,7 @@ export class UpdateArtifactTool implements AIToolHandler {
       const updatedArtifact = {
         ...existing,
         content,
+        summary: summary !== undefined ? summary : existing.summary,
         updatedAt: new Date().toISOString(),
       };
 

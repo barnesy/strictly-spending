@@ -114,15 +114,22 @@ ${JSON.stringify(runwayData, null, 2)}`;
         (this as any)._cachedSystemPrompt = overrideSystemPrompt;
       }
 
-      const activeHistory = isLastLoop
-        ? [
-            ...conversationHistory,
-            {
-              role: 'system' as const,
-              content: `This is the final turn. Summarize the results and explain directly to the user.`
-            }
-          ]
-        : conversationHistory;
+      if (loops === maxLoops) {
+        currentSteps.push({ type: 'process', status: 'running', text: `Reached operation limit.` });
+        await finalizeStreamingMessage(
+          "I have reached my execution limit, but I am still working. Would you like me to continue?",
+          null,
+          currentSteps,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          true // isAborted
+        );
+        break;
+      }
+
+      const activeHistory = conversationHistory;
 
       console.log("BEFORE CHAT COPILOT LOOP ITERATION", loops);
       currentSteps.push({ type: 'process', status: 'running', text: `Running ${modelName}...` });

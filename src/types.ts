@@ -319,6 +319,7 @@ export interface ChatArtifact {
   title: string;
   content: string;
   explanation?: string;
+  summary?: string;
   createdAt: string;
   updatedAt: string;
   path?: string;

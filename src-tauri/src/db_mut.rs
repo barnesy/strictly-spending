@@ -10,6 +10,7 @@ fn invalidate_recurrence_cache(state: &State<DbState>) {
 
 #[tauri::command]
 pub fn add_transaction(state: State<DbState>, item: Transaction) -> Result<i64, String> {
+    if item.description.trim().is_empty() { return Err("Description cannot be empty".into()); }
     let conn = state.conn.lock().unwrap();
     conn.execute(
         "INSERT INTO transactions (account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
@@ -42,6 +43,7 @@ pub fn bulk_add_transactions(state: State<DbState>, transactions: Vec<Transactio
 
 #[tauri::command]
 pub fn update_transaction(state: State<DbState>, id: i64, updates: Transaction) -> Result<(), String> {
+    if updates.description.trim().is_empty() { return Err("Description cannot be empty".into()); }
     let conn = state.conn.lock().unwrap();
     // In a real app we might want dynamic updates, but for now we just overwrite all fields
     conn.execute(
@@ -91,6 +93,7 @@ pub fn clear_transactions(state: State<DbState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn add_account(state: State<DbState>, item: Account) -> Result<i64, String> {
+    if item.name.trim().is_empty() { return Err("Account name cannot be empty".into()); }
     let conn = state.conn.lock().unwrap();
     if let Some(id) = item.id {
         conn.execute(
@@ -109,6 +112,7 @@ pub fn add_account(state: State<DbState>, item: Account) -> Result<i64, String> 
 
 #[tauri::command]
 pub fn update_account(state: State<DbState>, id: i64, updates: Account) -> Result<(), String> {
+    if updates.name.trim().is_empty() { return Err("Account name cannot be empty".into()); }
     let conn = state.conn.lock().unwrap();
     conn.execute(
         "UPDATE accounts SET name=?1, type=?2, institution=?3, last4=?4, source=?5, enabled=?6, current_balance=?7 WHERE id=?8",
@@ -194,6 +198,7 @@ pub fn clear_merchant_overrides(state: State<DbState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn put_budget(state: State<DbState>, item: Budget) -> Result<(), String> {
+    if item.monthly_amount < 0.0 { return Err("Budget amount cannot be negative".into()); }
     let conn = state.conn.lock().unwrap();
     conn.execute(
         "INSERT INTO budgets (category, monthly_amount, user_set) VALUES (?1, ?2, ?3) ON CONFLICT(category) DO UPDATE SET monthly_amount=excluded.monthly_amount, user_set=excluded.user_set",
@@ -255,4 +260,50 @@ pub fn clear_rules(state: State<DbState>) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute("DELETE FROM rules", []).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn setup_test_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::init_tables(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_bulk_add_transactions_acid_compliance() {
+        let mut conn = setup_test_db();
+        let tx1 = Transaction {
+            id: None, account_id: 1, date: "2024-01-01".into(), description: "Test1".into(), amount: 10.0,
+            raw_category: None, category: "Food".into(), source: "demo".into(), merchant_key: "merch".into(),
+            user_overridden: false, dedup_key: "dedup1".into(), import_batch_id: None,
+            recurrence: "onetime".into(), recurrence_override: None, is_business: None, tax_category: None, deduction_status: None,
+        };
+        let mut tx3_fail = tx1.clone();
+        tx3_fail.dedup_key = "dedup1".into(); // Will cause UNIQUE constraint failure
+
+        let tx_conn = conn.transaction().unwrap();
+        // Insert first
+        tx_conn.execute(
+            "INSERT INTO transactions (account_id, date, description, amount, category, source, merchant_key, dedup_key, recurrence) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![tx1.account_id, tx1.date, tx1.description, tx1.amount, tx1.category, tx1.source, tx1.merchant_key, tx1.dedup_key, tx1.recurrence],
+        ).unwrap();
+        
+        // Attempt failing insert
+        let result = tx_conn.execute(
+            "INSERT INTO transactions (account_id, date, description, amount, category, source, merchant_key, dedup_key, recurrence) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![tx3_fail.account_id, tx3_fail.date, tx3_fail.description, tx3_fail.amount, tx3_fail.category, tx3_fail.source, tx3_fail.merchant_key, tx3_fail.dedup_key, tx3_fail.recurrence],
+        );
+        
+        assert!(result.is_err());
+        
+        // Ensure roll back drops tx1 because we didn't commit
+        drop(tx_conn); 
+
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM transactions", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0, "Transaction should have rolled back completely");
+    }
 }

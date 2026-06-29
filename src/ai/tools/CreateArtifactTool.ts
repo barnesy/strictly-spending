@@ -7,7 +7,7 @@ export class CreateArtifactTool implements AIToolHandler {
   name = 'create_artifact';
 
   async execute(actionObj: any, context: AIToolContext): Promise<ToolExecutionResult> {
-    let { title, type, content, identifier } = actionObj;
+    let { title, type, content, identifier, summary } = actionObj;
     if (!type) {
       type = 'markdown';
     }
@@ -37,6 +37,7 @@ export class CreateArtifactTool implements AIToolHandler {
         type: type as 'skill' | 'markdown' | 'spreadsheet',
         title: title || 'Untitled Document',
         content,
+        summary,
         createdAt: now,
         updatedAt: now,
       };

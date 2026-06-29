@@ -19,7 +19,8 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
           title: { type: "string", description: "The title of the artifact" },
           type: { type: "string", enum: ["markdown", "spreadsheet", "skill"], description: "The type of the artifact" },
           content: { type: "string", description: "The complete content of the artifact. For markdown, this should be valid markdown text." },
-          identifier: { type: "string", description: "An optional unique identifier for the artifact. If updating an existing artifact, use its identifier." }
+          identifier: { type: "string", description: "An optional unique identifier for the artifact. If updating an existing artifact, use its identifier." },
+          summary: { type: "string", description: "A 1-3 sentence summary of the artifact content for quick reference." }
         },
         required: ["title", "type", "content"]
       }
@@ -35,7 +36,8 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
         properties: {
           id: { type: "string", description: "The unique identifier of the artifact to update." },
           content: { type: "string", description: "The updated complete content of the artifact." },
-          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." }
+          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." },
+          summary: { type: "string", description: "An updated 1-3 sentence summary of the artifact content." }
         },
         required: ["id", "content"]
       }

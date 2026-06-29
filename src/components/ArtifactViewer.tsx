@@ -224,6 +224,18 @@ export default function ArtifactViewer() {
             </>
           )}
 
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              navigate(`/artifacts/${activeArtifact.id}`);
+              setActiveArtifact(null); // Close the modal
+            }}
+            sx={{ textTransform: 'none', fontSize: 11, py: 0.5 }}
+          >
+            View Page
+          </Button>
+
           <IconButton onClick={() => setActiveArtifact(null)} size="small" sx={{ ml: 0.5 }}>
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -231,191 +243,193 @@ export default function ArtifactViewer() {
       </Box>
 
       {/* Content Area */}
-      <Box sx={{ flex: 1, p: 3, overflowY: 'auto' }}>
-        {isPdf ? (
-          <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-            <ArticleIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" color="text.primary" gutterBottom>PDF Document</Typography>
-            <Typography variant="body2" color="text.secondary" align="center" sx={{ maxWidth: 400, mb: 3 }}>
-              This is an uploaded PDF document. To view it, please open it externally in your system's default PDF viewer.
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<OpenInNewIcon />}
-              onClick={async () => {
-                if (activeArtifact.path) {
-                  const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
-                  if (isTauri) {
-                    try {
-                      const { open } = await import('@tauri-apps/plugin-shell');
-                      await open(activeArtifact.path);
-                    } catch (err) {
-                      console.error("Failed to open file", err);
+      <Box sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <Box sx={{ width: '100%', maxWidth: 900, display: 'flex', flexDirection: 'column' }}>
+          {isPdf ? (
+            <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <ArticleIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h6" color="text.primary" gutterBottom>PDF Document</Typography>
+              <Typography variant="body2" color="text.secondary" align="center" sx={{ maxWidth: 400, mb: 3 }}>
+                This is an uploaded PDF document. To view it, please open it externally in your system's default PDF viewer.
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<OpenInNewIcon />}
+                onClick={async () => {
+                  if (activeArtifact.path) {
+                    const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+                    if (isTauri) {
+                      try {
+                        const { open } = await import('@tauri-apps/plugin-shell');
+                        await open(activeArtifact.path);
+                      } catch (err) {
+                        console.error("Failed to open file", err);
+                      }
+                    } else {
+                      window.open(activeArtifact.path, '_blank');
                     }
-                  } else {
-                    window.open(activeArtifact.path, '_blank');
                   }
-                }
+                }}
+              >
+                Open PDF
+              </Button>
+            </Box>
+          ) : isSkill ? (
+            <Paper
+              variant="outlined"
+              sx={(theme) => ({
+                p: 3,
+                bgcolor: '#18181c',
+                color: '#e2e8f0',
+                borderColor: 'rgba(0,0,0,0.12)',
+                borderRadius: 2,
+                fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                fontSize: 12.5,
+                lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
+                scrollbarWidth: 'thin',
+                scrollbarColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.15) transparent' : 'rgba(0,0,0,0.15) transparent',
+              })}
+            >
+              {activeArtifact.content}
+            </Paper>
+          ) : isSpreadsheet ? (
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 0,
+                bgcolor: 'background.paper',
+                borderRadius: 2,
+                borderColor: 'rgba(0,0,0,0.06)',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.02)',
+                overflowX: 'auto',
+                minHeight: '100%',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
-              Open PDF
-            </Button>
-          </Box>
-        ) : isSkill ? (
-          <Paper
-            variant="outlined"
-            sx={(theme) => ({
-              p: 3,
-              bgcolor: '#18181c',
-              color: '#e2e8f0',
-              borderColor: 'rgba(0,0,0,0.12)',
-              borderRadius: 2,
-              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-              fontSize: 12.5,
-              lineHeight: 1.6,
-              whiteSpace: 'pre-wrap',
-              scrollbarWidth: 'thin',
-              scrollbarColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.15) transparent' : 'rgba(0,0,0,0.15) transparent',
-            })}
-          >
-            {activeArtifact.content}
-          </Paper>
-        ) : isSpreadsheet ? (
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 0,
-              bgcolor: 'background.paper',
-              borderRadius: 2,
-              borderColor: 'rgba(0,0,0,0.06)',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.02)',
-              overflowX: 'auto',
-              minHeight: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            {(() => {
-              const data = parseSpreadsheet(activeArtifact.content);
-              if (!data) {
+              {(() => {
+                const data = parseSpreadsheet(activeArtifact.content);
+                if (!data) {
+                  return (
+                    <Box sx={{ p: 3, textAlign: 'center' }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                        Invalid or empty spreadsheet format.
+                      </Typography>
+                    </Box>
+                  );
+                }
+                const { headers, rows } = data;
                 return (
-                  <Box sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                      Invalid or empty spreadsheet format.
-                    </Typography>
-                  </Box>
-                );
-              }
-              const { headers, rows } = data;
-              return (
-                <Table size="small" sx={{ borderCollapse: 'collapse', minWidth: 500 }}>
-                  <TableHead>
-                    {/* Column letters A, B, C */}
-                    <TableRow sx={{ bgcolor: '#f4f5f8', height: 26 }}>
-                      <TableCell sx={{ width: 40, p: '4px', borderRight: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', bgcolor: '#eaecef' }} />
-                      {headers.map((_, i) => (
-                        <TableCell
-                          key={i}
-                          align="center"
-                          sx={{
-                            p: '4px',
-                            fontWeight: 600,
-                            fontSize: 10,
-                            color: 'text.secondary',
-                            borderRight: '1px solid #e0e0e0',
-                            borderBottom: '1px solid #e0e0e0',
-                            fontFamily: 'monospace, sans-serif',
-                            bgcolor: '#eaecef',
-                          }}
-                        >
-                          {String.fromCharCode(65 + i)}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                    {/* Header names row */}
-                    <TableRow sx={{ bgcolor: '#fafafa' }}>
-                      <TableCell sx={{ bgcolor: '#f4f5f8', width: 40, p: 1, borderRight: '1px solid #e0e0e0', borderBottom: '2px solid #d0d0d0' }} />
-                      {headers.map((h, i) => (
-                        <TableCell
-                          key={i}
-                          sx={{
-                            p: 1.25,
-                            fontWeight: 700,
-                            fontSize: 11.5,
-                            color: 'text.primary',
-                            borderRight: '1px solid #e0e0e0',
-                            borderBottom: '2px solid #d0d0d0',
-                          }}
-                        >
-                          {h}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {rows.map((row, rowIdx) => (
-                      <TableRow key={rowIdx} hover>
-                        {/* Row index 1, 2, 3 */}
-                        <TableCell
-                          align="center"
-                          sx={{
-                            bgcolor: '#f4f5f8',
-                            width: 40,
-                            p: 1,
-                            fontWeight: 600,
-                            color: 'text.secondary',
-                            fontSize: 11,
-                            borderRight: '1px solid #e0e0e0',
-                            borderBottom: '1px solid #e0e0e0',
-                            userSelect: 'none',
-                          }}
-                        >
-                          {rowIdx + 1}
-                        </TableCell>
-                        {row.map((cell, cellIdx) => {
-                          const cleanCell = cell.trim();
-                          const isNum = /^\$?\-?\d+(\.\d+)?%?$/.test(cleanCell.replace(/,/g, ''));
-                          const isNegative = cleanCell.startsWith('-') || cleanCell.startsWith('-$');
-                          return (
-                            <TableCell
-                              key={cellIdx}
-                              align={isNum ? 'right' : 'left'}
-                              sx={{
-                                p: 1.25,
-                                fontSize: 12,
-                                borderRight: '1px solid #e0e0e0',
-                                borderBottom: '1px solid #e0e0e0',
-                                fontFamily: isNum ? 'monospace, sans-serif' : 'inherit',
-                                color: isNegative ? 'error.main' : 'text.primary',
-                                fontWeight: isNum ? 500 : 400,
-                              }}
-                            >
-                              {cell}
-                            </TableCell>
-                          );
-                        })}
+                  <Table size="small" sx={{ borderCollapse: 'collapse', minWidth: 500 }}>
+                    <TableHead>
+                      {/* Column letters A, B, C */}
+                      <TableRow sx={{ bgcolor: '#f4f5f8', height: 26 }}>
+                        <TableCell sx={{ width: 40, p: '4px', borderRight: '1px solid #e0e0e0', borderBottom: '1px solid #e0e0e0', bgcolor: '#eaecef' }} />
+                        {headers.map((_, i) => (
+                          <TableCell
+                            key={i}
+                            align="center"
+                            sx={{
+                              p: '4px',
+                              fontWeight: 600,
+                              fontSize: 10,
+                              color: 'text.secondary',
+                              borderRight: '1px solid #e0e0e0',
+                              borderBottom: '1px solid #e0e0e0',
+                              fontFamily: 'monospace, sans-serif',
+                              bgcolor: '#eaecef',
+                            }}
+                          >
+                            {String.fromCharCode(65 + i)}
+                          </TableCell>
+                        ))}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              );
-            })()}
-          </Paper>
-        ) : (
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 3,
-              bgcolor: 'background.paper',
-              borderRadius: 2,
-              borderColor: 'rgba(0,0,0,0.06)',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.02)',
-              minHeight: '100%',
-            }}
-          >
-            <SimpleMarkdown content={activeArtifact.content} />
-          </Paper>
-        )}
+                      {/* Header names row */}
+                      <TableRow sx={{ bgcolor: '#fafafa' }}>
+                        <TableCell sx={{ bgcolor: '#f4f5f8', width: 40, p: 1, borderRight: '1px solid #e0e0e0', borderBottom: '2px solid #d0d0d0' }} />
+                        {headers.map((h, i) => (
+                          <TableCell
+                            key={i}
+                            sx={{
+                              p: 1.25,
+                              fontWeight: 700,
+                              fontSize: 11.5,
+                              color: 'text.primary',
+                              borderRight: '1px solid #e0e0e0',
+                              borderBottom: '2px solid #d0d0d0',
+                            }}
+                          >
+                            {h}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row, rowIdx) => (
+                        <TableRow key={rowIdx} hover>
+                          {/* Row index 1, 2, 3 */}
+                          <TableCell
+                            align="center"
+                            sx={{
+                              bgcolor: '#f4f5f8',
+                              width: 40,
+                              p: 1,
+                              fontWeight: 600,
+                              color: 'text.secondary',
+                              fontSize: 11,
+                              borderRight: '1px solid #e0e0e0',
+                              borderBottom: '1px solid #e0e0e0',
+                              userSelect: 'none',
+                            }}
+                          >
+                            {rowIdx + 1}
+                          </TableCell>
+                          {row.map((cell, cellIdx) => {
+                            const cleanCell = cell.trim();
+                            const isNum = /^\$?\-?\d+(\.\d+)?%?$/.test(cleanCell.replace(/,/g, ''));
+                            const isNegative = cleanCell.startsWith('-') || cleanCell.startsWith('-$');
+                            return (
+                              <TableCell
+                                key={cellIdx}
+                                align={isNum ? 'right' : 'left'}
+                                sx={{
+                                  p: 1.25,
+                                  fontSize: 12,
+                                  borderRight: '1px solid #e0e0e0',
+                                  borderBottom: '1px solid #e0e0e0',
+                                  fontFamily: isNum ? 'monospace, sans-serif' : 'inherit',
+                                  color: isNegative ? 'error.main' : 'text.primary',
+                                  fontWeight: isNum ? 500 : 400,
+                                }}
+                              >
+                                {cell}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                );
+              })()}
+            </Paper>
+          ) : (
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 3,
+                bgcolor: 'background.paper',
+                borderRadius: 2,
+                borderColor: 'rgba(0,0,0,0.06)',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.02)',
+                minHeight: '100%',
+              }}
+            >
+              <SimpleMarkdown content={activeArtifact.content} />
+            </Paper>
+          )}
+        </Box>
       </Box>
     </Box>
   );

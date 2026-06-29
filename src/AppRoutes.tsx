@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { PageTransition } from './components/PageTransition';
-
 import React, { Suspense } from 'react';
+import PageLoader from './components/PageLoader';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Budget = React.lazy(() => import('./pages/Budget'));
@@ -19,7 +19,7 @@ const Loans = React.lazy(() => import('./pages/Loans'));
 const ToolsReference = React.lazy(() => import('./pages/ToolsReference'));
 const ApiPlayground = React.lazy(() => import('./pages/ApiPlayground'));
 const Artifacts = React.lazy(() => import('./pages/Artifacts'));
-import PageLoader from './components/PageLoader';
+const ArtifactDetail = React.lazy(() => import('./pages/ArtifactDetail'));
 
 export function AppRoutes() {
   const location = useLocation();
@@ -47,6 +47,7 @@ export function AppRoutes() {
           <Route path="/taxes" element={<Taxes />} />
           <Route path="/loans" element={<Loans />} />
           <Route path="/artifacts" element={<Artifacts />} />
+          <Route path="/artifacts/:id" element={<ArtifactDetail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
