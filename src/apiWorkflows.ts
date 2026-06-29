@@ -3,7 +3,7 @@ export type WorkflowPhase = 'setup' | 'execution' | 'teardown';
 export interface ApiWorkflowStep {
   endpoint: string;
   description: string;
-  defaultArgs: string;
+  defaultArgs: any[];
   phase: WorkflowPhase;
 }
 
@@ -11,6 +11,7 @@ export interface ApiWorkflow {
   id: string;
   title: string;
   description: string;
+  guards?: string[];
   steps: ApiWorkflowStep[];
 }
 
@@ -23,31 +24,56 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
       {
         endpoint: 'addAccount',
         description: 'Create a new checking or credit account.',
-        defaultArgs: '[\n  {\n    "name": "My New Checking",\n    "type": "checking",\n    "institution": "Chase",\n    "source": "playground_test",\n    "enabled": true\n  }\n]',
+        defaultArgs: [
+          {
+            name: "My New Checking",
+            type: "checking",
+            institution: "Chase",
+            source: "playground_test",
+            enabled: true
+          }
+        ],
         phase: 'setup'
       },
       {
         endpoint: 'getAccounts',
         description: 'Verify the account was created and retrieve its assigned ID to use in the next step.',
-        defaultArgs: '[]',
+        defaultArgs: [],
         phase: 'execution'
       },
       {
         endpoint: 'addTransaction',
         description: 'Add an initial transaction to the newly created account. Replace accountId with the ID from the previous step.',
-        defaultArgs: '[\n  {\n    "accountId": 99999,\n    "date": "2024-06-15",\n    "description": "Initial Deposit",\n    "amount": 1000.00,\n    "category": "Income",\n    "source": "playground_test",\n    "merchantKey": "Deposit",\n    "userOverridden": true,\n    "dedupKey": "deposit_123",\n    "recurrence": "onetime"\n  }\n]',
+        defaultArgs: [
+          {
+            accountId: 99999,
+            date: "2024-06-15",
+            description: "Initial Deposit",
+            amount: 1000.00,
+            category: "Income",
+            source: "playground_test",
+            merchantKey: "Deposit",
+            userOverridden: true,
+            dedupKey: "deposit_123",
+            recurrence: "onetime"
+          }
+        ],
         phase: 'execution'
       },
       {
         endpoint: 'getTransactions',
         description: 'Verify the transactions for the new account (pass the accountId retrieved from getAccounts).',
-        defaultArgs: '[\n  "2024-01-01",\n  "2024-12-31",\n  { "accountId": 99999 }\n]',
+        defaultArgs: [
+          "2024-01-01",
+          "2024-12-31",
+          { accountId: 99999 }
+        ],
         phase: 'execution'
       },
       {
         endpoint: 'deleteAccount',
         description: 'Clean up test data by deleting the account created during setup. Replace the ID with the one retrieved earlier.',
-        defaultArgs: '[\n  99999\n]',
+        defaultArgs: [99999],
         phase: 'teardown'
       }
     ]
@@ -60,25 +86,37 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
       {
         endpoint: 'getSettings',
         description: 'Retrieve the current app:testTaxSettings object to inspect existing deductions (Setup: Backup existing state).',
-        defaultArgs: '[\n  "app:testTaxSettings"\n]',
+        defaultArgs: ["app:testTaxSettings"],
         phase: 'setup'
       },
       {
         endpoint: 'updateSetting',
         description: 'Update the app:testTaxSettings object with a new deduction value.',
-        defaultArgs: '[\n  "app:testTaxSettings",\n  {\n    "businessDeductions": {\n      "general": {\n        "software": 500\n      }\n    }\n  }\n]',
+        defaultArgs: [
+          "app:testTaxSettings",
+          {
+            businessDeductions: {
+              general: {
+                software: 500
+              }
+            }
+          }
+        ],
         phase: 'execution'
       },
       {
         endpoint: 'getSettings',
         description: 'Verify the deduction value was successfully updated in the database.',
-        defaultArgs: '[\n  "app:testTaxSettings"\n]',
+        defaultArgs: ["app:testTaxSettings"],
         phase: 'execution'
       },
       {
         endpoint: 'updateSetting',
         description: 'Restore the original app:testTaxSettings object that was backed up in the setup phase.',
-        defaultArgs: '[\n  "app:testTaxSettings",\n  {}\n]',
+        defaultArgs: [
+          "app:testTaxSettings",
+          {}
+        ],
         phase: 'teardown'
       }
     ]
@@ -91,31 +129,40 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
       {
         endpoint: 'getBudgets',
         description: 'Retrieve all configured budgets.',
-        defaultArgs: '[]',
+        defaultArgs: [],
         phase: 'execution'
       },
       {
         endpoint: 'getDashboardAggregates',
         description: 'Retrieve actual spend data to compare against budgets.',
-        defaultArgs: '[\n  { "demoMode": false }\n]',
+        defaultArgs: [{ demoMode: false }],
         phase: 'execution'
       },
       {
         endpoint: 'putArtifact',
         description: 'Create a markdown artifact containing the budget report.',
-        defaultArgs: '[\n  {\n    "id": "budget_report_1",\n    "type": "markdown",\n    "title": "Monthly Budget Report",\n    "content": "# Budget Report\\n\\nYou are under budget by $500 this month.",\n    "createdAt": "2024-01-01T00:00:00.000Z",\n    "updatedAt": "2024-01-01T00:00:00.000Z"\n  }\n]',
+        defaultArgs: [
+          {
+            id: "budget_report_1",
+            type: "markdown",
+            title: "Monthly Budget Report",
+            content: "# Budget Report\n\nYou are under budget by $500 this month.",
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z"
+          }
+        ],
         phase: 'execution'
       },
       {
         endpoint: 'getArtifacts',
         description: 'Verify the budget report artifact was saved.',
-        defaultArgs: '[]',
+        defaultArgs: [],
         phase: 'execution'
       },
       {
         endpoint: 'deleteArtifact',
         description: 'Delete the test budget report artifact.',
-        defaultArgs: '[\n  "budget_report_1"\n]',
+        defaultArgs: ["budget_report_1"],
         phase: 'teardown'
       }
     ]
@@ -128,19 +175,25 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
       {
         endpoint: 'query_data',
         description: 'First, retrieve aggregate data for the last month to understand high-level spending patterns.',
-        defaultArgs: '[\n  { "preset": "lastMonth" }\n]',
+        defaultArgs: [{ preset: "lastMonth" }],
         phase: 'execution'
       },
       {
         endpoint: 'spending_anomalies',
         description: 'Next, scan for spending outliers and high-growth categories within that same period.',
-        defaultArgs: '[]',
+        defaultArgs: [],
         phase: 'execution'
       },
       {
         endpoint: 'create_artifact',
         description: 'Finally, synthesize the queried data and anomalies into a comprehensive markdown report for the user.',
-        defaultArgs: '[\n  {\n    "title": "End of Month Review",\n    "type": "markdown",\n    "content": "# End of Month Review\\n..."\n  }\n]',
+        defaultArgs: [
+          {
+            title: "End of Month Review",
+            type: "markdown",
+            content: "# End of Month Review\n..."
+          }
+        ],
         phase: 'execution'
       }
     ]
@@ -153,13 +206,13 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
       {
         endpoint: 'subscription_alerts',
         description: 'Run the subscription scanner to detect price spikes, duplicates, or overlapping subscriptions.',
-        defaultArgs: '[]',
+        defaultArgs: [],
         phase: 'execution'
       },
       {
         endpoint: 'filter_ui',
         description: 'Update the dashboard view to show the user the specific transactions flagged in the audit.',
-        defaultArgs: '[\n  { "categories": ["Subscriptions"] }\n]',
+        defaultArgs: [{ categories: ["Subscriptions"] }],
         phase: 'execution'
       }
     ]
@@ -172,26 +225,29 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
       {
         endpoint: 'categorize_transactions',
         description: 'Invoke the local AI model to propose categories for all currently uncategorized transactions.',
-        defaultArgs: '[]',
+        defaultArgs: [],
         phase: 'execution'
       },
       {
         endpoint: 'navigate',
         description: "Navigate the user to the /sort view where they can quickly review, approve, or override the AI's suggestions.",
-        defaultArgs: '[\n  { "page": "/sort" }\n]',
+        defaultArgs: [{ page: "/sort" }],
         phase: 'execution'
       }
     ]
   },
   {
-    id: 'generate_tax_document',
-    title: 'Generate Tax Document Playbook',
-    description: 'An AI Copilot playbook for generating tax documents like Profit & Loss statements, general ledgers, or expense summaries without unnecessarily querying settings.',
+    id: 'create_pnl_playbook',
+    title: 'Create Profit & Loss (P&L) Playbook',
+    description: 'An AI Copilot playbook for generating a Profit & Loss statement for a given tax year.',
+    guards: ['hasBusiness'],
     steps: [
       {
         endpoint: 'compile_tax_document',
-        description: 'Invoke the compile_tax_document tool to directly generate the requested tax document. If the user does not specify a year, default to the most recently completed calendar year (e.g. last year). Do NOT attempt to query tax settings first, as the compile_tax_document tool automatically falls back to reasonable defaults.',
-        defaultArgs: '[\n  { "documentType": "business_pnl", "taxYear": 2024 }\n]',
+        description: 'Call this tool to automatically compile the user\'s transactions and tax settings into a Business P&L statement artifact.',
+        defaultArgs: [
+          { documentType: "business_pnl", taxYear: "{{current_year}}" }
+        ],
         phase: 'execution'
       }
     ]

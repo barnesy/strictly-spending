@@ -14,21 +14,19 @@ interface Issue {
   message: string;
 }
 
-interface ContextKeyword {
-  word: string;
-  effect: string;
-}
+
 
 export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
   const lastDebugPayload = useChatStore(s => s.lastDebugPayload);
   const [tabIndex, setTabIndex] = useState(0);
 
-  const { parsed, issues, keywords } = useMemo(() => {
+  const { parsed, issues, activePlaybooks, currentStateStr } = useMemo(() => {
     let parsed: any = null;
     const issues: Issue[] = [];
-    const keywords: ContextKeyword[] = [];
+    let activePlaybooks: any[] = [];
+    let currentStateStr = '';
     
-    if (!lastDebugPayload) return { parsed, issues, keywords };
+    if (!lastDebugPayload) return { parsed, issues, activePlaybooks, currentStateStr };
 
     try {
       parsed = JSON.parse(lastDebugPayload);
@@ -37,6 +35,22 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
       const messages = parsed.messages || [];
       const systemMsg = messages.find((m: any) => m.role === 'system');
       
+      if (systemMsg && typeof systemMsg.content === 'string') {
+        const playbookMatch = systemMsg.content.match(/<api_playbook>([\s\S]*?)<\/api_playbook>/);
+        if (playbookMatch) {
+          try {
+            activePlaybooks = JSON.parse(playbookMatch[1]);
+          } catch (e) {
+            issues.push({ type: 'warning', title: 'Playbook Parse Error', message: 'Found <api_playbook> but could not parse the JSON.' });
+          }
+        }
+        
+        const stateMatch = systemMsg.content.match(/<current_state>([\s\S]*?)<\/current_state>/);
+        if (stateMatch) {
+          currentStateStr = stateMatch[1].trim();
+        }
+      }
+
       // 1. Missing Native Tools
       if (!parsed.tools || parsed.tools.length === 0) {
         issues.push({ type: 'warning', title: 'Missing Agent Tools', message: 'No native tools are configured for this request. The model will not be able to interact with the application or access live data.' });
@@ -62,29 +76,11 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
          issues.push({ type: 'info', title: 'Long Conversation History', message: `There are ${userMessages.length} user messages in history. Ensure old context is not confusing the model.` });
       }
 
-      // Analyze Keywords in latest user message
-      const latestUserMsg = userMessages[userMessages.length - 1];
-      if (latestUserMsg) {
-        const text = latestUserMsg.content.toLowerCase();
-        if (text.includes('food')) {
-          keywords.push({ word: 'food', effect: 'Maps categories to ["Groceries", "Restaurants & Coffee"]' });
-        }
-        if (text.includes('amazon') || text.includes('apple') || text.includes('netflix') || text.includes('walmart')) {
-          keywords.push({ word: 'merchant name', effect: 'Triggers the exact merchant search parameter in agent_action' });
-        }
-        if (text.includes('january') || text.includes('february') || text.includes('last month')) {
-          keywords.push({ word: 'timeframe', effect: 'Prompts the model to use the "custom" preset instead of "ytd"' });
-        }
-        if (text.includes('compare') || text.includes('versus') || text.includes('vs')) {
-          keywords.push({ word: 'comparison', effect: 'May trigger multi-step queries or comparison breakdowns' });
-        }
-      }
-
     } catch (e) {
       issues.push({ type: 'error', title: 'Parse Error', message: 'Failed to parse the JSON payload.' });
     }
 
-    return { parsed, issues, keywords };
+    return { parsed, issues, activePlaybooks, currentStateStr };
   }, [lastDebugPayload]);
 
   return (
@@ -115,14 +111,25 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
                   <Chip label={`Format: ${parsed.tools ? 'Native Tool Calling' : 'Text/Markdown'}`} variant="outlined" color={parsed.tools ? "success" : "default"} />
                 </Box>
 
-                <Typography variant="h6" gutterBottom>Detected Context Keywords</Typography>
-                {keywords.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>No special keywords detected in the latest user query.</Typography>
+                <Typography variant="h6" gutterBottom>Active Playbooks</Typography>
+                {activePlaybooks.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>No playbooks selected by Semantic Router for this interaction.</Typography>
                 ) : (
                   <Box sx={{ display: 'flex', gap: 1, mb: 4, flexWrap: 'wrap' }}>
-                    {keywords.map((kw, i) => (
-                      <Chip key={i} label={`${kw.word}: ${kw.effect}`} color="secondary" />
+                    {activePlaybooks.map((pb, i) => (
+                      <Chip key={i} label={`${pb.id}: ${pb.title}`} color="secondary" />
                     ))}
+                  </Box>
+                )}
+
+                <Typography variant="h6" gutterBottom>Injected State Context</Typography>
+                {!currentStateStr ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>No state context found.</Typography>
+                ) : (
+                  <Box sx={{ mb: 4, p: 2, bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="body2" component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12 }}>
+                      {currentStateStr}
+                    </Typography>
                   </Box>
                 )}
 
@@ -235,6 +242,30 @@ export function DebugPromptModal({ open, onClose }: DebugPromptModalProps) {
         )}
       </DialogContent>
       <DialogActions sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Button 
+          onClick={() => {
+            const debugText = [
+              'Execution Configuration',
+              `Model: ${parsed?.model || 'Unknown'}`,
+              `Temperature: ${parsed?.options?.temperature ?? 'Default'}`,
+              `Format: ${parsed?.tools ? 'Native Tool Calling' : 'Text/Markdown'}`,
+              '',
+              'Active Playbooks',
+              activePlaybooks.length === 0 ? 'No playbooks selected by Semantic Router for this interaction.' : activePlaybooks.map((p: any) => `${p.id}: ${p.title}`).join('\n'),
+              '',
+              'Injected State Context',
+              currentStateStr || 'No state context found.',
+              '',
+              'Payload Diagnostics',
+              issues.length === 0 ? 'No issues detected.' : issues.map((i: any) => `${i.title}\n${i.message}`).join('\n\n')
+            ].join('\n');
+            navigator.clipboard.writeText(debugText);
+          }} 
+          color="inherit" 
+          sx={{ mr: 'auto' }}
+        >
+          Copy Dashboard Data
+        </Button>
         <Button onClick={onClose} variant="contained">Close</Button>
       </DialogActions>
     </Dialog>

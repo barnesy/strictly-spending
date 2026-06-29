@@ -19,7 +19,7 @@ export class ManageLoansTool implements AIToolHandler {
       const loans = await api.getLoans();
       return {
         actionResult: { action: 'get_loans' },
-        data: { loans }
+        systemResultsMsg: `Loans data:\n${JSON.stringify(loans, null, 2)}`
       };
     }
 

@@ -58,11 +58,13 @@ import { ManageLoansTool } from './ManageLoansTool';
 import { ManageBudgetsTool } from './ManageBudgetsTool';
 import { CreateAutoRuleTool } from './CreateAutoRuleTool';
 import { ReadPdfTool } from './ReadPdfTool';
+import { ReadArtifactTool } from './ReadArtifactTool';
 
 toolRegistry.register(new QueryDataTool());
 toolRegistry.register(new ExportTransactionsTool());
 toolRegistry.register(new CreateArtifactTool());
 toolRegistry.register(new UpdateArtifactTool());
+toolRegistry.register(new ReadArtifactTool());
 toolRegistry.register(new ManageTaxSettingsTool());
 toolRegistry.register(new UpdateDeductionStatusTool());
 toolRegistry.register(new CategorizeTransactionsTool());

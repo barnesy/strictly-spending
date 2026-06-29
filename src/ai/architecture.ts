@@ -35,12 +35,26 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
       parameters: {
         type: "object",
         properties: {
-          id: { type: "string", description: "The unique identifier of the artifact to update." },
+          id: { type: "string", description: "The unique identifier of the artifact to update. DO NOT pass the title. Look at the 'Available Artifacts' list in your state and copy the exact string after 'ID:'." },
           content: { type: "string", description: "The updated complete content of the artifact." },
           confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." },
           summary: { type: "string", description: "An updated 1-3 sentence summary of the artifact content." }
         },
         required: ["id", "content"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_artifact",
+      description: "Read the full content of a specific artifact. Use this before attempting to update an artifact so you know its current state.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "The unique identifier of the artifact to read. DO NOT pass the title. Look at the 'Available Artifacts' list in your state and copy the exact string after 'ID:'." }
+        },
+        required: ["id"]
       }
     }
   },

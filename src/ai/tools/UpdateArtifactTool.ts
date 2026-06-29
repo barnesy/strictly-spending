@@ -21,10 +21,24 @@ export class UpdateArtifactTool implements AIToolHandler {
     try {
       // We need to fetch the existing artifact to preserve its title and type
       const existingArtifacts = await api.getArtifacts();
-      const existing = existingArtifacts.find(a => a.id === id);
+      let existing = existingArtifacts.find(a => a.id === id);
 
       if (!existing) {
-        return { feedbackError: `Artifact with ID ${id} not found.` };
+        const searchLower = id.toLowerCase();
+        existing = existingArtifacts.find(a => a.title.toLowerCase() === searchLower);
+        
+        if (!existing) {
+          const matches = existingArtifacts.filter(a => a.title.toLowerCase().includes(searchLower));
+          if (matches.length === 1) {
+            existing = matches[0];
+          } else if (matches.length > 1) {
+            return { feedbackError: `Multiple artifacts match '${id}'. Please be more specific. Matches: ${matches.map(m => `ID: ${m.id} (Title: ${m.title})`).join(', ')}` };
+          }
+        }
+      }
+
+      if (!existing) {
+        return { feedbackError: `Artifact with ID or Title matching '${id}' not found.` };
       }
 
       const updatedArtifact = {

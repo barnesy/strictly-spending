@@ -20,8 +20,29 @@ export interface OrchestratorContext {
 }
 
 export class CopilotOrchestrator {
+  static async evaluatePlaybookGuards(playbook: ApiWorkflow): Promise<boolean> {
+    if (!playbook.guards || playbook.guards.length === 0) return true;
+    
+    const taxSettings = await api.getSetting<any>('app:taxSettings') || {};
+    
+    for (const guard of playbook.guards) {
+      if (guard === 'hasBusiness') {
+        if (!taxSettings.hasBusiness) return false;
+      }
+    }
+    
+    return true;
+  }
+
   static async routeToPlaybooks(userQuery: string, modelName: string): Promise<ApiWorkflow[]> {
-    const catalog = API_WORKFLOWS.map(w => ({ id: w.id, title: w.title, description: w.description }));
+    const validPlaybooks: ApiWorkflow[] = [];
+    for (const w of API_WORKFLOWS) {
+      if (await this.evaluatePlaybookGuards(w)) {
+        validPlaybooks.push(w);
+      }
+    }
+
+    const catalog = validPlaybooks.map(w => ({ id: w.id, title: w.title, description: w.description }));
     const prompt = `You are a semantic router for an AI agent.
 Given the user query, return a JSON object with a "playbook_ids" array containing up to 2 playbook IDs that are highly relevant to helping the user accomplish their goal.
 If none are highly relevant, return an empty array.
@@ -47,7 +68,7 @@ Example output:
       const parsed = parseAIResponse(res.content);
       if (parsed && Array.isArray(parsed.playbook_ids)) {
         const ids = new Set(parsed.playbook_ids);
-        return API_WORKFLOWS.filter(w => ids.has(w.id));
+        return validPlaybooks.filter(w => ids.has(w.id));
       }
     } catch (e) {
       console.error("Failed to route playbooks:", e);
@@ -72,11 +93,13 @@ Example output:
     const recurrenceMapObj = await queryClient.fetchQuery({ queryKey: ['recurrence', filters.demoMode], queryFn: () => buildRecurrenceMap(filters.demoMode) });
     const recurrenceMap = new Map(Object.entries(recurrenceMapObj));
     const budgets = await queryClient.fetchQuery({ queryKey: ['budgets'], queryFn: api.getBudgets });
+    const artifacts = await queryClient.fetchQuery({ queryKey: ['artifacts'], queryFn: api.getArtifacts });
     const dataStore = { categories, accounts, transactions, recurrenceMap, budgets };
 
     const runwayData = await calculateGlobalRunwayData();
 
     const stateContext = `Current Date: ${new Date().toISOString().slice(0, 10)} (${new Date().toLocaleDateString()})
+Default Tax Year: ${new Date().getFullYear() - 1}
 Earliest Transaction Date: ${filters.earliestTransactionDate || 'None'}
 Latest Transaction Date: ${filters.latestTransactionDate || 'None'}
 Current Page: ${location.pathname}
@@ -84,6 +107,7 @@ Current Filter Preset: ${filters.preset}
 Current Search Query: "${filters.searchQuery}"
 Available Categories: ${dataStore.categories.map((c) => c.name).join(', ')}
 Available Accounts: ${dataStore.accounts.map((a) => a.name).join(', ')}
+Available Artifacts: ${artifacts.map(a => `ID: ${a.id}, Title: "${a.title}", Summary: "${a.summary}"`).join(' | ') || 'None'}
 
 Global Cash Runway:
 ${JSON.stringify(runwayData, null, 2)}`;
@@ -109,7 +133,14 @@ ${JSON.stringify(runwayData, null, 2)}`;
       if (loops === 1) {
         currentSteps.push({ type: 'process', status: 'running', text: `Routing semantic intent...` });
         const activePlaybooks = await this.routeToPlaybooks(userMsg.content, localAIModel.modelName);
-        const overrideSystemPrompt = await import('./prompts').then(m => m.getSystemPrompt(stateContext, undefined, JSON.stringify(activePlaybooks, null, 2)));
+        
+        // Strip the 'guards' property before sending to the LLM so it doesn't try to manually evaluate them
+        const sanitizedPlaybooks = activePlaybooks.map(({ guards, ...rest }) => rest);
+        
+        let activePlaybooksJson = JSON.stringify(sanitizedPlaybooks, null, 2);
+        activePlaybooksJson = activePlaybooksJson.replace(/\{\{current_year\}\}/g, String(new Date().getFullYear()));
+        
+        const overrideSystemPrompt = await import('./prompts').then(m => m.getSystemPrompt(stateContext, undefined, activePlaybooksJson));
         // We will pass overrideSystemPrompt below
         (this as any)._cachedSystemPrompt = overrideSystemPrompt;
       }
@@ -350,6 +381,10 @@ ${JSON.stringify(runwayData, null, 2)}`;
         
         // Start streaming for the next loop
         startStreamingMessage(currentSteps, undefined, true);
+        
+        // Yield to the macrotask event loop to prevent React "Maximum update depth exceeded" errors
+        // if the LLM is responding too quickly or looping on errors.
+        await new Promise(resolve => setTimeout(resolve, 10));
       } else {
         await finalizeStreamingMessage(
           currentResponse,

@@ -65,6 +65,14 @@ graph TD
 
 ---
 
+## Contributing & AI Customizations
+
+We welcome contributions! To understand how the app works, how to run tests, and our local-first architecture rules, please see our **[Contributing Guide](CONTRIBUTING.md)**. 
+
+If you are using an AI coding assistant (like Claude, Gemini, or Cursor) to help build features, it will automatically load our workspace rules from **[.agents/AGENTS.md](.agents/AGENTS.md)**. This ensures the AI understands our "No ORM" rule and our Tauri IPC boundaries without you needing to explicitly prompt it.
+
+---
+
 ## Quick start
 
 To build and run the desktop application:
