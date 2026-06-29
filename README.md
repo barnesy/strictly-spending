@@ -31,8 +31,7 @@ Strictly Spending uses a modern, local-first hybrid architecture combining a hig
 ```mermaid
 graph TD
     subgraph Frontend (Vite + React + TS)
-        UI[React Pages & Hooks] -->|Drizzle Queries| COMPAT[Drizzle Compatibility Layer]
-        COMPAT -->|Method Calls| API[API Wrapper]
+        UI[React Pages & Hooks] -->|Method Calls| API[API Wrapper]
     end
     
     subgraph IPC Bridge (Tauri v2)
@@ -47,11 +46,11 @@ graph TD
 ```
 
 ### Key Architectural Highlights:
-- **Native Rust Backend**: Built on Tauri v2 and powered by Rust. All database connection pooling, transactions, and mutations are handled by Rust using `rusqlite` with thread-safe connection locks.
-- **Transparent Drizzle Compatibility Layer**: An ultra-lightweight, mock Drizzle ORM implementation (`src/db/drizzle.ts`) intercepts all Drizzle-style queries in our React pages. It maps them to native Rust IPC commands on the fly. This keeps our frontend bundle tiny, free of heavy ORM libraries, and avoids the need to rewrite 30+ React pages.
+- **Native Rust Backend**: Built on Tauri v2 and powered by Rust. All database connection pooling, transactions, migrations, and mutations are handled directly by Rust using `rusqlite` with thread-safe connection locks.
+- **Thin API Wrapper**: Frontend components interact with the backend via a thin, fully-typed API wrapper (`src/api.ts`) that maps directly to Tauri IPC commands, keeping the frontend bundle extremely lightweight and entirely free of heavy ORM libraries.
 - **Transactional Safety**: Database mutations (inserts, updates, bulk operations) run inside acid-compliant SQLite transactions in Rust, ensuring database consistency even under heavy loads.
 - **High-Fidelity Testing**: 
-  - **Unit Tests**: Run in Vitest using the real `drizzle-orm` package against a real in-memory SQLite database, providing 100% authentic DB assertions.
+  - **Unit Tests**: Run in Vitest against mock configurations or simulated API boundaries.
   - **E2E Integration Tests**: Run in Playwright using Chrome DevTools Protocol (CDP) mode to test the compiled Tauri application natively on Windows.
 
 ---
@@ -146,9 +145,6 @@ strictly-spending/
 ├── src/                  React frontend
 │   ├── pages/            Top-level routes (Dashboard, Sort, Forecast, Rules, …)
 │   ├── components/       Reusable UI components (SortCard, SpendChart, …)
-│   ├── db/
-│   │   ├── drizzle.ts    Transparent Drizzle-to-IPC compatibility layer
-│   │   └── schema.ts     Drizzle database schema (used by Vitest and compatibility layer)
 │   ├── api.ts            Tauri command invoke wrapper
 │   ├── testBridge.ts     E2E test bridge for injecting mock data
 │   ├── main.tsx          Frontend bootstrapper
