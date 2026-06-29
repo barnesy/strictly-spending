@@ -422,9 +422,10 @@ export async function seedDemoData(): Promise<SeedResult> {
   await api.putMerchantOverride({ merchantKey: 'spotify', recurrence: 'monthly' });
   await api.putMerchantOverride({ merchantKey: 'applemusic', recurrence: 'monthly' });
 
-  // 2. Build transactions for the current year through this month
-  const demoTxns = buildDemoTransactions(year, throughMonth);
-
+  // 2. Build transactions for the current year through this month, and all of last year
+  const demoTxnsThisYear = buildDemoTransactions(year, throughMonth);
+  const demoTxnsLastYear = buildDemoTransactions(year - 1, 11);
+  const demoTxns = [...demoTxnsLastYear, ...demoTxnsThisYear];
   // 3. Insert (assign dedupKeys with sequence counters so identical
   //    same-day-same-amount-same-desc rows are kept distinct)
   const seqCounter = new Map<string, number>();

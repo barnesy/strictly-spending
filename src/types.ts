@@ -213,7 +213,11 @@ export interface TaxSettings {
 
   // Tax Payments Already Made
   taxPayments?: {
-    estimatedPayments?: number;
+    estimatedPayments?: number; // Total / legacy
+    q1Estimated?: number;
+    q2Estimated?: number;
+    q3Estimated?: number;
+    q4Estimated?: number;
     stateLocalFees?: number;
   };
 

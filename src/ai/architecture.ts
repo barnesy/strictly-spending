@@ -20,6 +20,7 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
           type: { type: "string", enum: ["markdown", "spreadsheet", "skill"], description: "The type of the artifact" },
           content: { type: "string", description: "The complete content of the artifact. For markdown, this should be valid markdown text." },
           identifier: { type: "string", description: "An optional unique identifier for the artifact. If updating an existing artifact, use its identifier." },
+          associatedChecklistId: { type: "string", description: "If the user provides a checklist ID (e.g. for tax documents), pass it here to link the artifact to the UI." },
           summary: { type: "string", description: "A 1-3 sentence summary of the artifact content for quick reference." }
         },
         required: ["title", "type", "content"]
@@ -160,15 +161,33 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
   {
     type: "function",
     function: {
-      name: "update_tax_settings",
-      description: "Update the user's global tax settings.",
+      name: "manage_tax_settings",
+      description: "Retrieve or update the user's global tax settings, tax deductions, and business tax statuses.",
       parameters: {
         type: "object",
         properties: {
-          taxData: { type: "object", description: "The new tax settings data." },
+          action: { type: "string", enum: ["get", "update"] },
+          taxData: { type: "object", description: "The new tax settings data. Required for 'update' action." },
           confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." }
         },
-        required: ["taxData"]
+        required: ["action"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "manage_loans",
+      description: "Manage, fetch, or create loans. Use this tool when the user asks about their loans, needs loan info for forecasting, or requests to add/update a loan.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["get", "create", "update", "delete"] },
+          loanId: { type: "number" },
+          loanData: { type: "object", description: "Loan details needed for creation or updates." },
+          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed creation/update/deletion." }
+        },
+        required: ["action"]
       }
     }
   },
@@ -243,6 +262,26 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
       parameters: {
         type: "object",
         properties: {}
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "compile_tax_document",
+      description: "Securely generate and save a tax document using local raw database data without hitting LLM context limits. ALWAYS use this tool instead of 'create_artifact' when asked to generate a tax document, P&L, ledger, or tax summary.",
+      parameters: {
+        type: "object",
+        properties: {
+          documentType: { 
+            type: "string", 
+            enum: ["business_pnl", "business_ledger", "deduction_expense_summary", "tax_summary"],
+            description: "The type of tax document to generate."
+          },
+          taxYear: { type: "number", description: "The tax year to generate for. If omitted, defaults to the previous year. Only specify if the user explicitly asks for a specific year." },
+          associatedChecklistId: { type: "string", description: "If the user provides a checklist ID (e.g. 'business_pnl'), pass it here to link the generated artifact to the UI." }
+        },
+        required: ["documentType"]
       }
     }
   }

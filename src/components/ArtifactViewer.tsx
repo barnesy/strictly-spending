@@ -27,6 +27,9 @@ import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettings } from '../hooks/queries';
+import { parseSpreadsheet } from '../spreadsheetUtils';
+import { downloadFile } from '../downloadUtils';
+import Papa from 'papaparse';
 
 import type { AgentSkill } from '../types';
 import SimpleMarkdown from './SimpleMarkdown';
@@ -53,27 +56,6 @@ export default function ArtifactViewer() {
   const isPdf = activeArtifact.type === 'pdf';
   const isSaved = isSkill && activeSkills.some(s => s.name === activeArtifact.title);
 
-  const parseSpreadsheet = (content: string): { headers: string[]; rows: string[][] } | null => {
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed && Array.isArray(parsed.headers) && Array.isArray(parsed.rows)) {
-        return parsed;
-      }
-    } catch {
-      // ignore JSON parse error, fall back to CSV
-    }
-
-    // CSV fallback parsing
-    const lines = content.split('\n').map(line => line.trim()).filter(Boolean);
-    if (lines.length > 0) {
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
-      const rows = lines.slice(1).map(line => line.split(',').map(cell => cell.trim().replace(/^["']|["']$/g, '')));
-      return { headers, rows };
-    }
-
-    return null;
-  };
-
   const handleCopy = () => {
     navigator.clipboard.writeText(activeArtifact.content);
     setCopied(true);
@@ -83,19 +65,13 @@ export default function ArtifactViewer() {
   const handleDownloadCSV = () => {
     const data = parseSpreadsheet(activeArtifact.content);
     if (!data) return;
-    const csvContent = [
-      data.headers.join(','),
-      ...data.rows.map(r => r.join(','))
-    ].join('\n');
     
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${activeArtifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const csvContent = Papa.unparse({
+      fields: data.headers,
+      data: data.rows
+    });
+    
+    downloadFile(csvContent, `${activeArtifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.csv`, 'text/csv;charset=utf-8;');
   };
 
   const handleSave = async () => {

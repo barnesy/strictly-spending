@@ -7,6 +7,9 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { api } from '../api';
 import { API_WORKFLOWS, type ApiWorkflow, type ApiWorkflowStep } from '../apiWorkflows';
 import { queryClient } from '../queryClient';
+import { toolRegistry } from '../ai/tools/index';
+import { useFilters } from '../store';
+import { useBudgetStore } from '../budgetStore';
 
 export default function ApiPlayground() {
   const theme = useTheme();
@@ -93,14 +96,30 @@ export default function ApiPlayground() {
         args = JSON.parse(trimmedArgs);
       }
       
+      let res: any;
       const fn = (api as any)[step.endpoint];
-      if (!fn) throw new Error(`Endpoint ${step.endpoint} not found in api.ts`);
+      const aiTool = toolRegistry.get(step.endpoint);
       
-      const res = await fn(...args);
+      if (fn) {
+        res = await fn(...args);
+      } else if (aiTool) {
+        const context = {
+          filters: useFilters.getState().filters,
+          dataStore: useFilters.getState(),
+          budgetStore: useBudgetStore.getState(),
+        };
+        // The args for AI tools are usually passed as actionObj in args[0]
+        res = await aiTool.execute(args[0] || {}, context);
+      } else if (['navigate', 'filter_ui'].includes(step.endpoint)) {
+        res = { success: true, mocked: true, message: `Mocked ${step.endpoint} step in API Playground` };
+      } else {
+        throw new Error(`Endpoint ${step.endpoint} not found in api.ts or toolRegistry`);
+      }
+      
       setWorkflowResults(prev => ({ ...prev, [stepIndex]: JSON.stringify(res, null, 2) || 'undefined' }));
 
       // If this was a mutation (add/put/update/delete/clear), invalidate the UI cache!
-      if (/^(add|put|update|delete|clear)/.test(step.endpoint)) {
+      if (/^(add|put|update|delete|clear)/.test(step.endpoint) || aiTool) {
         await queryClient.invalidateQueries();
       }
     } catch (e: any) {

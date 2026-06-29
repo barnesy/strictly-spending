@@ -25,7 +25,9 @@ import {
   DialogActions,
   Button,
   Stack,
-  CircularProgress
+  CircularProgress,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -37,6 +39,7 @@ import { api } from '../api';
 import type { TaxSettings, ChatArtifact } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
 import { SCHEDULE_C_CATEGORIES, resolveTaxDeduction } from '../taxUtils';
+import { calculateTaxYearStats, generateBusinessLedgerCsv, generatePersonalDeductionsCsv, generateTaxSummaryMarkdown, generateComprehensiveCsv } from '../taxDocumentGenerator';
 
 const DEFAULT_TAX_SETTINGS: TaxSettings = {
   hasBusiness: false,
@@ -101,7 +104,7 @@ export default function Taxes() {
   const { data: artifacts = [] } = useArtifacts();
   const shouldRender = useDeferredRender();
   const { data: taxRules = [], isLoading: isRulesLoading } = useTaxRules();
-  const { data: transactions = [], isLoading: isTransactionsLoading } = useTransactions();
+  const { data: transactions = [], isLoading: isTransactionsLoading } = useTaxTransactions(currentTaxYear || new Date().getFullYear());
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
 
@@ -116,6 +119,43 @@ export default function Taxes() {
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationProgress, setCompilationProgress] = useState(0);
   const [compilationStepText, setCompilationStepText] = useState('');
+  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+
+  const handleMileageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        let busMiles = 0;
+        let persMiles = 0;
+        results.data.forEach((row: any) => {
+          const distance = parseFloat(row.Distance || row.Miles || row.distance || row.miles) || 0;
+          const purpose = (row.Purpose || row.Category || row.purpose || row.category || '').toString().toLowerCase();
+          if (purpose.includes('business') || purpose.includes('work')) {
+            busMiles += distance;
+          } else {
+            persMiles += distance;
+          }
+        });
+        const currentVehicle = taxSettings.businessDeductions?.vehicle || {};
+        handleUpdateSettings({
+          businessDeductions: {
+            ...taxSettings.businessDeductions,
+            vehicle: {
+              ...currentVehicle,
+              businessMiles: (currentVehicle.businessMiles || 0) + busMiles,
+              personalMiles: (currentVehicle.personalMiles || 0) + persMiles
+            }
+          }
+        });
+        setSnackbarMessage(`Imported ${busMiles} business miles and ${persMiles} personal miles.`);
+        e.target.value = '';
+      }
+    });
+  };
 
   const handleUpdateSettings = async (updates: Partial<TaxSettings>) => {
     const newSettings = { ...taxSettings, ...updates };
@@ -223,6 +263,7 @@ export default function Taxes() {
 
     setBulkPromptOpen(false);
     setBulkAction(null);
+    setSnackbarMessage(`Successfully bulk updated ${updates.length} transactions.`);
   };
 
   const handleDocumentUpload = async (documentId: string, fileInfo: { filename: string; type: string; path: string; uploadedAt: string }) => {
@@ -261,36 +302,21 @@ export default function Taxes() {
     });
   };
 
-  const handleDocumentGenerateAi = (_documentId: string, label: string) => {
-    const promptText = `Please generate ${label} for the tax year ${taxSettings.taxYear}`;
+  const handleDocumentGenerateAi = (documentId: string, label: string) => {
+    const promptText = `Please generate ${label} for the tax year ${taxSettings.taxYear} and ensure you link it to checklist ID '${documentId}'.`;
     window.dispatchEvent(new CustomEvent('app:run-prompt', { detail: { prompt: promptText } }));
     window.dispatchEvent(new CustomEvent('app:open-chat'));
   };
 
   // Automated Insights
   const taxYearStats = useMemo(() => {
-    const yearTransactions = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
-    
-    let totalIncome = 0;
-    let businessExpenses = 0;
-    let itemizedDeductions = 0;
-
-    yearTransactions.forEach(t => {
-      if (t.category.toLowerCase() === 'income' || t.amount > 0) {
-        totalIncome += Math.abs(t.amount);
-      } else {
-        if (t.isBusiness && t.deductionStatus === 'confirmed') {
-          const rate = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.deductionRate ?? 1.0) : 1.0;
-          businessExpenses += Math.abs(t.amount) * rate;
-        }
-        if (!t.isBusiness && t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/)) {
-          itemizedDeductions += Math.abs(t.amount);
-        }
-      }
-    });
-
-    return { totalIncome, businessExpenses, itemizedDeductions };
+    return calculateTaxYearStats(transactions, taxSettings.taxYear || new Date().getFullYear());
   }, [transactions, taxSettings.taxYear]);
+
+  const netBusinessIncome = (taxSettings.businessIncome?.grossSales || 0) - taxYearStats.businessExpenses;
+  const estimatedTaxLiability = netBusinessIncome > 0 ? netBusinessIncome * 0.15 : 0;
+  const totalEstimatedPaid = (taxSettings.taxPayments?.q1Estimated || 0) + (taxSettings.taxPayments?.q2Estimated || 0) + (taxSettings.taxPayments?.q3Estimated || 0) + (taxSettings.taxPayments?.q4Estimated || 0);
+  const isUnderpaying = taxSettings.hasBusiness && totalEstimatedPaid < estimatedTaxLiability - 100;
 
   const activeDocuments = REQUIRED_DOCUMENTS.filter(doc => taxSettings.hasBusiness || !doc.category.startsWith('business'));
   const totalChecklist = activeDocuments.length;
@@ -343,250 +369,19 @@ export default function Taxes() {
   };
 
   const getBusinessCsvContent = () => {
-    const yearTxns = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
-    const businessTxns = yearTxns.filter(t => t.isBusiness && t.deductionStatus === 'confirmed');
-
-    const csvData = businessTxns.map(t => {
-      const rate = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.deductionRate ?? 1.0) : 1.0;
-      const deductible = Math.abs(t.amount) * rate;
-      const catLabel = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.label ?? 'Other') : 'Other';
-      const acc = accounts.find(a => a.id === t.accountId);
-      
-      return {
-        Date: t.date,
-        Account: acc ? acc.name : 'Unknown',
-        Institution: acc ? acc.institution : 'Unknown',
-        Description: t.description,
-        'IRS Schedule C Category': catLabel,
-        'Gross Amount': Math.abs(t.amount),
-        'Deduction Rate': `${rate * 100}%`,
-        'Deductible Amount': deductible
-      };
-    });
-
-    return Papa.unparse(csvData);
+    return generateBusinessLedgerCsv(transactions, accounts, taxSettings.taxYear || new Date().getFullYear());
   };
 
   const getPersonalCsvContent = () => {
-    const yearTxns = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
-    const personalTxns = yearTxns.filter(t => !t.isBusiness && t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/));
-
-    const csvData = personalTxns.map(t => {
-      const acc = accounts.find(a => a.id === t.accountId);
-      return {
-        Date: t.date,
-        Account: acc ? acc.name : 'Unknown',
-        Institution: acc ? acc.institution : 'Unknown',
-        Description: t.description,
-        Category: t.category,
-        Amount: Math.abs(t.amount)
-      };
-    });
-
-    return Papa.unparse(csvData);
+    return generatePersonalDeductionsCsv(transactions, accounts, taxSettings.taxYear || new Date().getFullYear());
   };
 
   const getMarkdownContent = () => {
-    const yearTxns = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
-    const businessTxns = yearTxns.filter(t => t.isBusiness && t.deductionStatus === 'confirmed');
-    const personalTxns = yearTxns.filter(t => !t.isBusiness && t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/));
-
-    const filerStatusLabel = {
-      single: 'Single',
-      married_joint: 'Married Filing Jointly',
-      married_separate: 'Married Filing Separately',
-      head_household: 'Head of Household'
-    }[taxSettings.personalInfo?.filingStatus || 'single'] || 'Single';
-
-    const checklistItems = activeDocuments.map(item => {
-      const doc = artifacts.find(d => d.associatedChecklistId === item.id);
-      return {
-        label: item.label,
-        status: doc ? 'Uploaded' : 'Missing',
-        filename: doc ? doc.title : 'N/A'
-      };
-    });
-
-    const formatCurrency = (val: number | undefined) => 
-      (val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    let md = `# Tax Summary Report - ${taxSettings.taxYear}\n\n`;
-    md += `**Exported:** ${new Date().toLocaleDateString()}\n`;
-    md += `**Source:** Local Database (strictly spending)\n\n`;
-
-    md += `## Tax Financial Overview\n\n`;
-    md += `### Income & Estimations\n`;
-    md += `- **Gross Personal / W-2 Income:** $${formatCurrency(taxSettings.personalInfo?.w2Income)}\n`;
-    if (taxSettings.hasBusiness) {
-      md += `- **Gross Business Income:** $${formatCurrency(taxSettings.businessIncome?.grossSales || taxSettings.businessIncome?.forms1099Total || 0)}\n`;
-    }
-    md += `- **Estimated Tax Payments Paid:** $${formatCurrency(taxSettings.taxPayments?.estimatedPayments)}\n`;
-    md += `- **State / LLC Fees Paid:** $${formatCurrency(taxSettings.taxPayments?.stateLocalFees)}\n\n`;
-
-    md += `### Mapped Deductions\n`;
-    md += `- **Personal Itemized Deductions:** $${formatCurrency(taxYearStats.itemizedDeductions)}\n`;
-    if (taxSettings.hasBusiness) {
-      md += `- **Business Schedule C Expenses:** $${formatCurrency(taxYearStats.businessExpenses)}\n`;
-      md += `- **Net Business Income:** $${formatCurrency((taxSettings.businessIncome?.grossSales || 0) - taxYearStats.businessExpenses)}\n`;
-    }
-    md += `\n`;
-
-    md += `## Filer & Entity Profile\n\n`;
-    md += `### Personal Profile\n`;
-    md += `- **Filing Status:** ${filerStatusLabel}\n`;
-    md += `- **Dependents:** ${taxSettings.personalInfo?.dependents || 0}\n\n`;
-
-    if (taxSettings.hasBusiness) {
-      md += `### Business / LLC Profile\n`;
-      md += `- **DBA / Legal Name:** ${taxSettings.businessIdentity?.dba || 'N/A'}\n`;
-      md += `- **Address:** ${taxSettings.businessIdentity?.address || 'N/A'}\n`;
-      md += `- **EIN or SSN:** ${taxSettings.businessIdentity?.einSsn || 'N/A'}\n\n`;
-    }
-
-    if (taxSettings.hasBusiness && (taxSettings.businessDeductions?.homeOffice || taxSettings.businessDeductions?.vehicle)) {
-      md += `## Home Office & Vehicle Declarations\n\n`;
-      if (taxSettings.businessDeductions?.homeOffice) {
-        const sqFtOffice = taxSettings.businessDeductions.homeOffice.sqFtOffice || 0;
-        const sqFtHome = taxSettings.businessDeductions.homeOffice.sqFtHome || 0;
-        const ratio = sqFtHome ? ((sqFtOffice / sqFtHome) * 100).toFixed(1) : '0.0';
-        md += `### Home Office\n`;
-        md += `- **Dedicated Office Area:** ${sqFtOffice} sq ft\n`;
-        md += `- **Total Home Area:** ${sqFtHome} sq ft\n`;
-        md += `- **Home Office Ratio:** ${ratio}%\n\n`;
-      }
-      if (taxSettings.businessDeductions?.vehicle) {
-        const busMiles = taxSettings.businessDeductions.vehicle.businessMiles || 0;
-        const persMiles = taxSettings.businessDeductions.vehicle.personalMiles || 0;
-        const ratio = (busMiles + persMiles) ? ((busMiles / (busMiles + persMiles)) * 100).toFixed(1) : '0.0';
-        md += `### Vehicle Mileage\n`;
-        md += `- **Business Miles Logged:** ${busMiles.toLocaleString()} mi\n`;
-        md += `- **Personal Miles Logged:** ${persMiles.toLocaleString()} mi\n`;
-        md += `- **Business Use Percentage:** ${ratio}%\n\n`;
-      }
-    }
-
-    md += `## Document Audit Checklist\n\n`;
-    md += `| Document Description | Status | File Name |\n`;
-    md += `| :--- | :--- | :--- |\n`;
-    checklistItems.forEach(item => {
-      md += `| ${item.label} | ${item.status} | \`${item.filename}\` |\n`;
-    });
-    md += `\n`;
-
-    if (taxSettings.hasBusiness) {
-      md += `## Schedule C Business Deductions Ledger (${businessTxns.length} records)\n\n`;
-      md += `| Date | Account | Description | IRS Category | Gross Amount | Rate | Deductible |\n`;
-      md += `| :--- | :--- | :--- | :--- | ---: | ---: | ---: |\n`;
-      businessTxns.forEach(t => {
-        const rate = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.deductionRate ?? 1.0) : 1.0;
-        const deductible = Math.abs(t.amount) * rate;
-        const catLabel = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.label ?? 'Other') : 'Other';
-        const acc = accounts.find(a => a.id === t.accountId);
-        md += `| ${t.date} | ${acc ? acc.name : 'Unknown'} | ${t.description} | ${catLabel} | $${Math.abs(t.amount).toFixed(2)} | ${(rate * 100)}% | $${deductible.toFixed(2)} |\n`;
-      });
-      md += `| **TOTAL** | | | | **$${businessTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0).toFixed(2)}** | | **$${taxYearStats.businessExpenses.toFixed(2)}** |\n\n`;
-    }
-
-    md += `## Itemized Personal Deductions Ledger (${personalTxns.length} records)\n\n`;
-    md += `| Date | Account | Description | Spend Category | Amount |\n`;
-    md += `| :--- | :--- | :--- | :--- | ---: |\n`;
-    personalTxns.forEach(t => {
-      const acc = accounts.find(a => a.id === t.accountId);
-      md += `| ${t.date} | ${acc ? acc.name : 'Unknown'} | ${t.description} | ${t.category} | $${Math.abs(t.amount).toFixed(2)} |\n`;
-    });
-    md += `| **TOTAL** | | | | **$${taxYearStats.itemizedDeductions.toFixed(2)}** |\n`;
-
-    return md;
+    return generateTaxSummaryMarkdown(transactions, accounts, taxSettings, artifacts, activeDocuments);
   };
 
   const getComprehensiveCsvContent = () => {
-    const yearTxns = transactions.filter(t => new Date(t.date).getFullYear() === taxSettings.taxYear);
-    const businessTxns = yearTxns.filter(t => t.isBusiness && t.deductionStatus === 'confirmed');
-    const personalTxns = yearTxns.filter(t => !t.isBusiness && t.category.toLowerCase().match(/(charity|medical|dental|vision|tax)/));
-
-    const filerStatusLabel = {
-      single: 'Single',
-      married_joint: 'Married Filing Jointly',
-      married_separate: 'Married Filing Separately',
-      head_household: 'Head of Household'
-    }[taxSettings.personalInfo?.filingStatus || 'single'] || 'Single';
-
-    const lines: string[][] = [
-      ['--- TAX PACKAGE GENERAL PROFILE ---'],
-      ['Tax Year', String(taxSettings.taxYear)],
-      ['Filing Status', filerStatusLabel],
-      ['Number of Dependents', String(taxSettings.personalInfo?.dependents || 0)],
-      ['Gross Personal / W-2 Income', String(taxSettings.personalInfo?.w2Income || 0)],
-      ['Estimated Tax Payments Paid', String(taxSettings.taxPayments?.estimatedPayments || 0)],
-      ['State / LLC Fees Paid', String(taxSettings.taxPayments?.stateLocalFees || 0)],
-      [],
-    ];
-
-    if (taxSettings.hasBusiness) {
-      lines.push(
-        ['--- BUSINESS LLC PROFILE ---'],
-        ['DBA / Legal Name', taxSettings.businessIdentity?.dba || 'N/A'],
-        ['Business Address', taxSettings.businessIdentity?.address || 'N/A'],
-        ['EIN or SSN', taxSettings.businessIdentity?.einSsn || 'N/A'],
-        ['Gross Sales / Receipts', String(taxSettings.businessIncome?.grossSales || 0)],
-        ['Forms 1099 Total', String(taxSettings.businessIncome?.forms1099Total || 0)],
-        ['Other Income', String(taxSettings.businessIncome?.otherIncome || 0)],
-        ['Home Office sq ft', String(taxSettings.businessDeductions?.homeOffice?.sqFtOffice || 0)],
-        ['Total Home sq ft', String(taxSettings.businessDeductions?.homeOffice?.sqFtHome || 0)],
-        ['Vehicle Business Miles', String(taxSettings.businessDeductions?.vehicle?.businessMiles || 0)],
-        ['Vehicle Personal Miles', String(taxSettings.businessDeductions?.vehicle?.personalMiles || 0)],
-        []
-      );
-    }
-
-    lines.push(
-      ['--- DOCUMENT AUDIT CHECKLIST STATUS ---'],
-      ['Document Title', 'Status', 'File Name']
-    );
-
-    activeDocuments.forEach(item => {
-      const doc = artifacts.find(d => d.associatedChecklistId === item.id);
-      lines.push([item.label, doc ? 'Uploaded' : 'Missing', doc ? doc.title : 'N/A']);
-    });
-    lines.push([]);
-
-    lines.push(
-      ['--- COMPILED DEDUCTIONS LEDGER ---'],
-      ['Ledger Type', 'Date', 'Account', 'Merchant/Description', 'IRS or Spend Category', 'Gross Amount', 'Rate', 'Deductible Amount']
-    );
-
-    businessTxns.forEach(t => {
-      const rate = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.deductionRate ?? 1.0) : 1.0;
-      const deductible = Math.abs(t.amount) * rate;
-      const catLabel = t.taxCategory ? (SCHEDULE_C_CATEGORIES[t.taxCategory]?.label ?? 'Other') : 'Other';
-      const acc = accounts.find(a => a.id === t.accountId);
-      lines.push([
-        'Business Schedule C',
-        t.date,
-        acc ? acc.name : 'Unknown',
-        t.description,
-        catLabel,
-        String(Math.abs(t.amount)),
-        `${rate * 100}%`,
-        String(deductible)
-      ]);
-    });
-
-    personalTxns.forEach(t => {
-      const acc = accounts.find(a => a.id === t.accountId);
-      lines.push([
-        'Personal Itemized',
-        t.date,
-        acc ? acc.name : 'Unknown',
-        t.description,
-        t.category,
-        String(Math.abs(t.amount)),
-        '100%',
-        String(Math.abs(t.amount))
-      ]);
-    });
-
-    return Papa.unparse(lines);
+    return generateComprehensiveCsv(transactions, accounts, taxSettings, artifacts, activeDocuments);
   };
 
 
@@ -848,9 +643,24 @@ export default function Taxes() {
         {/* Default Tax Rules (Accounts & Categories) */}
         <Accordion sx={{ mb: 2, borderRadius: (theme) => `${theme.shape.borderRadius}px`, '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: alpha(theme.palette.background.default, 0.5) }}>
-            <Typography variant="h6" fontWeight="700">
-              Default Tax Deduction Rules
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', pr: 2 }}>
+              <Typography variant="h6" fontWeight="700">
+                Default Tax Deduction Rules
+              </Typography>
+              <Button 
+                variant="outlined" 
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent('app:run-prompt', { 
+                    detail: { prompt: `Please review my unassigned transactions for the tax year ${taxSettings.taxYear}. For each transaction, determine if it is a personal or business deduction, and assign a Schedule C category if applicable. Propose a bulk update.` } 
+                  }));
+                  window.dispatchEvent(new CustomEvent('app:open-chat'));
+                }}
+              >
+                Auto-categorize with AI
+              </Button>
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
             <Grid container spacing={4}>
@@ -1039,6 +849,20 @@ export default function Taxes() {
                     <Grid size={6}>
                        <TextField fullWidth size="small" type="number" label="Personal Miles" value={taxSettings.businessDeductions?.vehicle?.personalMiles || ''} onChange={(e) => handleUpdateSettings({ businessDeductions: { ...taxSettings.businessDeductions, vehicle: { ...taxSettings.businessDeductions?.vehicle, personalMiles: parseFloat(e.target.value) || 0 } } })} />
                     </Grid>
+                    <Grid size={12}>
+                      <input
+                        accept=".csv"
+                        style={{ display: 'none' }}
+                        id="mileage-csv-upload"
+                        type="file"
+                        onChange={handleMileageUpload}
+                      />
+                      <label htmlFor="mileage-csv-upload">
+                        <Button variant="outlined" component="span" size="small" fullWidth>
+                          Import Mileage CSV
+                        </Button>
+                      </label>
+                    </Grid>
                   </Grid>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
@@ -1131,8 +955,17 @@ export default function Taxes() {
             <Grid container spacing={4}>
               <Grid size={{ xs: 12, md: 6 }}>
                 <Grid container spacing={2}>
-                  <Grid size={12}>
-                     <TextField fullWidth size="small" type="number" label="Estimated Payments (1040-ES)" value={taxSettings.taxPayments?.estimatedPayments || ''} onChange={(e) => updateNestedSetting('taxPayments', 'estimatedPayments', parseFloat(e.target.value) || 0)} InputProps={{ startAdornment: <Typography color="text.secondary" sx={{ mr: 1 }}>$</Typography> }} />
+                  <Grid size={6}>
+                     <TextField fullWidth size="small" type="number" label="Q1 Estimated" value={taxSettings.taxPayments?.q1Estimated || ''} onChange={(e) => updateNestedSetting('taxPayments', 'q1Estimated', parseFloat(e.target.value) || 0)} InputProps={{ startAdornment: <Typography color="text.secondary" sx={{ mr: 1 }}>$</Typography> }} />
+                  </Grid>
+                  <Grid size={6}>
+                     <TextField fullWidth size="small" type="number" label="Q2 Estimated" value={taxSettings.taxPayments?.q2Estimated || ''} onChange={(e) => updateNestedSetting('taxPayments', 'q2Estimated', parseFloat(e.target.value) || 0)} InputProps={{ startAdornment: <Typography color="text.secondary" sx={{ mr: 1 }}>$</Typography> }} />
+                  </Grid>
+                  <Grid size={6}>
+                     <TextField fullWidth size="small" type="number" label="Q3 Estimated" value={taxSettings.taxPayments?.q3Estimated || ''} onChange={(e) => updateNestedSetting('taxPayments', 'q3Estimated', parseFloat(e.target.value) || 0)} InputProps={{ startAdornment: <Typography color="text.secondary" sx={{ mr: 1 }}>$</Typography> }} />
+                  </Grid>
+                  <Grid size={6}>
+                     <TextField fullWidth size="small" type="number" label="Q4 Estimated" value={taxSettings.taxPayments?.q4Estimated || ''} onChange={(e) => updateNestedSetting('taxPayments', 'q4Estimated', parseFloat(e.target.value) || 0)} InputProps={{ startAdornment: <Typography color="text.secondary" sx={{ mr: 1 }}>$</Typography> }} />
                   </Grid>
                   <Grid size={12}>
                      <TextField fullWidth size="small" type="number" label="State/Local LLC Fees Paid" value={taxSettings.taxPayments?.stateLocalFees || ''} onChange={(e) => updateNestedSetting('taxPayments', 'stateLocalFees', parseFloat(e.target.value) || 0)} InputProps={{ startAdornment: <Typography color="text.secondary" sx={{ mr: 1 }}>$</Typography> }} />
@@ -1140,6 +973,11 @@ export default function Taxes() {
                 </Grid>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
+                {isUnderpaying && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    Your total estimated payments (${totalEstimatedPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) are significantly below your estimated tax liability (${estimatedTaxLiability.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). You may be subject to underpayment penalties.
+                  </Alert>
+                )}
                 <Typography variant="subtitle2" fontWeight="600" color="text.secondary" gutterBottom>Required Documents</Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                   {REQUIRED_DOCUMENTS.filter(i => i.category === 'tax_payments').map((item) => (
@@ -1304,6 +1142,14 @@ export default function Taxes() {
           </Box>
         </DialogContent>
       </Dialog>
+
+      {/* Snackbar for Notifications */}
+      <Snackbar
+        open={snackbarMessage !== null}
+        autoHideDuration={4000}
+        onClose={() => setSnackbarMessage(null)}
+        message={snackbarMessage || ''}
+      />
     </Box>
   );
 }

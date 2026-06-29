@@ -182,5 +182,18 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
         phase: 'execution'
       }
     ]
+  },
+  {
+    id: 'generate_tax_document',
+    title: 'Generate Tax Document Playbook',
+    description: 'An AI Copilot playbook for generating tax documents like Profit & Loss statements, general ledgers, or expense summaries without unnecessarily querying settings.',
+    steps: [
+      {
+        endpoint: 'compile_tax_document',
+        description: 'Invoke the compile_tax_document tool to directly generate the requested tax document. If the user does not specify a year, default to the most recently completed calendar year (e.g. last year). Do NOT attempt to query tax settings first, as the compile_tax_document tool automatically falls back to reasonable defaults.',
+        defaultArgs: '[\n  { "documentType": "business_pnl", "taxYear": 2024 }\n]',
+        phase: 'execution'
+      }
+    ]
   }
 ];

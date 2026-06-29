@@ -58,6 +58,20 @@ export const useDashboardAggregates = () => {
   });
 };
 
+export const useArtifactsCount = () => {
+  const lastViewedArtifactsAt = useFilters((s) => s.lastViewedArtifactsAt);
+  return useQuery({
+    queryKey: ['artifacts_count', lastViewedArtifactsAt],
+    queryFn: async () => {
+      const artifacts = await api.getArtifacts();
+      if (!lastViewedArtifactsAt) return artifacts.length;
+      const lastViewed = new Date(lastViewedArtifactsAt).getTime();
+      return artifacts.filter(a => new Date(a.updatedAt || a.createdAt).getTime() > lastViewed).length;
+    },
+    placeholderData: keepPreviousData,
+  });
+};
+
 export const useTopMerchants = () => {
   const filters = useFilters(useShallow(buildDashboardFilters));
   return useQuery({

@@ -37,14 +37,14 @@ Example output:
 }`;
 
     try {
-      const content = await invoke<string>('run_copilot_chat', {
+      const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
         model: modelName,
         messages: [{ role: 'user', content: prompt }],
         format: 'json',
         options: { temperature: 0.1 }
       });
       
-      const parsed = parseAIResponse(content);
+      const parsed = parseAIResponse(res.content);
       if (parsed && Array.isArray(parsed.playbook_ids)) {
         const ids = new Set(parsed.playbook_ids);
         return API_WORKFLOWS.filter(w => ids.has(w.id));
@@ -231,6 +231,8 @@ ${JSON.stringify(runwayData, null, 2)}`;
       else if (action === 'categorize_transactions') humanReadableAction = 'Categorizing transactions';
       else if (action === 'subscription_alerts') humanReadableAction = 'Checking subscriptions';
       else if (action === 'spending_anomalies') humanReadableAction = 'Analyzing anomalies';
+      else if (action === 'manage_loans') humanReadableAction = 'Managing loans';
+      else if (action === 'manage_tax_settings') humanReadableAction = 'Managing tax settings';
 
       currentSteps.push({ type: 'tool_execution', toolName: action, arguments: actionObj, status: 'running', text: `Tool Call: ${humanReadableAction}...` });
 

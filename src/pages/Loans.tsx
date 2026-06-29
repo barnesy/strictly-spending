@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useFilters } from '../store';
 import { useLoans, useUniqueMerchants, useCategories } from '../hooks/queries';
+import { useAddLoan, useUpdateLoan, useDeleteLoan } from '../hooks/mutations';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import {
@@ -143,6 +144,9 @@ export default function Loans() {
   const demoMode = useFilters((s) => s.demoMode);
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const shouldRender = useDeferredRender();
+  const addLoanMutation = useAddLoan();
+  const updateLoanMutation = useUpdateLoan();
+  const deleteLoanMutation = useDeleteLoan();
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [activeLoanId, setActiveLoanId] = useState<number | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -513,7 +517,7 @@ export default function Loans() {
     };
 
     if (currentConfig && currentConfig.id !== undefined) {
-      await api.updateLoan(currentConfig.id, { ...currentConfig, ...updatedConfig } as Loan);
+      await updateLoanMutation.mutateAsync({ id: currentConfig.id, updates: { ...currentConfig, ...updatedConfig } as Loan });
       setSnackbarMsg('Loan settings saved successfully!');
       setMobileSettingsOpen(false);
     }
@@ -542,7 +546,7 @@ export default function Loans() {
       setFormExtraOneTimePayment(resetLoan.extraOneTimePayment ? String(resetLoan.extraOneTimePayment) : '');
       setFormExtraOneTimeMonth(resetLoan.extraOneTimeMonth ? String(resetLoan.extraOneTimeMonth) : '');
 
-      await api.putLoan(resetLoan as Loan);
+      await updateLoanMutation.mutateAsync({ id: resetLoan.id!, updates: resetLoan as Loan });
       setSnackbarMsg('Reset to default values.');
     }
   };
@@ -580,13 +584,8 @@ export default function Loans() {
       createdAt: new Date().toISOString(),
     };
 
-    await api.putLoan(newLoan as Loan);
-    // Fetch the newly inserted loan ID
-    const loansList = await api.getLoans();
-    const latest = loansList.sort((a, b) => (b.id || 0) - (a.id || 0))[0];
-    if (latest && latest.id !== undefined) {
-      setActiveLoanId(latest.id);
-    }
+    const newId = await addLoanMutation.mutateAsync(newLoan as Loan);
+    setActiveLoanId(newId);
     setAddDialogOpen(false);
     setAddName('');
     setAddMerchant('');
@@ -598,13 +597,13 @@ export default function Loans() {
 
   const handleRemoveLoan = async () => {
     if (!currentConfig || currentConfig.id === undefined) return;
-    await api.putLoan({ ...currentConfig, enabled: false } as Loan);
+    await updateLoanMutation.mutateAsync({ id: currentConfig.id, updates: { ...currentConfig, enabled: false } as Loan });
     setSnackbarMsg(`Loan "${currentConfig.name}" removed from view.`);
   };
 
   const handleRestoreLoan = async (loan: Loan) => {
     if (loan.id === undefined) return;
-    await api.putLoan({ ...loan, enabled: true } as Loan);
+    await updateLoanMutation.mutateAsync({ id: loan.id, updates: { ...loan, enabled: true } as Loan });
     setActiveLoanId(loan.id);
     setSnackbarMsg(`Loan "${loan.name}" restored successfully.`);
   };
@@ -613,7 +612,7 @@ export default function Loans() {
     if (!window.confirm(`Are you sure you want to delete the loan "${name}"? This action cannot be undone.`)) {
       return;
     }
-    await api.deleteLoan(id);
+    await deleteLoanMutation.mutateAsync(id);
     setSnackbarMsg(`Loan "${name}" deleted permanently.`);
   };
 

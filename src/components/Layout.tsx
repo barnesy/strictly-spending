@@ -19,12 +19,13 @@ import ArtifactViewer from './ArtifactViewer';
 import { useFilters } from '../store';
 import { useChatStore } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
-import { useTransactionBounds, useUncategorizedCount } from '../hooks/queries';
+import { useTransactionBounds, useUncategorizedCount, useArtifactsCount } from '../hooks/queries';
 
 const PRIMARY_NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/budget', label: 'Budget' },
   { to: '/sort', label: 'Sort', badge: 'uncategorized' as const },
+  { to: '/artifacts', label: 'Artifacts' },
 ];
 
 const PLANNING_NAV = [
@@ -39,7 +40,6 @@ const ORGANIZE_NAV = [
 ];
 
 const AI_NAV = [
-  { to: '/artifacts', label: 'Artifacts' },
   { to: '/local-model', label: 'Local Model' },
   { to: '/ai-reference', label: 'AI Reference' },
   { to: '/api-playground', label: 'API Playground' },
@@ -143,6 +143,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const latestTransactionDate = useFilters((s) => s.latestTransactionDate);
   const { data: dbBounds } = useTransactionBounds(demoMode);
   const { data: uncategorizedCount = 0 } = useUncategorizedCount(demoMode);
+  const { data: newArtifactsCount = 0 } = useArtifactsCount();
 
   const setTransactionDataBounds = useFilters((s) => s.setTransactionDataBounds);
 
@@ -184,8 +185,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <AnimatedLogo sx={{ mr: { xs: 'auto', md: 1.5 } }} />
           <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 0.5, flex: 1, alignItems: 'center' }}>
             {PRIMARY_NAV.map((n) => {
-              const showBadge = n.badge === 'uncategorized' && uncategorizedCount > 0;
               const targetRoute = n.to;
+              const showBadge = (n.badge === 'uncategorized' && uncategorizedCount > 0) || (n.badge === 'artifacts' && newArtifactsCount > 0);
+              const badgeLabel = n.badge === 'uncategorized' ? uncategorizedCount : newArtifactsCount;
               return (
                 <Button
                   key={n.to}
@@ -203,7 +205,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   {n.label}
                   {showBadge && (
                     <Chip
-                      label={uncategorizedCount}
+                      label={badgeLabel}
                       size="small"
                       color="warning"
                       sx={{
@@ -538,25 +540,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </Box>
         <List sx={{ pt: 1, px: 1 }}>
           <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Primary</Typography>
-          {PRIMARY_NAV.map((n) => (
-            <ListItem key={n.to} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                component={NavLink}
-                to={n.to}
-                end={(n as { end?: boolean }).end}
-                onClick={() => setIsMobileNavOpen(false)}
-                sx={{
-                  borderRadius: 1,
-                  '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' }
-                }}
-              >
-                <ListItemText primary={n.label} />
-                {n.badge === 'uncategorized' && uncategorizedCount > 0 && (
-                  <Chip label={uncategorizedCount} size="small" color="warning" sx={{ height: 20, '& .MuiChip-label': { px: 1 } }} />
-                )}
-              </ListItemButton>
-            </ListItem>
-          ))}
+          {PRIMARY_NAV.map((n) => {
+            const isActive = isDesktop ? location.pathname === n.to || (n.end === undefined && location.pathname.startsWith(n.to)) : false;
+            return (
+              <ListItem key={n.to} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  component={NavLink}
+                  to={n.to}
+                  end={(n as { end?: boolean }).end}
+                  onClick={() => setIsMobileNavOpen(false)}
+                  sx={{
+                    borderRadius: 1,
+                    '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' }
+                  }}
+                >
+                  <ListItemText primary={n.label} primaryTypographyProps={{ variant: 'body1', fontWeight: isActive ? 600 : 400 }} />
+                  {n.badge === 'uncategorized' && uncategorizedCount > 0 && (
+                    <Chip label={uncategorizedCount} size="small" color="warning" sx={{ height: 20, '& .MuiChip-label': { px: 1 } }} />
+                  )}
+                  {n.badge === 'artifacts' && newArtifactsCount > 0 && (
+                    <Chip label={newArtifactsCount} size="small" color="warning" sx={{ height: 20, '& .MuiChip-label': { px: 1 } }} />
+                  )}
+                </ListItemButton>
+              </ListItem>
+            );
+          })}
           
           <Divider sx={{ my: 1 }} />
           <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Planning</Typography>

@@ -75,6 +75,8 @@ pub struct DbChatMessage {
     #[serde(rename = "tokenUsage")]
     pub token_usage: Option<serde_json::Value>,
     pub purpose: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -160,7 +162,8 @@ pub fn init_extra_tables(conn: &Connection) -> Result<()> {
     let _ = conn.execute("ALTER TABLE artifacts ADD COLUMN summary TEXT", []);
 
     conn.execute("CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, title TEXT, created_at TEXT, updated_at TEXT)", [])?;
-    conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT, role TEXT, content TEXT, action_result TEXT, created_at TEXT, active_skill_id TEXT, completed_stages TEXT, steps TEXT, token_usage TEXT, purpose TEXT)", [])?;
+    conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT, role TEXT, content TEXT, action_result TEXT, created_at TEXT, active_skill_id TEXT, completed_stages TEXT, steps TEXT, token_usage TEXT, purpose TEXT, thinking TEXT)", [])?;
+    let _ = conn.execute("ALTER TABLE messages ADD COLUMN thinking TEXT", []);
     conn.execute("CREATE TABLE IF NOT EXISTS csv_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, header_hash TEXT, headers TEXT, date_column TEXT, description_column TEXT, amount_column TEXT, debit_column TEXT, credit_column TEXT, balance_column TEXT, account_name TEXT, account_type TEXT, institution TEXT)", [])?;
 
     conn.execute("CREATE TABLE IF NOT EXISTS tax_rules (id INTEGER PRIMARY KEY AUTOINCREMENT, pattern TEXT, is_business BOOLEAN, tax_category TEXT, priority INTEGER, created_at TEXT)", [])?;
@@ -432,7 +435,7 @@ pub fn clear_threads(state: State<DbState>) -> Result<(), String> {
 #[tauri::command]
 pub fn get_messages(state: State<DbState>) -> Result<Vec<DbChatMessage>, String> {
     let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, thread_id, role, content, action_result, created_at, active_skill_id, completed_stages, steps, token_usage, purpose FROM messages").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, thread_id, role, content, action_result, created_at, active_skill_id, completed_stages, steps, token_usage, purpose, thinking FROM messages").map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(DbChatMessage {
             id: row.get(0)?,
@@ -446,6 +449,7 @@ pub fn get_messages(state: State<DbState>) -> Result<Vec<DbChatMessage>, String>
             steps: row.get::<_, Option<String>>(8)?.map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null)),
             token_usage: row.get::<_, Option<String>>(9)?.map(|s| serde_json::from_str(&s).unwrap_or(serde_json::Value::Null)),
             purpose: row.get(10)?,
+            thinking: row.get(11)?,
         })
     }).map_err(|e| e.to_string())?;
     let mut results = Vec::new();
@@ -457,8 +461,8 @@ pub fn get_messages(state: State<DbState>) -> Result<Vec<DbChatMessage>, String>
 pub fn add_message(state: State<DbState>, item: DbChatMessage) -> Result<i64, String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "INSERT INTO messages (thread_id, role, content, action_result, created_at, active_skill_id, completed_stages, steps, token_usage, purpose) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![item.thread_id, item.role, item.content, serde_json::to_string(&item.action_result).unwrap_or_default(), item.created_at, item.active_skill_id, serde_json::to_string(&item.completed_stages).unwrap_or_default(), serde_json::to_string(&item.steps).unwrap_or_default(), serde_json::to_string(&item.token_usage).unwrap_or_default(), item.purpose],
+        "INSERT INTO messages (thread_id, role, content, action_result, created_at, active_skill_id, completed_stages, steps, token_usage, purpose, thinking) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![item.thread_id, item.role, item.content, serde_json::to_string(&item.action_result).unwrap_or_default(), item.created_at, item.active_skill_id, serde_json::to_string(&item.completed_stages).unwrap_or_default(), serde_json::to_string(&item.steps).unwrap_or_default(), serde_json::to_string(&item.token_usage).unwrap_or_default(), item.purpose, item.thinking],
     ).map_err(|e| e.to_string())?;
     Ok(conn.last_insert_rowid())
 }
@@ -467,8 +471,8 @@ pub fn add_message(state: State<DbState>, item: DbChatMessage) -> Result<i64, St
 pub fn put_message(state: State<DbState>, item: DbChatMessage) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "INSERT OR REPLACE INTO messages (thread_id, role, content, action_result, created_at, active_skill_id, completed_stages, steps, token_usage, purpose, id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-        params![item.thread_id, item.role, item.content, serde_json::to_string(&item.action_result).unwrap_or_default(), item.created_at, item.active_skill_id, serde_json::to_string(&item.completed_stages).unwrap_or_default(), serde_json::to_string(&item.steps).unwrap_or_default(), serde_json::to_string(&item.token_usage).unwrap_or_default(), item.purpose, item.id],
+        "INSERT OR REPLACE INTO messages (thread_id, role, content, action_result, created_at, active_skill_id, completed_stages, steps, token_usage, purpose, thinking, id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![item.thread_id, item.role, item.content, serde_json::to_string(&item.action_result).unwrap_or_default(), item.created_at, item.active_skill_id, serde_json::to_string(&item.completed_stages).unwrap_or_default(), serde_json::to_string(&item.steps).unwrap_or_default(), serde_json::to_string(&item.token_usage).unwrap_or_default(), item.purpose, item.thinking, item.id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -477,8 +481,8 @@ pub fn put_message(state: State<DbState>, item: DbChatMessage) -> Result<(), Str
 pub fn update_message(state: State<DbState>, id: i64, updates: DbChatMessage) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "UPDATE messages SET thread_id=?1, role=?2, content=?3, action_result=?4, created_at=?5, active_skill_id=?6, completed_stages=?7, steps=?8, token_usage=?9, purpose=?10 WHERE id = ?11",
-        params![updates.thread_id, updates.role, updates.content, serde_json::to_string(&updates.action_result).unwrap_or_default(), updates.created_at, updates.active_skill_id, serde_json::to_string(&updates.completed_stages).unwrap_or_default(), serde_json::to_string(&updates.steps).unwrap_or_default(), serde_json::to_string(&updates.token_usage).unwrap_or_default(), updates.purpose, id],
+        "UPDATE messages SET thread_id=?1, role=?2, content=?3, action_result=?4, created_at=?5, active_skill_id=?6, completed_stages=?7, steps=?8, token_usage=?9, purpose=?10, thinking=?11 WHERE id = ?12",
+        params![updates.thread_id, updates.role, updates.content, serde_json::to_string(&updates.action_result).unwrap_or_default(), updates.created_at, updates.active_skill_id, serde_json::to_string(&updates.completed_stages).unwrap_or_default(), serde_json::to_string(&updates.steps).unwrap_or_default(), serde_json::to_string(&updates.token_usage).unwrap_or_default(), updates.purpose, updates.thinking, id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }

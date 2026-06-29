@@ -1,7 +1,6 @@
 import { Box, Button, Typography, alpha, useTheme, Chip, Stack } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DeleteIcon from '@mui/icons-material/Delete';
 
@@ -63,7 +62,6 @@ export default function TaxDocumentUpload({
         <Chip
           label="AI Generator"
           size="small"
-          icon={<AutoAwesomeIcon sx={{ fontSize: '12px !important' }} />}
           sx={{
             fontSize: '10px',
             fontWeight: 700,
@@ -183,7 +181,6 @@ export default function TaxDocumentUpload({
                 variant="contained"
                 color="secondary"
                 size="small"
-                startIcon={<AutoAwesomeIcon />}
                 onClick={() => onGenerateAi(documentId, label)}
                 sx={{ whiteSpace: 'nowrap', textTransform: 'none', borderRadius: `${theme.shape.borderRadius}px`, fontWeight: 600 }}
               >

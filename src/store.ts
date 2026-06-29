@@ -44,6 +44,7 @@ export interface FiltersState {
   // version is used as a knob to wipe stale persisted state
   version: number;
   seenAccountIds: number[];
+  lastViewedArtifactsAt?: string;
 }
 
 const initialState: FiltersState = {
@@ -63,6 +64,7 @@ const initialState: FiltersState = {
   minPrice: undefined,
   maxPrice: undefined,
   version: 1,
+  lastViewedArtifactsAt: undefined,
 };
 
 export interface FiltersActions {
@@ -85,6 +87,7 @@ export interface FiltersActions {
   setTransactionDataBounds: (earliest?: string, latest?: string) => void;
   setMinPrice: (price?: number) => void;
   setMaxPrice: (price?: number) => void;
+  setLastViewedArtifactsAt: (date: string) => void;
   reset: () => void;
 }
 
@@ -164,10 +167,12 @@ export const useFilters = create<FiltersStore>()(
       setTransactionDataBounds: (earliest, latest) =>
         set({ earliestTransactionDate: earliest, latestTransactionDate: latest }),
       setMinPrice: (price) => set({ minPrice: price }),
-      setMaxPrice: (price) => set({ maxPrice: price }),
+      setMaxPrice: (maxPrice) => set({ maxPrice }),
+      setLastViewedArtifactsAt: (date) => set({ lastViewedArtifactsAt: date }),
       reset: () =>
         set((s) => ({
           ...initialState,
+          version: get().version,
           earliestTransactionDate: s.earliestTransactionDate,
           latestTransactionDate: s.latestTransactionDate,
         })),

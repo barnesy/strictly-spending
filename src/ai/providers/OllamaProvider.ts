@@ -233,12 +233,13 @@ Example valid JSON output:
       const { invoke } = await import('@tauri-apps/api/core');
       let content = '{"results":[]}';
       try {
-        content = await invoke<string>('run_copilot_chat', {
+        const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
           model: this.modelName,
           messages: [{ role: 'user', content: prompt }],
           format: 'json',
           options: { temperature: 0.1 }
         });
+        content = res.content;
       } catch (err) {
         throw new Error(`Ollama error: ${err}`);
       }
@@ -309,12 +310,13 @@ Example valid JSON output:
       const { invoke } = await import('@tauri-apps/api/core');
       let content = '{"results":[]}';
       try {
-        content = await invoke<string>('run_copilot_chat', {
+        const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
           model: this.modelName,
           messages: [{ role: 'user', content: prompt }],
           format: 'json',
           options: { temperature: 0.1 }
         });
+        content = res.content;
       } catch (err) {
         throw new Error(`Ollama error: ${err}`);
       }

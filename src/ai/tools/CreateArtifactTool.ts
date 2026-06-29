@@ -7,7 +7,7 @@ export class CreateArtifactTool implements AIToolHandler {
   name = 'create_artifact';
 
   async execute(actionObj: any, context: AIToolContext): Promise<ToolExecutionResult> {
-    let { title, type, content, identifier, summary } = actionObj;
+    let { title, type, content, identifier, summary, associatedChecklistId } = actionObj;
     if (!type) {
       type = 'markdown';
     }
@@ -38,11 +38,30 @@ export class CreateArtifactTool implements AIToolHandler {
         title: title || 'Untitled Document',
         content,
         summary,
+        associatedChecklistId,
         createdAt: now,
         updatedAt: now,
       };
 
       await api.putArtifact(newArtifact);
+
+      if (associatedChecklistId) {
+        try {
+          const currentSettings = await api.getSetting<any>('app:taxSettings');
+          if (currentSettings) {
+            const checklist = currentSettings.checklist || {};
+            await api.putSetting('app:taxSettings', {
+              ...currentSettings,
+              checklist: { ...checklist, [associatedChecklistId]: true }
+            });
+            // Also invalidate queries so the Tax page re-renders the green checkmark
+            const { queryClient } = await import('../../queryClient');
+            queryClient.invalidateQueries({ queryKey: ['settings'] });
+          }
+        } catch (err) {
+          console.error('Failed to link artifact to tax checklist:', err);
+        }
+      }
 
       // Set it as active so the user sees it immediately
       useChatStore.getState().setActiveArtifact(newArtifact);

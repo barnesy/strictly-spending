@@ -18,18 +18,30 @@ import { useArtifacts } from '../hooks/queries';
 import { useDeleteArtifact } from '../hooks/mutations';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { confirmDialog } from '../utils/confirmDialog';
+import { useFilters } from '../store';
+import { useEffect } from 'react';
 
 export default function Artifacts() {
   const theme = useTheme();
   const navigate = useNavigate();
   const { data: artifacts = [], isLoading } = useArtifacts();
   const deleteArtifact = useDeleteArtifact();
+  const setLastViewedArtifactsAt = useFilters((s) => s.setLastViewedArtifactsAt);
+
+  useEffect(() => {
+    // Update the last viewed timestamp so the new artifacts badge gets cleared
+    setLastViewedArtifactsAt(new Date().toISOString());
+    return () => {
+      setLastViewedArtifactsAt(new Date().toISOString());
+    };
+  }, [setLastViewedArtifactsAt]);
 
   const sortedArtifacts = [...artifacts].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this artifact?')) {
+    if (await confirmDialog('Are you sure you want to delete this artifact?', 'Confirm Delete')) {
       deleteArtifact.mutate(id);
     }
   };
