@@ -1,6 +1,10 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, IconButton, Typography, Button, Paper, Table, TableHead, TableRow, TableCell, TableBody, Stack } from '@mui/material';
+import { Box, IconButton, Typography, Button, Paper, Table, TableHead, TableRow, TableCell, TableBody, Stack, TextField } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import EditIcon from '@mui/icons-material/Edit';
+import { useState } from 'react';
+import { api } from '../api';
+import { useQueryClient } from '@tanstack/react-query';
 import { useArtifacts } from '../hooks/queries';
 import SimpleMarkdown from '../components/SimpleMarkdown';
 import ArticleIcon from '@mui/icons-material/Article';
@@ -13,6 +17,9 @@ export default function ArtifactDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: artifacts = [], isLoading } = useArtifacts();
+  const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
   
   const artifact = artifacts.find(a => a.id === id);
 
@@ -65,7 +72,7 @@ export default function ArtifactDetail() {
           </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          {artifact.path && (
+          {artifact.path && !isEditing && (
             <Button
               variant="outlined"
               color="primary"
@@ -79,7 +86,7 @@ export default function ArtifactDetail() {
               Open Original
             </Button>
           )}
-          {isSpreadsheet && (
+          {isSpreadsheet && !isEditing && (
             <Button
               variant="outlined"
               color="success"
@@ -89,12 +96,61 @@ export default function ArtifactDetail() {
               Download CSV
             </Button>
           )}
+          {artifact.type !== 'pdf' && (
+            <Button
+              variant={isEditing ? "contained" : "outlined"}
+              color="primary"
+              startIcon={<EditIcon />}
+              onClick={async () => {
+                if (isEditing) {
+                  const updated = { ...artifact, content: editContent };
+                  await api.updateArtifact(artifact.id, updated);
+                  await queryClient.invalidateQueries({ queryKey: ['artifacts'] });
+                  setIsEditing(false);
+                } else {
+                  setEditContent(artifact.content);
+                  setIsEditing(true);
+                }
+              }}
+            >
+              {isEditing ? 'Save Edits' : 'Edit'}
+            </Button>
+          )}
+          {isEditing && (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => setIsEditing(false)}
+            >
+              Cancel
+            </Button>
+          )}
         </Box>
       </Box>
 
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Box sx={{ width: '100%', maxWidth: 900 }}>
-          {artifact.type === 'skill' ? (
+          {isEditing ? (
+            <TextField
+              multiline
+              fullWidth
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              variant="outlined"
+              sx={{
+                '& .MuiInputBase-root': {
+                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  bgcolor: 'background.paper',
+                  p: 3,
+                  borderRadius: 2,
+                  minHeight: '400px',
+                  alignItems: 'flex-start',
+                }
+              }}
+            />
+          ) : artifact.type === 'skill' ? (
             <Paper
               variant="outlined"
               sx={(theme) => ({
