@@ -77,7 +77,7 @@ if (typeof window !== 'undefined') {
         if (cmd === 'get_settings') return [];
         return [];
       },
-      transformCallback: (cb: any) => {
+      transformCallback: (_cb: any) => {
         return Math.floor(Math.random() * 1000000);
       }
     };

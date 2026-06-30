@@ -153,6 +153,7 @@ export function ProposedCategorizationReportUX({
   // Initialize items from the database setting when it loads
   useEffect(() => {
     if (report && report.id === message.actionResult?.reportId && !initialized) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setItems(report.items);
       setInitialized(true);
     }

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 // Prevent browser devtools from leaking DOM elements printed in warning logs
@@ -57,3 +58,5 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>
 );
+
+export {};

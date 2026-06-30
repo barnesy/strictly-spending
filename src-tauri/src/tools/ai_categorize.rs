@@ -116,12 +116,10 @@ pub async fn ai_categorize_transactions(
 
     for chunk in txns.chunks(chunk_size) {
         // Construct prompt
-        let mut prompt = format!(
-            "You are a financial categorization auditor running locally.\n\
+        let mut prompt = "You are a financial categorization auditor running locally.\n\
             Review the following transaction descriptions and the category assigned to them by a simple rule engine.\n\
             Respond with a JSON object containing a \"results\" array of strings, where each string is the BEST category for the transaction at the exact same index.\n\
-            You MUST choose from the following Available Categories EXACTLY (do not invent new ones):\n"
-        );
+            You MUST choose from the following Available Categories EXACTLY (do not invent new ones):\n".to_string();
         for c in &cat_names {
             prompt.push_str(&format!("- {}\n", c));
         }

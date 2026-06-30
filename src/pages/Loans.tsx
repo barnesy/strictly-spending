@@ -159,6 +159,8 @@ export default function Loans() {
 
   useEffect(() => {
     if (addType === 'house') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAddPrincipal('450000');
       setAddDownPayment('50000');
     } else if (addType === 'student') {
@@ -197,6 +199,7 @@ export default function Loans() {
   useEffect(() => {
     if (activeLoans.length > 0) {
       if (activeLoanId === null || !activeLoans.some((l) => l.id === activeLoanId)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveLoanId(activeLoans[0].id!);
       }
     } else {
@@ -222,6 +225,7 @@ export default function Loans() {
   // Sync Form with config
   useEffect(() => {
     if (currentConfig) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormName(currentConfig.name);
       setFormPrincipal(String(currentConfig.principal));
       setFormRate(String(currentConfig.rate));

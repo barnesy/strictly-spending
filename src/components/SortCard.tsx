@@ -53,10 +53,12 @@ export default function SortCard({
   const { merchantKey, txns, totalAbs, recurrence, suggestedCategory } = card;
 
   const [expanded, setExpanded] = useState(false);
+  const [prevMerchantKey, setPrevMerchantKey] = useState(merchantKey);
 
-  useEffect(() => {
+  if (merchantKey !== prevMerchantKey) {
+    setPrevMerchantKey(merchantKey);
     setExpanded(false);
-  }, [merchantKey]);
+  }
 
   const sortedTxns = useMemo(() => {
     return [...txns].sort((a, b) => b.date.localeCompare(a.date));

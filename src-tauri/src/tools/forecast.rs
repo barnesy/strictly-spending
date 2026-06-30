@@ -58,7 +58,7 @@ pub fn build_forecast_internal(
         if !spend_category_names.contains(&category) { continue; }
 
         let info = recurrence_map.get(&merchant_key);
-        let recurring = info.map_or(false, |i| i.kind != "none");
+        let recurring = info.is_some_and(|i| i.kind != "none");
 
         if recurring {
             let i = info.unwrap();

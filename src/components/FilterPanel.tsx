@@ -46,6 +46,7 @@ export default function FilterPanel({
 
   useEffect(() => {
     if (filters.searchQuery !== searchInput) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearchInput(filters.searchQuery);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

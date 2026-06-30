@@ -15,6 +15,7 @@ export interface ChatMessage {
   createdAt?: string;
   isAborted?: boolean;
   error?: string;
+  attachedFile?: { filename: string; type: string; localPath?: string; dataUrl?: string };
 };
 
 export interface AIProvider {

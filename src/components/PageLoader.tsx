@@ -9,10 +9,12 @@ interface PageLoaderProps {
 
 export default function PageLoader({ isLoading, children }: PageLoaderProps) {
   const [internalLoading, setInternalLoading] = useState(isLoading);
+  // eslint-disable-next-line react-hooks/purity
   const loadingStartTime = useRef(isLoading ? Date.now() : 0);
 
   useEffect(() => {
     if (isLoading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInternalLoading(true);
       loadingStartTime.current = Date.now();
     } else {

@@ -248,11 +248,9 @@ pub fn get_top_merchants(
     }).map_err(|e| e.to_string())?;
 
     let mut results = Vec::new();
-    for i in iter {
-        if let Ok(m) = i {
-            if m.total < 0.0 {
-                results.push(m);
-            }
+    for m in iter.flatten() {
+        if m.total < 0.0 {
+            results.push(m);
         }
     }
     
@@ -394,14 +392,12 @@ pub fn get_consolidated_recurring_merchants(
     }).map_err(|e| e.to_string())?;
     
     let mut results = Vec::new();
-    for r in rows {
-        if let Ok((merchant_key, category, total)) = r {
-            results.push(ConsolidatedMerchant {
-                merchant_key,
-                category,
-                monthly_average: total / 2.0,
-            });
-        }
+    for (merchant_key, category, total) in rows.flatten() {
+        results.push(ConsolidatedMerchant {
+            merchant_key,
+            category,
+            monthly_average: total / 2.0,
+        });
     }
     
     results.sort_by(|a, b| b.monthly_average.partial_cmp(&a.monthly_average).unwrap_or(std::cmp::Ordering::Equal));
@@ -443,13 +439,11 @@ pub fn get_category_trailing_averages(
     }).map_err(|e| e.to_string())?;
     
     let mut results = Vec::new();
-    for r in rows {
-        if let Ok((category, total)) = r {
-            results.push(CategoryTrailingAvg {
-                category,
-                average: total / 3.0,
-            });
-        }
+    for (category, total) in rows.flatten() {
+        results.push(CategoryTrailingAvg {
+            category,
+            average: total / 3.0,
+        });
     }
     
     Ok(results)
@@ -476,10 +470,8 @@ pub fn get_unique_merchants(
     let rows = stmt.query_map(rusqlite::params![demo_val, demo_val], |row| row.get::<_, String>(0)).map_err(|e| e.to_string())?;
     
     let mut results = Vec::new();
-    for r in rows {
-        if let Ok(m) = r {
-            results.push(m);
-        }
+    for m in rows.flatten() {
+        results.push(m);
     }
     Ok(results)
 }
@@ -529,12 +521,7 @@ fn normalize_for_match(s: &str) -> String {
     let mut result = String::with_capacity(cleaned.len());
     let mut last_was_space = false;
     for c in cleaned.chars() {
-        if c == '*' || c == '.' || c == '/' || c == '&' || c == '-' || c == '#' || c == '+' || c == ',' {
-            if !last_was_space {
-                result.push(' ');
-                last_was_space = true;
-            }
-        } else if c.is_whitespace() {
+        if c == '*' || c == '.' || c == '/' || c == '&' || c == '-' || c == '#' || c == '+' || c == ',' || c.is_whitespace() {
             if !last_was_space {
                 result.push(' ');
                 last_was_space = true;

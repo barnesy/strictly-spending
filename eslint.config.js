@@ -18,5 +18,23 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ],
+      'prefer-const': 'warn',
+      'no-useless-assignment': 'warn',
+      'no-empty': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+      'no-useless-escape': 'warn',
+      'preserve-caught-error': 'warn',
+    },
   },
 ])

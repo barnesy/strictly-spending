@@ -33,17 +33,21 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
     txn.recurrenceOverride || 'default'
   );
   const [scope, setScope] = useState<'one' | 'rule'>('rule');
-  const [pattern, setPattern] = useState('');
-
-  useEffect(() => {
-    // Suggest a sensible default rule pattern from the description's leading words
-    const cleaned = txn.description
+  const derivePattern = (desc: string) => {
+    const cleaned = desc
       .replace(/^[A-Z]{1,3}\s*\*+/, '')
       .replace(/[^A-Za-z0-9\s*]/g, ' ')
       .trim();
-    const firstWords = cleaned.split(/\s+/).slice(0, 2).join(' ');
-    setPattern(firstWords);
-  }, [txn]);
+    return cleaned.split(/\s+/).slice(0, 2).join(' ');
+  };
+
+  const [pattern, setPattern] = useState(() => derivePattern(txn.description));
+  const [prevTxnId, setPrevTxnId] = useState(txn.id);
+
+  if (txn.id !== prevTxnId) {
+    setPrevTxnId(txn.id);
+    setPattern(derivePattern(txn.description));
+  }
 
   const onSave = async () => {
     const ro = recurrenceOverride === 'default' ? null : recurrenceOverride;

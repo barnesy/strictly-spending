@@ -199,6 +199,7 @@ struct OpenAiFullMessage {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn run_gemini_chat(
     app: AppHandle,
     model: String,
@@ -279,8 +280,7 @@ pub async fn run_gemini_chat(
                 let text = String::from_utf8_lossy(&bytes);
                 for line in text.lines() {
                     let line = line.trim();
-                    if line.starts_with("data: ") {
-                        let json_str = &line[6..];
+                    if let Some(json_str) = line.strip_prefix("data: ") {
                         if json_str == "[DONE]" {
                             continue;
                         }

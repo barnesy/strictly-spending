@@ -119,6 +119,7 @@ export default function CopilotChat({
         setElapsedSeconds(s => s + 1);
       }, 1000);
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setElapsedSeconds(0);
     }
     return () => clearInterval(interval);

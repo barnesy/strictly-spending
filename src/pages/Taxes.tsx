@@ -648,6 +648,7 @@ export default function Taxes() {
                 Default Tax Deduction Rules
               </Typography>
               <Button 
+                component="div"
                 variant="outlined" 
                 size="small"
                 onClick={(e) => {

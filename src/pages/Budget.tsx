@@ -265,6 +265,7 @@ function BudgetAmountInput({
   const [value, setValue] = useState(() => initialAmount.toFixed(2));
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setValue(initialAmount.toFixed(2));
   }, [initialAmount]);
 

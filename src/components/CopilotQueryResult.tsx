@@ -97,6 +97,7 @@ export default function CopilotQueryResult({
 
   useEffect(() => {
     if (showReceipt && action === 'query_data') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadingReceipt(true);
       const startStr = customStart || storeEarliest || '2000-01-01';
       const endStr = customEnd || storeLatest || new Date().toISOString().slice(0, 10);

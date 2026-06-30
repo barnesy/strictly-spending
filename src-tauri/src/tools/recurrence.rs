@@ -45,10 +45,11 @@ pub fn detect_recurrence(txns: &[&Transaction]) -> RecurrenceInfo {
     spend.sort_by(|a, b| a.date.cmp(&b.date));
 
     if spend.len() < 3 {
-        let mut info = RecurrenceInfo::default();
-        info.count = spend.len();
-        info.last_date = spend.last().map(|t| t.date.clone());
-        return info;
+        return RecurrenceInfo {
+            count: spend.len(),
+            last_date: spend.last().map(|t| t.date.clone()),
+            ..Default::default()
+        };
     }
 
     let mut intervals = Vec::new();
@@ -67,10 +68,10 @@ pub fn detect_recurrence(txns: &[&Transaction]) -> RecurrenceInfo {
 
     let mut kind = "none".to_string();
     if is_stable_amount {
-        if mean >= 25.0 && mean <= 35.0 && stddev <= 7.0 { kind = "monthly".to_string(); }
-        else if mean >= 12.0 && mean <= 17.0 && stddev <= 5.0 { kind = "biweekly".to_string(); }
-        else if mean >= 5.0 && mean <= 9.0 && stddev <= 3.0 { kind = "weekly".to_string(); }
-        else if mean >= 330.0 && mean <= 400.0 && stddev <= 40.0 { kind = "annual".to_string(); }
+        if (25.0..=35.0).contains(&mean) && stddev <= 7.0 { kind = "monthly".to_string(); }
+        else if (12.0..=17.0).contains(&mean) && stddev <= 5.0 { kind = "biweekly".to_string(); }
+        else if (5.0..=9.0).contains(&mean) && stddev <= 3.0 { kind = "weekly".to_string(); }
+        else if (330.0..=400.0).contains(&mean) && stddev <= 40.0 { kind = "annual".to_string(); }
     }
 
     let recent_spend = if spend.len() >= 3 { &spend[spend.len()-3..] } else { &spend[..] };

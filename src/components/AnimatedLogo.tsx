@@ -101,7 +101,7 @@ export default function AnimatedLogo({ scale = 1, spinSpeed = 0.02, sx = {} }: A
           height: 32 * scale,
           position: 'relative',
           transformStyle: 'preserve-3d',
-          transform: `rotateY(${rotRef.current.y}deg) rotateX(${rotRef.current.x}deg)`,
+          transform: 'rotateY(0deg) rotateX(12deg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

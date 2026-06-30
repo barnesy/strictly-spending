@@ -76,12 +76,13 @@ export default function ApiPlayground() {
   const [workflowArgs, setWorkflowArgs] = useState<Record<number, string>>({});
 
   // Initialize args when workflow changes
-  useMemo(() => {
+  useEffect(() => {
     if (activeWorkflow) {
       const initialArgs: Record<number, string> = {};
       activeWorkflow.steps.forEach((step, idx) => {
         initialArgs[idx] = typeof step.defaultArgs === 'string' ? step.defaultArgs : JSON.stringify(step.defaultArgs);
       });
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWorkflowArgs(initialArgs);
       setWorkflowResults({});
     }

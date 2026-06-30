@@ -95,7 +95,7 @@ export type FiltersStore = FiltersState & FiltersActions;
 
 export const useFilters = create<FiltersStore>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       ...initialState,
       setPreset: (p) => set({ preset: p }),
       setCustomRange: (customStart, customEnd) =>

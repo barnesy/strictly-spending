@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { resolveDateRange, type FiltersState } from './store';
 
 describe('resolveDateRange - allTime scoping', () => {

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { RecurrenceKind, Transaction, MerchantOverride, Category } from './types';
+import type { RecurrenceKind, Transaction, Category } from './types';
 
 export interface RecurrenceInfo {
   kind: RecurrenceKind;

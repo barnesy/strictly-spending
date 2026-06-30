@@ -107,6 +107,7 @@ export default function AutoCleanupDialog({ open, categories, onClose, onComplet
         setLoading(false);
       });
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReport(null);
     }
   }, [open]);

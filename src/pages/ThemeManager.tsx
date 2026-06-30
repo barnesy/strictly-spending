@@ -119,14 +119,18 @@ export default function ThemeManager() {
   };
 
   const [localRadius, setLocalRadius] = useState(borderRadius);
-  useEffect(() => {
+  const [prevRadius, setPrevRadius] = useState(borderRadius);
+  if (borderRadius !== prevRadius) {
+    setPrevRadius(borderRadius);
     setLocalRadius(borderRadius);
-  }, [borderRadius]);
+  }
 
   const [localFontSize, setLocalFontSize] = useState(fontSize);
-  useEffect(() => {
+  const [prevFontSize, setPrevFontSize] = useState(fontSize);
+  if (fontSize !== prevFontSize) {
+    setPrevFontSize(fontSize);
     setLocalFontSize(fontSize);
-  }, [fontSize]);
+  }
 
   const handleRadiusChangeCommitted = (_event: Event | React.SyntheticEvent, value: number | number[]) => {
     updateTheme({ borderRadius: value as number });

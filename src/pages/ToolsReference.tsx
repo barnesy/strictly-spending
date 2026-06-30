@@ -1,11 +1,7 @@
 import { useState } from 'react';
 import { AGENT_TOOLS } from '../ai/architecture';
-import { Box, Typography, Card, CardContent, Grid, Stack, Chip, Divider, useTheme, Tabs, Tab, Paper } from '@mui/material';
-import SchoolIcon from '@mui/icons-material/School';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import { Box, Typography, Card, CardContent, Grid, Stack, useTheme, Tabs, Tab } from '@mui/material';
 import ArchitectureIcon from '@mui/icons-material/Architecture';
-import BuildIcon from '@mui/icons-material/Build';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 
 export default function ToolsReference() {
   const theme = useTheme();

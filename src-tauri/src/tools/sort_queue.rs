@@ -23,10 +23,9 @@ pub struct SortCard {
 }
 
 fn infer_type_category(amount: f64, source: &str, raw_category: Option<&str>) -> Option<String> {
-    if (source == "chase" || source == "boa-credit") && amount > 0.0 {
-        if raw_category.is_none() || raw_category.unwrap().is_empty() {
-            return Some("Transfers".to_string());
-        }
+    if (source == "chase" || source == "boa-credit") && amount > 0.0 
+        && (raw_category.is_none() || raw_category.unwrap().is_empty()) {
+        return Some("Transfers".to_string());
     }
     None
 }
@@ -87,7 +86,7 @@ fn suggest_category(
                 if amt >= 1000.0 && valid_category_names.contains("Housing") {
                     return Some("Housing".to_string());
                 }
-                if amt >= 5.0 && amt <= 50.0 && valid_category_names.contains("Subscriptions") {
+                if (5.0..=50.0).contains(&amt) && valid_category_names.contains("Subscriptions") {
                     return Some("Subscriptions".to_string());
                 }
             }
@@ -131,12 +130,10 @@ pub fn get_sort_queue(state: State<DbState>, demo_mode: bool) -> Result<Vec<Sort
             })
         }).map_err(|e| e.to_string())?;
 
-        for tx in tx_iter {
-            if let Ok(t) = tx {
-                let is_demo = t.source == "demo";
-                if demo_mode == is_demo {
-                    uncategorized.push(t);
-                }
+        for t in tx_iter.flatten() {
+            let is_demo = t.source == "demo";
+            if demo_mode == is_demo {
+                uncategorized.push(t);
             }
         }
 
@@ -152,10 +149,8 @@ pub fn get_sort_queue(state: State<DbState>, demo_mode: bool) -> Result<Vec<Sort
                 default_recurrence: row.get(5)?,
             })
         }).map_err(|e| e.to_string())?;
-        for cat in cat_iter {
-            if let Ok(c) = cat {
-                valid_category_names.insert(c.name);
-            }
+        for c in cat_iter.flatten() {
+            valid_category_names.insert(c.name);
         }
 
         // Fetch Rules
@@ -170,18 +165,16 @@ pub fn get_sort_queue(state: State<DbState>, demo_mode: bool) -> Result<Vec<Sort
             })
         }).map_err(|e| e.to_string())?;
         
-        for rule in rules_iter {
-            if let Ok(r) = rule {
-                if valid_category_names.contains(&r.category) {
-                    let lower_pat = r.pattern.to_lowercase();
-                    let tokens: Vec<String> = lower_pat
-                        .split(|c: char| !c.is_ascii_alphanumeric())
-                        .filter(|t| t.len() >= 3)
-                        .map(|s| s.to_string())
-                        .collect();
-                    if !tokens.is_empty() {
-                        parsed_rules.push((r, tokens));
-                    }
+        for r in rules_iter.flatten() {
+            if valid_category_names.contains(&r.category) {
+                let lower_pat = r.pattern.to_lowercase();
+                let tokens: Vec<String> = lower_pat
+                    .split(|c: char| !c.is_ascii_alphanumeric())
+                    .filter(|t| t.len() >= 3)
+                    .map(|s| s.to_string())
+                    .collect();
+                if !tokens.is_empty() {
+                    parsed_rules.push((r, tokens));
                 }
             }
         }

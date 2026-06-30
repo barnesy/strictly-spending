@@ -19,4 +19,3 @@ If you are asked to refactor or add new files, be aware of these structural simp
 - **Zustand Stores**: Place new stores in a `src/stores/` directory.
 - **Domain Logic**: We are aiming to group domain-specific files (e.g., `categorize.ts`, `forecast.ts`) into a `src/domain/` or `src/core/` folder.
 - **Tax Logic**: Place tax-related files in a `src/tax/` directory.
-- **Backend Refactoring**: `src-tauri/src/db_extra.rs` is currently very large (~60KB). If you are adding substantial new backend logic, consider splitting it into a dedicated module instead of appending to `db_extra.rs`.

@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 
 // 1. Mock Tauri's core invoke globally so tests don't crash when APIs are called
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(async (cmd: string, args: any) => {
+  invoke: vi.fn(async (cmd: string, _args: any) => {
     switch (cmd) {
       case 'get_settings': return [];
       case 'get_rules': return [];
