@@ -251,8 +251,24 @@ export default function ArtifactViewer() {
               variant="outlined"
               startIcon={<ArticleIcon />}
               onClick={() => {
+                let contentToDownload = activeArtifact.content;
+                
+                const chartBlocks = [...contentToDownload.matchAll(/```chart[\s\S]*?```/g)];
+                if (chartBlocks.length > 0) {
+                  const canvases = document.querySelectorAll('.artifact-chart canvas') as NodeListOf<HTMLCanvasElement>;
+                  let canvasIndex = 0;
+                  contentToDownload = contentToDownload.replace(/```chart[\s\S]*?```/g, (match) => {
+                    const canvas = canvases[canvasIndex++];
+                    if (canvas) {
+                      const dataUrl = canvas.toDataURL('image/png');
+                      return `${match}\n\n![Chart Snapshot](${dataUrl})`;
+                    }
+                    return match;
+                  });
+                }
+
                 const filename = `${activeArtifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.md`;
-                downloadFile(activeArtifact.content, filename, 'text/markdown;charset=utf-8;');
+                downloadFile(contentToDownload, filename, 'text/markdown;charset=utf-8;');
               }}
               sx={{ textTransform: 'none', fontSize: 11, py: 0.5 }}
             >
