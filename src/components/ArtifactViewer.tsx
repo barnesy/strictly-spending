@@ -16,7 +16,9 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  TextField,
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 import CloseIcon from '@mui/icons-material/Close';
 import ArticleIcon from '@mui/icons-material/Article';
 import PsychologyIcon from '@mui/icons-material/Psychology';
@@ -52,6 +54,8 @@ export default function ArtifactViewer() {
   const [versions, setVersions] = useState<ChatArtifactVersion[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string>('current');
   const [selectedVersionContent, setSelectedVersionContent] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
 
   useEffect(() => {
     if (activeArtifact) {
@@ -63,6 +67,7 @@ export default function ArtifactViewer() {
     setPrevArtifact(activeArtifact);
     setSelectedVersionId('current');
     setSelectedVersionContent(null);
+    setIsEditing(false);
   }
 
   if (!activeArtifact) return null;
@@ -272,6 +277,45 @@ export default function ArtifactViewer() {
             </>
           )}
 
+          {!isPdf && selectedVersionId === 'current' && (
+            <Button
+              size="small"
+              variant={isEditing ? "contained" : "outlined"}
+              color="primary"
+              startIcon={<EditIcon sx={{ fontSize: 13 }} />}
+              onClick={async () => {
+                if (isEditing) {
+                  const updated = { ...activeArtifact, content: editContent };
+                  await api.updateArtifact(activeArtifact.id, updated);
+                  const updatedArtifacts = await api.getArtifacts();
+                  const latest = updatedArtifacts.find(a => a.id === activeArtifact.id);
+                  if (latest) setActiveArtifact(latest);
+                  const v = await api.getArtifactVersions(activeArtifact.id);
+                  setVersions(v);
+                  setIsEditing(false);
+                } else {
+                  setEditContent(activeArtifact.content);
+                  setIsEditing(true);
+                }
+              }}
+              sx={{ textTransform: 'none', fontSize: 11, py: 0.5 }}
+            >
+              {isEditing ? 'Save Edits' : 'Edit'}
+            </Button>
+          )}
+
+          {isEditing && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              onClick={() => setIsEditing(false)}
+              sx={{ textTransform: 'none', fontSize: 11, py: 0.5 }}
+            >
+              Cancel
+            </Button>
+          )}
+
           <Button
             size="small"
             variant="outlined"
@@ -322,6 +366,26 @@ export default function ArtifactViewer() {
                 Open PDF
               </Button>
             </Box>
+          ) : isEditing ? (
+            <TextField
+              multiline
+              fullWidth
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              variant="outlined"
+              sx={{
+                '& .MuiInputBase-root': {
+                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  bgcolor: 'background.paper',
+                  p: 3,
+                  borderRadius: 2,
+                  minHeight: '400px',
+                  alignItems: 'flex-start',
+                }
+              }}
+            />
           ) : isSkill ? (
             <Paper
               variant="outlined"

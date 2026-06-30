@@ -7,6 +7,7 @@ export const chatApi = {
   getArtifactVersions: (artifactId: string) => invoke<ChatArtifactVersion[]>('get_artifact_versions', { artifactId }),
   restoreArtifactVersion: (artifactId: string, versionId: string) => invoke<void>('restore_artifact_version', { artifactId, versionId }),
   putArtifact: (item: ChatArtifact) => invoke<void>('put_artifact', { item }),
+  updateArtifact: (id: string, updates: ChatArtifact) => invoke<void>('update_artifact', { id, updates }),
   deleteArtifact: (id: string) => invoke<void>('delete_artifact', { id }),
 
   // Threads
