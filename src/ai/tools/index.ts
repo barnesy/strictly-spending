@@ -59,12 +59,14 @@ import { ManageBudgetsTool } from './ManageBudgetsTool';
 import { CreateAutoRuleTool } from './CreateAutoRuleTool';
 import { ReadPdfTool } from './ReadPdfTool';
 import { ReadArtifactTool } from './ReadArtifactTool';
+import { RequestUserConfirmationTool } from './RequestUserConfirmationTool';
 
 toolRegistry.register(new QueryDataTool());
 toolRegistry.register(new ExportTransactionsTool());
 toolRegistry.register(new CreateArtifactTool());
 toolRegistry.register(new UpdateArtifactTool());
 toolRegistry.register(new ReadArtifactTool());
+toolRegistry.register(new RequestUserConfirmationTool());
 toolRegistry.register(new ManageTaxSettingsTool());
 toolRegistry.register(new UpdateDeductionStatusTool());
 toolRegistry.register(new CategorizeTransactionsTool());

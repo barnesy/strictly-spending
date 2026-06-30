@@ -60,6 +60,9 @@ export default function LocalModel() {
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseError, setLicenseError] = useState<string | null>(null);
 
+  const [aiProvider, setAiProvider] = useState<string>(() => localStorage.getItem('app:aiProvider') || 'ollama');
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => localStorage.getItem('app:geminiApiKey') || '');
+
   const {
     aiLoaded,
     aiStatus,
@@ -262,10 +265,10 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Local AI
+            AI Engine Configuration
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Configure, download, and test offline models. 100% private and runs locally on your machine.
+            Configure, test, and manage your AI capabilities.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1.5} alignItems="center">
@@ -276,17 +279,70 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
             onClick={() => {
               checkAIStatus();
               if (aiStatus === 'ready' || aiStatus === 'running') {
-                refreshInstalledModels();
+                if (aiProvider === 'ollama') refreshInstalledModels();
               }
             }}
-            disabled={fetchingModels || aiStatus === 'checking' || aiStatus === 'pulling'}
+            disabled={(aiProvider === 'ollama' && fetchingModels) || aiStatus === 'checking' || aiStatus === 'pulling'}
           >
             Refresh Status
           </Button>
         </Stack>
       </Box>
 
+      {/* Provider Selection */}
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 2 }}>
+          Select AI Provider
+        </Typography>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <FormControl sx={{ minWidth: 200 }} size="small">
+            <InputLabel>Provider</InputLabel>
+            <Select
+              value={aiProvider}
+              label="Provider"
+              onChange={(e) => {
+                const newProvider = e.target.value;
+                setAiProvider(newProvider);
+                localAI.setProviderId(newProvider as 'ollama' | 'gemini');
+                if (newProvider === 'gemini') {
+                  setModelName('gemini-3.1-flash');
+                } else {
+                  setModelName('gemma2:2b');
+                }
+                setTimeout(() => checkAIStatus(true), 100);
+              }}
+            >
+              <MenuItem value="ollama">Local Ollama</MenuItem>
+              <MenuItem value="gemini">Google Gemini (Cloud)</MenuItem>
+            </Select>
+          </FormControl>
+        </Stack>
+        
+        {aiProvider === 'gemini' && (
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="body2" sx={{ mb: 1.5 }}>
+              Enter your Google Gemini API Key. A valid key is required to use cloud models.
+            </Typography>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <TextField
+                size="small"
+                label="Gemini API Key"
+                type="password"
+                value={geminiApiKey}
+                onChange={(e) => {
+                  setGeminiApiKey(e.target.value);
+                  localStorage.setItem('app:geminiApiKey', e.target.value.trim());
+                  setTimeout(() => checkAIStatus(true), 100);
+                }}
+                sx={{ minWidth: 300 }}
+              />
+            </Stack>
+          </Box>
+        )}
+      </Paper>
+
       {/* Connection & Status Banner */}
+      {aiProvider === 'ollama' && (
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ gap: 1 }}>
@@ -357,6 +413,7 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
           )}
         </Stack>
       </Paper>
+      )}
 
       {/* Model Selection */}
       {(aiStatus === 'ready' || aiStatus === 'running' || aiStatus === 'pulling' || aiStatus === 'stopped') && (
@@ -380,11 +437,19 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
                       label="Active Model"
                       onChange={(e) => handleSelectModel(e.target.value)}
                     >
-                      {dropdownItems.map((m) => (
-                        <MenuItem key={m.name} value={m.name}>
-                          {m.isNotInstalled ? `${m.name} (Not Downloaded)` : `${m.name} (${Math.round(m.size / 1e6) / 1000} GB)`}
-                        </MenuItem>
-                      ))}
+                      {aiProvider === 'gemini' ? (
+                        [
+                          <MenuItem key="gemini-3.1-flash" value="gemini-3.1-flash">Gemini 3.1 Flash</MenuItem>,
+                          <MenuItem key="gemini-3.1-pro" value="gemini-3.1-pro">Gemini 3.1 Pro</MenuItem>,
+                          <MenuItem key="gemini-3.1-flash-lite" value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</MenuItem>
+                        ]
+                      ) : (
+                        dropdownItems.map((m) => (
+                          <MenuItem key={m.name} value={m.name}>
+                            {m.isNotInstalled ? `${m.name} (Not Downloaded)` : `${m.name} (${Math.round(m.size / 1e6) / 1000} GB)`}
+                          </MenuItem>
+                        ))
+                      )}
                     </Select>
                   </FormControl>
 
@@ -402,7 +467,7 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
                     </Paper>
                   </Box>
 
-                  {installedModels.length > 0 && (
+                  {aiProvider === 'ollama' && installedModels.length > 0 && (
                     <Box>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                         Downloaded Models:
@@ -467,12 +532,13 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
                 </Stack>
               ) : (
                 <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                  No models detected in Ollama. Please download a model below.
+                  {aiProvider === 'gemini' ? "Ready to use Gemini models." : "No models detected in Ollama. Please download a model below."}
                 </Typography>
               )}
             </Paper>
           </Grid>
 
+          {aiProvider === 'ollama' && (
           <Grid size={{ xs: 12, md: 6 }}>
             <Paper sx={{ p: 3, height: '100%' }}>
               <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 2 }}>
@@ -583,6 +649,7 @@ Available Categories: Groceries, Utilities, Travel, Restaurants & Coffee`
               </List>
             </Paper>
           </Grid>
+          )}
         </Grid>
       )}
 

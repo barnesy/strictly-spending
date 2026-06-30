@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { z } from 'zod';
 import type { 
   Account, Transaction, CategoryRule, TaxRule, Category, 
-  ImportBatch, MerchantOverride, Budget, ChatArtifact, ChatThread, 
+  ImportBatch, MerchantOverride, Budget, ChatArtifact, ChatArtifactVersion, ChatThread, 
   DbChatMessage, CsvMapping, Loan, SortCard 
 } from './types';
 
@@ -245,6 +245,8 @@ export const api = {
 
   // Artifacts
   getArtifacts: () => invoke<ChatArtifact[]>('get_artifacts'),
+  getArtifactVersions: (artifactId: string) => invoke<ChatArtifactVersion[]>('get_artifact_versions', { artifactId }),
+  restoreArtifactVersion: (artifactId: string, versionId: string) => invoke<void>('restore_artifact_version', { artifactId, versionId }),
   putArtifact: (item: ChatArtifact) => invoke<void>('put_artifact', { item }),
   deleteArtifact: (id: string) => invoke<void>('delete_artifact', { id }),
 

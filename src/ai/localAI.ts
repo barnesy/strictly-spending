@@ -1,23 +1,34 @@
 import type { AIProvider, ChatMessage } from './types';
 import { OllamaProvider } from './providers/OllamaProvider';
+import { GeminiProvider } from './providers/GeminiProvider';
 
 export class LocalAI implements AIProvider {
   public id = 'dispatcher';
   public name = 'AI Dispatcher';
   public activeProvider: AIProvider;
+  private providers: Map<string, AIProvider> = new Map();
 
   constructor() {
-    this.activeProvider = new OllamaProvider();
+    this.providers.set('ollama', new OllamaProvider());
+    this.providers.set('gemini', new GeminiProvider());
+    this.activeProvider = this.providers.get('ollama')!;
     this.syncActiveProvider();
   }
 
   public syncActiveProvider() {
     if (typeof window !== 'undefined') {
+      const savedProviderId = localStorage.getItem('app:aiProvider') || 'ollama';
+      const provider = this.providers.get(savedProviderId);
+      if (provider) {
+        this.activeProvider = provider;
+      }
+
       const savedModel = localStorage.getItem('app:modelName');
       if (savedModel) {
         this.activeProvider.modelName = savedModel;
       } else {
-        this.activeProvider.modelName = 'gemma2:2b';
+        if (savedProviderId === 'gemini') this.activeProvider.modelName = 'gemini-3.1-flash';
+        else this.activeProvider.modelName = 'gemma2:2b';
       }
     }
   }
@@ -45,13 +56,14 @@ export class LocalAI implements AIProvider {
   }
 
   public getProviderId(): string {
-    return 'ollama';
+    return this.activeProvider.id;
   }
 
-  public setProviderId(id: 'ollama' | 'web-llm') {
+  public setProviderId(id: 'ollama' | 'gemini') {
     if (typeof window !== 'undefined') {
       localStorage.setItem('app:aiProvider', id);
     }
+    this.syncActiveProvider();
   }
 
   async init(progressCallback?: (progress: string, percent?: number) => void): Promise<void> {

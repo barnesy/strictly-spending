@@ -40,7 +40,7 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
           confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." },
           summary: { type: "string", description: "An updated 1-3 sentence summary of the artifact content." }
         },
-        required: ["id", "content"]
+        required: ["id", "content", "confirmed"]
       }
     }
   },
@@ -184,7 +184,7 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
           taxData: { type: "object", description: "The new tax settings data. Required for 'update' action." },
           confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." }
         },
-        required: ["action"]
+        required: ["action", "confirmed"]
       }
     }
   },
@@ -201,7 +201,7 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
           loanData: { type: "object", description: "Loan details needed for creation or updates." },
           confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed creation/update/deletion." }
         },
-        required: ["action"]
+        required: ["action", "confirmed"]
       }
     }
   },
@@ -218,7 +218,8 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
           deductionStatus: { type: "string" },
           filter: { type: "object" },
           confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed the update." }
-        }
+        },
+        required: ["confirmed"]
       }
     }
   },

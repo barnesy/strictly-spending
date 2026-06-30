@@ -47,6 +47,17 @@ pub struct ChatArtifact {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ChatArtifactVersion {
+    pub id: String,
+    #[serde(rename = "artifactId")]
+    pub artifact_id: String,
+    pub content: String,
+    pub summary: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChatThread {
     pub id: String,
     pub title: String,
@@ -160,6 +171,8 @@ pub fn init_extra_tables(conn: &Connection) -> Result<()> {
     let _ = conn.execute("ALTER TABLE artifacts ADD COLUMN source TEXT", []);
     let _ = conn.execute("ALTER TABLE artifacts ADD COLUMN associated_checklist_id TEXT", []);
     let _ = conn.execute("ALTER TABLE artifacts ADD COLUMN summary TEXT", []);
+
+    conn.execute("CREATE TABLE IF NOT EXISTS artifact_versions (id TEXT PRIMARY KEY, artifact_id TEXT, content TEXT, summary TEXT, created_at TEXT)", [])?;
 
     conn.execute("CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, title TEXT, created_at TEXT, updated_at TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT, role TEXT, content TEXT, action_result TEXT, created_at TEXT, active_skill_id TEXT, completed_stages TEXT, steps TEXT, token_usage TEXT, purpose TEXT, thinking TEXT)", [])?;
@@ -350,10 +363,102 @@ pub fn put_artifact(state: State<DbState>, item: ChatArtifact) -> Result<(), Str
 #[tauri::command]
 pub fn update_artifact(state: State<DbState>, id: String, updates: ChatArtifact) -> Result<(), String> {
     let conn = state.conn.lock().unwrap();
+    
+    // Fetch current state to save as a version
+    let mut stmt = conn.prepare("SELECT content, summary, updated_at FROM artifacts WHERE id = ?1").map_err(|e| e.to_string())?;
+    let current_iter = stmt.query_map(params![id], |row| {
+        Ok((
+            row.get::<usize, String>(0)?,
+            row.get::<usize, Option<String>>(1)?,
+            row.get::<usize, String>(2)?,
+        ))
+    });
+    
+    if let Ok(mut iter) = current_iter {
+        if let Some(Ok((content, summary, updated_at))) = iter.next() {
+            let version_id = uuid::Uuid::new_v4().to_string();
+            let _ = conn.execute(
+                "INSERT INTO artifact_versions (id, artifact_id, content, summary, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![version_id, id, content, summary, updated_at],
+            );
+        }
+    }
+
     conn.execute(
         "UPDATE artifacts SET type=?1, title=?2, content=?3, explanation=?4, summary=?5, created_at=?6, updated_at=?7, path=?8, source=?9, associated_checklist_id=?10 WHERE id = ?11",
         params![updates.type_val, updates.title, updates.content, updates.explanation, updates.summary, updates.created_at, updates.updated_at, updates.path, updates.source, updates.associated_checklist_id, id],
     ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_artifact_versions(state: State<DbState>, artifact_id: String) -> Result<Vec<ChatArtifactVersion>, String> {
+    let conn = state.conn.lock().unwrap();
+    let mut stmt = conn.prepare("SELECT id, artifact_id, content, summary, created_at FROM artifact_versions WHERE artifact_id = ?1 ORDER BY created_at DESC").map_err(|e| e.to_string())?;
+    
+    let iter = stmt.query_map(params![artifact_id], |row| {
+        Ok(ChatArtifactVersion {
+            id: row.get(0)?,
+            artifact_id: row.get(1)?,
+            content: row.get(2)?,
+            summary: row.get(3)?,
+            created_at: row.get(4)?,
+        })
+    }).map_err(|e| e.to_string())?;
+    
+    let mut results = Vec::new();
+    for i in iter {
+        results.push(i.map_err(|e| e.to_string())?);
+    }
+    Ok(results)
+}
+
+#[tauri::command]
+pub fn restore_artifact_version(state: State<DbState>, artifact_id: String, version_id: String) -> Result<(), String> {
+    let conn = state.conn.lock().unwrap();
+    
+    // 1. Get the version content
+    let mut stmt = conn.prepare("SELECT content, summary FROM artifact_versions WHERE id = ?1").map_err(|e| e.to_string())?;
+    let mut iter = stmt.query_map(params![version_id], |row| {
+        Ok((
+            row.get::<usize, String>(0)?,
+            row.get::<usize, Option<String>>(1)?,
+        ))
+    }).map_err(|e| e.to_string())?;
+    
+    let (version_content, version_summary) = match iter.next() {
+        Some(Ok(v)) => v,
+        _ => return Err("Version not found".to_string()),
+    };
+    
+    // 2. Get current state to save as a version before restoring
+    let mut current_stmt = conn.prepare("SELECT content, summary, updated_at FROM artifacts WHERE id = ?1").map_err(|e| e.to_string())?;
+    let current_iter = current_stmt.query_map(params![artifact_id], |row| {
+        Ok((
+            row.get::<usize, String>(0)?,
+            row.get::<usize, Option<String>>(1)?,
+            row.get::<usize, String>(2)?,
+        ))
+    });
+    
+    if let Ok(mut c_iter) = current_iter {
+        if let Some(Ok((content, summary, updated_at))) = c_iter.next() {
+            let new_version_id = uuid::Uuid::new_v4().to_string();
+            let _ = conn.execute(
+                "INSERT INTO artifact_versions (id, artifact_id, content, summary, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![new_version_id, artifact_id, content, summary, updated_at],
+            );
+        }
+    }
+    
+    let now = chrono::Utc::now().to_rfc3339();
+    
+    // 3. Update the artifact
+    conn.execute(
+        "UPDATE artifacts SET content=?1, summary=?2, updated_at=?3 WHERE id = ?4",
+        params![version_content, version_summary, now, artifact_id],
+    ).map_err(|e| e.to_string())?;
+    
     Ok(())
 }
 

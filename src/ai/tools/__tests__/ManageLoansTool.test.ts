@@ -25,7 +25,7 @@ describe('ManageLoansTool', () => {
     const result = await tool.execute({ action: 'get' }, {} as any);
     
     expect(result.feedbackError).toBeUndefined();
-    expect(result.data?.loans).toHaveLength(1);
+    expect(result.systemResultsMsg).toContain('House');
     expect(result.actionResult?.action).toBe('get_loans');
   });
 

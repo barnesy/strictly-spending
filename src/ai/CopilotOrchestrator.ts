@@ -81,7 +81,7 @@ Example output:
     context: OrchestratorContext
   ): Promise<void> {
     const chatStore = useChatStore.getState();
-    const { addMessage, startStreamingMessage, appendStreamingToken, finalizeStreamingMessage, messages } = chatStore;
+    const { addMessage, startStreamingMessage, appendStreamingToken, finalizeStreamingMessage, messages, activeArtifact } = chatStore;
     const { signal, navigate, location } = context;
 
     startStreamingMessage([], undefined, false);
@@ -112,6 +112,22 @@ Available Artifacts: ${artifacts.map(a => `ID: ${a.id}, Title: "${a.title}", Sum
 Global Cash Runway:
 ${JSON.stringify(runwayData, null, 2)}`;
 
+    let contextualArtifact = activeArtifact;
+    if (!contextualArtifact) {
+      const lastArtifactResult = [...messages].reverse().find(m => 
+        m.actionResult && (m.actionResult.action === 'create_artifact' || m.actionResult.action === 'update_artifact')
+      )?.actionResult;
+
+      if (lastArtifactResult) {
+        const targetId = lastArtifactResult.artifactId || lastArtifactResult.id || lastArtifactResult.identifier;
+        if (targetId) {
+          contextualArtifact = artifacts.find(a => a.id === targetId) || null;
+        }
+      }
+    }
+
+    const stateContextFinal = stateContext + (contextualArtifact ? `\nActive Artifact Context:\n- ID: ${contextualArtifact.id}\n- Title: ${contextualArtifact.title}\n(If the user asks to update 'the artifact', assume they mean this one).` : '');
+
     // Evict older messages to prevent context window overflow, keeping last 100 for long workflows
     const maxHistoryLength = 100;
     let conversationHistory = messages.length > maxHistoryLength 
@@ -140,7 +156,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
         let activePlaybooksJson = JSON.stringify(sanitizedPlaybooks, null, 2);
         activePlaybooksJson = activePlaybooksJson.replace(/\{\{current_year\}\}/g, String(new Date().getFullYear()));
         
-        const overrideSystemPrompt = await import('./prompts').then(m => m.getSystemPrompt(stateContext, undefined, activePlaybooksJson));
+        const overrideSystemPrompt = await import('./prompts').then(m => m.getSystemPrompt(stateContextFinal, undefined, activePlaybooksJson));
         // We will pass overrideSystemPrompt below
         (this as any)._cachedSystemPrompt = overrideSystemPrompt;
       }
@@ -170,7 +186,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
       try {
         chatResult = await localAIModel.chatCopilot(
           activeHistory,
-          stateContext,
+          stateContextFinal,
           (this as any)._cachedSystemPrompt, // override system prompt
           undefined, // no schema
           (chunk) => { appendStreamingToken(chunk); },
@@ -289,7 +305,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
           // Invalidate TanStack query cache since the LLM tools may have mutated data
           await queryClient.invalidateQueries();
 
-          if (action === 'create_artifact' || action === 'update_artifact') {
+          if (action === 'create_artifact' || action === 'update_artifact' || action === 'request_user_confirmation') {
              systemResultsMsg = null;
           } else {
              systemResultsMsg = result.systemResultsMsg ? { role: 'tool', content: result.systemResultsMsg } : null;

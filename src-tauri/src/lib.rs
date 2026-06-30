@@ -30,6 +30,7 @@ pub fn run() {
             
             // ai.rs
             ai::run_copilot_chat,
+            ai::run_gemini_chat,
             
             // tools/
             tools::rule_miner::mine_rule_suggestions,
@@ -111,6 +112,8 @@ pub fn run() {
             db_extra::update_artifact,
             db_extra::delete_artifact,
             db_extra::clear_artifacts,
+            db_extra::get_artifact_versions,
+            db_extra::restore_artifact_version,
             db_extra::get_threads,
             db_extra::add_thread,
             db_extra::put_thread,

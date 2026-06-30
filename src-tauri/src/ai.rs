@@ -163,3 +163,154 @@ pub async fn run_copilot_chat(
         thinking: if full_thinking.is_empty() { None } else { Some(full_thinking) },
     })
 }
+
+#[derive(Deserialize, Debug)]
+struct OpenAiChatChunk {
+    choices: Option<Vec<OpenAiChoiceDelta>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OpenAiChoiceDelta {
+    delta: Option<OpenAiDelta>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OpenAiDelta {
+    content: Option<String>,
+    tool_calls: Option<Vec<Value>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OpenAiFullResponse {
+    choices: Option<Vec<OpenAiFullChoice>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OpenAiFullChoice {
+    message: Option<OpenAiFullMessage>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OpenAiFullMessage {
+    content: Option<String>,
+    tool_calls: Option<Vec<Value>>,
+}
+
+#[tauri::command]
+pub async fn run_gemini_chat(
+    app: AppHandle,
+    model: String,
+    messages: Vec<ChatMessage>,
+    api_key: String,
+    format: Option<Value>,
+    tools: Option<Value>,
+    options: Value,
+    stream: Option<bool>,
+) -> Result<CopilotChatResult, String> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(300))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let is_streaming = stream.unwrap_or(true);
+
+    let mut req_body = serde_json::json!({
+        "model": model,
+        "messages": messages,
+        "stream": is_streaming,
+    });
+
+    if let Some(f) = format {
+        req_body["response_format"] = f;
+    }
+    if let Some(t) = tools {
+        req_body["tools"] = t;
+    }
+    
+    // Extract temperature from options
+    if let Some(temp) = options.get("temperature") {
+        req_body["temperature"] = temp.clone();
+    }
+
+    let response = client
+        .post("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .json(&req_body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        let err_text = response.text().await.unwrap_or_default();
+        return Err(format!("Gemini API error: {}", err_text));
+    }
+
+    if !is_streaming {
+        let full_resp = response.json::<OpenAiFullResponse>().await.map_err(|e| e.to_string())?;
+        
+        let mut content = String::new();
+        let mut tool_calls = None;
+        
+        if let Some(choices) = full_resp.choices {
+            if let Some(choice) = choices.into_iter().next() {
+                if let Some(msg) = choice.message {
+                    content = msg.content.unwrap_or_default();
+                    tool_calls = msg.tool_calls;
+                }
+            }
+        }
+        
+        return Ok(CopilotChatResult {
+            content,
+            tool_calls,
+            thinking: None,
+        });
+    }
+
+    let mut full_content = String::new();
+    let mut collected_tool_calls: Option<Vec<Value>> = None;
+    let mut stream_res = response.bytes_stream();
+
+    while let Some(chunk_res) = stream_res.next().await {
+        match chunk_res {
+            Ok(bytes) => {
+                let text = String::from_utf8_lossy(&bytes);
+                for line in text.lines() {
+                    let line = line.trim();
+                    if line.starts_with("data: ") {
+                        let json_str = &line[6..];
+                        if json_str == "[DONE]" {
+                            continue;
+                        }
+                        if let Ok(chunk) = serde_json::from_str::<OpenAiChatChunk>(json_str) {
+                            if let Some(choices) = chunk.choices {
+                                if let Some(choice) = choices.into_iter().next() {
+                                    if let Some(delta) = choice.delta {
+                                        if let Some(c) = delta.content {
+                                            full_content.push_str(&c);
+                                            let _ = app.emit("llm_chunk", c);
+                                        }
+                                        if let Some(tc) = delta.tool_calls {
+                                            collected_tool_calls = Some(tc);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(e.to_string());
+            }
+        }
+    }
+    
+    let _ = app.emit("llm_done", serde_json::json!({}));
+
+    Ok(CopilotChatResult {
+        content: full_content,
+        tool_calls: collected_tool_calls,
+        thinking: None,
+    })
+}

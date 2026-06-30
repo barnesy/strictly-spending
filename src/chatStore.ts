@@ -286,6 +286,12 @@ export const useChatStore = create<ChatStore>()(
 
       checkAIStatus: async (force) => {
         const isTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
+        const providerId = localStorage.getItem('app:aiProvider') || 'ollama';
+
+        if (providerId === 'gemini') {
+          set({ aiStatus: 'ready', aiProgress: 'Gemini Ready', aiLoaded: true, aiProgressPercent: 100 });
+          return;
+        }
 
         // Skip background checks if a model is currently downloading
         if (get().aiStatus === 'pulling' && !force) {
@@ -557,6 +563,7 @@ export const useChatStore = create<ChatStore>()(
             tokenUsage: m.tokenUsage
           };
         }));
+        
         set({ messages: formatted });
       }
     }),

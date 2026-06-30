@@ -9,7 +9,14 @@ import {
   Stack,
   alpha,
   useTheme,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  InputAdornment,
 } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import ArticleIcon from '@mui/icons-material/Article';
@@ -20,7 +27,7 @@ import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { confirmDialog } from '../utils/confirmDialog';
 import { useFilters } from '../store';
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
 export default function Artifacts() {
   const theme = useTheme();
@@ -37,7 +44,28 @@ export default function Artifacts() {
     };
   }, [setLastViewedArtifactsAt]);
 
-  const sortedArtifacts = [...artifacts].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+
+  const artifactTypes = useMemo(() => {
+    const types = new Set(artifacts.map((a) => a.type));
+    return Array.from(types).sort();
+  }, [artifacts]);
+
+  const filteredArtifacts = useMemo(() => {
+    return artifacts.filter((art) => {
+      const matchesSearch =
+        art.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (art.explanation && art.explanation.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (art.summary && art.summary.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesType = typeFilter === 'all' || art.type === typeFilter;
+
+      return matchesSearch && matchesType;
+    });
+  }, [artifacts, searchQuery, typeFilter]);
+
+  const sortedArtifacts = [...filteredArtifacts].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -74,6 +102,41 @@ export default function Artifacts() {
           View and manage all files, spreadsheets, and AI capabilities.
         </Typography>
       </Box>
+
+      <Stack direction="row" spacing={2} sx={{ mb: 4 }} alignItems="flex-end">
+        <TextField
+          label="Search artifacts"
+          variant="standard"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ flexGrow: 1, maxWidth: 400 }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }
+          }}
+        />
+        <FormControl variant="standard" sx={{ minWidth: 150 }}>
+          <InputLabel id="type-filter-label">Type</InputLabel>
+          <Select
+            labelId="type-filter-label"
+            value={typeFilter}
+            label="Type"
+            onChange={(e) => setTypeFilter(e.target.value as string)}
+          >
+            <MenuItem value="all">All Types</MenuItem>
+            {artifactTypes.map((type) => (
+              <MenuItem key={type} value={type}>
+                {getLabelForType(type)}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Stack>
 
       {isLoading ? null : sortedArtifacts.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 10 }}>

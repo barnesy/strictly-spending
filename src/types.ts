@@ -331,6 +331,14 @@ export interface ChatArtifact {
   associatedChecklistId?: string;
 }
 
+export interface ChatArtifactVersion {
+  id: string;
+  artifactId: string;
+  content: string;
+  summary?: string;
+  createdAt: string;
+}
+
 export interface ChatThread {
   id: string;
   title: string;
