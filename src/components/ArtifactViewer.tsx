@@ -245,6 +245,21 @@ export default function ArtifactViewer() {
             </Button>
           )}
 
+          {!isPdf && !isSpreadsheet && !isSkill && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<ArticleIcon />}
+              onClick={() => {
+                const filename = `${activeArtifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.md`;
+                downloadFile(activeArtifact.content, filename, 'text/markdown;charset=utf-8;');
+              }}
+              sx={{ textTransform: 'none', fontSize: 11, py: 0.5 }}
+            >
+              Download MD
+            </Button>
+          )}
+
           {isSkill && (
             <>
               <Button

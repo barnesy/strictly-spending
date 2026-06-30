@@ -96,6 +96,19 @@ export default function ArtifactDetail() {
               Download CSV
             </Button>
           )}
+          {artifact.type === 'markdown' && !isEditing && (
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<ArticleIcon />}
+              onClick={() => {
+                const filename = `${artifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.md`;
+                downloadFile(artifact.content, filename, 'text/markdown;charset=utf-8;');
+              }}
+            >
+              Download MD
+            </Button>
+          )}
           {artifact.type !== 'pdf' && (
             <Button
               variant={isEditing ? "contained" : "outlined"}
