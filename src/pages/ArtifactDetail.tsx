@@ -104,19 +104,29 @@ export default function ArtifactDetail() {
               onClick={() => {
                 let contentToDownload = artifact.content;
                 
-                const chartBlocks = [...contentToDownload.matchAll(/```chart[\s\S]*?```/g)];
-                if (chartBlocks.length > 0) {
-                  const canvases = document.querySelectorAll('.artifact-chart canvas') as NodeListOf<HTMLCanvasElement>;
-                  let canvasIndex = 0;
-                  contentToDownload = contentToDownload.replace(/```chart[\s\S]*?```/g, (match) => {
-                    const canvas = canvases[canvasIndex++];
-                    if (canvas) {
-                      const dataUrl = canvas.toDataURL('image/png');
-                      return `${match}\n\n![Chart Snapshot](${dataUrl})`;
-                    }
-                    return match;
-                  });
-                }
+                const canvases = document.querySelectorAll('.artifact-chart canvas') as NodeListOf<HTMLCanvasElement>;
+                let canvasIndex = 0;
+                contentToDownload = contentToDownload.replace(/```(.*)\n([\s\S]*?)```/g, (match, lang, innerText) => {
+                  const language = lang.trim().toLowerCase();
+                  if (['echarts', 'json', 'javascript', 'js', ''].includes(language)) {
+                    try {
+                      let parsed = null;
+                      try { parsed = JSON.parse(innerText); }
+                      catch(e) { const fn = new Function('return (' + innerText + ')'); parsed = fn(); }
+                      
+                      if (parsed && typeof parsed === 'object') {
+                        if (language === 'echarts' || (parsed.series && Array.isArray(parsed.series))) {
+                          const canvas = canvases[canvasIndex++];
+                          if (canvas) {
+                            const dataUrl = canvas.toDataURL('image/png');
+                            return `${match}\n\n![Chart Snapshot](${dataUrl})`;
+                          }
+                        }
+                      }
+                    } catch(e) {}
+                  }
+                  return match;
+                });
 
                 const filename = `${artifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.md`;
                 downloadFile(contentToDownload, filename, 'text/markdown;charset=utf-8;');
