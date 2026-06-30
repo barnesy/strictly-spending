@@ -119,7 +119,7 @@ export default function ArtifactDetail() {
                           const canvas = canvases[canvasIndex++];
                           if (canvas) {
                             const dataUrl = canvas.toDataURL('image/png');
-                            return `${match}\n\n![Chart Snapshot](${dataUrl})`;
+                            return `<details>\n<summary>View Chart Data</summary>\n\n${match}\n\n</details>\n\n![Chart Snapshot](${dataUrl})`;
                           }
                         }
                       }
