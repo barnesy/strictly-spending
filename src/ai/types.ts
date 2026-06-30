@@ -9,8 +9,6 @@ export interface ChatMessage {
   purpose?: 'tool_select' | 'explanation';
   tool_calls?: any[];
   thinking?: string;
-  images?: string[];
-  attachedFile?: { filename: string, localPath?: string, base64?: string, text?: string, type: 'image' | 'pdf' };
   isStreaming?: boolean;
   steps?: any[];
   tokenUsage?: { prompt: number; completion: number; total: number };

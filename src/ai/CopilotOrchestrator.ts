@@ -136,16 +136,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
 
     // Evict older messages to prevent context window overflow
     // Evict older messages to prevent context window overflow
-    let conversationHistory = [...messages, userMsg].flatMap(msg => {
-      const msgs = [msg];
-      if (msg.attachedFile?.text) {
-        msgs.push({
-          role: 'system',
-          content: `[System Payload: Uploaded File '${msg.attachedFile.filename}' Text Content:\n${msg.attachedFile.text}]`
-        } as any);
-      }
-      return msgs;
-    });
+    let conversationHistory = [...messages, userMsg];
 
     if (conversationHistory.length > maxHistoryLength) {
       conversationHistory = [

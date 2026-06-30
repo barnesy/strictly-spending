@@ -3,8 +3,6 @@ mod db;
 mod db_mut;
 mod ai;
 mod tools;
-mod documents;
-
 use tauri::Manager;
 
 #[tauri::command]
@@ -31,11 +29,6 @@ pub fn run() {
             // ai.rs
             ai::run_copilot_chat,
             ai::run_gemini_chat,
-            
-            // documents.rs
-            documents::save_document,
-            documents::read_document_base64,
-            documents::open_document,
             
             // tools/
             tools::rule_miner::mine_rule_suggestions,

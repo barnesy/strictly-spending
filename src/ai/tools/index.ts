@@ -57,7 +57,6 @@ import { ProjectRunwayTool } from './ProjectRunwayTool';
 import { ManageLoansTool } from './ManageLoansTool';
 import { ManageBudgetsTool } from './ManageBudgetsTool';
 import { CreateAutoRuleTool } from './CreateAutoRuleTool';
-import { ReadPdfTool } from './ReadPdfTool';
 import { ReadArtifactTool } from './ReadArtifactTool';
 import { RequestUserConfirmationTool } from './RequestUserConfirmationTool';
 
@@ -77,5 +76,4 @@ toolRegistry.register(new ProjectRunwayTool());
 toolRegistry.register(new ManageLoansTool());
 toolRegistry.register(new ManageBudgetsTool());
 toolRegistry.register(new CreateAutoRuleTool());
-toolRegistry.register(new ReadPdfTool());
 toolRegistry.register(new CompileTaxDocumentTool());
