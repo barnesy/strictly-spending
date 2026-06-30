@@ -510,8 +510,6 @@ export default function CopilotChat({
             disabled={loading}
             onStop={stopPromptExecution}
             loading={loading}
-            onUpload={handleUploadDocument}
-            isUploading={isUploading}
           />
         </>
       )}
