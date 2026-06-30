@@ -68,8 +68,11 @@ fn is_installed(app: &AppHandle) -> bool {
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
 
-        cmd.status()
-            .map(|s| s.success())
+        cmd.stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map(|s| s.status.success())
             .unwrap_or(false)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -102,6 +105,9 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
                 .arg("-o")
                 .arg(&zip_path)
                 .arg("https://ollama.com/download/Ollama-darwin.zip")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .stdin(std::process::Stdio::null())
                 .status()
                 .map_err(|e| e.to_string())?;
                 
@@ -115,6 +121,9 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
                 .arg(&zip_path)
                 .arg("-d")
                 .arg(&app_data)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .stdin(std::process::Stdio::null())
                 .status()
                 .map_err(|e| e.to_string())?;
                 
@@ -149,6 +158,9 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
                 .arg("-o")
                 .arg(&zip_path)
                 .arg("https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .stdin(std::process::Stdio::null())
                 .creation_flags(CREATE_NO_WINDOW);
 
             if let Ok(status) = curl_cmd.status() {
@@ -167,6 +179,9 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
                          (New-Object System.Net.WebClient).DownloadFile('https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip', '{}')",
                         zip_path.to_string_lossy()
                     ))
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .stdin(std::process::Stdio::null())
                     .creation_flags(CREATE_NO_WINDOW);
 
                 let status = ps_cmd.status().map_err(|e| e.to_string())?;
@@ -184,6 +199,9 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
                 .arg(&zip_path)
                 .arg("-C")
                 .arg(&app_data)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .stdin(std::process::Stdio::null())
                 .creation_flags(CREATE_NO_WINDOW);
 
             if let Ok(status) = tar_cmd.status() {
@@ -202,6 +220,9 @@ pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
                         zip_path.to_string_lossy(),
                         app_data.to_string_lossy()
                     ))
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .stdin(std::process::Stdio::null())
                     .creation_flags(CREATE_NO_WINDOW);
 
                 let status = ps_extract_cmd.status().map_err(|e| e.to_string())?;
@@ -280,26 +301,15 @@ pub async fn start_ollama(app: AppHandle) -> Result<(), String> {
         };
         
         tauri::async_runtime::spawn_blocking(move || {
-            let mut cmd = std::process::Command::new(&target_exe);
-            
-            if target_exe.to_string_lossy() == "ollama" || target_exe.file_name().unwrap_or_default() == "ollama.exe" {
-                if target_exe.exists() && target_exe.parent().map_or(false, |p| {
-                    let p_str = p.to_string_lossy().to_lowercase();
-                    p_str.contains("programs\\ollama") || p_str.contains("program files\\ollama")
-                }) {
-                    // Start the tray app directly
-                } else {
-                    cmd.arg("serve");
-                }
-            }
-            
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                const DETACHED_PROCESS: u32 = 0x00000008;
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
-                cmd.creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW);
-            }
+            // Write a VBScript wrapper to the temp directory to completely hide 
+            // the console windows of both `ollama serve` and its grandchild `llama-server.exe`
+            let vbs_path = std::env::temp_dir().join("start_ollama.vbs");
+            let vbs_content = "Set WshShell = CreateObject(\"WScript.Shell\")\nWshShell.Run \"cmd.exe /c \"\"\" & WScript.Arguments(0) & \"\"\" serve\", 0, False\n";
+            let _ = std::fs::write(&vbs_path, vbs_content);
+
+            let mut cmd = std::process::Command::new("wscript.exe");
+            cmd.arg(vbs_path);
+            cmd.arg(&target_exe);
             
             let _child = cmd
                 .stdout(std::process::Stdio::null())

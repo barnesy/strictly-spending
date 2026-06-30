@@ -59,7 +59,13 @@ export default function Artifacts() {
   };
 
   return (
-    <Box sx={{ pb: 6 }}>
+    <Box sx={{ 
+      pb: 6, 
+      height: '100%', 
+      overflowY: 'auto',
+      mr: { xs: -1.5, sm: -3 },
+      pr: { xs: 1.5, sm: 4 }
+    }}>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
           Artifacts Gallery

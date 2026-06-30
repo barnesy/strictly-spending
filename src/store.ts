@@ -95,7 +95,7 @@ export type FiltersStore = FiltersState & FiltersActions;
 
 export const useFilters = create<FiltersStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialState,
       setPreset: (p) => set({ preset: p }),
       setCustomRange: (customStart, customEnd) =>
@@ -172,7 +172,7 @@ export const useFilters = create<FiltersStore>()(
       reset: () =>
         set((s) => ({
           ...initialState,
-          version: get().version,
+          version: s.version,
           earliestTransactionDate: s.earliestTransactionDate,
           latestTransactionDate: s.latestTransactionDate,
         })),

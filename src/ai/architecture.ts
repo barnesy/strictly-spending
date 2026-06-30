@@ -293,7 +293,8 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
             description: "The type of tax document to generate."
           },
           taxYear: { type: "number", description: "The tax year to generate for. If omitted, defaults to the previous year. Only specify if the user explicitly asks for a specific year." },
-          associatedChecklistId: { type: "string", description: "If the user provides a checklist ID (e.g. 'business_pnl'), pass it here to link the generated artifact to the UI." }
+          associatedChecklistId: { type: "string", description: "If the user provides a checklist ID (e.g. 'business_pnl'), pass it here to link the generated artifact to the UI." },
+          ignoreWarnings: { type: "boolean", description: "Set to true to bypass categorization warnings and force the generation of the document even if the ledger is mostly uncategorized or empty." }
         },
         required: ["documentType"]
       }

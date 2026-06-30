@@ -28,6 +28,20 @@ export class CompileTaxDocumentTool implements AIToolHandler {
       const artifacts = await api.getArtifacts();
       const transactions = context.dataStore.transactions || [];
       const accounts = context.dataStore.accounts || [];
+
+      // Categorization and Empty Ledger Warnings
+      if (!actionObj.ignoreWarnings) {
+        const yearTxns = transactions.filter(t => t.date.startsWith(`${year}-`));
+        if (yearTxns.length === 0) {
+          return { feedbackError: `No transactions found for the year ${year}. Ask the user if they still want to generate an empty document, or if they need to import transactions first. If they want to proceed, call this tool again with 'ignoreWarnings: true'.` };
+        }
+
+        const uncategorized = yearTxns.filter(t => !t.category || t.category.toLowerCase() === 'uncategorized');
+        // If more than 10% are uncategorized or there are over 20 uncategorized transactions
+        if (uncategorized.length > 0 && (uncategorized.length > 20 || uncategorized.length / yearTxns.length > 0.1)) {
+          return { feedbackError: `Warning: ${uncategorized.length} out of ${yearTxns.length} transactions for ${year} are uncategorized. A tax document will be inaccurate. It is highly recommended to run the 'categorize_transactions' tool first to propose categories to the user. If the user explicitly wants to proceed with uncategorized data, call this tool again with 'ignoreWarnings: true'.` };
+        }
+      }
       
       // We don't have activeDocuments easily, so we just mock REQUIRED_DOCUMENTS minimally 
       // since generateTaxSummaryMarkdown uses it just for the checklist.

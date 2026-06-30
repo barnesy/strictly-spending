@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Box, Typography } from '@mui/material';
 
 interface AnimatedLogoProps {
@@ -8,11 +8,21 @@ interface AnimatedLogoProps {
 }
 
 export default function AnimatedLogo({ scale = 1, spinSpeed = 0.02, sx = {} }: AnimatedLogoProps = {}) {
-  const [rotY, setRotY] = useState(0);
-  const [rotX, setRotX] = useState(12);
+  const boxRef = useRef<HTMLDivElement>(null);
+  
+  // Use refs to track current rotation without triggering re-renders
+  const rotRef = useRef({ x: 12, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragStartRot, setDragStartRot] = useState({ x: 12, y: 0 });
+
+  // Helper to apply rotation directly to the DOM element
+  const applyRotation = (x: number, y: number) => {
+    rotRef.current = { x, y };
+    if (boxRef.current) {
+      boxRef.current.style.transform = `rotateY(${y}deg) rotateX(${x}deg)`;
+    }
+  };
 
   // Slow auto-spin animation when not dragging
   useEffect(() => {
@@ -22,26 +32,32 @@ export default function AnimatedLogo({ scale = 1, spinSpeed = 0.02, sx = {} }: A
     const update = (time: number) => {
       const delta = time - lastTime;
       lastTime = time;
-      setRotY((prev) => (prev + delta * spinSpeed) % 360);
-      setRotX(() => 2 + 10 * Math.sin(time * 0.0004));
+      
+      const nextY = (rotRef.current.y + delta * spinSpeed) % 360;
+      const nextX = 2 + 10 * Math.sin(time * 0.0004);
+      
+      applyRotation(nextX, nextY);
       frame = requestAnimationFrame(update);
     };
     frame = requestAnimationFrame(update);
     return () => cancelAnimationFrame(frame);
-  }, [isDragging]);
+  }, [isDragging, spinSpeed]);
 
   const handleStart = (clientX: number, clientY: number) => {
     setIsDragging(true);
     setDragStart({ x: clientX, y: clientY });
-    setDragStartRot({ x: rotX, y: rotY });
+    setDragStartRot({ x: rotRef.current.x, y: rotRef.current.y });
   };
 
   const handleMove = (clientX: number, clientY: number) => {
     if (!isDragging) return;
     const dx = clientX - dragStart.x;
     const dy = clientY - dragStart.y;
-    setRotY(dragStartRot.y + dx * 0.7);
-    setRotX(Math.max(-45, Math.min(45, dragStartRot.x - dy * 0.7)));
+    
+    const nextY = dragStartRot.y + dx * 0.7;
+    const nextX = Math.max(-45, Math.min(45, dragStartRot.x - dy * 0.7));
+    
+    applyRotation(nextX, nextY);
   };
 
   const handleEnd = () => {
@@ -79,16 +95,17 @@ export default function AnimatedLogo({ scale = 1, spinSpeed = 0.02, sx = {} }: A
       onTouchEnd={handleEnd}
     >
       <Box
+        ref={boxRef}
         sx={{
           width: 32 * scale,
           height: 32 * scale,
           position: 'relative',
           transformStyle: 'preserve-3d',
-          transform: `rotateY(${rotY}deg) rotateX(${rotX}deg)`,
+          transform: `rotateY(${rotRef.current.y}deg) rotateX(${rotRef.current.x}deg)`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: isDragging ? 'none' : 'none', // Remove CSS transition to allow smooth rAF spinning
+          transition: isDragging ? 'none' : 'none',
         }}
       >
         {layers.map((z) => {

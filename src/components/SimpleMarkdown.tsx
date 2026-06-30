@@ -327,14 +327,28 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
                 </TableContainer>
               );
             case 'code':
-              if (block.language === 'echarts') {
+              if (['echarts', 'json', 'javascript', 'js', ''].includes(block.language.toLowerCase())) {
                 try {
                   const parsedOption = JSON.parse(block.text);
                   if (parsedOption && typeof parsedOption === 'object') {
-                    return <ArtifactChart key={idx} option={parsedOption} />;
+                    if (block.language === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
+                      return <ArtifactChart key={idx} option={parsedOption} />;
+                    }
                   }
-                } catch (e) {
-                  // fall back to rendering as normal code block
+                } catch (e1) {
+                  try {
+                    // LLMs sometimes output JS objects instead of strict JSON (unquoted keys, trailing commas, comments)
+                    // Evaluated in a function to allow valid JS object syntax
+                    const fn = new Function('return (' + block.text + ')');
+                    const parsedOption = fn();
+                    if (parsedOption && typeof parsedOption === 'object') {
+                      if (block.language === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
+                        return <ArtifactChart key={idx} option={parsedOption} />;
+                      }
+                    }
+                  } catch (e2) {
+                    // fall back to rendering as normal code block
+                  }
                 }
               }
               return (

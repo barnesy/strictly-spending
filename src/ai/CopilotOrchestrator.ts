@@ -205,6 +205,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
 
         // Synthesize the action object so it runs through the standard pipeline
         actionObj = {
+          toolName: 'create_artifact',
           action: 'create_artifact',
           identifier,
           title,
@@ -226,7 +227,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
         }
 
         actionObj = {
-          action: call.name,
+          toolName: call.name,
           ...parsedArgs
         };
       }
@@ -252,7 +253,7 @@ ${JSON.stringify(runwayData, null, 2)}`;
         break;
       }
 
-      const action = actionObj.action;
+      const action = actionObj.toolName || actionObj.action;
       lastExecutedAction = action;
       let humanReadableAction = action;
       if (action === 'query_data') humanReadableAction = 'Analyzing financial data';
@@ -336,9 +337,9 @@ ${JSON.stringify(runwayData, null, 2)}`;
       }
       if (!parsedMessage && actionObj) {
         // Synthesize standard tool_calls if we used the Gemma fallback
-        const { action: fnName, ...args } = actionObj;
+        const { action: fnName, toolName, ...args } = actionObj;
         parsedMessage = {
-          tool_calls: [{ function: { name: fnName, arguments: args } }]
+          tool_calls: [{ function: { name: toolName || fnName, arguments: args } }]
         };
       }
 
