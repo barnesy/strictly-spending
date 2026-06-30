@@ -9,106 +9,64 @@ const accountsData: any[] = [];
 const importsData: any[] = [];
 const csvMappingsData: any[] = [];
 const categoriesData: any[] = [{ name: 'Groceries' }, { name: 'Utilities' }];
-let licenseSetting: any = { value: { active: false } };
+let licenseSetting: any = { active: false };
 
-vi.mock('./db', () => {
-  return {
-    db: {
-      rules: {
-        toArray: async () => [...rulesData],
-      },
-      taxRules: {
-        toArray: async () => [],
-      },
-      transactions: {
-        toArray: async () => [...transactionsData],
-        bulkAdd: async (txns: any[]) => {
-          transactionsData.push(...txns);
-          return txns;
-        },
-        update: async (id: number, updates: any) => {
-          const t = transactionsData.find(x => x.id === id);
-          if (t) Object.assign(t, updates);
-        },
-        where: (field: string) => ({
-          equals: (val: any) => ({
-            toArray: async () => transactionsData.filter(t => t[field] === val)
-          }),
-          anyOf: (vals: any[]) => ({
-            toArray: async () => transactionsData.filter(t => vals.includes(t[field]))
-          })
-        }),
-        orderBy: (field: string) => ({
-          keys: async () => transactionsData.map(t => t[field]).filter(Boolean)
-        })
-      },
-      accounts: {
-        where: (field: string) => ({
-          equals: (val: any) => ({
-            first: async () => accountsData.find(a => a[field] === val)
-          })
-        }),
-        add: async (a: any) => {
-          const newAcc = { ...a, id: accountsData.length + 1 };
-          accountsData.push(newAcc);
-          return newAcc.id;
-        },
-        update: async (id: number, patch: any) => {
-          const acc = accountsData.find(a => a.id === id);
-          if (acc) {
-            Object.assign(acc, patch);
-          }
-          return 1;
-        }
-      },
-      imports: {
-        add: async (imp: any) => {
-          const newImp = { ...imp, id: importsData.length + 1 };
-          importsData.push(newImp);
-          return newImp.id;
-        }
-      },
-      categories: {
-        toArray: async () => [...categoriesData]
-      },
-      merchantOverrides: {
-        toArray: async () => []
-      },
-      csvMappings: {
-        where: (field: string) => ({
-          equals: (val: any) => ({
-            first: async () => csvMappingsData.find((m) => m[field] === val),
-          }),
-        }),
-        add: async (m: any) => {
-          const newMapping = { ...m, id: csvMappingsData.length + 1 };
-          csvMappingsData.push(newMapping);
-          return newMapping.id;
-        },
-      },
-      settings: {
-        get: async (key: string) => {
-          if (key === 'license') return licenseSetting;
-          return null;
-        }
-      },
-      transaction: async (_mode: string, _tables: any, callback: () => Promise<void>) => {
-        await callback();
+vi.mock('./api', () => ({
+  api: {
+    getRules: async () => [...rulesData],
+    getTaxRules: async () => [],
+    getTransactions: async () => [...transactionsData],
+    bulkAddTransactions: async (txns: any[]) => {
+      transactionsData.push(...txns);
+    },
+    updateTransaction: async (id: number, updates: any) => {
+      const t = transactionsData.find(x => x.id === id);
+      if (t) Object.assign(t, updates);
+    },
+    getAccounts: async () => [...accountsData],
+    addAccount: async (a: any) => {
+      const newAcc = { ...a, id: accountsData.length + 1 };
+      accountsData.push(newAcc);
+      return newAcc.id;
+    },
+    updateAccount: async (id: number, patch: any) => {
+      const acc = accountsData.find(a => a.id === id);
+      if (acc) {
+        Object.assign(acc, patch);
       }
+    },
+    addImport: async (imp: any) => {
+      const newImp = { ...imp, id: importsData.length + 1 };
+      importsData.push(newImp);
+      return newImp.id;
+    },
+    getCategories: async () => [...categoriesData],
+    getMerchantOverrides: async () => [],
+    getCsvMappings: async () => [...csvMappingsData],
+    addCsvMapping: async (m: any) => {
+      const newMapping = { ...m, id: csvMappingsData.length + 1 };
+      csvMappingsData.push(newMapping);
+      return newMapping.id;
+    },
+    getSetting: async (key: string) => {
+      if (key === 'license') return licenseSetting;
+      return null;
     }
-  };
-});
+  }
+}));
 
-vi.mock('./ai', () => {
-  return {
-    localAI: {
-      isLoaded: true,
-      reviewTransactions: vi.fn(async (txns, _categories) => {
-        return txns.map(() => 'Groceries');
-      })
-    }
-  };
-});
+vi.mock('./ai', () => ({
+  localAI: {
+    isLoaded: true,
+    reviewTransactions: vi.fn(async (txns, _categories) => {
+      return txns.map(() => 'Groceries');
+    })
+  }
+}));
+
+vi.mock('./recurrence', () => ({
+  refreshRecurrenceAll: async () => {}
+}));
 
 describe('CSV Import Engine', () => {
   beforeEach(() => {
@@ -117,8 +75,7 @@ describe('CSV Import Engine', () => {
     accountsData.length = 0;
     importsData.length = 0;
     csvMappingsData.length = 0;
-    licenseSetting = { value: { active: false } };
-    expect(db).toBeDefined();
+    licenseSetting = { active: false };
     vi.clearAllMocks();
   });
 
@@ -169,7 +126,7 @@ JOHN DOE,05/22/2026,05/23/2026,Netflix Card,Subscriptions,Sale,-15.00,`;
     });
 
     it('invokes local AI categorization if license is active', async () => {
-      licenseSetting = { value: { active: true } };
+      licenseSetting = { active: true };
       const preview = await buildPreview('Chase_Chase1234_stmt.CSV', chaseCsvSample, undefined, true);
       expect(localAI.reviewTransactions).toHaveBeenCalled();
       expect(preview.rows[0].aiCategory).toBe('Groceries');

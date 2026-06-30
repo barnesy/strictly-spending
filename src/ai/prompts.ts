@@ -5,7 +5,7 @@ import type { SkillTestCase } from '../types';
 // @ts-ignore
 import typesRaw from '../types.ts?raw';
 // @ts-ignore
-import apiRaw from '../api.ts?raw';
+import apiRaw from '../api/index.ts?raw';
 
 export const GENERAL_SYSTEM_PROMPT = `<identity>
 You are an expert AI financial agent managing a user's private financial data. 

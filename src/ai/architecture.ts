@@ -21,6 +21,7 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
           content: { type: "string", description: "The complete content of the artifact. For markdown, this should be valid markdown text." },
           identifier: { type: "string", description: "An optional unique identifier for the artifact. If updating an existing artifact, use its identifier." },
           associatedChecklistId: { type: "string", description: "If the user provides a checklist ID (e.g. for tax documents), pass it here to link the artifact to the UI." },
+          sourceFile: { type: "string", description: "The local path of the original file this artifact is based on, if applicable." },
           summary: { type: "string", description: "A 1-3 sentence summary of the artifact content for quick reference." }
         },
         required: ["title", "type", "content"]

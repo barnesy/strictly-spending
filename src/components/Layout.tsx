@@ -21,10 +21,17 @@ import { useChatStore } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useTransactionBounds, useUncategorizedCount, useArtifactsCount } from '../hooks/queries';
 
-const PRIMARY_NAV = [
+type NavItem = {
+  to: string;
+  label: string;
+  end?: boolean;
+  badge?: 'uncategorized' | 'artifacts';
+};
+
+const PRIMARY_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/budget', label: 'Budget' },
-  { to: '/sort', label: 'Sort', badge: 'uncategorized' as const },
+  { to: '/sort', label: 'Sort', badge: 'uncategorized' },
   { to: '/artifacts', label: 'Artifacts' },
 ];
 

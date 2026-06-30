@@ -30,6 +30,9 @@
       "allow": [
         {
           "url": "https://github.com/barnesy/strictly-spending/issues/new"
+        },
+        {
+          "url": "^.*$"
         }
       ]
     },

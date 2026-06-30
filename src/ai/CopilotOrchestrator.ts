@@ -128,13 +128,33 @@ ${JSON.stringify(runwayData, null, 2)}`;
 
     const stateContextFinal = stateContext + (contextualArtifact ? `\nActive Artifact Context:\n- ID: ${contextualArtifact.id}\n- Title: ${contextualArtifact.title}\n(If the user asks to update 'the artifact', assume they mean this one).` : '');
 
-    // Evict older messages to prevent context window overflow, keeping last 100 for long workflows
-    const maxHistoryLength = 100;
-    let conversationHistory = messages.length > maxHistoryLength 
-      ? [...messages.slice(messages.length - maxHistoryLength), userMsg]
-      : [...messages, userMsg];
+    const maxLoopsSetting = await api.getSetting<number>('app:maxLoops');
+    const maxLoops = typeof maxLoopsSetting === 'number' ? maxLoopsSetting : 15;
+    
+    const maxHistorySetting = await api.getSetting<number>('app:maxHistoryLength');
+    const maxHistoryLength = typeof maxHistorySetting === 'number' ? maxHistorySetting : 100;
+
+    // Evict older messages to prevent context window overflow
+    // Evict older messages to prevent context window overflow
+    let conversationHistory = [...messages, userMsg].flatMap(msg => {
+      const msgs = [msg];
+      if (msg.attachedFile?.text) {
+        msgs.push({
+          role: 'system',
+          content: `[System Payload: Uploaded File '${msg.attachedFile.filename}' Text Content:\n${msg.attachedFile.text}]`
+        } as any);
+      }
+      return msgs;
+    });
+
+    if (conversationHistory.length > maxHistoryLength) {
+      conversationHistory = [
+        { role: 'system', content: `[System: The previous ${conversationHistory.length - maxHistoryLength} messages have been truncated from this conversation context to save memory. You may not have the full context of older interactions.]` },
+        ...conversationHistory.slice(conversationHistory.length - maxHistoryLength)
+      ];
+    }
+    
     let loops = 0;
-    const maxLoops = 15;
     const currentSteps: any[] = [];
     let lastQueryState: any = null;
     let lastExecutedAction: string = '';
@@ -176,7 +196,13 @@ ${JSON.stringify(runwayData, null, 2)}`;
         break;
       }
 
-      const activeHistory = conversationHistory;
+      let activeHistory = conversationHistory;
+      if (loops === maxLoops - 1) {
+        activeHistory = [
+          ...activeHistory,
+          { role: 'system', content: `[System: WARNING. You only have 1 execution loop remaining before execution is halted. Please summarize your findings or state your conclusion now.]` }
+        ];
+      }
 
       console.log("BEFORE CHAT COPILOT LOOP ITERATION", loops);
       currentSteps.push({ type: 'process', status: 'running', text: `Running ${modelName}...` });

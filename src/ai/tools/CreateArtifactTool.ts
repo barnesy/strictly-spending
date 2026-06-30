@@ -1,13 +1,14 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
 import { api } from '../../api';
+import { queryClient } from '../../queryClient';
 import { useChatStore } from '../../chatStore';
 
 export class CreateArtifactTool implements AIToolHandler {
   name = 'create_artifact';
 
   async execute(actionObj: any, context: AIToolContext): Promise<ToolExecutionResult> {
-    let { title, type, content, identifier, summary, associatedChecklistId } = actionObj;
+    let { title, type, content, identifier, summary, associatedChecklistId, sourceFile } = actionObj;
     if (!type) {
       type = 'markdown';
     }
@@ -39,6 +40,7 @@ export class CreateArtifactTool implements AIToolHandler {
         content,
         summary,
         associatedChecklistId,
+        path: sourceFile,
         createdAt: now,
         updatedAt: now,
       };
@@ -55,8 +57,8 @@ export class CreateArtifactTool implements AIToolHandler {
               checklist: { ...checklist, [associatedChecklistId]: true }
             });
             // Also invalidate queries so the Tax page re-renders the green checkmark
-            const { queryClient } = await import('../../queryClient');
             queryClient.invalidateQueries({ queryKey: ['settings'] });
+            queryClient.invalidateQueries({ queryKey: ['artifacts'] });
           }
         } catch (err) {
           console.error('Failed to link artifact to tax checklist:', err);

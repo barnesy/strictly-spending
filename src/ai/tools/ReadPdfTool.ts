@@ -19,8 +19,9 @@ export class ReadPdfTool implements AIToolHandler {
 
     try {
       const pdfjsLib = await import('pdfjs-dist');
-      // Set up worker source dynamically just in case it's needed in this environment.
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      // Set up worker source dynamically using Vite's ?url
+      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
 
       const uint8Array = await readFile(path);
       

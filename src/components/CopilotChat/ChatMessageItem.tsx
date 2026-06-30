@@ -452,6 +452,74 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
         </Box>
       )}
 
+      {isUser && message.attachedFile && (
+        <Paper
+          elevation={1}
+          onClick={() => {
+            if (message.attachedFile?.localPath) {
+              import('@tauri-apps/api/core').then(({ invoke }) => {
+                invoke('open_document', { path: message.attachedFile!.localPath! }).catch(console.error);
+              });
+            }
+          }}
+          sx={{
+            p: 1.5,
+            mb: 1,
+            maxWidth: '90%',
+            bgcolor: 'background.paper',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            overflow: 'hidden',
+            cursor: message.attachedFile.localPath ? 'pointer' : 'default',
+            transition: 'background-color 0.2s, border-color 0.2s',
+            '&:hover': {
+              bgcolor: message.attachedFile.localPath ? 'action.hover' : 'background.paper',
+              borderColor: message.attachedFile.localPath ? 'primary.main' : 'divider',
+            }
+          }}
+        >
+          <Box sx={{ 
+            width: 32, 
+            height: 32, 
+            borderRadius: 1, 
+            bgcolor: 'primary.main', 
+            color: 'primary.contrastText',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: 12 }}>
+              {message.attachedFile.type === 'pdf' ? 'PDF' : 'IMG'}
+            </Typography>
+          </Box>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+              {message.attachedFile.filename}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Original File (Reference)
+            </Typography>
+          </Box>
+          <Box sx={{
+            px: 1,
+            py: 0.25,
+            borderRadius: 4,
+            bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.2)' : 'rgba(76, 175, 80, 0.1)',
+            border: '1px solid',
+            borderColor: 'success.main',
+            color: 'success.main',
+          }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 10, textTransform: 'uppercase' }}>
+              Uploaded
+            </Typography>
+          </Box>
+        </Paper>
+      )}
+
       {displayContent ? (
         <Paper
           elevation={0}

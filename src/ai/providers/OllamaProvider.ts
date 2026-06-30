@@ -3,6 +3,9 @@ import { handleOllamaError, safeFetch } from '../utils';
 import { getSystemPrompt, fewShots } from '../prompts';
 import { parseAIResponse } from '../utils';
 import { cleanChatHistory } from '../../copilotMatcher';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { AGENT_TOOLS } from '../architecture';
 
 export class OllamaProvider implements AIProvider {
   public id = 'ollama';
@@ -62,8 +65,7 @@ export class OllamaProvider implements AIProvider {
   async pullModel(progressCallback?: (progress: number, status: string) => void): Promise<void> {
     this.pullAbortController = new AbortController();
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const { listen } = await import('@tauri-apps/api/event');
+
       
       const unlisten = await listen<{ pct: number; status: string }>('ollama_pull_progress', (event) => {
         const payload = event.payload;
@@ -138,7 +140,6 @@ export class OllamaProvider implements AIProvider {
 
       const schema = responseSchema || null;
       
-      const { AGENT_TOOLS } = await import('../architecture');
       const tools = toolsOverride || AGENT_TOOLS;
       const stream = !!onChunk;
 
@@ -163,9 +164,6 @@ export class OllamaProvider implements AIProvider {
       }
 
       if (onChunk) {
-        const { listen } = await import('@tauri-apps/api/event');
-        const { invoke } = await import('@tauri-apps/api/core');
-        
         const unlistenChunk = await listen<string>('llm_chunk', (event) => {
           onChunk(event.payload);
         });
@@ -191,7 +189,6 @@ export class OllamaProvider implements AIProvider {
           unlistenDone();
         }
       } else {
-        const { invoke } = await import('@tauri-apps/api/core');
         const result = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
           model: body.model,
           messages: body.messages,
@@ -230,7 +227,6 @@ Example valid JSON output:
 }
 `;
 
-      const { invoke } = await import('@tauri-apps/api/core');
       let content = '{"results":[]}';
       try {
         const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
@@ -307,7 +303,6 @@ Example valid JSON output:
 }
 `;
 
-      const { invoke } = await import('@tauri-apps/api/core');
       let content = '{"results":[]}';
       try {
         const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
@@ -364,6 +359,73 @@ Example valid JSON output:
       }
 
       return resultsList;
+    } catch (e: any) {
+      throw handleOllamaError(e);
+    }
+  }
+
+  async parseReceipt(imageBase64: string, signal?: AbortSignal): Promise<{ merchant: string; date: string; total: number; tax: number; items: any[] }> {
+    if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
+
+    const prompt = `Extract the following information from this receipt image. 
+Return EXACTLY a JSON object with this schema:
+{
+  "merchant": "Name of the store or merchant",
+  "date": "YYYY-MM-DD",
+  "total": 123.45,
+  "tax": 1.23,
+  "items": [{"name": "item 1", "price": 10.0}]
+}
+If a field is missing, use null or 0. Respond with only the JSON.`;
+
+    try {
+      const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
+        model: this.modelName,
+        messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
+        format: 'json',
+        options: { temperature: 0.1 }
+      });
+      const parsed = parseAIResponse(res.content);
+      return {
+        merchant: parsed.merchant || 'Unknown',
+        date: parsed.date || '',
+        total: Number(parsed.total) || 0,
+        tax: Number(parsed.tax) || 0,
+        items: Array.isArray(parsed.items) ? parsed.items : []
+      };
+    } catch (e: any) {
+      throw handleOllamaError(e);
+    }
+  }
+
+  async parseBankStatement(text: string, signal?: AbortSignal): Promise<{ transactions: { date: string; description: string; amount: number; debitCredit?: 'debit' | 'credit' }[] }> {
+    if (!this.isLoaded) throw new Error("Ollama AI not initialized.");
+
+    const prompt = `Extract the transaction history from the following bank statement text.
+Return EXACTLY a JSON object with this schema:
+{
+  "transactions": [
+    {"date": "YYYY-MM-DD", "description": "Transaction details", "amount": 123.45, "debitCredit": "debit"}
+  ]
+}
+If it is a deposit/credit, make debitCredit "credit". If it is a withdrawal/expense, make it "debit".
+Amount should always be a positive number.
+Respond with only the JSON.
+
+Bank Statement Text:
+${text.substring(0, 8000)}`; // Truncate text just in case to prevent context overflow
+
+    try {
+      const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
+        model: this.modelName,
+        messages: [{ role: 'user', content: prompt }],
+        format: 'json',
+        options: { temperature: 0.1 }
+      });
+      const parsed = parseAIResponse(res.content);
+      return {
+        transactions: Array.isArray(parsed.transactions) ? parsed.transactions : []
+      };
     } catch (e: any) {
       throw handleOllamaError(e);
     }

@@ -64,16 +64,32 @@ export default function ArtifactDetail() {
             )}
           </Box>
         </Box>
-        {isSpreadsheet && (
-          <Button
-            variant="outlined"
-            color="success"
-            startIcon={<GridOnIcon />}
-            onClick={handleDownloadCSV}
-          >
-            Download CSV
-          </Button>
-        )}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {artifact.path && (
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<ArticleIcon />}
+              onClick={() => {
+                import('@tauri-apps/api/core').then(({ invoke }) => {
+                  invoke('open_document', { path: artifact.path! }).catch(console.error);
+                });
+              }}
+            >
+              Open Original
+            </Button>
+          )}
+          {isSpreadsheet && (
+            <Button
+              variant="outlined"
+              color="success"
+              startIcon={<GridOnIcon />}
+              onClick={handleDownloadCSV}
+            >
+              Download CSV
+            </Button>
+          )}
+        </Box>
       </Box>
 
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

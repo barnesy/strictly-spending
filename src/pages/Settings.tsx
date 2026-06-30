@@ -56,6 +56,13 @@ export default function Settings() {
   const { data: settings = [] } = useSettings();
   const licenseSetting = settings.find(s => s.key === 'license');
   const license = licenseSetting?.value as { active: boolean; key: string } | undefined;
+  
+  const maxLoopsSetting = settings.find(s => s.key === 'app:maxLoops');
+  const maxLoops = (maxLoopsSetting?.value as number) ?? 15;
+  
+  const maxHistorySetting = settings.find(s => s.key === 'app:maxHistoryLength');
+  const maxHistoryLength = (maxHistorySetting?.value as number) ?? 100;
+
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseError, setLicenseError] = useState<string | null>(null);
 
@@ -220,6 +227,37 @@ export default function Settings() {
                   <Box component="span" sx={{ fontWeight: 900, mr: 0.75, textShadow: '0 0 0.5px currentColor' }}>AI</Box>
                   Manage Local Model
                 </Button>
+              </Box>
+              <Divider />
+              <Box>
+                <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600, mb: 1 }}>
+                  AI Deep Research Mode
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Adjust the maximum agent iterations and history length. Higher numbers allow the AI to tackle more complex, multi-step queries autonomously, but require more processing time and memory.
+                </Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Max Agent Loops"
+                    value={maxLoops}
+                    onChange={(e) => putSetting.mutate({ key: 'app:maxLoops', value: parseInt(e.target.value) || 15 })}
+                    InputProps={{ inputProps: { min: 1, max: 100 } }}
+                    helperText="Default: 15"
+                    sx={{ width: { xs: '100%', sm: 160 } }}
+                  />
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Max Context History"
+                    value={maxHistoryLength}
+                    onChange={(e) => putSetting.mutate({ key: 'app:maxHistoryLength', value: parseInt(e.target.value) || 100 })}
+                    InputProps={{ inputProps: { min: 10, max: 1000 } }}
+                    helperText="Default: 100 messages"
+                    sx={{ width: { xs: '100%', sm: 160 } }}
+                  />
+                </Stack>
               </Box>
             </Stack>
           ) : (

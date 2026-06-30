@@ -9,6 +9,8 @@ export interface ChatMessage {
   purpose?: 'tool_select' | 'explanation';
   tool_calls?: any[];
   thinking?: string;
+  images?: string[];
+  attachedFile?: { filename: string, localPath?: string, base64?: string, text?: string, type: 'image' | 'pdf' };
   isStreaming?: boolean;
   steps?: any[];
   tokenUsage?: { prompt: number; completion: number; total: number };
@@ -33,13 +35,14 @@ export interface AIProvider {
     directMode?: boolean,
     toolsOverride?: any[]
   ): Promise<{ content: string; tool_calls?: any[]; thinking?: string }>;
-  reviewTransactions(transactions: { desc: string; ruleCategory: string }[], availableCategories: string[], signal?: AbortSignal): Promise<string[]>;
+  reviewTransactions(transactions: any[], availableCategories: string[], signal?: AbortSignal): Promise<string[]>;
   reviewTransactionsWithRules(
     transactions: { desc: string; ruleCategory: string; localRecurrence?: string }[],
     availableCategories: string[],
     signal?: AbortSignal
   ): Promise<{ category: string; pattern: string; recurrence: "recurring" | "onetime" }[]>;
-  pullModel?(progressCallback?: (progress: number, status: string) => void): Promise<void>;
+  parseReceipt?: (imageBase64: string, signal?: AbortSignal) => Promise<any>;
+  parseBankStatement?: (text: string, signal?: AbortSignal) => Promise<any>;
+  pullModel?: (progressCallback?: (progress: number, status: string) => void) => Promise<void>;
   abortPull?(): void;
 }
-

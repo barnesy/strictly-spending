@@ -1,6 +1,7 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
 import { api } from '../../api';
+import { queryClient } from '../../queryClient';
 import { useChatStore } from '../../chatStore';
 import {
   generateBusinessLedgerCsv,
@@ -108,14 +109,12 @@ export class CompileTaxDocumentTool implements AIToolHandler {
             ...taxSettings,
             checklist: { ...checklist, [associatedChecklistId]: true }
           });
-          const { queryClient } = await import('../../queryClient');
           queryClient.invalidateQueries({ queryKey: ['settings'] });
           queryClient.invalidateQueries({ queryKey: ['artifacts'] });
         } catch (err) {
           console.error('Failed to link artifact to tax checklist:', err);
         }
       } else {
-        const { queryClient } = await import('../../queryClient');
         queryClient.invalidateQueries({ queryKey: ['artifacts'] });
       }
 

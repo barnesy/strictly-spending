@@ -21,8 +21,8 @@ import { useFilters } from '../store';
 import { useChatStore, formatModelName } from '../chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useCategories, useAccounts } from '../hooks/queries';
-
 import { executeCopilotCommand } from '../copilotMatcher';
+import { prepareDocumentForChat } from '../core/documents';
 import { useCopilotActionHandler } from './CopilotChat/useCopilotActionHandler';
 import { ChatInput } from './CopilotChat/ChatInput';
 import { ChatMessageItem } from './CopilotChat/ChatMessageItem';
@@ -112,6 +112,45 @@ export default function CopilotChat({
 
   const { sendPromptText, stopPromptExecution, loading } = useCopilotActionHandler();
 
+
+  const [isUploading, setIsUploading] = useState(false);
+  const handleUploadDocument = useCallback(async (file: File) => {
+    setIsUploading(true);
+    try {
+      const doc = await prepareDocumentForChat(file);
+      
+      // Start a new thread for the upload context
+      useChatStore.getState().createThread();
+
+      let prompt = '';
+      let images: string[] | undefined;
+      const attachedFile = {
+        filename: doc.filename,
+        localPath: doc.localPath,
+        text: 'text' in doc ? doc.text : undefined,
+        base64: 'base64' in doc ? doc.base64 : undefined,
+        type: doc.type
+      };
+
+      if (doc.type === 'pdf') {
+        prompt = `I have uploaded a bank statement (${doc.filename}). The extracted text has been attached to your system context payload. Please read it and use the \`create_artifact\` tool to create a 'spreadsheet' artifact. The spreadsheet content must be tab-separated values with columns: Date, Description, Amount. Credit amounts should be positive, debits negative.\nMake sure to pass \`sourceFile: '${doc.localPath}'\` to the tool.`;
+      } else {
+        prompt = `I have uploaded a receipt (${doc.filename}). Please parse the attached image and use the \`create_artifact\` tool to create a 'markdown' artifact summarizing the merchant, date, total, tax, and itemized lines.\nMake sure to pass \`sourceFile: '${doc.localPath}'\` to the tool.`;
+        images = [doc.base64 as string];
+      }
+
+      // Small delay to ensure thread is created and active
+      setTimeout(() => {
+        sendPromptText(prompt, images, attachedFile);
+      }, 100);
+
+    } catch (err: any) {
+      alert("Error parsing document: " + err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [sendPromptText]);
+
   useEffect(() => {
     let interval: any;
     if (loading) {
@@ -136,13 +175,21 @@ export default function CopilotChat({
         sendPromptText(customEvent.detail.prompt);
       }
     };
+    const handleUploadEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ file: File }>;
+      if (customEvent.detail?.file) {
+        handleUploadDocument(customEvent.detail.file);
+      }
+    };
     window.addEventListener('app:run-ai-categorization', handleRunAiCategorization);
     window.addEventListener('app:run-prompt', handleRunPrompt as EventListener);
+    window.addEventListener('app:upload-document', handleUploadEvent as EventListener);
     return () => {
       window.removeEventListener('app:run-ai-categorization', handleRunAiCategorization);
       window.removeEventListener('app:run-prompt', handleRunPrompt as EventListener);
+      window.removeEventListener('app:upload-document', handleUploadEvent as EventListener);
     };
-  }, [sendPromptText, loading]);
+  }, [sendPromptText, loading, handleUploadDocument]);
 
   const visibleMessages = useMemo(() => {
     return messages.filter((m) => {
@@ -508,6 +555,8 @@ export default function CopilotChat({
             disabled={loading}
             onStop={stopPromptExecution}
             loading={loading}
+            onUpload={handleUploadDocument}
+            isUploading={isUploading}
           />
         </>
       )}

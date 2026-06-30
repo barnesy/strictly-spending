@@ -108,6 +108,22 @@ export class LocalAI implements AIProvider {
     return this.activeProvider.reviewTransactionsWithRules(transactions, availableCategories, signal);
   }
 
+  async parseReceipt(imageBase64: string, signal?: AbortSignal) {
+    this.syncActiveProvider();
+    if (!this.activeProvider || !this.activeProvider.parseReceipt) {
+      throw new Error('No AI provider loaded or provider does not support vision');
+    }
+    return this.activeProvider.parseReceipt(imageBase64, signal);
+  }
+
+  async parseBankStatement(text: string, signal?: AbortSignal) {
+    this.syncActiveProvider();
+    if (!this.activeProvider || !this.activeProvider.parseBankStatement) {
+      throw new Error('No AI provider loaded or provider does not support text processing');
+    }
+    return this.activeProvider.parseBankStatement(text, signal);
+  }
+
   async pullModel(progressCallback?: (progress: number, status: string) => void): Promise<void> {
     this.syncActiveProvider();
     if (this.activeProvider.pullModel) {

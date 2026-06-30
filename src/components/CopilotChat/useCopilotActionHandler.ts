@@ -10,14 +10,14 @@ export function useCopilotActionHandler() {
   const location = useLocation();
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const sendPromptText = async (textToSubmit: string) => {
-    if (!textToSubmit.trim() || loading) return;
+  const sendPromptText = async (text: string, images?: string[], attachedFile?: { filename: string, localPath?: string, base64?: string, text?: string, type: 'image' | 'pdf' }) => {
+    if ((!text.trim() && !images && !attachedFile) || loading) return;
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
     const { signal } = controller;
 
-    const userMsg: ChatMessage = { role: 'user', content: textToSubmit.trim() };
+    const userMsg: ChatMessage = { role: 'user', content: text.trim(), images, attachedFile };
     useChatStore.getState().addMessage(userMsg);
     setLoading(true);
 

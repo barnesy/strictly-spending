@@ -1,9 +1,9 @@
 mod ollama;
 mod db;
-mod db_extra;
 mod db_mut;
 mod ai;
 mod tools;
+mod documents;
 
 use tauri::Manager;
 
@@ -31,6 +31,11 @@ pub fn run() {
             // ai.rs
             ai::run_copilot_chat,
             ai::run_gemini_chat,
+            
+            // documents.rs
+            documents::save_document,
+            documents::read_document_base64,
+            documents::open_document,
             
             // tools/
             tools::rule_miner::mine_rule_suggestions,
@@ -79,73 +84,84 @@ pub fn run() {
             db_mut::delete_rule,
             db_mut::clear_rules,
 
-            // db_extra.rs
-            db_extra::get_transactions_paginated,
-            db_extra::get_transaction_count,
-            db_extra::get_dashboard_aggregates,
-            db_extra::get_top_merchants,
-            db_extra::get_spend_chart_data,
-            db_extra::get_income_chart_data,
-            db_extra::get_consolidated_recurring_merchants,
-            db_extra::get_category_trailing_averages,
-            db_extra::get_unique_merchants,
-            db_extra::get_transaction_bounds,
-            db_extra::get_uncategorized_count,
-            db_extra::get_category_transaction_counts,
-            db_extra::get_rule_match_counts,
-            db_extra::get_merchant_groups,
-            db_extra::get_imports,
-            db_extra::add_import,
-            db_extra::put_import,
-            db_extra::update_import,
-            db_extra::delete_import,
-            db_extra::clear_imports,
-            db_extra::get_settings,
-            db_extra::add_setting,
-            db_extra::put_setting,
-            db_extra::update_setting,
-            db_extra::delete_setting,
-            db_extra::clear_settings,
-            db_extra::get_artifacts,
-            db_extra::add_artifact,
-            db_extra::put_artifact,
-            db_extra::update_artifact,
-            db_extra::delete_artifact,
-            db_extra::clear_artifacts,
-            db_extra::get_artifact_versions,
-            db_extra::restore_artifact_version,
-            db_extra::get_threads,
-            db_extra::add_thread,
-            db_extra::put_thread,
-            db_extra::update_thread,
-            db_extra::delete_thread,
-            db_extra::delete_thread_messages,
-            db_extra::clear_threads,
-            db_extra::get_messages,
-            db_extra::add_message,
-            db_extra::put_message,
-            db_extra::update_message,
-            db_extra::delete_message,
-            db_extra::clear_messages,
-            db_extra::get_csv_mappings,
-            db_extra::add_csv_mapping,
-            db_extra::put_csv_mapping,
-            db_extra::update_csv_mapping,
-            db_extra::delete_csv_mapping,
-            db_extra::clear_csv_mappings,
+            // db::analytics
+            db::analytics::get_transactions_paginated,
+            db::analytics::get_transaction_count,
+            db::analytics::get_dashboard_aggregates,
+            db::analytics::get_top_merchants,
+            db::analytics::get_spend_chart_data,
+            db::analytics::get_income_chart_data,
+            db::analytics::get_consolidated_recurring_merchants,
+            db::analytics::get_category_trailing_averages,
+            db::analytics::get_unique_merchants,
+            db::analytics::get_transaction_bounds,
+            db::analytics::get_uncategorized_count,
+            db::analytics::get_category_transaction_counts,
+            db::analytics::get_rule_match_counts,
+            db::analytics::get_merchant_groups,
 
-            db_extra::get_tax_rules,
-            db_extra::add_tax_rule,
-            db_extra::put_tax_rule,
-            db_extra::update_tax_rule,
-            db_extra::delete_tax_rule,
-            db_extra::clear_tax_rules,
-            db_extra::get_loans,
-            db_extra::add_loan,
-            db_extra::put_loan,
-            db_extra::update_loan,
-            db_extra::delete_loan,
-            db_extra::clear_loans,
+            // db::imports
+            db::imports::get_imports,
+            db::imports::add_import,
+            db::imports::put_import,
+            db::imports::update_import,
+            db::imports::delete_import,
+            db::imports::clear_imports,
+
+            // db::settings
+            db::settings::get_settings,
+            db::settings::add_setting,
+            db::settings::put_setting,
+            db::settings::update_setting,
+            db::settings::delete_setting,
+            db::settings::clear_settings,
+
+            // db::chat
+            db::chat::get_artifacts,
+            db::chat::add_artifact,
+            db::chat::put_artifact,
+            db::chat::update_artifact,
+            db::chat::delete_artifact,
+            db::chat::clear_artifacts,
+            db::chat::get_artifact_versions,
+            db::chat::restore_artifact_version,
+            db::chat::get_threads,
+            db::chat::add_thread,
+            db::chat::put_thread,
+            db::chat::update_thread,
+            db::chat::delete_thread,
+            db::chat::delete_thread_messages,
+            db::chat::clear_threads,
+            db::chat::get_messages,
+            db::chat::add_message,
+            db::chat::put_message,
+            db::chat::update_message,
+            db::chat::delete_message,
+            db::chat::clear_messages,
+
+            // db::csv_mappings
+            db::csv_mappings::get_csv_mappings,
+            db::csv_mappings::add_csv_mapping,
+            db::csv_mappings::put_csv_mapping,
+            db::csv_mappings::update_csv_mapping,
+            db::csv_mappings::delete_csv_mapping,
+            db::csv_mappings::clear_csv_mappings,
+
+            // db::tax
+            db::tax::get_tax_rules,
+            db::tax::add_tax_rule,
+            db::tax::put_tax_rule,
+            db::tax::update_tax_rule,
+            db::tax::delete_tax_rule,
+            db::tax::clear_tax_rules,
+
+            // db::loans
+            db::loans::get_loans,
+            db::loans::add_loan,
+            db::loans::put_loan,
+            db::loans::update_loan,
+            db::loans::delete_loan,
+            db::loans::clear_loans,
         ])
         .setup(|app| {
             // Setup native database under app data directory

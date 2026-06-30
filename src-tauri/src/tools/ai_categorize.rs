@@ -4,7 +4,7 @@ use serde_json::json;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::State;
 use crate::db::DbState;
-use crate::db_extra::AppSetting;
+use crate::db::settings::AppSetting;
 
 #[derive(Serialize, Deserialize)]
 pub struct CategorizeResult {
@@ -204,7 +204,7 @@ pub async fn ai_categorize_transactions(
                 value: serde_json::to_value(&report).unwrap_or(json!({})),
             };
 
-            let _ = crate::db_extra::put_setting(state.clone(), setting);
+            let _ = crate::db::settings::put_setting(state.clone(), setting);
         }
     }
 

@@ -27,6 +27,15 @@ export default defineConfig(() => {
         ignored: ['**/src-tauri/**'],
       },
     },
+    build: {
+      chunkSizeWarningLimit: 3000,
+      rollupOptions: {
+        onwarn(warning, warn) {
+          if (warning.code === 'INEFFECTIVE_DYNAMIC_IMPORT') return;
+          warn(warning);
+        }
+      }
+    },
     test: {
       include: ['src/**/*.test.{ts,tsx}'],
       setupFiles: ['./src/setupTests.ts']

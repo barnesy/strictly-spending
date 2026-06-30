@@ -4,6 +4,15 @@ use std::sync::Mutex;
 use tauri::State;
 use std::path::PathBuf;
 
+pub mod analytics;
+pub mod chat;
+pub mod csv_mappings;
+pub mod imports;
+pub mod loans;
+pub mod schema;
+pub mod settings;
+pub mod tax;
+
 pub struct DbState {
     pub conn: Mutex<Connection>,
     pub recurrence_cache: Mutex<Option<std::collections::HashMap<String, crate::tools::recurrence::RecurrenceInfo>>>,
@@ -181,7 +190,7 @@ pub fn init_tables(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    crate::db_extra::init_extra_tables(conn)?;
+    crate::db::schema::legacy_init(conn)?;
     Ok(())
 }
 

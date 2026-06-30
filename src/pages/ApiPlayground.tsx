@@ -80,7 +80,7 @@ export default function ApiPlayground() {
     if (activeWorkflow) {
       const initialArgs: Record<number, string> = {};
       activeWorkflow.steps.forEach((step, idx) => {
-        initialArgs[idx] = step.defaultArgs;
+        initialArgs[idx] = typeof step.defaultArgs === 'string' ? step.defaultArgs : JSON.stringify(step.defaultArgs);
       });
       setWorkflowArgs(initialArgs);
       setWorkflowResults({});
@@ -104,9 +104,9 @@ export default function ApiPlayground() {
         res = await fn(...args);
       } else if (aiTool) {
         const context = {
-          filters: useFilters.getState().filters,
-          dataStore: useFilters.getState(),
-          budgetStore: useBudgetStore.getState(),
+          filters: useFilters.getState() as any,
+          dataStore: {} as any,
+          budgetStore: useBudgetStore.getState() as any,
         };
         // The args for AI tools are usually passed as actionObj in args[0]
         res = await aiTool.execute(args[0] || {}, context);

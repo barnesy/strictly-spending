@@ -43,7 +43,10 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import CloseIcon from '@mui/icons-material/Close';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+
+import { useChatStore } from '../chatStore';
 
 
 import {
@@ -84,7 +87,6 @@ export default function Dashboard() {
     if (typeof window === 'undefined') return true;
     return localStorage.getItem('dashboard:sidebarVisible') !== 'false';
   });
-
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const toggleFilters = () => {
@@ -573,7 +575,7 @@ export default function Dashboard() {
                 <Button
                   onClick={() => useFilters.getState().reset()}
                   variant="outlined"
-                  color="primary"
+                  color="warning"
                   size="small"
                   startIcon={<RestartAltIcon fontSize="small" />}
                   sx={{

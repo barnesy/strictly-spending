@@ -28,6 +28,10 @@ import { useNavigate } from 'react-router-dom';
 import { confirmDialog } from '../utils/confirmDialog';
 import { useFilters } from '../store';
 import { useEffect, useState, useMemo } from 'react';
+import { Button } from '@mui/material';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+
+import { useChatStore } from '../chatStore';
 
 export default function Artifacts() {
   const theme = useTheme();
@@ -43,6 +47,19 @@ export default function Artifacts() {
       setLastViewedArtifactsAt(new Date().toISOString());
     };
   }, [setLastViewedArtifactsAt]);
+
+  const handleUploadDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Dispatch event so CopilotChat handles the upload and creates a thread
+    window.dispatchEvent(new CustomEvent('app:upload-document', { detail: { file } }));
+    
+    // Navigate to dashboard if not already there, to see the chat pop open
+    navigate('/');
+    
+    e.target.value = '';
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -136,6 +153,28 @@ export default function Artifacts() {
             ))}
           </Select>
         </FormControl>
+        <Button
+          variant="outlined"
+          color="secondary"
+          size="small"
+          component="label"
+          startIcon={<UploadFileIcon fontSize="small" />}
+          sx={{
+            textTransform: 'none',
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+            fontWeight: 600,
+            height: 32,
+            mb: '4px'
+          }}
+        >
+          Upload Document
+          <input
+            type="file"
+            hidden
+            accept="image/*,application/pdf"
+            onChange={handleUploadDocument}
+          />
+        </Button>
       </Stack>
 
       {isLoading ? null : sortedArtifacts.length === 0 ? (
