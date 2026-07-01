@@ -5,6 +5,7 @@ import PageLoader from './components/PageLoader';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Budget = React.lazy(() => import('./pages/Budget'));
+const Forecast = React.lazy(() => import('./pages/Forecast'));
 const Import = React.lazy(() => import('./pages/Import'));
 const Rules = React.lazy(() => import('./pages/Rules'));
 const Categories = React.lazy(() => import('./pages/Categories'));
@@ -33,6 +34,7 @@ export function AppRoutes() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/sort" element={<Sort />} />
           <Route path="/budget" element={<Budget />} />
+          <Route path="/forecast" element={<Forecast />} />
           <Route path="/transactions" element={<Dashboard />} />
           <Route path="/import" element={<Import />} />
           <Route path="/rules" element={<Rules />} />

@@ -31,6 +31,7 @@ type NavItem = {
 const PRIMARY_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/budget', label: 'Budget' },
+  { to: '/forecast', label: 'Forecast' },
   { to: '/sort', label: 'Sort', badge: 'uncategorized' },
   { to: '/artifacts', label: 'Artifacts' },
 ];

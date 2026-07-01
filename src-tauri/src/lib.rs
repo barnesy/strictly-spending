@@ -39,6 +39,7 @@ pub fn run() {
             tools::ai_categorize::ai_categorize_transactions,
             tools::ai_query::ai_query_data,
             tools::sort_queue::get_sort_queue,
+            tools::projection::calculate_projection,
 
             // db.rs
             db::get_transactions,
