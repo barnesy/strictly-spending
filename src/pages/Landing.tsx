@@ -266,8 +266,7 @@ export default function Landing() {
               variant="contained" 
               size="large" 
               startIcon={<AppleIcon />}
-              href="https://github.com/barnesy/strictly-spending/releases/latest"
-              target="_blank"
+              onClick={() => handleDownload('mac')}
               sx={{ 
                 borderRadius: '8px', 
                 py: 4, 
@@ -287,8 +286,7 @@ export default function Landing() {
               variant="contained" 
               size="large" 
               startIcon={<WindowIcon />}
-              href="https://github.com/barnesy/strictly-spending/releases/latest"
-              target="_blank"
+              onClick={() => handleDownload('windows')}
               sx={{ 
                 borderRadius: '8px', 
                 py: 4, 
