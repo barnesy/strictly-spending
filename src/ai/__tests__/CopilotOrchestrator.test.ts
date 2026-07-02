@@ -18,6 +18,9 @@ vi.mock('../../chatStore', () => {
     appendStreamingToken: vi.fn(),
     finalizeStreamingMessage: vi.fn(),
     addMessage: vi.fn(),
+    replaceStreamingContent: vi.fn(),
+    setActiveArtifact: vi.fn(),
+    activeArtifact: null,
     messages: [],
   };
   return {
@@ -138,5 +141,41 @@ describe('CopilotOrchestrator', () => {
     expect(systemMessage).toBeDefined();
     expect(systemMessage.content).toContain('SECURITY EXCEPTION');
     expect(systemMessage.content).toContain('without user confirmation');
+  });
+
+  it('should intercept native XML <artifact> blocks during streaming and route to activeArtifact', async () => {
+    (localAI.chatCopilot as any).mockImplementationOnce(async (history: any, context: any, prompt: any, schema: any, onChunk: any) => {
+      onChunk('Here is the document: ');
+      onChunk('<artifact identifier="doc1" title="Test Doc">');
+      onChunk('Hello ');
+      onChunk('World');
+      onChunk('</artifact> Enjoy!');
+      
+      return {
+        content: 'Here is the document: <artifact identifier="doc1" title="Test Doc">Hello World</artifact> Enjoy!',
+        tool_calls: undefined
+      };
+    });
+
+    const storeState = useChatStore.getState();
+    await CopilotOrchestrator.run(mockUserMsg, mockContext);
+
+    // Should have intercepted the stream to chat
+    expect(storeState.replaceStreamingContent).toHaveBeenCalledWith('Here is the document: ', '');
+    
+    // Should have updated activeArtifact live
+    expect(storeState.setActiveArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'doc1',
+      title: 'Test Doc',
+      content: 'Hello World'
+    }));
+
+    // Post-artifact text should be restored to chat
+    expect(storeState.replaceStreamingContent).toHaveBeenCalledWith('Here is the document:\n\nEnjoy!', '');
+
+    // Final message should have the XML cleanly stripped
+    const finalizeCalls = (storeState.finalizeStreamingMessage as any).mock.calls;
+    const finalCallArgs = finalizeCalls[finalizeCalls.length - 1];
+    expect(finalCallArgs[0]).toBe('Here is the document:  Enjoy!');
   });
 });

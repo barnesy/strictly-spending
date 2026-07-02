@@ -61,7 +61,7 @@ export default function ArtifactViewer() {
     if (activeArtifact) {
       api.getArtifactVersions(activeArtifact.id).then(setVersions).catch(console.error);
     }
-  }, [activeArtifact?.id, activeArtifact?.updatedAt]);
+  }, [activeArtifact?.id]);
 
   if (activeArtifact !== prevArtifact) {
     setPrevArtifact(activeArtifact);

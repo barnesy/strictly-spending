@@ -201,12 +201,71 @@ ${JSON.stringify(runwayData, null, 2)}`;
       let chatResult: { content: string; tool_calls?: any[]; thinking?: string } | null = null;
 
       try {
+        let fullStream = '';
         chatResult = await localAIModel.chatCopilot(
           activeHistory,
           stateContextFinal,
           (this as any)._cachedSystemPrompt, // override system prompt
           undefined, // no schema
-          (chunk) => { appendStreamingToken(chunk); },
+          (chunk) => {
+            fullStream += chunk;
+            
+            let thinkingStr = '';
+            let contentStr = fullStream;
+            
+            const thinkStart = fullStream.indexOf('<think>');
+            if (thinkStart !== -1) {
+              const thinkEnd = fullStream.indexOf('</think>', thinkStart);
+              if (thinkEnd !== -1) {
+                thinkingStr = fullStream.substring(thinkStart + 7, thinkEnd).trim();
+                contentStr = fullStream.substring(0, thinkStart) + fullStream.substring(thinkEnd + 9);
+              } else {
+                thinkingStr = fullStream.substring(thinkStart + 7).trim();
+                contentStr = fullStream.substring(0, thinkStart);
+              }
+            }
+            
+            const artifactStartMatch = contentStr.match(/<artifact\s+identifier="([^"]+)"\s+title="([^"]+)"(?:\s+type="([^"]+)")?>/);
+            
+            if (artifactStartMatch) {
+              const identifier = artifactStartMatch[1];
+              const title = artifactStartMatch[2];
+              const type = artifactStartMatch[3] || 'markdown';
+              
+              const contentStartIdx = artifactStartMatch.index! + artifactStartMatch[0].length;
+              let content = contentStr.substring(contentStartIdx);
+              
+              const closeIdx = content.indexOf('</artifact>');
+              if (closeIdx !== -1) {
+                content = content.substring(0, closeIdx);
+              }
+              
+              // Only update zustand if content changed to avoid excessive re-renders
+              const activeArt = useChatStore.getState().activeArtifact;
+              if (!activeArt || activeArt.content !== content || activeArt.id !== identifier) {
+                 useChatStore.getState().setActiveArtifact({
+                   id: identifier,
+                   title,
+                   type: type as any,
+                   summary: 'Generating...',
+                   content,
+                   createdAt: activeArt?.createdAt || new Date().toISOString(),
+                   updatedAt: new Date().toISOString()
+                 });
+              }
+              
+              let chatContent = contentStr.substring(0, artifactStartMatch.index!).trim();
+              const fullCloseIdx = contentStr.indexOf('</artifact>');
+              if (fullCloseIdx !== -1) {
+                 const postText = contentStr.substring(fullCloseIdx + 11);
+                 if (postText.trim()) chatContent += '\n\n' + postText.trim();
+              }
+              
+              useChatStore.getState().replaceStreamingContent(chatContent, thinkingStr);
+            } else {
+              useChatStore.getState().replaceStreamingContent(contentStr, thinkingStr);
+            }
+          },
           signal,
           false,
           AGENT_TOOLS

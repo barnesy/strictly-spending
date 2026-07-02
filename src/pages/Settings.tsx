@@ -28,6 +28,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { seedDemoData, clearDemoData, hasDemoData, clearImportedData } from '../demoData';
 import { useFilters } from '../store';
 import { useChatStore } from '../chatStore';
+import AnimatedLogo from '../components/AnimatedLogo';
 
 export default function Settings() {
   const demoMode = useFilters((s) => s.demoMode);
@@ -447,6 +448,10 @@ export default function Settings() {
             </Box>
           </Box>
         </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 5, display: 'flex', justifyContent: 'center', bgcolor: 'transparent', boxShadow: 'none', mt: 4 }}>
+        <AnimatedLogo scale={8} spinSpeed={0} />
       </Paper>
 
       <Dialog

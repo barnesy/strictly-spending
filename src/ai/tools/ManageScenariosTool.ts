@@ -18,17 +18,23 @@ export class ManageScenariosTool implements AIToolHandler {
 
     if (action === 'list') {
       const scenarios = await api.scenariosApi.list();
-      return { actionResult: { status: 'success', scenarios } };
+      return { 
+        actionResult: { status: 'success', scenarios },
+        systemResultsMsg: `Successfully fetched scenarios:\n${JSON.stringify(scenarios, null, 2)}\n\nYou may now use this data to fulfill the user's request.`
+      };
     }
 
     if (action === 'get') {
       if (!scenarioId) return { actionResult: { status: 'error', message: 'scenarioId is required for get' } };
       const scenarios = await api.scenariosApi.list();
       const scenario = scenarios.find(s => s.id === scenarioId);
-      if (!scenario) return { actionResult: { status: 'error', message: 'Scenario not found' } };
+      if (!scenario) return { actionResult: { status: 'error', message: 'Scenario not found' }, systemResultsMsg: 'Error: Scenario not found.' };
       
       useForecastStore.getState().loadScenario(scenario);
-      return { actionResult: { status: 'success', scenario, message: 'Scenario loaded into UI' } };
+      return { 
+        actionResult: { status: 'success', scenario, message: 'Scenario loaded into UI' },
+        systemResultsMsg: `Successfully loaded scenario data:\n${JSON.stringify(scenario, null, 2)}\n\nYou may now use this data to fulfill the user's request.`
+      };
     }
 
     if (['create', 'update', 'delete'].includes(action)) {

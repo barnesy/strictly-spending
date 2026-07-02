@@ -49,6 +49,7 @@ interface ChatStore {
   addMessage: (msg: ChatMessage) => void;
   startStreamingMessage: (initialSteps?: any[], purpose?: 'tool_select' | 'explanation', resumeLastMessage?: boolean) => void;
   appendStreamingToken: (token: string) => void;
+  replaceStreamingContent: (content: string, thinking?: string) => void;
   updateStreamingMetadata: (steps: any[], tokenUsage?: { prompt: number; completion: number; total: number }) => void;
   finalizeStreamingMessage: (finalContent: string, actionResult?: any, steps?: any[], tokenUsage?: { prompt: number; completion: number; total: number }, purpose?: 'tool_select' | 'explanation', activeSkillId?: string, completedStages?: string[], isAborted?: boolean, error?: string, thinking?: string) => Promise<void>;
   setMessages: (messages: ChatMessage[]) => void;
@@ -202,6 +203,23 @@ export const useChatStore = create<ChatStore>()(
               updated[i] = {
                 ...updated[i],
                 content: updated[i].content + token
+              };
+              return { messages: updated };
+            }
+          }
+          return {};
+        });
+      },
+
+      replaceStreamingContent: (content, thinking) => {
+        set((state) => {
+          for (let i = state.messages.length - 1; i >= 0; i--) {
+            if (state.messages[i].role === 'assistant' && state.messages[i].isStreaming) {
+              const updated = [...state.messages];
+              updated[i] = {
+                ...updated[i],
+                content,
+                thinking: thinking !== undefined ? thinking : updated[i].thinking
               };
               return { messages: updated };
             }
