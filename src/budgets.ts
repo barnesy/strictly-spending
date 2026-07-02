@@ -61,7 +61,7 @@ export function getConsolidatedRecurringMerchants(
 ): ConsolidatedMerchant[] {
   const cutoff = daysAgoIso(today, 60);
 
-  const map = new Map<string, { merchantKey: string, category: string, total: number }>();
+  const map = new Map<string, { merchantKey: string, category: string, total: number, count: number }>();
 
   for (const t of allTxns) {
     if (t.amount >= 0) continue;
@@ -69,8 +69,9 @@ export function getConsolidatedRecurringMerchants(
     if (!recurringCategoryNames.has(t.category)) continue;
 
     const key = `${t.category}::${t.merchantKey}`;
-    const existing = map.get(key) || { merchantKey: t.merchantKey, category: t.category, total: 0 };
+    const existing = map.get(key) || { merchantKey: t.merchantKey, category: t.category, total: 0, count: 0 };
     existing.total += Math.abs(t.amount);
+    existing.count += 1;
     map.set(key, existing);
   }
 
@@ -79,7 +80,7 @@ export function getConsolidatedRecurringMerchants(
     result.push({
       merchantKey: item.merchantKey,
       category: item.category,
-      monthlyAverage: item.total / 2, // 60 days is roughly 2 months
+      monthlyAverage: item.total / item.count, // Use average per-charge instead of arbitrary 60-day division
     });
   }
 

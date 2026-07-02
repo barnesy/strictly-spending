@@ -369,7 +369,7 @@ pub fn get_consolidated_recurring_merchants(
     let cutoff_str = cutoff.format("%Y-%m-%d").to_string();
     
     let query = "
-        SELECT merchant_key, category, SUM(ABS(amount)) as total
+        SELECT merchant_key, category, SUM(ABS(amount)) as total, COUNT(*) as count
         FROM transactions
         WHERE amount < 0
           AND date >= ?
@@ -388,15 +388,17 @@ pub fn get_consolidated_recurring_merchants(
             row.get::<_, String>(0)?,
             row.get::<_, String>(1)?,
             row.get::<_, f64>(2)?,
+            row.get::<_, i64>(3)?,
         ))
     }).map_err(|e| e.to_string())?;
     
     let mut results = Vec::new();
-    for (merchant_key, category, total) in rows.flatten() {
+    for (merchant_key, category, total, count) in rows.flatten() {
+        let count_f64 = if count > 0 { count as f64 } else { 1.0 };
         results.push(ConsolidatedMerchant {
             merchant_key,
             category,
-            monthly_average: total / 2.0,
+            monthly_average: total / count_f64,
         });
     }
     

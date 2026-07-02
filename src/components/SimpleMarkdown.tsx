@@ -25,7 +25,9 @@ type MarkdownBlock =
   | { type: 'empty' };
 
 function parseMarkdown(content: string): MarkdownBlock[] {
-  const lines = content.split('\n');
+  // Normalize literal '\n' strings that the LLM might have escaped from JSON habits
+  const normalizedContent = content.replace(/\\n/g, '\n');
+  const lines = normalizedContent.split('\n');
   const blocks: MarkdownBlock[] = [];
 
   let i = 0;
