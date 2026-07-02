@@ -8,6 +8,7 @@ import { csvMappingsApi } from './csvMappings';
 import { taxApi } from './tax';
 import { loansApi, loanSchema } from './loans';
 import { chatApi } from './chat';
+import { scenariosApi } from './scenarios';
 import type { AppSetting } from './settings';
 
 export {
@@ -15,7 +16,8 @@ export {
   transactionSchema,
   categorySchema,
   budgetSchema,
-  loanSchema
+  loanSchema,
+  scenariosApi
 };
 
 export type { AppSetting };
@@ -34,4 +36,5 @@ export const api = {
   ...taxApi,
   ...loansApi,
   ...chatApi,
+  scenariosApi,
 };

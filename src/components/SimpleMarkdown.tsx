@@ -137,7 +137,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
 }
 
 function renderInlineMarkdown(text: string, onLinkClick?: (url: string) => void): React.ReactNode[] {
-  const regex = /(\*\*.*?\*\*|`.*?`|\*.*?\*|\[.*?\]\(.*?\))/g;
+  const regex = /(!\[.*?\]\(.*?\)|\*\*.*?\*\*|`.*?`|\*.*?\*|\[.*?\]\(.*?\))/g;
   const parts = text.split(regex);
   
   return parts.map((part, idx) => {
@@ -184,6 +184,14 @@ function renderInlineMarkdown(text: string, onLinkClick?: (url: string) => void)
         >
           {label}
         </a>
+      );
+    }
+    if (part.startsWith('![') && part.includes('](') && part.endsWith(')')) {
+      const closingBracket = part.indexOf(']');
+      const alt = part.slice(2, closingBracket);
+      const url = part.slice(closingBracket + 2, -1);
+      return (
+        <Box component="img" key={idx} src={url} alt={alt} sx={{ maxWidth: '100%', height: 'auto', borderRadius: 1, mt: 1, display: 'block' }} />
       );
     }
     return part;

@@ -14,14 +14,33 @@ pub struct Windfall {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct GoalParam {
+    pub name: String,
+    pub target_amount: f64,
+    pub monthly_contribution: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectionParams {
     pub base_income: f64,
+    pub recurring_budget: f64,
+    pub savings_budget: f64,
     pub starting_balance: f64,
     pub income_gaps: Vec<u32>,
     pub windfalls: Vec<Windfall>,
-    pub expense_modifier: f64,
+    pub variable_budget: f64,
     pub global_extra_loan_payment: f64,
+    pub loan_strategy: Option<String>, // "avalanche", "snowball", or "evenly"
     pub months: u32,
+    pub goals: Vec<GoalParam>,
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LoanBalanceProjection {
+    pub id: Option<i64>,
+    pub name: String,
+    pub balance: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,40 +51,69 @@ pub struct ProjectionPoint {
     pub income: f64,
     pub recurring_spend: f64,
     pub variable_spend: f64,
+    pub savings_spend: f64,
     pub loan_payments: f64,
     pub total_debt: f64,
+    pub loans: Vec<LoanBalanceProjection>,
+    pub goal_contributions: f64,
+    pub achieved_goals: Vec<String>,
+    pub remainder: f64,
+    pub cumulative_remainder: f64,
     pub ending_balance: f64,
 }
 
 #[tauri::command]
 pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> Result<Vec<ProjectionPoint>, String> {
-    let txns = get_transactions(state.clone(), "1970-01-01".into(), "2099-12-31".into(), None, None, None, None)?;
-    let overrides = get_merchant_overrides(state.clone())?;
-    let recurrence_map = build_recurrence_map_internal(&txns, &overrides);
-    let categories = get_categories(state.clone())?;
-    
-    let forecasts = build_forecast_internal(&txns, &recurrence_map, &categories);
-
-    let mut base_recurring: f64 = 0.0;
-    let mut base_variable: f64 = 0.0;
-
-    for f in forecasts {
-        if f.kind == "recurring" {
-            base_recurring += f.monthly_estimate.abs();
-        } else {
-            base_variable += f.monthly_estimate.abs();
-        }
-    }
+    let base_recurring = params.recurring_budget;
 
     let mut loans = get_loans(state.clone()).unwrap_or_default();
     loans.retain(|l| l.enabled.unwrap_or(true));
-
-    let mut results = Vec::new();
-    let mut current_balance = params.starting_balance;
-
+    
     let today = Local::now().naive_local().date();
     let mut current_year = today.year();
     let mut current_month = today.month();
+
+    // Fast-forward loans to today
+    for loan in &mut loans {
+        let r = (loan.rate / 100.0) / 12.0;
+        let n = (loan.term_years * 12) as f64;
+        
+        let standard_payment = if r > 0.0 && n > 0.0 {
+            loan.principal * (r * (1.0 + r).powf(n)) / ((1.0 + r).powf(n) - 1.0)
+        } else if n > 0.0 {
+            loan.principal / n
+        } else {
+            0.0
+        };
+
+        let actual_payment = loan.monthly_payment.unwrap_or(standard_payment);
+        loan.monthly_payment = Some(actual_payment); // ensure simulation uses this
+
+        let start_date = chrono::NaiveDate::parse_from_str(&loan.start_date, "%Y-%m-%d")
+            .unwrap_or(today);
+            
+        let months_passed = (today.year() - start_date.year()) * 12 + (today.month() as i32 - start_date.month() as i32);
+        let months_passed = months_passed.max(0) as i64;
+        
+        let mut current_principal = loan.principal;
+        for _ in 0..months_passed {
+            let interest = current_principal * r;
+            let principal_payment = actual_payment - interest;
+            current_principal -= principal_payment;
+            if current_principal < 0.0 {
+                current_principal = 0.0;
+                break;
+            }
+        }
+        
+        loan.principal = current_principal;
+    }
+
+    let mut results = Vec::new();
+    let mut current_balance = params.starting_balance;
+    let mut current_cumulative_remainder = 0.0;
+    
+    let mut goal_balances: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
 
     let months = vec![
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -86,13 +134,47 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
             }
         }
 
+        let mut month_goal_contributions = 0.0;
+        let mut achieved_goals = Vec::new();
+
+        for goal in &params.goals {
+            let balance = goal_balances.get(&goal.name).copied().unwrap_or(0.0);
+            if balance < goal.target_amount {
+                let remaining = goal.target_amount - balance;
+                let contribution = goal.monthly_contribution.min(remaining);
+                
+                let new_balance = balance + contribution;
+                goal_balances.insert(goal.name.clone(), new_balance);
+                
+                month_goal_contributions += contribution;
+
+                if new_balance >= goal.target_amount {
+                    achieved_goals.push(goal.name.clone());
+                }
+            }
+        }
+
         let mut month_loan_payments = 0.0;
         let mut month_total_debt = 0.0;
+        let mut month_loans = Vec::new();
 
         let active_loans_count = loans.iter().filter(|l| l.principal > 0.0).count() as f64;
+        let mut extra_payment_remaining = params.global_extra_loan_payment;
+
+        let strategy = params.loan_strategy.as_deref().unwrap_or("evenly");
+        if strategy == "avalanche" {
+            loans.sort_by(|a, b| b.rate.partial_cmp(&a.rate).unwrap_or(std::cmp::Ordering::Equal));
+        } else if strategy == "snowball" {
+            loans.sort_by(|a, b| a.principal.partial_cmp(&b.principal).unwrap_or(std::cmp::Ordering::Equal));
+        }
 
         for loan in &mut loans {
             if loan.principal <= 0.0 {
+                month_loans.push(LoanBalanceProjection {
+                    id: loan.id.clone(),
+                    name: loan.name.clone(),
+                    balance: 0.0,
+                });
                 continue;
             }
 
@@ -103,7 +185,17 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
             payment += loan.extra_monthly_payment.unwrap_or(0.0);
             
             if active_loans_count > 0.0 {
-                payment += params.global_extra_loan_payment / active_loans_count;
+                if strategy == "evenly" {
+                    payment += params.global_extra_loan_payment / active_loans_count;
+                } else if extra_payment_remaining > 0.0 {
+                    // Avalanche or Snowball: apply as much extra as possible to this loan
+                    let max_useful_extra = loan.principal + interest - payment;
+                    if max_useful_extra > 0.0 {
+                        let to_apply = extra_payment_remaining.min(max_useful_extra);
+                        payment += to_apply;
+                        extra_payment_remaining -= to_apply;
+                    }
+                }
             }
 
             if let Some(one_time_month) = loan.extra_one_time_month {
@@ -125,11 +217,21 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
             loan.principal -= principal_payment;
             month_loan_payments += payment;
             month_total_debt += loan.principal;
+
+            month_loans.push(LoanBalanceProjection {
+                id: loan.id.clone(),
+                name: loan.name.clone(),
+                balance: loan.principal,
+            });
         }
 
-        let adj_variable = base_variable * params.expense_modifier;
+        let adj_variable = params.variable_budget;
+        let adj_savings = params.savings_budget;
         
-        let ending_balance = current_balance + month_income - base_recurring - adj_variable - month_loan_payments;
+        let remainder = month_income - base_recurring - adj_variable - adj_savings - month_loan_payments - month_goal_contributions;
+        current_cumulative_remainder += remainder;
+        
+        let ending_balance = current_balance + remainder;
 
         results.push(ProjectionPoint {
             month_index: i,
@@ -138,8 +240,14 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
             income: month_income,
             recurring_spend: base_recurring,
             variable_spend: adj_variable,
+            savings_spend: adj_savings,
             loan_payments: month_loan_payments,
             total_debt: month_total_debt,
+            loans: month_loans,
+            goal_contributions: month_goal_contributions,
+            achieved_goals,
+            remainder,
+            cumulative_remainder: current_cumulative_remainder,
             ending_balance,
         });
 

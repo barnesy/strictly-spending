@@ -287,3 +287,11 @@ export const useMerchantGroups = () => {
   });
 };
 
+export const useScenarios = () => {
+  return useQuery({
+    queryKey: ['scenarios'],
+    queryFn: () => api.scenariosApi.list(),
+    placeholderData: keepPreviousData,
+  });
+};
+

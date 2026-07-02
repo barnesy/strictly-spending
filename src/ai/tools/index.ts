@@ -59,6 +59,7 @@ import { ManageBudgetsTool } from './ManageBudgetsTool';
 import { CreateAutoRuleTool } from './CreateAutoRuleTool';
 import { ReadArtifactTool } from './ReadArtifactTool';
 import { RequestUserConfirmationTool } from './RequestUserConfirmationTool';
+import { ManageScenariosTool } from './ManageScenariosTool';
 
 toolRegistry.register(new QueryDataTool());
 toolRegistry.register(new ExportTransactionsTool());
@@ -77,3 +78,4 @@ toolRegistry.register(new ManageLoansTool());
 toolRegistry.register(new ManageBudgetsTool());
 toolRegistry.register(new CreateAutoRuleTool());
 toolRegistry.register(new CompileTaxDocumentTool());
+toolRegistry.register(new ManageScenariosTool());

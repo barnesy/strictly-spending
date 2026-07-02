@@ -156,6 +156,12 @@ pub fn run() {
             db::loans::update_loan,
             db::loans::delete_loan,
             db::loans::clear_loans,
+
+            // db::scenarios
+            db::scenarios::get_scenarios,
+            db::scenarios::create_scenario,
+            db::scenarios::update_scenario,
+            db::scenarios::delete_scenario,
         ])
         .setup(|app| {
             // Setup native database under app data directory

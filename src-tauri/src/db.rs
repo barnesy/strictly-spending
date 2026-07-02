@@ -12,6 +12,7 @@ pub mod loans;
 pub mod schema;
 pub mod settings;
 pub mod tax;
+pub mod scenarios;
 
 pub struct DbState {
     pub conn: Mutex<Connection>,
@@ -211,6 +212,28 @@ pub fn init_db(db_path: PathBuf) -> Result<Connection> {
     Ok(conn)
 }
 
+fn row_to_transaction(row: &rusqlite::Row) -> Result<Transaction> {
+    Ok(Transaction {
+        id: row.get(0)?,
+        account_id: row.get(1)?,
+        date: row.get(2)?,
+        description: row.get(3)?,
+        amount: row.get(4)?,
+        raw_category: row.get(5)?,
+        category: row.get(6)?,
+        source: row.get(7)?,
+        merchant_key: row.get(8)?,
+        user_overridden: row.get(9)?,
+        dedup_key: row.get(10)?,
+        import_batch_id: row.get(11)?,
+        recurrence: row.get(12)?,
+        recurrence_override: row.get(13)?,
+        is_business: row.get(14)?,
+        tax_category: row.get(15)?,
+        deduction_status: row.get(16)?,
+    })
+}
+
 // Basic fetch methods to get started
 #[tauri::command]
 pub fn get_transactions(
@@ -250,27 +273,7 @@ pub fn get_transactions(
     
     let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
     
-    let tx_iter = stmt.query_map(rusqlite::params_from_iter(params), |row| {
-        Ok(Transaction {
-            id: row.get(0)?,
-            account_id: row.get(1)?,
-            date: row.get(2)?,
-            description: row.get(3)?,
-            amount: row.get(4)?,
-            raw_category: row.get(5)?,
-            category: row.get(6)?,
-            source: row.get(7)?,
-            merchant_key: row.get(8)?,
-            user_overridden: row.get(9)?,
-            dedup_key: row.get(10)?,
-            import_batch_id: row.get(11)?,
-            recurrence: row.get(12)?,
-            recurrence_override: row.get(13)?,
-            is_business: row.get(14)?,
-            tax_category: row.get(15)?,
-            deduction_status: row.get(16)?,
-        })
-    }).map_err(|e| e.to_string())?;
+    let tx_iter = stmt.query_map(rusqlite::params_from_iter(params), row_to_transaction).map_err(|e| e.to_string())?;
 
     let mut transactions = Vec::new();
     for tx in tx_iter {
@@ -285,27 +288,7 @@ pub fn get_transaction(state: State<DbState>, id: i64) -> Result<Option<Transact
     let conn = state.conn.lock().unwrap();
     let mut stmt = conn.prepare("SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status FROM transactions WHERE id = ?1").map_err(|e| e.to_string())?;
     
-    let mut iter = stmt.query_map([id], |row| {
-        Ok(Transaction {
-            id: row.get(0)?,
-            account_id: row.get(1)?,
-            date: row.get(2)?,
-            description: row.get(3)?,
-            amount: row.get(4)?,
-            raw_category: row.get(5)?,
-            category: row.get(6)?,
-            source: row.get(7)?,
-            merchant_key: row.get(8)?,
-            user_overridden: row.get(9)?,
-            dedup_key: row.get(10)?,
-            import_batch_id: row.get(11)?,
-            recurrence: row.get(12)?,
-            recurrence_override: row.get(13)?,
-            is_business: row.get(14)?,
-            tax_category: row.get(15)?,
-            deduction_status: row.get(16)?,
-        })
-    }).map_err(|e| e.to_string())?;
+    let mut iter = stmt.query_map([id], row_to_transaction).map_err(|e| e.to_string())?;
 
     if let Some(res) = iter.next() {
         Ok(Some(res.map_err(|e| e.to_string())?))
@@ -319,27 +302,7 @@ pub fn get_recurring_transactions(state: State<DbState>) -> Result<Vec<Transacti
     let conn = state.conn.lock().unwrap();
     let mut stmt = conn.prepare("SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status FROM transactions WHERE recurrence = 'recurring'").map_err(|e| e.to_string())?;
     
-    let tx_iter = stmt.query_map([], |row| {
-        Ok(Transaction {
-            id: row.get(0)?,
-            account_id: row.get(1)?,
-            date: row.get(2)?,
-            description: row.get(3)?,
-            amount: row.get(4)?,
-            raw_category: row.get(5)?,
-            category: row.get(6)?,
-            source: row.get(7)?,
-            merchant_key: row.get(8)?,
-            user_overridden: row.get(9)?,
-            dedup_key: row.get(10)?,
-            import_batch_id: row.get(11)?,
-            recurrence: row.get(12)?,
-            recurrence_override: row.get(13)?,
-            is_business: row.get(14)?,
-            tax_category: row.get(15)?,
-            deduction_status: row.get(16)?,
-        })
-    }).map_err(|e| e.to_string())?;
+    let tx_iter = stmt.query_map([], row_to_transaction).map_err(|e| e.to_string())?;
 
     let mut transactions = Vec::new();
     for tx in tx_iter {
@@ -354,27 +317,7 @@ pub fn get_forecast_transactions(state: State<DbState>, cutoff_date: String) -> 
     let conn = state.conn.lock().unwrap();
     let mut stmt = conn.prepare("SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status FROM transactions WHERE date >= ?1").map_err(|e| e.to_string())?;
     
-    let tx_iter = stmt.query_map(params![cutoff_date], |row| {
-        Ok(Transaction {
-            id: row.get(0)?,
-            account_id: row.get(1)?,
-            date: row.get(2)?,
-            description: row.get(3)?,
-            amount: row.get(4)?,
-            raw_category: row.get(5)?,
-            category: row.get(6)?,
-            source: row.get(7)?,
-            merchant_key: row.get(8)?,
-            user_overridden: row.get(9)?,
-            dedup_key: row.get(10)?,
-            import_batch_id: row.get(11)?,
-            recurrence: row.get(12)?,
-            recurrence_override: row.get(13)?,
-            is_business: row.get(14)?,
-            tax_category: row.get(15)?,
-            deduction_status: row.get(16)?,
-        })
-    }).map_err(|e| e.to_string())?;
+    let tx_iter = stmt.query_map(params![cutoff_date], row_to_transaction).map_err(|e| e.to_string())?;
 
     let mut transactions = Vec::new();
     for tx in tx_iter {

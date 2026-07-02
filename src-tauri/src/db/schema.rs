@@ -21,5 +21,8 @@ pub fn legacy_init(conn: &Connection) -> Result<()> {
 
     conn.execute("CREATE TABLE IF NOT EXISTS tax_rules (id INTEGER PRIMARY KEY AUTOINCREMENT, pattern TEXT, is_business BOOLEAN, tax_category TEXT, priority INTEGER, created_at TEXT)", [])?;
     conn.execute("CREATE TABLE IF NOT EXISTS loans (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, type TEXT, principal REAL, rate REAL, term_years INTEGER, start_date TEXT, category TEXT, merchant TEXT, monthly_payment REAL, property_value REAL, down_payment REAL, extra_monthly_payment REAL, extra_one_time_payment REAL, extra_one_time_month INTEGER, created_at TEXT, enabled BOOLEAN)", [])?;
+    
+    conn.execute("CREATE TABLE IF NOT EXISTS scenarios (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, starting_balance REAL, base_income REAL, tax_rate REAL, recurring_budget REAL, variable_budget REAL, savings_budget REAL, extra_loan_payment REAL, loan_strategy TEXT, created_at TEXT, goals TEXT)", [])?;
+    let _ = conn.execute("ALTER TABLE scenarios ADD COLUMN goals TEXT", []);
     Ok(())
 }

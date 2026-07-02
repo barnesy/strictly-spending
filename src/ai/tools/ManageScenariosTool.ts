@@ -1,0 +1,66 @@
+import { api } from '../../api';
+import type { AIToolHandler, AIToolContext, ToolExecutionResult } from './index';
+import type { Scenario } from '../../api/scenarios';
+import { useForecastStore } from '../../store/forecastStore';
+
+interface ManageScenariosAction {
+  action: 'list' | 'get' | 'create' | 'update' | 'delete';
+  scenarioId?: number;
+  scenarioData?: Scenario;
+  confirmed?: boolean;
+}
+
+export class ManageScenariosTool implements AIToolHandler {
+  name = 'manage_scenarios';
+
+  async execute(actionObj: ManageScenariosAction, context: AIToolContext): Promise<ToolExecutionResult> {
+    const { action, scenarioId, scenarioData, confirmed } = actionObj;
+
+    if (action === 'list') {
+      const scenarios = await api.scenariosApi.list();
+      return { actionResult: { status: 'success', scenarios } };
+    }
+
+    if (action === 'get') {
+      if (!scenarioId) return { actionResult: { status: 'error', message: 'scenarioId is required for get' } };
+      const scenarios = await api.scenariosApi.list();
+      const scenario = scenarios.find(s => s.id === scenarioId);
+      if (!scenario) return { actionResult: { status: 'error', message: 'Scenario not found' } };
+      
+      useForecastStore.getState().loadScenario(scenario);
+      return { actionResult: { status: 'success', scenario, message: 'Scenario loaded into UI' } };
+    }
+
+    if (['create', 'update', 'delete'].includes(action)) {
+      if (!confirmed) {
+        return { 
+          actionResult: {
+            status: 'awaiting_confirmation', 
+            message: `Are you sure you want to ${action} this scenario?`,
+            pendingAction: action
+          }
+        };
+      }
+    }
+
+    if (action === 'create') {
+      if (!scenarioData || !scenarioData.name) return { actionResult: { status: 'error', message: 'scenarioData with name is required' } };
+      const id = await api.scenariosApi.create(scenarioData);
+      return { actionResult: { status: 'success', message: 'Scenario created', id } };
+    }
+
+    if (action === 'update') {
+      if (!scenarioData || !scenarioId) return { actionResult: { status: 'error', message: 'scenarioId and scenarioData are required' } };
+      await api.scenariosApi.update({ ...scenarioData, id: scenarioId });
+      return { actionResult: { status: 'success', message: 'Scenario updated' } };
+    }
+
+    if (action === 'delete') {
+      if (!scenarioId) return { actionResult: { status: 'error', message: 'scenarioId is required' } };
+      await api.scenariosApi.delete(scenarioId);
+      return { actionResult: { status: 'success', message: 'Scenario deleted' } };
+    }
+
+    return { actionResult: { status: 'error', message: 'Unknown action' } };
+  }
+}

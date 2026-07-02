@@ -4,6 +4,7 @@ import type {
   Transaction, Account, CategoryRule, Category, 
   MerchantOverride, Budget, AppSetting, Loan, TaxRule, ChatArtifact
 } from '../types';
+import type { Scenario } from '../api/scenarios';
 
 // TRANSACTIONS
 export const useAddTransaction = () => {
@@ -290,6 +291,39 @@ export const useDeleteArtifact = () => {
   return useMutation({
     mutationFn: (id: string) => api.deleteArtifact(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artifacts'] }),
+  });
+};
+
+export const usePutArtifact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (item: ChatArtifact) => api.putArtifact(item),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artifacts'] }),
+  });
+};
+
+// SCENARIOS
+export const useCreateScenario = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (item: Scenario) => api.scenariosApi.create(item),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scenarios'] }),
+  });
+};
+
+export const useUpdateScenario = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (item: Scenario) => api.scenariosApi.update(item),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scenarios'] }),
+  });
+};
+
+export const useDeleteScenario = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.scenariosApi.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scenarios'] }),
   });
 };
 

@@ -1,0 +1,906 @@
+
+> strictly-spending@0.1.4 lint
+> eslint .
+
+
+C:\Users\Chris Barnes\Projects\strictly-spending\coverage\block-navigation.js
+  1:1  warning  Unused eslint-disable directive (no problems were reported)
+
+C:\Users\Chris Barnes\Projects\strictly-spending\coverage\prettify.js
+  1:1  warning  Unused eslint-disable directive (no problems were reported)
+
+C:\Users\Chris Barnes\Projects\strictly-spending\coverage\sorter.js
+  1:1  warning  Unused eslint-disable directive (no problems were reported)
+
+C:\Users\Chris Barnes\Projects\strictly-spending\scripts\evaluate-skills.ts
+    5:10  warning  'getSystemPrompt' is defined but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+   64:17  warning  Unexpected any. Specify a different type                                                       @typescript-eslint/no-explicit-any
+   76:18  warning  Unexpected any. Specify a different type                                                       @typescript-eslint/no-explicit-any
+   89:11  warning  'overridePromptText' is never reassigned. Use 'const' instead                                  prefer-const
+   89:11  warning  'overridePromptText' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   91:11  warning  'conversationHistory' is never reassigned. Use 'const' instead                                 prefer-const
+   91:32  warning  Unexpected any. Specify a different type                                                       @typescript-eslint/no-explicit-any
+   92:11  warning  'currentCompletedStages' is never reassigned. Use 'const' instead                              prefer-const
+  117:13  warning  The value assigned to 'currentResponse' is not used in subsequent statements                   no-useless-assignment
+  125:23  warning  Unexpected any. Specify a different type                                                       @typescript-eslint/no-explicit-any
+  130:24  warning  Unexpected any. Specify a different type                                                       @typescript-eslint/no-explicit-any
+  152:17  warning  Empty block statement                                                                          no-empty
+
+C:\Users\Chris Barnes\Projects\strictly-spending\scripts\evaluate-tools.ts
+    5:10  warning  'AVAILABLE_TOOLS' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   60:9   warning  'result' is defined but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+   80:16  warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u       @typescript-eslint/no-unused-vars
+  122:19  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\scripts\simulate-all.ts
+  29:9   warning  'toolHandler' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  51:19  warning  Empty block statement                                                                   no-empty
+  76:11  warning  'rawAction' is never reassigned. Use 'const' instead                                    prefer-const
+
+C:\Users\Chris Barnes\Projects\strictly-spending\scripts\simulate-subscriptions.ts
+  19:9   warning  'toolHandler' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  42:17  warning  Empty block statement                                                                   no-empty
+  60:9   warning  'rawAction' is never reassigned. Use 'const' instead                                    prefer-const
+
+C:\Users\Chris Barnes\Projects\strictly-spending\scripts\test-orchestrator.ts
+  20:9   warning  'toolHandler' is assigned a value but never used. Allowed unused vars must match /^_/u                               @typescript-eslint/no-unused-vars
+  40:17  warning  Empty block statement                                                                                                no-empty
+  77:26  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  92:7   warning  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\App.tsx
+  9:10  warning  'useChatStore' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\CopilotOrchestrator.ts
+   26:46  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+   61:64  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  149:25  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  150:25  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  158:13  warning  'isLastLoop' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  165:59  warning  'guards' is defined but never used. Allowed unused args must match /^_/u               @typescript-eslint/no-unused-vars
+  172:18  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  200:11  warning  The value assigned to 'currentResponse' is not used in subsequent statements           no-useless-assignment
+  201:11  warning  The value assigned to 'chatResult' is not used in subsequent statements                no-useless-assignment
+  201:55  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  207:20  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  216:21  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  219:9   warning  There is no `cause` attached to the symptom error being thrown                         preserve-caught-error
+  225:22  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  226:26  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  284:27  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  304:25  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+  305:11  warning  The value assigned to 'systemResultsMsg' is not used in subsequent statements          no-useless-assignment
+  333:71  warning  Unexpected any. Specify a different type                                               @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\__tests__\CopilotOrchestrator.test.ts
+   32:10  warning  'QueryDataTool' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+   43:10  warning  'UpdateArtifactTool' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   67:29  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   76:52  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   81:29  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   92:29  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  102:52  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  106:65  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  110:67  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  117:29  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  127:29  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  134:52  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  137:46  warning  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\architecture.ts
+  6:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\localAI.ts
+  78:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  82:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  83:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  97:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\ollamaApi.ts
+  3:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\prompts.ts
+   5:1   warning  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+   7:1   warning  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  35:41  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\providers\GeminiProvider.ts
+   41:22  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+   45:21  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+   46:46  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+   80:19  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  108:43  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  114:71  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  131:69  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  142:17  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  143:7   warning  There is no `cause` attached to the symptom error being thrown            preserve-caught-error
+  150:5   warning  'signal' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  174:66  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  183:9   warning  There is no `cause` attached to the symptom error being thrown            preserve-caught-error
+  194:41  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  207:17  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  208:7   warning  There is no `cause` attached to the symptom error being thrown            preserve-caught-error
+  215:5   warning  'signal' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  253:66  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  262:9   warning  There is no `cause` attached to the symptom error being thrown            preserve-caught-error
+  308:17  warning  Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  309:7   warning  There is no `cause` attached to the symptom error being thrown            preserve-caught-error
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\providers\OllamaProvider.ts
+   29:16   warning  'parseErr' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+   30:9    warning  There is no `cause` attached to the symptom error being thrown                       preserve-caught-error
+   33:46   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+   59:17   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+   84:17   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  107:22   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  111:21   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  112:46   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  146:19   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  171:43   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  177:71   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  192:69   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  202:17   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  210:5    warning  'signal' is defined but never used. Allowed unused args must match /^_/u             @typescript-eslint/no-unused-vars
+  232:66   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  240:9    warning  There is no `cause` attached to the symptom error being thrown                       preserve-caught-error
+  251:41   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  264:17   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  272:5    warning  'signal' is defined but never used. Allowed unused args must match /^_/u             @typescript-eslint/no-unused-vars
+  308:66   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  316:9    warning  There is no `cause` attached to the symptom error being thrown                       preserve-caught-error
+  362:17   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  367:43   warning  'signal' is defined but never used. Allowed unused args must match /^_/u             @typescript-eslint/no-unused-vars
+  367:143  warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  382:64   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  396:17   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  401:42   warning  'signal' is defined but never used. Allowed unused args must match /^_/u             @typescript-eslint/no-unused-vars
+  419:64   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+  429:17   warning  Unexpected any. Specify a different type                                             @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\skills.ts
+  54:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  55:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  56:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  57:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  58:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  65:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\AuditAccessibilityTool.ts
+   8:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   9:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  14:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  15:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\CategorizeTransactionsTool.ts
+   8:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  11:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  32:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\CompileTaxDocumentTool.ts
+   17:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   28:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  128:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\CreateArtifactTool.ts
+  10:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  10:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  11:11  warning  'title' is never reassigned. Use 'const' instead                           prefer-const
+  11:24  warning  'content' is never reassigned. Use 'const' instead                         prefer-const
+  11:33  warning  'identifier' is never reassigned. Use 'const' instead                      prefer-const
+  11:45  warning  'summary' is never reassigned. Use 'const' instead                         prefer-const
+  11:54  warning  'associatedChecklistId' is never reassigned. Use 'const' instead           prefer-const
+  11:77  warning  'sourceFile' is never reassigned. Use 'const' instead                      prefer-const
+  52:56  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  76:17  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\CreateAutoRuleTool.ts
+  9:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  9:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\ExportTransactionsTool.ts
+   9:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  10:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  83:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\ManageBudgetsTool.ts
+  9:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  9:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\ManageLoansTool.ts
+  9:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  9:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\ManageTaxSettingsTool.ts
+   8:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+   8:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  10:52  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  29:52  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\ProjectRunwayTool.ts
+  8:17  warning  'actionObj' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  8:28  warning  Unexpected any. Specify a different type                                     @typescript-eslint/no-explicit-any
+  8:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u    @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\QueryDataTool.ts
+   13:28  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+   76:11  warning  'recurrenceMap' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  112:19  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  163:47  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  172:46  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  182:48  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+  188:61  warning  Unexpected any. Specify a different type                                                  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\ReadArtifactTool.ts
+   8:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+   8:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  41:17  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\RequestUserConfirmationTool.ts
+  7:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+  7:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\SpendingAnomaliesTool.ts
+  11:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\SubscriptionAlertsTool.ts
+   9:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\UpdateArtifactTool.ts
+   9:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+   9:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  61:17  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\UpdateDeductionStatusTool.ts
+   8:28  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+   8:33  warning  'context' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  30:35  warning  Unexpected any. Specify a different type                                   @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\__tests__\ManageLoansTool.test.ts
+  23:22   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  25:64   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:81   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  40:115  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  44:21   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:14   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\tools\index.ts
+   5:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   6:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   7:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  13:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  14:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  28:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\types.ts
+   1:10  warning  'AVAILABLE_TOOLS' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   8:18  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  10:16  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  13:11  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  30:22  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  34:21  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  35:46  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  36:36  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  42:73  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  43:72  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\ai\utils.ts
+    3:30  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   21:51  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   21:69  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   29:19  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   41:7   warning  There is no `cause` attached to the symptom error being thrown                  preserve-caught-error
+   47:42  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+   47:48  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  168:50  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  202:48  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+  260:12  warning  'err' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+  330:49  warning  Unnecessary escape character: \)                                                no-useless-escape
+  338:28  warning  Unnecessary escape character: \-                                                no-useless-escape
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\apiWorkflows.ts
+  6:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\api\settings.ts
+   5:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  15:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\audio.ts
+   7:55  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  62:14  warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\autoCleanup.ts
+  166:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\backup.ts
+  164:65  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  165:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  166:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  167:83  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  168:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  169:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:98  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\categorize.test.ts
+  12:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  13:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  20:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\chatStore.ts
+    9:24  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+   20:7   warning  The value assigned to 'label' is not used in subsequent statements  no-useless-assignment
+   50:42  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+   52:36  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+   53:67  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+   53:80  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  107:47  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  116:23  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  231:24  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  314:44  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  345:27  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  362:25  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  370:23  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  394:23  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  415:23  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  437:23  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+  552:50  warning  Unexpected any. Specify a different type                            @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\AnimatedCard.tsx
+  105:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\AnimatedLogo.tsx
+  7:8  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\ArtifactViewer.tsx
+   30:8   warning  'FullscreenIcon' is defined but never used. Allowed unused vars must match /^_/u                                   @typescript-eslint/no-unused-vars
+   31:8   warning  'FullscreenExitIcon' is defined but never used. Allowed unused vars must match /^_/u                               @typescript-eslint/no-unused-vars
+   64:6   warning  React Hook useEffect has a missing dependency: 'activeArtifact'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  264:29  warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u                                       @typescript-eslint/no-unused-vars
+  275:29  warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u                                       @typescript-eslint/no-unused-vars
+  275:32  warning  Empty block statement                                                                                              no-empty
+  543:48  warning  Unnecessary escape character: \-                                                                                   no-useless-escape
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\AutoCleanupDialog.tsx
+   37:15  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  110:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\AutoCleanupDialog.tsx:110:7
+  108 |       });
+  109 |     } else {
+> 110 |       setReport(null);
+      |       ^^^^^^^^^ Avoid calling setState() directly within an effect
+  111 |     }
+  112 |   }, [open]);
+  113 |  react-hooks/set-state-in-effect
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\BulkRecategorizeDialog.tsx
+  132:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  171:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotChat.tsx
+  116:19  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  122:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotChat.tsx:122:7
+  120 |       }, 1000);
+  121 |     } else {
+> 122 |       setElapsedSeconds(0);
+      |       ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  123 |     }
+  124 |     return () => clearInterval(interval);
+  125 |   }, [loading]);  react-hooks/set-state-in-effect
+  176:9   warning  The 'handleApplyFilters' function makes the dependencies of useEffect Hook (at line 211) change on every render. To fix this, wrap the definition of 'handleApplyFilters' in its own useCallback() Hook                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react-hooks/exhaustive-deps
+  176:51  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  212:63  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotChat\ChatMessageItem.tsx
+   17:8   warning  'ExpandLessIcon' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+   18:8   warning  'VisibilityIcon' is defined but never used. Allowed unused vars must match /^_/u        @typescript-eslint/no-unused-vars
+   19:8   warning  'AutoAwesomeIcon' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+   39:34  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+   42:10  warning  'renderMessageContent' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  113:73  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  307:36  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  312:43  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  601:51  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+  666:52  warning  Unexpected any. Specify a different type                                                @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotChat\DebugPromptModal.tsx
+   24:17   warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   26:26   warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   36:43   warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   43:20   warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+   74:48   warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+   79:14   warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+  159:45   warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  254:137  warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+  260:76   warning  Unexpected any. Specify a different type                                      @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotChat\GenUXComponents.tsx
+  139:41  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  156:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotChat\GenUXComponents.tsx:156:7
+  154 |   useEffect(() => {
+  155 |     if (report && report.id === message.actionResult?.reportId && !initialized) {
+> 156 |       setItems(report.items);
+      |       ^^^^^^^^ Avoid calling setState() directly within an effect
+  157 |       setInitialized(true);
+  158 |     }
+  159 |   }, [report, message.actionResult?.reportId, initialized]);  react-hooks/set-state-in-effect
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotChat\useCopilotActionHandler.ts
+  30:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotQueryResult.tsx
+   78:50   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+   80:50   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+   96:40   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  100:7    warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotQueryResult.tsx:100:7
+   98 |   useEffect(() => {
+   99 |     if (showReceipt && action === 'query_data') {
+> 100 |       setLoadingReceipt(true);
+      |       ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  101 |       const startStr = customStart || storeEarliest || '2000-01-01';
+  102 |       const endStr = customEnd || storeLatest || new Date().toISOString().slice(0, 10);
+  103 |         react-hooks/set-state-in-effect
+  124:6    warning  React Hook useEffect has missing dependencies: 'accounts', 'categories', and 'metrics?.resolvedCategoryNames'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+  124:44   warning  React Hook useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     react-hooks/exhaustive-deps
+  124:92   warning  React Hook useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     react-hooks/exhaustive-deps
+  124:114  warning  React Hook useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     react-hooks/exhaustive-deps
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotQueryResult\QueryResultQueryData.tsx
+   14:21  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+   18:16  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+   19:25  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+  202:56  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+  238:57  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+  331:23  warning  The value assigned to 'displayAmt' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotQueryResult\QueryResultSpendingAnomalies.tsx
+  11:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\CopilotQueryResult\QueryResultTransactionModal.tsx
+  5:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  6:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\DataTable.tsx
+  6:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\FilterPanel.tsx
+  17:34  warning  'Transaction' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+  18:15  warning  'monthKey' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+  29:3   warning  'allTxnCount' is defined but never used. Allowed unused args must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+  30:3   warning  'recurrenceMap' is defined but never used. Allowed unused args must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+  49:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\FilterPanel.tsx:49:7
+  47 |   useEffect(() => {
+  48 |     if (filters.searchQuery !== searchInput) {
+> 49 |       setSearchInput(filters.searchQuery);
+     |       ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  50 |     }
+  51 |   // eslint-disable-next-line react-hooks/exhaustive-deps
+  52 |   }, [filters.searchQuery]);  react-hooks/set-state-in-effect
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\Layout.tsx
+  105:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\PageLoader.tsx
+  12:47  error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\PageLoader.tsx:12:47
+  10 | export default function PageLoader({ isLoading, children }: PageLoaderProps) {
+  11 |   const [internalLoading, setInternalLoading] = useState(isLoading);
+> 12 |   const loadingStartTime = useRef(isLoading ? Date.now() : 0);
+     |                                               ^^^^^^^^^^ Cannot call impure function
+  13 |
+  14 |   useEffect(() => {
+  15 |     if (isLoading) {                                                                                                                                                                                                                                                                                                                react-hooks/purity
+  16:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\PageLoader.tsx:16:7
+  14 |   useEffect(() => {
+  15 |     if (isLoading) {
+> 16 |       setInternalLoading(true);
+     |       ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  17 |       loadingStartTime.current = Date.now();
+  18 |     } else {
+  19 |       const elapsed = Date.now() - loadingStartTime.current;  react-hooks/set-state-in-effect
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\RangePicker.tsx
+  58:8  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\RecategorizeDialog.tsx
+   45:5   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\RecategorizeDialog.tsx:45:5
+  43 |       .trim();
+  44 |     const firstWords = cleaned.split(/\s+/).slice(0, 2).join(' ');
+> 45 |     setPattern(firstWords);
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  46 |   }, [txn]);
+  47 |
+  48 |   const onSave = async () => {  react-hooks/set-state-in-effect
+   64:12  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  122:70  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\SimpleMarkdown.tsx
+  338:26  warning  'e1' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+  349:28  warning  'e2' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\SortCard.tsx
+  58:5  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\SortCard.tsx:58:5
+  56 |
+  57 |   useEffect(() => {
+> 58 |     setExpanded(false);
+     |     ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  59 |   }, [merchantKey]);
+  60 |
+  61 |   const sortedTxns = useMemo(() => {  react-hooks/set-state-in-effect
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\SortCategoryGrid.tsx
+  88:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\components\SpendChart.tsx
+    4:10  warning  'monthKey' is defined but never used. Allowed unused vars must match /^_/u                                       @typescript-eslint/no-unused-vars
+    6:34  warning  'Transaction' is defined but never used. Allowed unused vars must match /^_/u                                    @typescript-eslint/no-unused-vars
+   10:10  warning  'isRecurring' is defined but never used. Allowed unused vars must match /^_/u                                    @typescript-eslint/no-unused-vars
+   26:18  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+   71:3   warning  'dashboardAggregates' is defined but never used. Allowed unused args must match /^_/u                            @typescript-eslint/no-unused-vars
+   75:3   warning  'recurrenceMap' is defined but never used. Allowed unused args must match /^_/u                                  @typescript-eslint/no-unused-vars
+  318:28  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  328:6   warning  React Hook useMemo has a missing dependency: 'spendChartData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  363:29  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  502:21  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\copilotAnalytics.ts
+  261:9  warning  The value assigned to 'baselineMonthlySpend' is not used in subsequent statements  no-useless-assignment
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\copilotMatcher.ts
+  162:7   warning  The value assigned to 'statusText' is not used in subsequent statements  no-useless-assignment
+  243:23  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+  252:44  warning  Unexpected any. Specify a different type                                 @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\forecast.ts
+  32:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\hooks\mutations.ts
+    5:29  warning  'AppSetting' is defined but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+    5:56  warning  'ChatArtifact' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  214:56  warning  Unexpected any. Specify a different type                                        @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\hooks\queries.ts
+  18:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\import.test.ts
+   3:10  warning  'api' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   6:18  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+   7:25  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+   8:21  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+   9:20  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  10:24  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  11:23  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  12:21  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  19:39  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  22:52  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  27:27  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  32:46  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  38:28  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  46:30  warning  Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\import.ts
+   84:7    warning  The value assigned to 'source' is not used in subsequent statements  no-useless-assignment
+   85:106  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+  220:37   warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\main.tsx
+   7:28  warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  13:29  warning  Unexpected any. Specify a different type                                                    @typescript-eslint/no-explicit-any
+  24:23  warning  'seedDemoData' is defined but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+  47:7   error    Fast refresh only works when a file has exports. Move your component(s) to a separate file  react-refresh/only-export-components
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\AnimationSettings.tsx
+  185:19  warning  The value assigned to 'zIndex' is not used in subsequent statements  no-useless-assignment
+  187:60  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+  189:59  warning  Unexpected any. Specify a different type                             @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\ApiPlayground.tsx
+    2:109  warning  'Divider' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+    5:8    warning  'AutoGraphIcon' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+    8:30   warning  'ApiWorkflow' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+   21:39   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+   39:17   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+   48:21   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+   49:11   warning  There is no `cause` attached to the symptom error being thrown                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 preserve-caught-error
+   53:26   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+   62:17   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+   85:7    error    Error: Calling setState from useMemo may trigger an infinite loop
+
+Each time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\ApiPlayground.tsx:85:7
+  83 |         initialArgs[idx] = typeof step.defaultArgs === 'string' ? step.defaultArgs : JSON.stringify(step.defaultArgs);
+  84 |       });
+> 85 |       setWorkflowArgs(initialArgs);
+     |       ^^^^^^^^^^^^^^^ Found setState() within useMemo()
+  86 |       setWorkflowResults({});
+  87 |     }
+  88 |   }, [activeWorkflow]);  react-hooks/set-state-in-render
+   86:7    error    Error: Calling setState from useMemo may trigger an infinite loop
+
+Each time the memo callback is evaluated it will change state. This can cause a memoization dependency to change, running the memo function again and causing an infinite loop. Instead of setting state in useMemo(), prefer deriving the value during render. (https://react.dev/reference/react/useState).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\ApiPlayground.tsx:86:7
+  84 |       });
+  85 |       setWorkflowArgs(initialArgs);
+> 86 |       setWorkflowResults({});
+     |       ^^^^^^^^^^^^^^^^^^ Found setState() within useMemo()
+  87 |     }
+  88 |   }, [activeWorkflow]);
+  89 |                                                                                                                      react-hooks/set-state-in-render
+   93:17   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+   99:16   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  100:26   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  107:45   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  108:28   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  109:53   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  125:17   warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\ArtifactDetail.tsx
+    2:104  warning  'Stack' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+  115:29   warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+  126:29   warning  'e' is defined but never used. Allowed unused caught errors must match /^_/u  @typescript-eslint/no-unused-vars
+  126:32   warning  Empty block statement                                                         no-empty
+  302:48   warning  Unnecessary escape character: \-                                              no-useless-escape
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Artifacts.tsx
+   6:3   warning  'CardActionArea' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  21:8   warning  'PsychologyIcon' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  23:8   warning  'GridOnIcon' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  31:10  warning  'Button' is defined but never used. Allowed unused vars must match /^_/u          @typescript-eslint/no-unused-vars
+  34:10  warning  'useChatStore' is defined but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Budget.tsx
+   35:9  warning  'demoMode' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  268:5  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Budget.tsx:268:5
+  266 |
+  267 |   useEffect(() => {
+> 268 |     setValue(initialAmount.toFixed(2));
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  269 |   }, [initialAmount]);
+  270 |
+  271 |   const saveToDb = async (val: string) => {  react-hooks/set-state-in-effect
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Categories.tsx
+    1:47  warning  'useDeferredValue' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   73:9   warning  'theme' is assigned a value but never used. Allowed unused vars must match /^_/u    @typescript-eslint/no-unused-vars
+  283:96  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Dashboard.tsx
+   46:8   warning  'UploadFileIcon' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+   49:10  warning  'useChatStore' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+   64:3   warning  'buildRecurrenceMap' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  122:9   warning  'disabledCategories' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+  123:9   warning  'spendOnly' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  124:9   warning  'recurrenceFilter' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+  126:9   warning  'deferredSearchQuery' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+  128:9   warning  'deferredMinPrice' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+  130:9   warning  'deferredMaxPrice' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+  181:10  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+  221:5   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Dashboard.tsx:221:5
+  219 |
+  220 |   useEffect(() => {
+> 221 |     setPage(0);
+      |     ^^^^^^^ Avoid calling setState() directly within an effect
+  222 |   }, [dbTxnCount]);
+  223 |
+  224 |   const accountName = (id: number) =>  react-hooks/set-state-in-effect
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Import.tsx
+  236:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Landing.tsx
+  22:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  24:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Loans.tsx
+  135:17  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+  162:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Loans.tsx:162:7
+  160 |   useEffect(() => {
+  161 |     if (addType === 'house') {
+> 162 |       setAddPrincipal('450000');
+      |       ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  163 |       setAddDownPayment('50000');
+  164 |     } else if (addType === 'student') {
+  165 |       setAddPrincipal('30000');                                                react-hooks/set-state-in-effect
+  180:29  warning  'isLoading' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+  200:9   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Loans.tsx:200:9
+  198 |     if (activeLoans.length > 0) {
+  199 |       if (activeLoanId === null || !activeLoans.some((l) => l.id === activeLoanId)) {
+> 200 |         setActiveLoanId(activeLoans[0].id!);
+      |         ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  201 |       }
+  202 |     } else {
+  203 |       setActiveLoanId(null);                     react-hooks/set-state-in-effect
+  225:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Loans.tsx:225:7
+  223 |   useEffect(() => {
+  224 |     if (currentConfig) {
+> 225 |       setFormName(currentConfig.name);
+      |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  226 |       setFormPrincipal(String(currentConfig.principal));
+  227 |       setFormRate(String(currentConfig.rate));
+  228 |       setFormTerm(String(currentConfig.termYears));  react-hooks/set-state-in-effect
+  249:22  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+  269:64  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+  322:39  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+  324:11  warning  The value assigned to 'isMatch' is not used in subsequent statements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        no-useless-assignment
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\LocalModel.tsx
+   92:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Merchants.tsx
+    1:40  warning  'useDeferredValue' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  255:38  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  277:38  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  312:21  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+  461:19  warning  Unexpected any. Specify a different type                                            @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Rules.tsx
+  1:40  warning  'useDeferredValue' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Sort.tsx
+  333:91   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  337:136  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\Taxes.tsx
+   28:3   warning  'CircularProgress' is defined but never used. Allowed unused vars must match /^_/u                @typescript-eslint/no-unused-vars
+   37:98  warning  'useTransactions' is defined but never used. Allowed unused vars must match /^_/u                 @typescript-eslint/no-unused-vars
+   39:28  warning  'ChatArtifact' is defined but never used. Allowed unused vars must match /^_/u                    @typescript-eslint/no-unused-vars
+  106:43  warning  'isRulesLoading' is assigned a value but never used. Allowed unused vars must match /^_/u         @typescript-eslint/no-unused-vars
+  107:47  warning  'isTransactionsLoading' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  134:36  warning  Unexpected any. Specify a different type                                                          @typescript-eslint/no-explicit-any
+  198:18  warning  Unexpected any. Specify a different type                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\pages\ThemeManager.tsx
+    1:27  warning  'useEffect' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  104:23  warning  Unexpected any. Specify a different type                                     @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\recurrence.ts
+  135:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\seed.ts
+  682:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  697:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  729:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  734:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\setupTests.ts
+   5:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  32:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  37:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\store\aiEngineStore.ts
+   23:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  145:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  168:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  189:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  208:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\testBridge.ts
+  20:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  62:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  80:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Chris Barnes\Projects\strictly-spending\src\types.ts
+  128:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  129:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  312:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  358:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 470 problems (4 errors, 466 warnings)
+  0 errors and 8 warnings potentially fixable with the `--fix` option.
+

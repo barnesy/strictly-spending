@@ -301,5 +301,49 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
         required: ["documentType"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "manage_scenarios",
+      description: "Manage, fetch, or create financial forecast scenarios. Use this tool when the user asks to save a simulation scenario, load a scenario, or build a scenario with specific parameters (e.g. \"Create a scenario where I save $1000 a month and pay off debt aggressively\").",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list", "get", "create", "update", "delete"] },
+          scenarioId: { type: "number" },
+          scenarioData: { 
+            type: "object", 
+            description: "Scenario details needed for creation or updates.",
+            properties: {
+              name: { type: "string" },
+              startingBalance: { type: "number" },
+              baseIncome: { type: "number" },
+              taxRate: { type: "number" },
+              recurringBudget: { type: "number" },
+              variableBudget: { type: "number" },
+              savingsBudget: { type: "number" },
+              extraLoanPayment: { type: "number" },
+              loanStrategy: { type: "string", enum: ["avalanche", "snowball", "custom"] },
+              goals: { 
+                type: "array", 
+                items: { 
+                  type: "object", 
+                  properties: { 
+                    id: { type: "string" }, 
+                    name: { type: "string" }, 
+                    amount: { type: "number" }, 
+                    targetMonths: { type: "number" }, 
+                    monthlyContribution: { type: "number" } 
+                  } 
+                } 
+              }
+            }
+          },
+          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed creation/update/deletion." }
+        },
+        required: ["action", "confirmed"]
+      }
+    }
   }
 ];
