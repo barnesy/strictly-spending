@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Box, Typography, Paper, Slider, useTheme, Grid, ToggleButtonGroup, ToggleButton, TextField, Button, IconButton, Snackbar, FormControl, InputLabel, Select, MenuItem, Stack } from '@mui/material';
+import { Box, Typography, Paper, Slider, useTheme, Grid, ToggleButtonGroup, ToggleButton, TextField, Button, IconButton, Snackbar, FormControl, InputLabel, Select, MenuItem, Stack, Switch, FormControlLabel } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Group as PanelGroup,
@@ -49,9 +49,11 @@ export default function Forecast() {
     taxRate, setTaxRate, 
     recurringBudget, setRecurringBudget, 
     savingsBudget, setSavingsBudget, 
+    investmentGrowthRate, setInvestmentGrowthRate,
     startingBalance, setStartingBalance, 
     variableBudget, setVariableBudget, 
     extraLoanPayment, setExtraLoanPayment, 
+    divertExtraToSavings, setDivertExtraToSavings,
     loanStrategy, setLoanStrategy, 
     months, setMonths, 
     goals, setGoals 
@@ -85,7 +87,9 @@ export default function Forecast() {
             income_gaps: [],
             windfalls: [],
             variable_budget: variableBudget,
+            investment_growth_rate: investmentGrowthRate,
             global_extra_loan_payment: extraLoanPayment,
+            divert_extra_to_savings: divertExtraToSavings,
             loan_strategy: loanStrategy,
             months: months,
             goals: goals.map(g => ({ name: g.name, target_amount: g.amount, monthly_contribution: g.monthlyContribution })),
@@ -97,7 +101,7 @@ export default function Forecast() {
       }
     }
     load();
-  }, [baseIncome, taxRate, recurringBudget, savingsBudget, startingBalance, variableBudget, extraLoanPayment, loanStrategy, months, goals]);
+  }, [baseIncome, taxRate, recurringBudget, savingsBudget, investmentGrowthRate, startingBalance, variableBudget, extraLoanPayment, divertExtraToSavings, loanStrategy, months, goals]);
 
   useEffect(() => {
     async function fetchInitialData() {
@@ -162,8 +166,9 @@ export default function Forecast() {
 - **Tax Rate:** ${taxRate}%
 - **Recurring Budget:** ${usd.format(recurringBudget)}
 - **Variable Budget:** ${usd.format(variableBudget)}
-- **Investing/Savings:** ${usd.format(savingsBudget)}
+- **Investing/Savings:** ${usd.format(savingsBudget)} @ ${investmentGrowthRate}% growth
 - **Extra Loan Payment:** ${usd.format(extraLoanPayment)}
+- **Divert to Savings:** ${divertExtraToSavings ? 'Yes' : 'No'}
 - **Loan Strategy:** ${loanStrategy}
 
 ## Results
@@ -329,7 +334,9 @@ export default function Forecast() {
                       recurringBudget,
                       variableBudget,
                       savingsBudget,
+                      investmentGrowthRate,
                       extraLoanPayment,
+                      divertExtraToSavings,
                       loanStrategy,
                       goals
                     };
@@ -410,12 +417,28 @@ export default function Forecast() {
               onChange={(_, val) => setSavingsBudget(val as number)} 
             />
 
+            <Typography variant="subtitle2" fontWeight="600" gutterBottom sx={{ mt: 2 }}>Investment Growth Rate (Annual %)</Typography>
+            <Typography variant="h5" mb={1} fontWeight="700" color="secondary.main">{investmentGrowthRate}%</Typography>
+            <Typography variant="body2" color="text.secondary" mb={1}>
+              Simulates a standard investment vehicle like an S&P 500 index fund.
+            </Typography>
+            <Slider 
+              value={investmentGrowthRate} 
+              min={0} max={20} step={0.5} 
+              onChange={(_, val) => setInvestmentGrowthRate(val as number)} 
+            />
+
             <Typography variant="subtitle2" fontWeight="600" gutterBottom sx={{ mt: 4 }}>Extra Monthly Loan Payment</Typography>
             <Typography variant="h5" mb={1} color="primary.main" fontWeight="700">{usd.format(extraLoanPayment)}</Typography>
             <Slider 
               value={extraLoanPayment} 
               min={0} max={10000} step={250} 
               onChange={(_, val) => setExtraLoanPayment(val as number)} 
+            />
+            <FormControlLabel
+              control={<Switch size="small" checked={divertExtraToSavings} onChange={(e) => setDivertExtraToSavings(e.target.checked)} />}
+              label={<Typography variant="body2" color="text.secondary">Divert to savings once loans are paid off</Typography>}
+              sx={{ mb: 2 }}
             />
 
             <Typography variant="subtitle2" fontWeight="600" gutterBottom sx={{ mt: 4 }}>Loan Payoff Strategy</Typography>

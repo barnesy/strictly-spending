@@ -24,5 +24,7 @@ pub fn legacy_init(conn: &Connection) -> Result<()> {
     
     conn.execute("CREATE TABLE IF NOT EXISTS scenarios (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, starting_balance REAL, base_income REAL, tax_rate REAL, recurring_budget REAL, variable_budget REAL, savings_budget REAL, extra_loan_payment REAL, loan_strategy TEXT, created_at TEXT, goals TEXT)", [])?;
     let _ = conn.execute("ALTER TABLE scenarios ADD COLUMN goals TEXT", []);
+    let _ = conn.execute("ALTER TABLE scenarios ADD COLUMN investment_growth_rate REAL DEFAULT 7.0", []);
+    let _ = conn.execute("ALTER TABLE scenarios ADD COLUMN divert_extra_to_savings BOOLEAN DEFAULT 0", []);
     Ok(())
 }

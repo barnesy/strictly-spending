@@ -26,6 +26,7 @@ export interface ProjectionPoint {
   remainder: number;
   cumulative_remainder: number;
   ending_balance: number;
+  investment_balance: number;
 }
 
 interface ForecastChartsProps {
@@ -71,6 +72,18 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef }
         data: points.map(p => p.ending_balance)
     });
 
+    debtSeries.push({
+        name: 'Investment Portfolio',
+        type: 'line',
+        stack: undefined,
+        areaStyle: undefined,
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 4, color: theme.palette.secondary.main },
+        itemStyle: { color: theme.palette.secondary.main },
+        data: points.map(p => p.investment_balance)
+    });
+
     const markLines: any[] = [];
     goals.forEach(goal => {
         const achievedPoint = points.find(p => p.achieved_goals.includes(goal.name));
@@ -80,7 +93,7 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef }
     });
 
     const debtOption: any = {
-      title: { text: 'Debt Payoff Mountain', left: 'center', textStyle: { color: theme.palette.text.primary, fontWeight: 'bold' } },
+      title: { text: 'Net Worth & Debt Mountain', left: 'center', textStyle: { color: theme.palette.text.primary, fontWeight: 'bold' } },
       tooltip: { 
         trigger: 'axis',
         formatter: (params: any[]) => {
@@ -91,7 +104,7 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef }
           return out;
         }
       },
-      legend: { data: [...loanNames, 'Account Balance'], bottom: 0, textStyle: { color: theme.palette.text.primary } },
+      legend: { data: [...loanNames, 'Account Balance', 'Investment Portfolio'], bottom: 0, textStyle: { color: theme.palette.text.primary } },
       grid: { left: '8%', right: '5%', top: '15%', bottom: '15%', containLabel: true },
       xAxis: { type: 'category', data: points.map(p => p.month_label) },
       yAxis: { type: 'value', axisLabel: { formatter: (val: number) => `$${val.toLocaleString()}` } },

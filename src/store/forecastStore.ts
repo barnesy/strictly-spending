@@ -9,8 +9,10 @@ interface ForecastState {
   startingBalance: number;
   variableBudget: number;
   extraLoanPayment: number;
+  divertExtraToSavings: boolean;
   loanStrategy: 'avalanche' | 'snowball' | 'custom';
   months: number;
+  investmentGrowthRate: number;
   goals: Goal[];
   
   // Actions
@@ -21,8 +23,10 @@ interface ForecastState {
   setStartingBalance: (val: number) => void;
   setVariableBudget: (val: number) => void;
   setExtraLoanPayment: (val: number) => void;
+  setDivertExtraToSavings: (val: boolean) => void;
   setLoanStrategy: (val: 'avalanche' | 'snowball' | 'custom') => void;
   setMonths: (val: number) => void;
+  setInvestmentGrowthRate: (val: number) => void;
   setGoals: (val: Goal[]) => void;
   
   // Bulk load
@@ -37,7 +41,9 @@ export const useForecastStore = create<ForecastState>((set) => ({
   startingBalance: 15000,
   variableBudget: 2500,
   extraLoanPayment: 0,
+  divertExtraToSavings: false,
   loanStrategy: 'avalanche',
+  investmentGrowthRate: 7.0,
   months: 36,
   goals: [
     { id: '1', name: 'Japan Trip', amount: 5000, targetMonths: 10, monthlyContribution: 500 }
@@ -50,7 +56,9 @@ export const useForecastStore = create<ForecastState>((set) => ({
   setStartingBalance: (val) => set({ startingBalance: val }),
   setVariableBudget: (val) => set({ variableBudget: val }),
   setExtraLoanPayment: (val) => set({ extraLoanPayment: val }),
+  setDivertExtraToSavings: (val) => set({ divertExtraToSavings: val }),
   setLoanStrategy: (val) => set({ loanStrategy: val }),
+  setInvestmentGrowthRate: (val) => set({ investmentGrowthRate: val }),
   setMonths: (val) => set({ months: val }),
   setGoals: (val) => set({ goals: val }),
 
@@ -62,7 +70,9 @@ export const useForecastStore = create<ForecastState>((set) => ({
     startingBalance: scenario.startingBalance,
     variableBudget: scenario.variableBudget,
     extraLoanPayment: scenario.extraLoanPayment,
+    divertExtraToSavings: scenario.divertExtraToSavings || false,
     loanStrategy: scenario.loanStrategy as 'avalanche' | 'snowball' | 'custom',
+    investmentGrowthRate: scenario.investmentGrowthRate ?? 7.0,
     goals: scenario.goals || [],
   })
 }));

@@ -2,10 +2,8 @@ use rusqlite::Result;
 use serde::{Deserialize, Serialize};
 use chrono::{Local, Datelike};
 use tauri::State;
-use crate::db::{DbState, get_transactions, get_categories, get_merchant_overrides};
+use crate::db::DbState;
 use crate::db::loans::get_loans;
-use super::recurrence::build_recurrence_map_internal;
-use super::forecast::build_forecast_internal;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Windfall {
@@ -25,11 +23,13 @@ pub struct ProjectionParams {
     pub base_income: f64,
     pub recurring_budget: f64,
     pub savings_budget: f64,
+    pub investment_growth_rate: f64,
     pub starting_balance: f64,
     pub income_gaps: Vec<u32>,
     pub windfalls: Vec<Windfall>,
     pub variable_budget: f64,
     pub global_extra_loan_payment: f64,
+    pub divert_extra_to_savings: bool,
     pub loan_strategy: Option<String>, // "avalanche", "snowball", or "evenly"
     pub months: u32,
     pub goals: Vec<GoalParam>,
@@ -60,6 +60,7 @@ pub struct ProjectionPoint {
     pub remainder: f64,
     pub cumulative_remainder: f64,
     pub ending_balance: f64,
+    pub investment_balance: f64,
 }
 
 #[tauri::command]
@@ -81,7 +82,7 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
         let n = (loan.term_years * 12) as f64;
         
         let standard_payment = if r > 0.0 && n > 0.0 {
-            loan.principal * (r * (1.0 + r).powf(n)) / ((1.0 + r).powf(n) - 1.0)
+            loan.principal * (r * (1.0_f64 + r).powf(n)) / ((1.0_f64 + r).powf(n) - 1.0_f64)
         } else if n > 0.0 {
             loan.principal / n
         } else {
@@ -105,10 +106,10 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
         let mut current_principal = loan.principal - loan.down_payment.unwrap_or(0.0);
         let extra_monthly = loan.extra_monthly_payment.unwrap_or(0.0);
         let extra_one_time = loan.extra_one_time_payment.unwrap_or(0.0);
-        let extra_one_time_month = loan.extra_one_time_month.unwrap_or(0) as i64;
+        let extra_one_time_month = loan.extra_one_time_month.unwrap_or(0) as i32;
         
         let mut months_passed = (today.year() - start_date.year()) * 12 + (today.month() as i32 - start_date.month() as i32) + 1;
-        months_passed = months_passed.max(0) as i64;
+        months_passed = months_passed.max(0);
         
         for month_idx in 1..=months_passed {
             let interest = current_principal * r;
@@ -131,6 +132,7 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
 
     let mut results = Vec::new();
     let mut current_balance = params.starting_balance;
+    let mut current_investment_balance = 0.0;
     let mut current_cumulative_remainder = 0.0;
     
     let mut goal_balances: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
@@ -245,13 +247,30 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
             });
         }
 
+        let mut actual_extra_diverted = 0.0;
+        if params.divert_extra_to_savings {
+            if active_loans_count == 0.0 {
+                actual_extra_diverted = params.global_extra_loan_payment;
+            } else if strategy != "evenly" {
+                actual_extra_diverted = extra_payment_remaining;
+            }
+        }
+
         let adj_variable = params.variable_budget;
-        let adj_savings = params.savings_budget;
+        let mut adj_savings = params.savings_budget;
+        
+        if actual_extra_diverted > 0.0 {
+            adj_savings += actual_extra_diverted;
+        }
         
         let remainder = month_income - base_recurring - adj_variable - adj_savings - month_loan_payments - month_goal_contributions;
         current_cumulative_remainder += remainder;
         
         let ending_balance = current_balance + remainder;
+
+        let monthly_growth_rate = (params.investment_growth_rate / 100.0) / 12.0;
+        current_investment_balance *= 1.0_f64 + monthly_growth_rate;
+        current_investment_balance += adj_savings;
 
         results.push(ProjectionPoint {
             month_index: i,
@@ -269,6 +288,7 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
             remainder,
             cumulative_remainder: current_cumulative_remainder,
             ending_balance,
+            investment_balance: current_investment_balance,
         });
 
         current_balance = ending_balance;

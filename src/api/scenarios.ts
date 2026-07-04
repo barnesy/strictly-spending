@@ -18,7 +18,9 @@ export interface Scenario {
   variableBudget: number;
   savingsBudget: number;
   extraLoanPayment: number;
+  divertExtraToSavings?: boolean;
   loanStrategy: string;
+  investmentGrowthRate?: number;
   createdAt?: string;
   goals?: Goal[];
 }
