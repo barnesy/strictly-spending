@@ -193,7 +193,7 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
         for loan in &mut loans {
             if loan.principal <= 0.0 {
                 month_loans.push(LoanBalanceProjection {
-                    id: loan.id.clone(),
+                    id: loan.id,
                     name: loan.name.clone(),
                     balance: 0.0,
                 });
@@ -241,7 +241,7 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
             month_total_debt += loan.principal;
 
             month_loans.push(LoanBalanceProjection {
-                id: loan.id.clone(),
+                id: loan.id,
                 name: loan.name.clone(),
                 balance: loan.principal,
             });
