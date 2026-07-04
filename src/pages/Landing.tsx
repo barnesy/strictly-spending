@@ -9,6 +9,7 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import NoAccountsIcon from '@mui/icons-material/NoAccounts';
 import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
 import AnimatedLogo from '../components/AnimatedLogo';
+import packageJson from '../../package.json';
 
 export default function Landing() {
   const handleDownload = async (platform: 'mac' | 'windows') => {
@@ -305,6 +306,13 @@ export default function Landing() {
               Download for Windows
             </Button>
           </Box>
+        </Box>
+
+        {/* Footer Version */}
+        <Box sx={{ mt: 8, textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ color: '#9CA3AF' }}>
+            v{packageJson.version}
+          </Typography>
         </Box>
 
       </Container>
