@@ -13,6 +13,7 @@ A local-first household spending dashboard. Multi-bank CSV ingestion, rule-based
 - **Surfaces recurring charges** by detecting consistent intervals across a merchant's history (monthly, biweekly, weekly, annual). Uses the mean of the most recent 3 charges so subscription tier changes propagate within one billing cycle.
 - **Projects next month** by splitting recurring (locked-in) from per-category budgets (trailing average). Toggle individual recurring charges or budget lines to simulate cuts.
 - **Sort view** turns the dreaded post-import Uncategorized triage into a card-stack interaction. One decision per merchant categorizes every past *and* future transaction from that merchant. `Enter` accepts the suggested category, `1`–`9` pick from the grid, `⌘Z` undoes.
+- **Local AI Integration**: Chat with your financial data using entirely local LLMs (powered by Ollama and the Gemma 4 E2B model). The AI runs on your machine, ensuring complete privacy while providing intelligent insights.
 - **JSON backup & restore** for moving data between browsers or surviving a *Clear site data*. Single file, plain JSON, no encryption (store it yourself).
 - **Demo mode**: a Settings toggle that hides real data and shows only `Demo:` records app-wide, useful for screenshots, demos, or share-screen calls.
 
@@ -43,6 +44,11 @@ graph TD
         COMMANDS -->|Connection Pool| RUSQLITE[rusqlite Database Layer]
         RUSQLITE -->|Read / Write| SQLITE[(spending-viz.sqlite)]
     end
+    
+    subgraph Local_AI["Local AI (Ollama)"]
+        UI -->|HTTP / IPC| OLLAMA[Ollama API]
+        OLLAMA -->|Inference| MODEL[Gemma Models]
+    end
 ```
 
 ### Key Architectural Highlights:
@@ -62,6 +68,7 @@ graph TD
 - **UI & Styling**: **MUI v7** + **MUI X Charts** (stacked-bar visualization) + **react-resizable-panels**
 - **State Management**: **Zustand** (filters, forecast, sort session state)
 - **Parser**: **PapaParse** (CSV parsing)
+- **Local AI**: **Ollama** (Gemma models via REST/IPC)
 
 ---
 
