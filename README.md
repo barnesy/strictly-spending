@@ -4,7 +4,7 @@
 
 A local-first household spending dashboard. Multi-bank CSV ingestion, rule-based categorization, recurring-charge detection, per-category budgets, and a rapid-triage **Sort** view, all in the browser. **No server. No cloud. No account credentials.**
 
-![Strictly Spending dashboard](docs/hero.png)
+<video src="https://github.com/barnesy/strictly-spending/raw/main/public/strictly-spending.mp4" width="100%" autoplay loop muted playsinline></video>
 
 ## What it does
 
@@ -30,15 +30,15 @@ Strictly Spending uses a modern, local-first hybrid architecture combining a hig
 
 ```mermaid
 graph TD
-    subgraph Frontend (Vite + React + TS)
+    subgraph Frontend["Frontend (Vite + React + TS)"]
         UI[React Pages & Hooks] -->|Method Calls| API[API Wrapper]
     end
     
-    subgraph IPC Bridge (Tauri v2)
+    subgraph IPC_Bridge["IPC Bridge (Tauri v2)"]
         API -->|Invoke Command| TAURI[Tauri Command Router]
     end
     
-    subgraph Backend (Rust + SQLite)
+    subgraph Backend["Backend (Rust + SQLite)"]
         TAURI -->|Invokes| COMMANDS[Rust Commands]
         COMMANDS -->|Connection Pool| RUSQLITE[rusqlite Database Layer]
         RUSQLITE -->|Read / Write| SQLITE[(spending-viz.sqlite)]
