@@ -27,6 +27,7 @@ export interface SubscriptionAlerts {
   priceSpikes: PriceSpike[];
   duplicateCharges: DuplicateCharge[];
   overlappingSubscriptions: OverlappingSubscription[];
+  activeSubscriptions: { merchantKey: string; name: string; estMonthlyCost: number; cat: string }[];
 }
 
 export interface CategorySpike {
@@ -190,6 +191,7 @@ export function detectSubscriptionAlerts(
     priceSpikes,
     duplicateCharges,
     overlappingSubscriptions,
+    activeSubscriptions: activeSubs,
   };
 }
 

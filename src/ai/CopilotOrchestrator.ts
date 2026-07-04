@@ -65,6 +65,7 @@ Example output:
         options: { temperature: 0.1 }
       });
       
+      if (!res?.content) return [];
       const parsed = parseAIResponse(res.content);
       if (parsed && Array.isArray(parsed.playbook_ids)) {
         const ids = new Set(parsed.playbook_ids);
@@ -94,7 +95,8 @@ Example output:
     const recurrenceMap = new Map(Object.entries(recurrenceMapObj));
     const budgets = await queryClient.fetchQuery({ queryKey: ['budgets'], queryFn: api.getBudgets });
     const artifacts = await queryClient.fetchQuery({ queryKey: ['artifacts'], queryFn: api.getArtifacts });
-    const dataStore = { categories, accounts, transactions, recurrenceMap, budgets };
+    const merchantOverrides = await queryClient.fetchQuery({ queryKey: ['merchantOverrides'], queryFn: api.getMerchantOverrides });
+    const dataStore = { categories, accounts, transactions, recurrenceMap, budgets, merchantOverrides };
 
     const runwayData = await calculateGlobalRunwayData();
 

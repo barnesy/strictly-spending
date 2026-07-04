@@ -242,7 +242,10 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
       description: "Scan transactions for subscription price spikes, duplicates, and overlaps.",
       parameters: {
         type: "object",
-        properties: {}
+        properties: {
+          minPrice: { type: "number", description: "Minimum transaction amount" },
+          maxPrice: { type: "number", description: "Maximum transaction amount" }
+        }
       }
     }
   },

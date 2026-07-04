@@ -69,6 +69,8 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
     let mut loans = get_loans(state.clone()).unwrap_or_default();
     loans.retain(|l| l.enabled.unwrap_or(true));
     
+    let accounts = crate::db::get_accounts(state.clone()).unwrap_or_default();
+
     let today = Local::now().naive_local().date();
     let mut current_year = today.year();
     let mut current_month = today.month();
@@ -89,16 +91,34 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
         let actual_payment = loan.monthly_payment.unwrap_or(standard_payment);
         loan.monthly_payment = Some(actual_payment); // ensure simulation uses this
 
+        // If there's an account with the same name that has a balance, use it as the source of truth
+        if let Some(acc) = accounts.iter().find(|a| a.name == loan.name) {
+            if let Some(bal) = acc.current_balance {
+                loan.principal = bal.abs(); // Ensure it's positive for debt calculations
+                continue;
+            }
+        }
+
         let start_date = chrono::NaiveDate::parse_from_str(&loan.start_date, "%Y-%m-%d")
             .unwrap_or(today);
             
-        let months_passed = (today.year() - start_date.year()) * 12 + (today.month() as i32 - start_date.month() as i32);
-        let months_passed = months_passed.max(0) as i64;
+        let mut current_principal = loan.principal - loan.down_payment.unwrap_or(0.0);
+        let extra_monthly = loan.extra_monthly_payment.unwrap_or(0.0);
+        let extra_one_time = loan.extra_one_time_payment.unwrap_or(0.0);
+        let extra_one_time_month = loan.extra_one_time_month.unwrap_or(0) as i64;
         
-        let mut current_principal = loan.principal;
-        for _ in 0..months_passed {
+        let mut months_passed = (today.year() - start_date.year()) * 12 + (today.month() as i32 - start_date.month() as i32) + 1;
+        months_passed = months_passed.max(0) as i64;
+        
+        for month_idx in 1..=months_passed {
             let interest = current_principal * r;
-            let principal_payment = actual_payment - interest;
+            let mut principal_payment = actual_payment - interest;
+            
+            principal_payment += extra_monthly;
+            if month_idx == extra_one_time_month {
+                principal_payment += extra_one_time;
+            }
+            
             current_principal -= principal_payment;
             if current_principal < 0.0 {
                 current_principal = 0.0;

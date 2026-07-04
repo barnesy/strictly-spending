@@ -216,7 +216,7 @@ export default function Forecast() {
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   });
 
-  const minGroupWidth = (settingsVisible ? 420 : 0) + 400 + (goalsVisible ? 420 : 0);
+  const minGroupWidth = (settingsVisible ? 320 : 0) + 400 + (goalsVisible ? 320 : 0);
 
   return (
     <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -266,9 +266,9 @@ export default function Forecast() {
       >
         {/* Controls */}
         {settingsVisible && (
-        <Panel id="settings" order={1} defaultSize={25} minSize={20} style={{ minWidth: 420 }}>
+        <Panel id="settings" order={1} defaultSize={25} minSize={20} style={{ minWidth: 320 }}>
           <Box sx={{ height: '100%', overflow: 'auto' }}>
-            <Paper sx={{ minWidth: 420, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+            <Paper sx={{ minWidth: 320, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
               <Typography variant="h6" fontWeight="600" mb={4}>Simulator Settings</Typography>
             
             <Box sx={{ mb: 4, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
@@ -496,9 +496,9 @@ export default function Forecast() {
         )}
 
         {goalsVisible && (
-        <Panel id="goals" order={3} defaultSize={25} minSize={20} style={{ minWidth: 420 }}>
+        <Panel id="goals" order={3} defaultSize={25} minSize={20} style={{ minWidth: 320 }}>
           <Box sx={{ height: '100%', overflow: 'auto' }}>
-            <Paper sx={{ minWidth: 420, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+            <Paper sx={{ minWidth: 320, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
               <Typography variant="h6" fontWeight="600" mb={2}>Custom Goals</Typography>
             <Typography variant="body2" color="text.secondary" mb={2}>
               Add arbitrary goals to see when your cumulative remainder can afford them.

@@ -141,7 +141,7 @@ export class OllamaProvider implements AIProvider {
       const schema = responseSchema || null;
       
       const tools = toolsOverride || AGENT_TOOLS;
-      const stream = !!onChunk;
+      const stream = !!onChunk && (!tools || tools.length === 0);
 
       const body: any = {
         model: this.modelName,

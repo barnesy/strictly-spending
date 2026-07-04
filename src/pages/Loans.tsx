@@ -276,7 +276,13 @@ export default function Loans() {
   // Handler for loading payment details from selected category transactions
   const handleCategoryChange = async (categoryName: string) => {
     setFormCategory(categoryName);
-    if (!categoryName) return;
+    if (!categoryName) {
+      if (!formMerchant) {
+        setFormMonthlyPayment('');
+        setSnackbarMsg('Monthly payment reset to standard schedule.');
+      }
+      return;
+    }
 
     try {
       // Filter transactions for selected category to identify typical payment amount
@@ -1242,8 +1248,19 @@ export default function Loans() {
                     freeSolo
                     options={merchantOptions}
                     value={formMerchant}
-                    onChange={(_, newValue) => setFormMerchant(newValue || '')}
-                    onInputChange={(_, newInputValue) => setFormMerchant(newInputValue || '')}
+                    onChange={(_, newValue) => {
+                      setFormMerchant(newValue || '');
+                      if (!newValue && !formCategory) {
+                        setFormMonthlyPayment('');
+                        setSnackbarMsg('Monthly payment reset to standard schedule.');
+                      }
+                    }}
+                    onInputChange={(_, newInputValue) => {
+                      setFormMerchant(newInputValue || '');
+                      if (!newInputValue && !formCategory) {
+                        setFormMonthlyPayment('');
+                      }
+                    }}
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -1556,8 +1573,19 @@ export default function Loans() {
                     freeSolo
                     options={merchantOptions}
                     value={formMerchant}
-                    onChange={(_, newValue) => setFormMerchant(newValue || '')}
-                    onInputChange={(_, newInputValue) => setFormMerchant(newInputValue || '')}
+                    onChange={(_, newValue) => {
+                      setFormMerchant(newValue || '');
+                      if (!newValue && !formCategory) {
+                        setFormMonthlyPayment('');
+                        setSnackbarMsg('Monthly payment reset to standard schedule.');
+                      }
+                    }}
+                    onInputChange={(_, newInputValue) => {
+                      setFormMerchant(newInputValue || '');
+                      if (!newInputValue && !formCategory) {
+                        setFormMonthlyPayment('');
+                      }
+                    }}
                     renderInput={(params) => (
                       <TextField
                         {...params}
