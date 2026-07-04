@@ -36,6 +36,11 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "macOS": {
+      "dmg": {
+        "background": null
+      }
     }
   }
 }
