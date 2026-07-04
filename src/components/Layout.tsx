@@ -64,7 +64,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
-  const layoutPages = ['/', '/dashboard', '/transactions', '/categories', '/rules', '/merchants', '/artifacts'];
+  const layoutPages = ['/', '/dashboard', '/transactions', '/categories', '/rules', '/merchants', '/artifacts', '/forecast'];
   const isLayoutPage = layoutPages.includes(location.pathname) && isDesktop;
 
   const { activeArtifact, setActiveArtifact } = useChatStore(useShallow(s => ({

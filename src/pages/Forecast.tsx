@@ -1,12 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Paper, Slider, useTheme, Grid, ToggleButtonGroup, ToggleButton, TextField, Button, IconButton, Snackbar, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Box, Typography, Paper, Slider, useTheme, Grid, ToggleButtonGroup, ToggleButton, TextField, Button, IconButton, Snackbar, FormControl, InputLabel, Select, MenuItem, Stack } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Group as PanelGroup,
   Panel,
   Separator as PanelResizeHandle,
+  useDefaultLayout,
 } from 'react-resizable-panels';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SettingsIcon from '@mui/icons-material/Settings';
+import FlagIcon from '@mui/icons-material/Flag';
 import { invoke } from '@tauri-apps/api/core';
 import * as echarts from 'echarts';
 import { usd } from '../lib';
@@ -24,6 +27,22 @@ export default function Forecast() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [points, setPoints] = useState<ProjectionPoint[]>([]);
+
+  const [settingsVisible, setSettingsVisible] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('forecast:settingsVisible') !== 'false';
+  });
+  const [goalsVisible, setGoalsVisible] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('forecast:goalsVisible') !== 'false';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('forecast:settingsVisible', String(settingsVisible));
+  }, [settingsVisible]);
+  useEffect(() => {
+    localStorage.setItem('forecast:goalsVisible', String(goalsVisible));
+  }, [goalsVisible]);
   
   const { 
     baseIncome, setBaseIncome, 
@@ -185,24 +204,72 @@ export default function Forecast() {
     });
   };
 
+  const panelIds = useMemo(() => [
+    ...(settingsVisible ? ['settings'] : []),
+    'charts',
+    ...(goalsVisible ? ['goals'] : []),
+  ], [settingsVisible, goalsVisible]);
+
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: `forecast-layout-${panelIds.join('-')}`,
+    panelIds,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  });
+
+  const minGroupWidth = (settingsVisible ? 420 : 0) + 400 + (goalsVisible ? 420 : 0);
+
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '100vh', bgcolor: 'background.default' }}>
-      <Typography variant="h4" fontWeight={700} mb={1}>Financial Forecast</Typography>
-      <Typography variant="subtitle1" color="text.secondary" mb={4}>Gamify your debt payoff and savings goals.</Typography>
-      
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'flex-end' }, mb: 4, gap: 2, flexShrink: 0 }}>
+        <Box>
+          <Typography variant="h4" fontWeight={700} mb={1}>Financial Forecast</Typography>
+          <Typography variant="subtitle1" color="text.secondary">Gamify your debt payoff and savings goals.</Typography>
+        </Box>
+        
+        <Stack direction="row" spacing={2} alignItems="flex-end">
+          <ToggleButtonGroup size="small" sx={{ height: 40 }}>
+            <ToggleButton
+              value="settings"
+              selected={settingsVisible}
+              onClick={() => setSettingsVisible(prev => !prev)}
+              sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600, height: 40 }}
+            >
+              <SettingsIcon fontSize="small" />
+              Settings
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <ToggleButtonGroup size="small" sx={{ height: 40 }}>
+            <ToggleButton
+              value="goals"
+              selected={goalsVisible}
+              onClick={() => setGoalsVisible(prev => !prev)}
+              sx={{ gap: 0.75, textTransform: 'none', px: 1.5, fontWeight: 600, height: 40 }}
+            >
+              <FlagIcon fontSize="small" />
+              Goals
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
+      </Box>
 
-
-      <PanelGroup 
-        orientation={isMobile ? 'vertical' : 'horizontal'}
-        onLayoutChanged={() => {
-          if (debtChartRef.current) echarts.getInstanceByDom(debtChartRef.current)?.resize();
-          if (cashflowChartRef.current) echarts.getInstanceByDom(cashflowChartRef.current)?.resize();
-        }}
+      <Box sx={{ flex: 1, minHeight: 0, position: 'relative', overflowX: 'auto' }}>
+        <PanelGroup 
+          key={`forecast-${panelIds.join('-')}`}
+          orientation={isMobile ? 'vertical' : 'horizontal'}
+          defaultLayout={defaultLayout}
+          style={{ height: '100%', minWidth: isMobile ? '100%' : minGroupWidth }}
+          onLayoutChanged={(sizes) => {
+            onLayoutChanged(sizes);
+            if (debtChartRef.current) echarts.getInstanceByDom(debtChartRef.current)?.resize();
+            if (cashflowChartRef.current) echarts.getInstanceByDom(cashflowChartRef.current)?.resize();
+          }}
       >
         {/* Controls */}
-        <Panel defaultSize="35%" minSize="25%" maxSize="50%" style={{ paddingRight: isMobile ? 0 : 16, paddingBottom: isMobile ? 16 : 0, overflow: 'auto' }}>
-          <Paper sx={{ p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
-            <Typography variant="h6" fontWeight="600" mb={4}>Simulator Settings</Typography>
+        {settingsVisible && (
+        <Panel id="settings" order={1} defaultSize={25} minSize={20} style={{ minWidth: 420 }}>
+          <Box sx={{ height: '100%', overflow: 'auto' }}>
+            <Paper sx={{ minWidth: 420, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+              <Typography variant="h6" fontWeight="600" mb={4}>Simulator Settings</Typography>
             
             <Box sx={{ mb: 4, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
               <Typography variant="subtitle2" fontWeight="600" gutterBottom>Saved Scenarios</Typography>
@@ -372,90 +439,26 @@ export default function Forecast() {
               min={6} max={240} step={6} 
               onChange={(_, val) => setMonths(val as number)} 
             />
-          </Paper>
 
-          <Paper sx={{ p: 3, mt: 4, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
-            <Typography variant="h6" fontWeight="600" mb={2}>Custom Goals</Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              Add arbitrary goals to see when your cumulative remainder can afford them.
-            </Typography>
-
-            {goals.map((g, idx) => (
-                <Box key={g.id} sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
-                    <TextField 
-                        size="small" 
-                        label="Name" 
-                        value={g.name} 
-                        onChange={e => {
-                            const newGoals = [...goals];
-                            newGoals[idx].name = e.target.value;
-                            setGoals(newGoals);
-                        }} 
-                    />
-                    <TextField 
-                        size="small" 
-                        label="Amount ($)" 
-                        type="number"
-                        value={g.amount} 
-                        onChange={e => {
-                            const newGoals = [...goals];
-                            const amt = Number(e.target.value);
-                            newGoals[idx].amount = amt;
-                            newGoals[idx].monthlyContribution = amt / newGoals[idx].targetMonths;
-                            setGoals(newGoals);
-                        }} 
-                    />
-                    <TextField 
-                        size="small" 
-                        label="Target (Months)" 
-                        type="number"
-                        value={g.targetMonths} 
-                        onChange={e => {
-                            const newGoals = [...goals];
-                            const t = Math.max(1, Number(e.target.value));
-                            newGoals[idx].targetMonths = t;
-                            newGoals[idx].monthlyContribution = newGoals[idx].amount / t;
-                            setGoals(newGoals);
-                        }} 
-                    />
-                    <TextField 
-                        size="small" 
-                        label="Monthly ($)" 
-                        type="number"
-                        value={Math.round(g.monthlyContribution)} 
-                        onChange={e => {
-                            const newGoals = [...goals];
-                            const m = Math.max(1, Number(e.target.value));
-                            newGoals[idx].monthlyContribution = m;
-                            newGoals[idx].targetMonths = Math.ceil(newGoals[idx].amount / m);
-                            setGoals(newGoals);
-                        }} 
-                    />
-                    <IconButton size="small" color="error" onClick={() => setGoals(goals.filter(x => x.id !== g.id))}>
-                        <DeleteIcon />
-                    </IconButton>
-                </Box>
-            ))}
-            <Button variant="outlined" fullWidth onClick={() => setGoals([...goals, { id: Math.random().toString(), name: 'New Goal', amount: 1000, targetMonths: 10, monthlyContribution: 100 }])}>
-                + Add Goal
-            </Button>
-            
             <Button variant="contained" color="primary" fullWidth sx={{ mt: 4 }} onClick={handleSaveScenario}>
               Save Scenario as Artifact
             </Button>
-
-          </Paper>
+            </Paper>
+          </Box>
         </Panel>
+        )}
 
-        {!isMobile && (
-          <PanelResizeHandle style={{ width: 8, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {settingsVisible && !isMobile && (
+          <PanelResizeHandle style={{ width: 16, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Box sx={{ width: 4, height: 24, borderRadius: 2, bgcolor: 'divider' }} />
           </PanelResizeHandle>
         )}
 
         {/* Charts */}
-        <Panel minSize="30%" style={{ paddingLeft: isMobile ? 0 : 16, overflow: 'auto' }}>
-          <Paper sx={{ p: 4, mb: 4, border: '1px solid', borderColor: 'divider', boxShadow: 'none', bgcolor: 'background.paper', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+        <Panel id="charts" order={2} defaultSize={50} minSize={20}>
+          <Box sx={{ height: '100%', overflow: 'auto' }}>
+            <Box>
+              <Paper sx={{ p: 4, mb: 4, border: '1px solid', borderColor: 'divider', boxShadow: 'none', bgcolor: 'background.paper', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
               <Typography variant="h6" fontWeight="bold" mb={1}>Safe Cash to Blow</Typography>
               <Typography variant="body2" color="text.secondary" mb={2}>Your minimum monthly remainder after all obligations across the entire timeline.</Typography>
               <Typography variant="h3" fontWeight="900" color={minRemainder >= 0 ? 'success.main' : 'error.main'}>
@@ -478,12 +481,102 @@ export default function Forecast() {
           <Paper sx={{ p: 3, mb: 4, border: '1px solid', borderColor: 'divider', boxShadow: 'none', height: 500 }}>
              <Box ref={debtChartRef} sx={{ width: '100%', height: '100%' }} />
           </Paper>
-          <Paper sx={{ p: 3, mb: 4, border: '1px solid', borderColor: 'divider', boxShadow: 'none', height: 500 }}>
-             <Box ref={cashflowChartRef} sx={{ width: '100%', height: '100%' }} />
-          </Paper>
-          <ForecastCharts points={points} goals={goals} debtChartRef={debtChartRef} cashflowChartRef={cashflowChartRef} />
+            <Paper sx={{ p: 3, mb: 4, border: '1px solid', borderColor: 'divider', boxShadow: 'none', height: 500 }}>
+               <Box ref={cashflowChartRef} sx={{ width: '100%', height: '100%' }} />
+            </Paper>
+            <ForecastCharts points={points} goals={goals} debtChartRef={debtChartRef} cashflowChartRef={cashflowChartRef} />
+            </Box>
+          </Box>
         </Panel>
+
+        {goalsVisible && !isMobile && (
+          <PanelResizeHandle style={{ width: 16, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Box sx={{ width: 4, height: 24, borderRadius: 2, bgcolor: 'divider' }} />
+          </PanelResizeHandle>
+        )}
+
+        {goalsVisible && (
+        <Panel id="goals" order={3} defaultSize={25} minSize={20} style={{ minWidth: 420 }}>
+          <Box sx={{ height: '100%', overflow: 'auto' }}>
+            <Paper sx={{ minWidth: 420, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+              <Typography variant="h6" fontWeight="600" mb={2}>Custom Goals</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Add arbitrary goals to see when your cumulative remainder can afford them.
+            </Typography>
+
+            {goals.map((g, idx) => (
+                <Box key={g.id} sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
+                        <TextField 
+                            size="small" 
+                            label="Name" 
+                            value={g.name} 
+                            fullWidth
+                            onChange={e => {
+                                const newGoals = [...goals];
+                                newGoals[idx].name = e.target.value;
+                                setGoals(newGoals);
+                            }} 
+                        />
+                        <TextField 
+                            size="small" 
+                            label="Amount ($)" 
+                            type="number"
+                            value={g.amount} 
+                            fullWidth
+                            onChange={e => {
+                                const newGoals = [...goals];
+                                const amt = Number(e.target.value);
+                                newGoals[idx].amount = amt;
+                                newGoals[idx].monthlyContribution = amt / newGoals[idx].targetMonths;
+                                setGoals(newGoals);
+                            }} 
+                        />
+                        <TextField 
+                            size="small" 
+                            label="Monthly ($)" 
+                            type="number"
+                            value={Math.round(g.monthlyContribution)} 
+                            fullWidth
+                            onChange={e => {
+                                const newGoals = [...goals];
+                                const m = Math.max(1, Number(e.target.value));
+                                newGoals[idx].monthlyContribution = m;
+                                newGoals[idx].targetMonths = Math.ceil(newGoals[idx].amount / m);
+                                setGoals(newGoals);
+                            }} 
+                        />
+                        <IconButton size="small" color="error" onClick={() => setGoals(goals.filter(x => x.id !== g.id))}>
+                            <DeleteIcon />
+                        </IconButton>
+                    </Box>
+                    <Box sx={{ px: 1 }}>
+                        <Typography variant="subtitle2" fontWeight="600" gutterBottom>
+                            Target: {g.targetMonths} Months
+                        </Typography>
+                        <Slider 
+                            value={g.targetMonths} 
+                            min={1} max={120} step={1}
+                            onChange={(_, val) => {
+                                const newGoals = [...goals];
+                                const t = Math.max(1, val as number);
+                                newGoals[idx].targetMonths = t;
+                                newGoals[idx].monthlyContribution = newGoals[idx].amount / t;
+                                setGoals(newGoals);
+                            }} 
+                        />
+                    </Box>
+                </Box>
+            ))}
+            <Button variant="outlined" fullWidth onClick={() => setGoals([...goals, { id: Math.random().toString(), name: 'New Goal', amount: 1000, targetMonths: 10, monthlyContribution: 100 }])}>
+                + Add Goal
+            </Button>
+            </Paper>
+          </Box>
+        </Panel>
+        )}
       </PanelGroup>
+      </Box>
 
       <Snackbar
         open={snackbarMessage !== null}
