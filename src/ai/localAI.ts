@@ -28,7 +28,7 @@ export class LocalAI implements AIProvider {
         this.activeProvider.modelName = savedModel;
       } else {
         if (savedProviderId === 'gemini') this.activeProvider.modelName = 'gemini-3.1-flash';
-        else this.activeProvider.modelName = 'gemma2:2b';
+        else this.activeProvider.modelName = 'gemma4:e2b';
       }
     }
   }
