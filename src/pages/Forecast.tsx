@@ -271,7 +271,7 @@ export default function Forecast() {
       >
         {/* Controls */}
         {settingsVisible && (
-        <Panel id="settings" order={1} defaultSize={25} minSize={20} style={{ minWidth: 320 }}>
+        <Panel id="settings" defaultSize={25} minSize={20} style={{ minWidth: 320 }}>
           <Box sx={{ height: '100%', overflow: 'auto' }}>
             <Paper sx={{ minWidth: 320, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
               <Typography variant="h6" fontWeight="600" mb={4}>Simulator Settings</Typography>
@@ -478,7 +478,7 @@ export default function Forecast() {
         )}
 
         {/* Charts */}
-        <Panel id="charts" order={2} defaultSize={50} minSize={20}>
+        <Panel id="charts" defaultSize={50} minSize={20}>
           <Box sx={{ height: '100%', overflow: 'auto' }}>
             <Box>
               <Paper sx={{ p: 4, mb: 4, border: '1px solid', borderColor: 'divider', boxShadow: 'none', bgcolor: 'background.paper', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
@@ -519,7 +519,7 @@ export default function Forecast() {
         )}
 
         {goalsVisible && (
-        <Panel id="goals" order={3} defaultSize={25} minSize={20} style={{ minWidth: 320 }}>
+        <Panel id="goals" defaultSize={25} minSize={20} style={{ minWidth: 320 }}>
           <Box sx={{ height: '100%', overflow: 'auto' }}>
             <Paper sx={{ minWidth: 320, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
               <Typography variant="h6" fontWeight="600" mb={2}>Custom Goals</Typography>
