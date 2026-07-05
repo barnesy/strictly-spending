@@ -1,4 +1,5 @@
-import { Box, Button, Container, Typography, Grid, Paper, Chip } from '@mui/material';
+import { Box, Button, Container, Typography, Grid, Paper, Chip, IconButton, Tooltip } from '@mui/material';
+import { useState } from 'react';
 import AppleIcon from '@mui/icons-material/Apple';
 import WindowIcon from '@mui/icons-material/Window';
 import SecurityIcon from '@mui/icons-material/Security';
@@ -9,8 +10,49 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import NoAccountsIcon from '@mui/icons-material/NoAccounts';
 import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
 import AnimatedLogo from '../components/AnimatedLogo';
 import packageJson from '../../package.json';
+
+function InstallationNotes() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyCommand = () => {
+    navigator.clipboard.writeText('xattr -cr /Applications/Strictly\\ Spending.app');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 2.5, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', maxWidth: '700px', textAlign: 'left' }}>
+      <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20, mt: 0.25 }} />
+      <Box sx={{ width: '100%' }}>
+        <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151', mb: 0.5 }}>
+          Installation Notes
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5, mb: 1 }}>
+          <b>Mac:</b> If macOS warns that the app is "damaged" or cannot be verified, drag it to your <b>Applications</b> folder, Right-Click (or Control-Click) the app, and select <b>Open</b>. As a fallback, you can run this command in your terminal:
+        </Typography>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: 'rgba(0,0,0,0.04)', borderRadius: '6px', p: 1, pl: 1.5, mb: 1.5, border: '1px solid rgba(0,0,0,0.05)' }}>
+          <Typography variant="body2" sx={{ fontFamily: 'monospace', color: '#111827' }}>
+            xattr -cr /Applications/Strictly\ Spending.app
+          </Typography>
+          <Tooltip title={copied ? "Copied!" : "Copy command"}>
+            <IconButton size="small" onClick={handleCopyCommand} sx={{ color: copied ? '#10B981' : '#6B7280', p: 0.5 }}>
+              {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5 }}>
+          <b>Windows:</b> If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
 
 export default function Landing() {
   const handleDownload = async (platform: 'mac' | 'windows') => {
@@ -137,18 +179,7 @@ export default function Landing() {
         </Box>
 
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 10, px: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 2.5, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', maxWidth: '700px', textAlign: 'left' }}>
-            <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20, mt: 0.25 }} />
-            <Box>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151', mb: 0.5 }}>
-                Installation Notes
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5 }}>
-                <b>Mac:</b> If macOS warns that the app is "damaged" or cannot be verified, drag it to your <b>Applications</b> folder, Right-Click (or Control-Click) the app, and select <b>Open</b>. As a fallback, you can run <code style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>xattr -cr /Applications/Strictly\ Spending.app</code> in your terminal.<br/>
-                <b>Windows:</b> If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
-              </Typography>
-            </Box>
-          </Box>
+          <InstallationNotes />
         </Box>
 
         {/* Video Demo Section */}
@@ -324,18 +355,7 @@ export default function Landing() {
           </Box>
           
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, px: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 2.5, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', maxWidth: '700px', textAlign: 'left' }}>
-              <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20, mt: 0.25 }} />
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151', mb: 0.5 }}>
-                  Installation Notes
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5 }}>
-                  <b>Mac:</b> If macOS warns that the app is "damaged" or cannot be verified, drag it to your <b>Applications</b> folder, Right-Click (or Control-Click) the app, and select <b>Open</b>. As a fallback, you can run <code style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>xattr -cr /Applications/Strictly\ Spending.app</code> in your terminal.<br/>
-                  <b>Windows:</b> If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
-                </Typography>
-              </Box>
-            </Box>
+            <InstallationNotes />
           </Box>
         </Box>
 
