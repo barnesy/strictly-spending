@@ -31,33 +31,38 @@ type NavItem = {
 const PRIMARY_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/budget', label: 'Budget' },
+  { to: '/loans', label: 'Loans' },
   { to: '/forecast', label: 'Forecast' },
   { to: '/sort', label: 'Sort', badge: 'uncategorized' },
   { to: '/artifacts', label: 'Artifacts' },
 ];
 
-const PLANNING_NAV = [
-  { to: '/loans', label: 'Loans' },
-  { to: '/taxes', label: 'Taxes' },
-];
-
-const ORGANIZE_NAV = [
-  { to: '/categories', label: 'Categories' },
-  { to: '/rules', label: 'Rules' },
-  { to: '/merchants', label: 'Merchants' },
-];
-
-const AI_NAV = [
-  { to: '/local-model', label: 'Local Model' },
-  { to: '/ai-reference', label: 'AI Reference' },
-  { to: '/api-playground', label: 'API Playground' },
-];
-
-const SETTINGS_NAV = [
-  { to: '/import', label: 'Import' },
-  { to: '/settings', label: 'Settings' },
-  { to: '/animation-playground', label: 'Animations' },
-  { to: '/theme', label: 'Theme' },
+const SETTINGS_SECTIONS = [
+  {
+    title: 'Organize',
+    items: [
+      { to: '/categories', label: 'Categories' },
+      { to: '/rules', label: 'Rules' },
+      { to: '/merchants', label: 'Merchants' },
+    ]
+  },
+  {
+    title: 'AI Tools',
+    items: [
+      { to: '/local-model', label: 'Local Model' },
+      { to: '/ai-reference', label: 'AI Reference' },
+      { to: '/api-playground', label: 'API Playground' },
+    ]
+  },
+  {
+    title: 'System',
+    items: [
+      { to: '/import', label: 'Import' },
+      { to: '/settings', label: 'Settings' },
+      { to: '/animation-playground', label: 'Animations' },
+      { to: '/theme', label: 'Theme' },
+    ]
+  }
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -72,33 +77,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setActiveArtifact: s.setActiveArtifact
   })));
   
-  const [planningAnchorEl, setPlanningAnchorEl] = useState<null | HTMLElement>(null);
-  const [organizeAnchorEl, setOrganizeAnchorEl] = useState<null | HTMLElement>(null);
-  const [aiToolsAnchorEl, setAiToolsAnchorEl] = useState<null | HTMLElement>(null);
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<null | HTMLElement>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  const isPlanningOpen = Boolean(planningAnchorEl);
-  const isOrganizeOpen = Boolean(organizeAnchorEl);
-  const isAiToolsOpen = Boolean(aiToolsAnchorEl);
   const isSettingsOpen = Boolean(settingsAnchorEl);
-
-  const handlePlanningClick = (event: React.MouseEvent<HTMLButtonElement>) => setPlanningAnchorEl(event.currentTarget);
-  const handlePlanningClose = () => setPlanningAnchorEl(null);
-
-  const handleOrganizeClick = (event: React.MouseEvent<HTMLButtonElement>) => setOrganizeAnchorEl(event.currentTarget);
-  const handleOrganizeClose = () => setOrganizeAnchorEl(null);
-
-  const handleAiToolsClick = (event: React.MouseEvent<HTMLButtonElement>) => setAiToolsAnchorEl(event.currentTarget);
-  const handleAiToolsClose = () => setAiToolsAnchorEl(null);
 
   const handleSettingsClick = (event: React.MouseEvent<HTMLButtonElement>) => setSettingsAnchorEl(event.currentTarget);
   const handleSettingsClose = () => setSettingsAnchorEl(null);
 
-  const isPlanningActive = ['/loans', '/taxes'].includes(location.pathname);
-  const isOrganizeActive = ['/categories', '/rules', '/merchants'].includes(location.pathname);
-  const isAiToolsActive = ['/artifacts', '/local-model', '/ai-reference', '/api-playground'].includes(location.pathname);
-  const isSettingsActive = ['/import', '/settings', '/animation-playground', '/theme'].includes(location.pathname);
+
+  const isSettingsActive = SETTINGS_SECTIONS.flatMap(s => s.items).some(item => item.to === location.pathname);
 
   const [mem, setMem] = useState<{ used: number; total: number } | null>(null);
   useEffect(() => {
@@ -228,173 +216,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               );
             })}
 
-            {/* Planning Menu */}
-            <Button
-              id="planning-nav-button"
-              onClick={handlePlanningClick}
-              endIcon={<KeyboardArrowDownIcon />}
-              sx={{
-                color: isPlanningActive ? 'primary.main' : 'text.secondary',
-                textTransform: 'none',
-                fontWeight: isPlanningActive ? 600 : 500,
-                gap: 0.75,
-              }}
-            >
-              Planning
-            </Button>
-            {isPlanningOpen && (
-              <Menu
-                anchorEl={planningAnchorEl}
-                open={isPlanningOpen}
-                onClose={handlePlanningClose}
-                transitionDuration={0}
-                MenuListProps={{ 'aria-labelledby': 'planning-nav-button' }}
-                sx={{
-                  '& .MuiPaper-root': {
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                    minWidth: 160,
-                    mt: 0.5,
-                  }
-                }}
-              >
-                {PLANNING_NAV.map((item) => {
-                  const isItemActive = location.pathname === item.to;
-                  return (
-                    <MenuItem
-                      key={item.to}
-                      component={NavLink}
-                      to={item.to}
-                      onClick={handlePlanningClose}
-                      sx={{
-                        color: isItemActive ? 'primary.main' : 'text.primary',
-                        fontWeight: isItemActive ? 600 : 400,
-                        py: 1,
-                        px: 2,
-                        '&:hover': { bgcolor: 'action.hover' }
-                      }}
-                    >
-                      <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
-                        {item.label}
-                      </Typography>
-                    </MenuItem>
-                  );
-                })}
-              </Menu>
-            )}
 
-            {/* Organize Menu */}
-            <Button
-              id="organize-nav-button"
-              onClick={handleOrganizeClick}
-              endIcon={<KeyboardArrowDownIcon />}
-              sx={{
-                color: isOrganizeActive ? 'primary.main' : 'text.secondary',
-                textTransform: 'none',
-                fontWeight: isOrganizeActive ? 600 : 500,
-                gap: 0.75,
-              }}
-            >
-              Organize
-            </Button>
-            {isOrganizeOpen && (
-              <Menu
-                anchorEl={organizeAnchorEl}
-                open={isOrganizeOpen}
-                onClose={handleOrganizeClose}
-                transitionDuration={0}
-                MenuListProps={{ 'aria-labelledby': 'organize-nav-button' }}
-                sx={{
-                  '& .MuiPaper-root': {
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                    minWidth: 160,
-                    mt: 0.5,
-                  }
-                }}
-              >
-                {ORGANIZE_NAV.map((item) => {
-                  const isItemActive = location.pathname === item.to;
-                  return (
-                    <MenuItem
-                      key={item.to}
-                      component={NavLink}
-                      to={item.to}
-                      onClick={handleOrganizeClose}
-                      sx={{
-                        color: isItemActive ? 'primary.main' : 'text.primary',
-                        fontWeight: isItemActive ? 600 : 400,
-                        py: 1,
-                        px: 2,
-                        '&:hover': { bgcolor: 'action.hover' }
-                      }}
-                    >
-                      <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
-                        {item.label}
-                      </Typography>
-                    </MenuItem>
-                  );
-                })}
-              </Menu>
-            )}
-
-            {/* AI Tools Menu */}
-            <Button
-              id="aitools-nav-button"
-              onClick={handleAiToolsClick}
-              endIcon={<KeyboardArrowDownIcon />}
-              sx={{
-                color: isAiToolsActive ? 'primary.main' : 'text.secondary',
-                textTransform: 'none',
-                fontWeight: isAiToolsActive ? 600 : 500,
-                gap: 0.75,
-              }}
-            >
-              AI Tools
-            </Button>
-            {isAiToolsOpen && (
-              <Menu
-                anchorEl={aiToolsAnchorEl}
-                open={isAiToolsOpen}
-                onClose={handleAiToolsClose}
-                transitionDuration={0}
-                MenuListProps={{ 'aria-labelledby': 'aitools-nav-button' }}
-                sx={{
-                  '& .MuiPaper-root': {
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                    minWidth: 180,
-                    mt: 0.5,
-                  }
-                }}
-              >
-                {AI_NAV.map((item) => {
-                  const isItemActive = location.pathname === item.to;
-                  return (
-                    <MenuItem
-                      key={item.to}
-                      component={NavLink}
-                      to={item.to}
-                      onClick={handleAiToolsClose}
-                      sx={{
-                        color: isItemActive ? 'primary.main' : 'text.primary',
-                        fontWeight: isItemActive ? 600 : 400,
-                        py: 1,
-                        px: 2,
-                        '&:hover': { bgcolor: 'action.hover' }
-                      }}
-                    >
-                      <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
-                        {item.label}
-                      </Typography>
-                    </MenuItem>
-                  );
-                })}
-              </Menu>
-            )}
 
             {/* Settings Menu */}
             <Button
@@ -427,28 +249,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   }
                 }}
               >
-                {SETTINGS_NAV.map((item) => {
-                  const isItemActive = location.pathname === item.to;
-                  return (
-                    <MenuItem
-                      key={item.to}
-                      component={NavLink}
-                      to={item.to}
-                      onClick={handleSettingsClose}
-                      sx={{
-                        color: isItemActive ? 'primary.main' : 'text.primary',
-                        fontWeight: isItemActive ? 600 : 400,
-                        py: 1,
-                        px: 2,
-                        '&:hover': { bgcolor: 'action.hover' }
-                      }}
-                    >
-                      <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
-                        {item.label}
-                      </Typography>
-                    </MenuItem>
-                  );
-                })}
+                {SETTINGS_SECTIONS.map((section, idx) => [
+                  idx > 0 && <Divider key={`div-${section.title}`} sx={{ my: 0.5 }} />,
+                  <Typography key={`title-${section.title}`} variant="overline" color="text.secondary" sx={{ px: 2, display: 'block', lineHeight: 2 }}>{section.title}</Typography>,
+                  ...section.items.map((item) => {
+                    const isItemActive = location.pathname === item.to;
+                    return (
+                      <MenuItem
+                        key={item.to}
+                        component={NavLink}
+                        to={item.to}
+                        onClick={handleSettingsClose}
+                        sx={{
+                          color: isItemActive ? 'primary.main' : 'text.primary',
+                          fontWeight: isItemActive ? 600 : 400,
+                          py: 1,
+                          px: 2,
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
+                          {item.label}
+                        </Typography>
+                      </MenuItem>
+                    );
+                  })
+                ])}
               </Menu>
             )}
           </Box>
@@ -574,34 +400,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
           
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Planning</Typography>
-          {PLANNING_NAV.map((item) => (
-            <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton component={NavLink} to={item.to} onClick={() => setIsMobileNavOpen(false)} sx={{ borderRadius: 1, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' } }}>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            </ListItem>
-          ))}
+
           
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Organize</Typography>
-          {ORGANIZE_NAV.map((item) => (
-            <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton component={NavLink} to={item.to} onClick={() => setIsMobileNavOpen(false)} sx={{ borderRadius: 1, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' } }}>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            </ListItem>
-          ))}
-          
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>Settings</Typography>
-          {SETTINGS_NAV.map((item) => (
-            <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton component={NavLink} to={item.to} onClick={() => setIsMobileNavOpen(false)} sx={{ borderRadius: 1, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' } }}>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            </ListItem>
+          {SETTINGS_SECTIONS.map((section) => (
+            <Box key={section.title}>
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="overline" color="text.secondary" sx={{ px: 2, pb: 0.5, display: 'block' }}>{section.title}</Typography>
+              {section.items.map((item) => (
+                <ListItem key={item.to} disablePadding sx={{ mb: 0.5 }}>
+                  <ListItemButton component={NavLink} to={item.to} onClick={() => setIsMobileNavOpen(false)} sx={{ borderRadius: 1, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText' } }}>
+                    <ListItemText primary={item.label} />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </Box>
           ))}
         </List>
       </Drawer>

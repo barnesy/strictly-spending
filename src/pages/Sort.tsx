@@ -310,6 +310,7 @@ export default function Sort() {
 
     await (async () => {
       const toUpdateTxns: Transaction[] = [];
+      const addedPatterns = new Set<string>();
       for (const key of selectionKeys) {
         const sel = selections[key];
         const card = queue.find(c => c.merchantKey === key);
@@ -333,7 +334,8 @@ export default function Sort() {
           await api.putMerchantOverride({ merchantKey: key, recurrence: sel.recurrence as any }).catch(e => console.error(e));
         }
 
-        if (sel.saveRule && patternToSave) {
+        if (sel.saveRule && patternToSave && !addedPatterns.has(patternToSave)) {
+          addedPatterns.add(patternToSave);
           await api.addRule({ pattern: patternToSave, category: sel.category, priority: 1000, createdAt: new Date().toISOString() } as any).catch(e => console.error(e));
         }
       }
@@ -341,6 +343,10 @@ export default function Sort() {
       if (toUpdateTxns.length > 0) {
         // We use raw invoke to avoid the reactive mut() which spams db-update
         await api.bulkUpdateTransactions(toUpdateTxns).catch(e => console.error(e));
+        import('../queryClient').then(({ queryClient }) => {
+          queryClient.invalidateQueries({ queryKey: ['sortQueue'] });
+          queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        });
       }
     })();
 

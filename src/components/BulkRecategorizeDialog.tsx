@@ -177,9 +177,20 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
       // Re-evaluate recurrence status database-wide since overrides changed
       await refreshRecurrenceAll();
 
+      import('../queryClient').then(({ queryClient }) => {
+        queryClient.invalidateQueries({ queryKey: ['sortQueue'] });
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
+      });
+
       onClose();
-    } catch (e) {
-      setError((e).returning().message);
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      if (msg.includes('UNIQUE constraint failed')) {
+        setError('A rule with this pattern already exists.');
+      } else {
+        setError(msg);
+      }
       setSaving(false);
     }
   };

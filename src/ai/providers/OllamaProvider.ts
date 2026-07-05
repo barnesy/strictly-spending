@@ -214,20 +214,18 @@ export class OllamaProvider implements AIProvider {
     try {
       const prompt = `You are a financial categorization auditor running locally. 
 Review the following transaction descriptions and the category assigned to them by a simple rule engine.
-Respond with a JSON object containing a "results" array of strings, where each string is the BEST category for the transaction at the exact same index. 
+Respond with a JSON array of strings, where each string is the BEST category for the transaction at the exact same index. 
 You MUST choose from the following Available Categories EXACTLY (do not invent new ones):
-${availableCategories.map(c => `- ${c}`).join('\n')}
+[${availableCategories.join(', ')}]
 
 Transactions:
 ${transactions.map((t, i) => `${i+1}. Desc: "${t.desc}" | Rule Guessed: "${t.ruleCategory}"`).join('\n')}
 
 Example valid JSON output:
-{
-  "results": ["Dining", "Transportation", "Shopping"]
-}
+["Dining", "Transportation", "Shopping"]
 `;
 
-      let content = '{"results":[]}';
+      let content = '[]';
       try {
         const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
           model: this.modelName,
@@ -247,8 +245,8 @@ Example valid JSON output:
         console.error('Failed to parse AI classification response content:', content, err);
       }
 
-      if (parsed && Array.isArray(parsed.results) && parsed.results.length === transactions.length) {
-        return parsed.results.map((res: any, idx: number) => {
+      if (parsed && Array.isArray(parsed) && parsed.length === transactions.length) {
+        return parsed.map((res: any, idx: number) => {
           const val = String(res).trim();
           if (val && val !== 'Uncategorized' && availableCategories.includes(val)) {
             return val;
@@ -284,26 +282,24 @@ Review the following transaction descriptions and suggest:
 3. Whether this transaction is recurring (e.g. a subscription, rent, utility bill) or onetime.
 
 You MUST choose categories from the following Available Categories EXACTLY (do not invent new ones):
-${availableCategories.map(c => `- ${c}`).join('\n')}
+[${availableCategories.join(', ')}]
 
 Transactions:
 ${transactions.map((t, i) => `${i+1}. Desc: "${t.desc}" | Rule Guessed: "${t.ruleCategory}"`).join('\n')}
 
-Respond with a JSON object containing a "results" array of objects, where each object has:
-- "category": the suggested category
-- "pattern": the simplified keyword pattern
-- "recurrence": "recurring" or "onetime"
+Respond with EXACTLY a JSON array of arrays (one inner array for each transaction, in the exact same order). Each inner array MUST contain exactly 3 strings:
+1. The suggested category
+2. The simplified keyword pattern
+3. "r" for recurring or "o" for onetime
 
-Example valid JSON output:
-{
-  "results": [
-    { "category": "Restaurants & Coffee", "pattern": "starbucks", "recurrence": "onetime" },
-    { "category": "Entertainment", "pattern": "netflix", "recurrence": "recurring" }
-  ]
-}
+Example valid JSON output for 2 transactions:
+[
+  ["Restaurants & Coffee", "starbucks", "o"],
+  ["Entertainment", "netflix", "r"]
+]
 `;
 
-      let content = '{"results":[]}';
+      let content = '[]';
       try {
         const res = await invoke<{ content: string; tool_calls?: any[]; thinking?: string }>('run_copilot_chat', {
           model: this.modelName,
@@ -325,26 +321,36 @@ Example valid JSON output:
 
       const resultsList: { category: string; pattern: string; recurrence: 'recurring' | 'onetime' }[] = [];
 
-      if (parsed && Array.isArray(parsed.results) && parsed.results.length === transactions.length) {
+      if (parsed && Array.isArray(parsed) && parsed.length === transactions.length) {
         for (let idx = 0; idx < transactions.length; idx++) {
-          const item = parsed.results[idx];
-          const cat = item && typeof item === 'object' && item.category ? String(item.category).trim() : '';
-          const pat = item && typeof item === 'object' && item.pattern ? String(item.pattern).trim().toLowerCase() : '';
-          const rec = item && typeof item === 'object' && item.recurrence === 'recurring' ? 'recurring' : 'onetime';
-          
-          let finalCat = '';
-          if (cat && cat !== 'Uncategorized' && availableCategories.includes(cat)) {
-            finalCat = cat;
+          const item = parsed[idx];
+          if (Array.isArray(item) && item.length >= 3) {
+            const cat = String(item[0]).trim();
+            const pat = String(item[1]).trim().toLowerCase();
+            const recStr = String(item[2]).trim().toLowerCase();
+            const rec = recStr === 'r' || recStr === 'recurring' ? 'recurring' : 'onetime';
+            
+            let finalCat = '';
+            if (cat && cat !== 'Uncategorized' && availableCategories.includes(cat)) {
+              finalCat = cat;
+            } else {
+              const fallback = transactions[idx].ruleCategory;
+              finalCat = (fallback && fallback !== 'Uncategorized' && availableCategories.includes(fallback)) ? fallback : '';
+            }
+
+            resultsList.push({
+              category: finalCat,
+              pattern: pat || transactions[idx].desc.toLowerCase(),
+              recurrence: rec
+            });
           } else {
             const fallback = transactions[idx].ruleCategory;
-            finalCat = (fallback && fallback !== 'Uncategorized' && availableCategories.includes(fallback)) ? fallback : '';
+            resultsList.push({
+              category: (fallback && fallback !== 'Uncategorized' && availableCategories.includes(fallback)) ? fallback : '',
+              pattern: transactions[idx].desc.toLowerCase(),
+              recurrence: 'onetime'
+            });
           }
-
-          resultsList.push({
-            category: finalCat,
-            pattern: pat || transactions[idx].desc.toLowerCase(),
-            recurrence: rec
-          });
         }
       } else {
         // Fallback

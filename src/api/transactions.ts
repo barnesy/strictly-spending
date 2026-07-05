@@ -9,18 +9,18 @@ export const transactionSchema = z.object({
   date: z.string().min(10),
   description: z.string().min(1),
   amount: z.number(),
-  rawCategory: z.string().optional(),
+  rawCategory: z.string().nullable().optional(),
   category: z.string().min(1),
   source: z.enum(['chase', 'boa-credit', 'boa-checking', 'truist-checking', 'demo', 'custom']),
   merchantKey: z.string().min(1),
   userOverridden: z.boolean(),
   dedupKey: z.string().min(1),
-  importBatchId: z.number().optional(),
+  importBatchId: z.number().nullable().optional(),
   recurrence: z.enum(['recurring', 'onetime']),
   recurrenceOverride: z.enum(['recurring', 'onetime']).nullable().optional(),
-  isBusiness: z.boolean().optional(),
-  taxCategory: z.string().optional(),
-  deductionStatus: z.enum(['pending', 'confirmed', 'rejected']).optional()
+  isBusiness: z.boolean().nullable().optional(),
+  taxCategory: z.string().nullable().optional(),
+  deductionStatus: z.enum(['pending', 'confirmed', 'rejected']).nullable().optional()
 });
 
 export const transactionsApi = {

@@ -8,6 +8,7 @@ import MemoryIcon from '@mui/icons-material/Memory';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import NoAccountsIcon from '@mui/icons-material/NoAccounts';
 import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import AnimatedLogo from '../components/AnimatedLogo';
 import packageJson from '../../package.json';
 
@@ -90,7 +91,7 @@ export default function Landing() {
           Ingest multi-bank CSVs, apply intelligent categorization, and manage your budget entirely on your machine. Featuring an unlimited, free, and completely local AI assistant.
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mb: 10 }}>
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mb: 4 }}>
           <Button 
             variant="contained" 
             size="large" 
@@ -133,6 +134,21 @@ export default function Landing() {
           >
             Download for Windows
           </Button>
+        </Box>
+
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 10, px: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 2.5, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', maxWidth: '700px', textAlign: 'left' }}>
+            <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20, mt: 0.25 }} />
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151', mb: 0.5 }}>
+                Installation Notes
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5 }}>
+                <b>Mac:</b> If macOS warns that the app is "damaged" or cannot be verified, drag it to your <b>Applications</b> folder, Right-Click (or Control-Click) the app, and select <b>Open</b>. As a fallback, you can run <code style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>xattr -cr /Applications/Strictly\ Spending.app</code> in your terminal.<br/>
+                <b>Windows:</b> If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
+              </Typography>
+            </Box>
+          </Box>
         </Box>
 
         {/* Video Demo Section */}
@@ -262,7 +278,7 @@ export default function Landing() {
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 4, color: '#111827' }}>
             Ready to take control?
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mb: 4 }}>
             <Button 
               variant="contained" 
               size="large" 
@@ -305,6 +321,21 @@ export default function Landing() {
             >
               Download for Windows
             </Button>
+          </Box>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, px: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 2.5, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', maxWidth: '700px', textAlign: 'left' }}>
+              <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20, mt: 0.25 }} />
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151', mb: 0.5 }}>
+                  Installation Notes
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5 }}>
+                  <b>Mac:</b> If macOS warns that the app is "damaged" or cannot be verified, drag it to your <b>Applications</b> folder, Right-Click (or Control-Click) the app, and select <b>Open</b>. As a fallback, you can run <code style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: '4px' }}>xattr -cr /Applications/Strictly\ Spending.app</code> in your terminal.<br/>
+                  <b>Windows:</b> If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
+                </Typography>
+              </Box>
+            </Box>
           </Box>
         </Box>
 
