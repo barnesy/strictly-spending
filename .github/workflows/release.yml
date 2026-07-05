@@ -15,8 +15,6 @@ jobs:
         include:
           - platform: 'macos-latest' # This builds for arm64 (Apple Silicon) on modern GitHub runners
             args: ''
-          - platform: 'macos-13' # This builds for Intel (x86_64) on older GitHub runners
-            args: ''
           - platform: 'windows-latest'
             args: '--bundles nsis'
 
@@ -27,7 +25,7 @@ jobs:
       - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
