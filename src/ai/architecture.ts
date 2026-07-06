@@ -199,10 +199,10 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
         properties: {
           action: { type: "string", enum: ["get", "create", "update", "delete"] },
           loanId: { type: "number" },
-          loanData: { type: "object", description: "Loan details needed for creation or updates." },
-          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed creation/update/deletion." }
+          loanData: { type: "object", description: "Loan details needed for creation or updates. Make educated guesses for any missing required data when creating." },
+          confirmed: { type: "boolean", description: "Set to true ONLY if the user has explicitly confirmed an update/deletion. Confirmation is NOT required for creation." }
         },
-        required: ["action", "confirmed"]
+        required: ["action"]
       }
     }
   },
@@ -343,9 +343,9 @@ export const AGENT_TOOLS: AgentToolInfo[] = [
               }
             }
           },
-          confirmed: { type: "boolean", description: "Set to true ONLY if the user has already explicitly confirmed creation/update/deletion." }
+          confirmed: { type: "boolean", description: "Set to true ONLY if the user has explicitly confirmed an update/deletion. Confirmation is NOT required for creation." }
         },
-        required: ["action", "confirmed"]
+        required: ["action"]
       }
     }
   }

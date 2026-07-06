@@ -19,7 +19,7 @@ export const loanSchema = z.object({
   extraOneTimePayment: z.number().optional(),
   extraOneTimeMonth: z.number().optional(),
   createdAt: z.string().min(1),
-  enabled: z.boolean().optional()
+  enabled: z.boolean().nullish()
 });
 
 export const loansApi = {

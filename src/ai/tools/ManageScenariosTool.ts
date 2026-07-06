@@ -37,9 +37,9 @@ export class ManageScenariosTool implements AIToolHandler {
       };
     }
 
-    if (['create', 'update', 'delete'].includes(action)) {
+    if (['update', 'delete'].includes(action)) {
       if (!confirmed) {
-        if ((action === 'create' || action === 'update') && scenarioData) {
+        if (action === 'update' && scenarioData) {
           useForecastStore.getState().loadScenario(scenarioData);
         }
         return { 
@@ -50,6 +50,16 @@ export class ManageScenariosTool implements AIToolHandler {
 
     if (action === 'create') {
       if (!scenarioData || !scenarioData.name) return { actionResult: { status: 'error', message: 'scenarioData with name is required' } };
+      
+      scenarioData.startingBalance = scenarioData.startingBalance ?? 0;
+      scenarioData.baseIncome = scenarioData.baseIncome ?? 0;
+      scenarioData.taxRate = scenarioData.taxRate ?? 0;
+      scenarioData.recurringBudget = scenarioData.recurringBudget ?? 0;
+      scenarioData.variableBudget = scenarioData.variableBudget ?? 0;
+      scenarioData.savingsBudget = scenarioData.savingsBudget ?? 0;
+      scenarioData.extraLoanPayment = scenarioData.extraLoanPayment ?? 0;
+      scenarioData.loanStrategy = scenarioData.loanStrategy || 'avalanche';
+
       const id = await api.scenariosApi.create(scenarioData);
       return { actionResult: { status: 'success', message: 'Scenario created', id } };
     }
