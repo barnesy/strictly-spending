@@ -280,5 +280,31 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
         phase: 'execution'
       }
     ]
+  },
+  {
+    id: 'create_loan_playbook',
+    title: 'Create Loan Playbook',
+    description: 'An AI Copilot playbook for creating loans based on user input, using reasonable default values for any unspecified parameters.',
+    steps: [
+      {
+        endpoint: 'manage_loans',
+        description: 'Call manage_loans with action "create". CRITICAL RULES: 1. You MUST infer or guess reasonable defaults for missing values like interest rate (rate), term (termYears), or start dates. Do not ask the user for missing data or stall. 2. Remember interest rates (rate) should be specified as whole numbers (e.g. 6.5 for 6.5%). Present the generated loan to the user to view or edit.',
+        defaultArgs: [
+          {
+            action: 'create',
+            loanData: {
+              name: 'New Loan',
+              type: 'house',
+              principal: 0,
+              rate: 6.5,
+              termYears: 30,
+              startDate: '2026-07-06',
+              category: 'Debt'
+            }
+          }
+        ],
+        phase: 'execution'
+      }
+    ]
   }
 ];

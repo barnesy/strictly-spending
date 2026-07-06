@@ -28,6 +28,7 @@ import {
 } from '../../ai';
 
 import { useChatStore } from '../../stores/chatStore';
+import { useForecastStore } from '../../stores/forecastStore';
 import SimpleMarkdown from '../SimpleMarkdown';
 import CopilotQueryResult from '../CopilotQueryResult';
 import { GenUXConfirmation, GenUXForm, ProposedCategorizationReportUX } from './GenUXComponents';
@@ -147,6 +148,8 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
     ['create_artifact', 'update_artifact'].includes(
       message.actionResult.action
     );
+
+  const isGenUxCard = message.actionResult && ['manage_scenarios_create', 'create_loan'].includes(message.actionResult.action);
 
   // Memoize parsed JSON so it is only computed once per message content change
   const hasAgentAction = useMemo(() => {
@@ -732,6 +735,56 @@ export const ChatMessageItem = React.memo(function ChatMessageItem({
                 sx={{ textTransform: 'none', alignSelf: 'flex-start' }}
               >
                 Open Artifact
+              </Button>
+            </Stack>
+          </Paper>
+        </Box>
+      )}
+
+      {isGenUxCard && message.actionResult && (
+        <Box sx={{ width: '85%', mt: 0.5 }}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 1.5,
+              bgcolor: 'background.paper',
+              borderColor: 'divider',
+              borderRadius: 1,
+            }}
+          >
+            <Stack spacing={1}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                }}
+              >
+                {message.actionResult.action === 'manage_scenarios_create' ? '📈 Scenario Created' : '🏦 Loan Created'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
+                <strong>Name:</strong> {message.actionResult.title}
+              </Typography>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={async () => {
+                  if (message.actionResult.action === 'manage_scenarios_create') {
+                    const scenarios = await api.scenariosApi.list();
+                    const scenario = scenarios.find((s) => s.id === message.actionResult?.id);
+                    if (scenario) {
+                      useForecastStore.getState().loadScenario(scenario);
+                    }
+                    navigate('/forecast');
+                  } else {
+                    navigate('/loans');
+                  }
+                }}
+                sx={{ textTransform: 'none', alignSelf: 'flex-start' }}
+              >
+                {message.actionResult.action === 'manage_scenarios_create' ? 'View Scenario' : 'View Loan'}
               </Button>
             </Stack>
           </Paper>

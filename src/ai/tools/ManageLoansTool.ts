@@ -13,7 +13,7 @@ export class ManageLoansTool implements AIToolHandler {
       };
     }
 
-    const { action, loanId, loanData } = actionObj;
+    let { action, loanId, loanData } = actionObj;
 
     if (action === 'get') {
       const loans = await api.getLoans();
@@ -24,15 +24,21 @@ export class ManageLoansTool implements AIToolHandler {
     }
 
     if (action === 'create') {
-      if (!loanData || !loanData.name || !loanData.type || !loanData.principal || !loanData.rate || !loanData.termYears || !loanData.startDate || !loanData.category) {
-        return { feedbackError: 'Missing required loan fields (name, type, principal, rate, termYears, startDate, category)' };
-      }
+      loanData = loanData || {};
+      loanData.name = loanData.name || 'New Loan';
+      loanData.type = loanData.type || 'house';
+      loanData.principal = loanData.principal ?? 0;
+      loanData.rate = loanData.rate ?? 6.5;
+      loanData.termYears = loanData.termYears ?? 30;
+      loanData.startDate = loanData.startDate || new Date().toISOString().split('T')[0];
+      loanData.category = loanData.category || 'Debt';
+
       if (!loanData.createdAt) {
         loanData.createdAt = new Date().toISOString();
       }
       const newId = await api.addLoan(loanData as Loan);
       return {
-        actionResult: { action: 'create_loan', id: newId },
+        actionResult: { action: 'create_loan', id: newId, title: loanData.name },
       };
     }
 

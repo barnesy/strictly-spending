@@ -61,7 +61,7 @@ export class ManageScenariosTool implements AIToolHandler {
       scenarioData.loanStrategy = scenarioData.loanStrategy || 'avalanche';
 
       const id = await api.scenariosApi.create(scenarioData);
-      return { actionResult: { status: 'success', message: 'Scenario created', id } };
+      return { actionResult: { status: 'success', message: 'Scenario created', action: 'manage_scenarios_create', id, title: scenarioData.name } };
     }
 
     if (action === 'update') {
