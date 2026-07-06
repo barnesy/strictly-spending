@@ -1,4 +1,4 @@
-import { Box, Button, Container, Typography, Grid, Paper, Chip, IconButton, Tooltip } from '@mui/material';
+import { Box, Button, Container, Typography, Grid, Paper, Chip, IconButton, Tooltip, Accordion, AccordionSummary, AccordionDetails, Alert } from '@mui/material';
 import { useState } from 'react';
 import AppleIcon from '@mui/icons-material/Apple';
 import WindowIcon from '@mui/icons-material/Window';
@@ -12,6 +12,8 @@ import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import GitHubIcon from '@mui/icons-material/GitHub';
 import AnimatedLogo from '../components/AnimatedLogo';
 import packageJson from '../../package.json';
 
@@ -25,32 +27,38 @@ function InstallationNotes() {
   };
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 2.5, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', maxWidth: '700px', textAlign: 'left' }}>
-      <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20, mt: 0.25 }} />
-      <Box sx={{ width: '100%' }}>
-        <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151', mb: 0.5 }}>
-          Installation Notes
-        </Typography>
-        <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5, mb: 1 }}>
-          <b>Mac:</b> If macOS warns that the app is "damaged" or cannot be verified, drag it to your <b>Applications</b> folder, Right-Click (or Control-Click) the app, and select <b>Open</b>. As a fallback, you can run this command in your terminal:
-        </Typography>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: 'rgba(0,0,0,0.04)', borderRadius: '6px', p: 1, pl: 1.5, mb: 1.5, border: '1px solid rgba(0,0,0,0.05)' }}>
-          <Typography variant="body2" sx={{ fontFamily: 'monospace', color: '#111827' }}>
-            xattr -cr /Applications/Strictly\ Spending.app
+    <Accordion sx={{ width: '100%', bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', '&:before': { display: 'none' }, border: '1px solid rgba(0,0,0,0.06)', boxShadow: 'none' }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ '& .MuiAccordionSummary-content': { my: 1.5 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20 }} />
+          <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151' }}>
+            Installation Notes & Troubleshooting
           </Typography>
-          <Tooltip title={copied ? "Copied!" : "Copy command"}>
-            <IconButton size="small" onClick={handleCopyCommand} sx={{ color: copied ? '#10B981' : '#6B7280', p: 0.5 }}>
-              {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
         </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ pt: 0, pb: 2.5, px: 2.5, textAlign: 'left' }}>
+        <Alert severity="warning" sx={{ mb: 2, borderRadius: '8px', '& .MuiAlert-message': { width: '100%' } }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Mac Users</Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            If macOS warns that the app is "damaged" or cannot be verified, you must allow it to run. As a fallback to Right-Clicking and opening, run this command in your terminal after installing the application:
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: 'rgba(255,255,255,0.7)', borderRadius: '6px', p: 1, pl: 1.5, border: '1px solid rgba(0,0,0,0.1)' }}>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', color: '#111827' }}>
+              xattr -cr /Applications/Strictly\ Spending.app
+            </Typography>
+            <Tooltip title={copied ? "Copied!" : "Copy command"}>
+              <IconButton size="small" onClick={handleCopyCommand} sx={{ color: copied ? '#10B981' : '#6B7280', p: 0.5 }}>
+                {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Alert>
 
-        <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5 }}>
-          <b>Windows:</b> If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
+        <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5, mt: 2 }}>
+          <b>Windows:</b> You may need to allow the app to run on your PC. If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
         </Typography>
-      </Box>
-    </Box>
+      </AccordionDetails>
+    </Accordion>
   );
 }
 
@@ -60,7 +68,7 @@ export default function Landing() {
       const response = await fetch('https://api.github.com/repos/barnesy/strictly-spending/releases/latest');
       if (!response.ok) throw new Error('Failed to fetch release');
       const data = await response.json();
-      
+
       let asset;
       if (platform === 'mac') {
         asset = data.assets.find((a: any) => a.name.endsWith('.dmg') || a.name.endsWith('.app.tar.gz'));
@@ -80,13 +88,13 @@ export default function Landing() {
   };
 
   return (
-    <Box sx={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <Box sx={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
       overflowY: 'auto',
       bgcolor: '#FAFAFA', // Clean light background
-      color: '#111827', 
+      color: '#111827',
       fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
       letterSpacing: '-0.02em',
     }}>
@@ -102,22 +110,32 @@ export default function Landing() {
 
       {/* Hero Section */}
       <Container maxWidth="lg" sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', py: { xs: 8, md: 12 }, textAlign: 'center' }}>
-        
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-          <Chip 
-            label="Fully Private Budgeting & Local AI" 
-            sx={{ 
-              bgcolor: 'rgba(0,0,0,0.04)', 
-              color: '#374151', 
-              fontWeight: 600, 
+
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3, gap: 1 }}>
+          <Chip
+            label="Beta Version"
+            sx={{
+              bgcolor: 'rgba(239,68,68,0.1)',
+              color: '#DC2626',
+              fontWeight: 700,
+              border: '1px solid rgba(239,68,68,0.2)',
+              backdropFilter: 'blur(10px)',
+            }}
+          />
+          <Chip
+            label="Fully Private Budgeting & Local AI"
+            sx={{
+              bgcolor: 'rgba(0,0,0,0.04)',
+              color: '#374151',
+              fontWeight: 600,
               border: '1px solid rgba(0,0,0,0.1)',
               backdropFilter: 'blur(10px)',
-            }} 
+            }}
           />
         </Box>
 
-        <Typography variant="h1" component="h1" sx={{ 
-          fontWeight: 800, 
+        <Typography variant="h1" component="h1" sx={{
+          fontWeight: 800,
           fontSize: { xs: '3rem', md: '4.5rem' },
           lineHeight: 1.1,
           mb: 3,
@@ -126,65 +144,71 @@ export default function Landing() {
           WebkitTextFillColor: 'transparent',
           textShadow: '0px 4px 20px rgba(0,0,0,0.05)'
         }}>
-          Infinite Intelligence,<br />Absolute Privacy.
+          Unlimited intelligence,<br />Absolute Privacy.
         </Typography>
-        
+
         <Typography variant="h5" sx={{ mb: 6, maxWidth: '700px', mx: 'auto', lineHeight: 1.5, color: '#4B5563', fontWeight: 400 }}>
-          Ingest multi-bank CSVs, apply intelligent categorization, and manage your budget entirely on your machine. Featuring an unlimited, free, and completely local AI assistant.
+          <b>Note: This is an Early Access version.</b> Ingest multi-bank CSVs, apply intelligent categorization, and manage your budget entirely on your machine. Featuring an unlimited, free, and completely local AI assistant.
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mb: 4 }}>
-          <Button 
-            variant="contained" 
-            size="large" 
-            startIcon={<AppleIcon />}
-            onClick={() => handleDownload('mac')}
-            sx={{ 
-              borderRadius: '8px', 
-              py: 3.5, 
-              px: 6, 
-              textTransform: 'none', 
-              fontWeight: 600,
-              fontSize: '1.1rem',
-              bgcolor: '#000000',
-              color: '#FFFFFF',
-              '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)' },
-              transition: 'all 0.2s'
-            }}
-          >
-            Download for Mac
-          </Button>
-          <Button 
-            variant="contained" 
-            size="large" 
-            startIcon={<WindowIcon />}
-            onClick={() => handleDownload('windows')}
-            sx={{ 
-              borderRadius: '8px', 
-              py: 3.5, 
-              px: 6, 
-              textTransform: 'none', 
-              fontWeight: 600,
-              fontSize: '1.1rem',
-              bgcolor: '#FFFFFF',
-              color: '#111827',
-              border: '1px solid #D1D5DB',
-              '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)' },
-              transition: 'all 0.2s',
-              boxShadow: 'none',
-            }}
-          >
-            Download for Windows
-          </Button>
-        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '700px', width: '100%', mx: 'auto', px: 2, mb: 10 }}>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<AppleIcon />}
+              onClick={() => handleDownload('mac')}
+              sx={{
+                flex: 1,
+                width: { xs: '100%', sm: 'auto' },
+                borderRadius: '8px',
+                py: 3.5,
+                px: 3,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '1.1rem',
+                bgcolor: '#000000',
+                color: '#FFFFFF',
+                '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)' },
+                transition: 'all 0.2s'
+              }}
+            >
+              Download for Mac
+            </Button>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<WindowIcon />}
+              onClick={() => handleDownload('windows')}
+              sx={{
+                flex: 1,
+                width: { xs: '100%', sm: 'auto' },
+                borderRadius: '8px',
+                py: 3.5,
+                px: 3,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '1.1rem',
+                bgcolor: '#FFFFFF',
+                color: '#111827',
+                border: '1px solid #D1D5DB',
+                '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)' },
+                transition: 'all 0.2s',
+                boxShadow: 'none',
+              }}
+            >
+              Download for Windows
+            </Button>
+          </Box>
 
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 10, px: 2 }}>
-          <InstallationNotes />
+          <Box sx={{ width: '100%' }}>
+            <InstallationNotes />
+          </Box>
         </Box>
 
         {/* Video Demo Section */}
-        <Box sx={{ maxWidth: '1000px', mx: 'auto', width: '100%' }}>
-          <Paper elevation={12} sx={{ 
+        <Box sx={{ maxWidth: '1200px', mx: 'auto', width: '100%' }}>
+          <Paper elevation={12} sx={{
             borderRadius: '12px',
             overflow: 'hidden',
             bgcolor: '#FFFFFF',
@@ -201,17 +225,19 @@ export default function Landing() {
             </Box>
             {/* Mockup Content - Video */}
             <Box sx={{ width: '100%', lineHeight: 0 }}>
-              <video 
-                src={`${import.meta.env.BASE_URL}strictly-spending.mp4`} 
-                autoPlay 
-                loop 
-                muted 
-                playsInline 
-                style={{ width: '100%', height: 'auto', display: 'block' }} 
+              <video
+                src={`${import.meta.env.BASE_URL}strictly-spending.mp4`}
+                autoPlay
+                loop
+                muted
+                playsInline
+                style={{ width: '100%', height: 'auto', display: 'block' }}
               />
             </Box>
           </Paper>
         </Box>
+
+
 
         {/* Features Section */}
         <Grid container spacing={4} sx={{ mt: { xs: 10, md: 16 } }}>
@@ -309,53 +335,79 @@ export default function Landing() {
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 4, color: '#111827' }}>
             Ready to take control?
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mb: 4 }}>
-            <Button 
-              variant="contained" 
-              size="large" 
-              startIcon={<AppleIcon />}
-              onClick={() => handleDownload('mac')}
-              sx={{ 
-                borderRadius: '8px', 
-                py: 4, 
-                px: 6, 
-                textTransform: 'none', 
-                fontWeight: 700,
-                fontSize: '1.2rem',
-                bgcolor: '#000000',
-                color: '#FFFFFF',
-                '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)' },
-                transition: 'all 0.2s'
-              }}
-            >
-              Download for Mac
-            </Button>
-            <Button 
-              variant="contained" 
-              size="large" 
-              startIcon={<WindowIcon />}
-              onClick={() => handleDownload('windows')}
-              sx={{ 
-                borderRadius: '8px', 
-                py: 4, 
-                px: 6, 
-                textTransform: 'none', 
-                fontWeight: 700,
-                fontSize: '1.2rem',
-                bgcolor: '#FFFFFF',
-                color: '#111827',
-                border: '1px solid #D1D5DB',
-                '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)' },
-                transition: 'all 0.2s',
-                boxShadow: 'none',
-              }}
-            >
-              Download for Windows
-            </Button>
-          </Box>
-          
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, px: 2 }}>
-            <InstallationNotes />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '700px', width: '100%', mx: 'auto', px: 2, mb: 4 }}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<AppleIcon />}
+                onClick={() => handleDownload('mac')}
+                sx={{
+                  flex: 1,
+                  width: { xs: '100%', sm: 'auto' },
+                  borderRadius: '8px',
+                  py: 4,
+                  px: 3,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: '1.2rem',
+                  bgcolor: '#000000',
+                  color: '#FFFFFF',
+                  '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)' },
+                  transition: 'all 0.2s'
+                }}
+              >
+                Download for Mac
+              </Button>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<WindowIcon />}
+                onClick={() => handleDownload('windows')}
+                sx={{
+                  flex: 1,
+                  width: { xs: '100%', sm: 'auto' },
+                  borderRadius: '8px',
+                  py: 4,
+                  px: 3,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: '1.2rem',
+                  bgcolor: '#FFFFFF',
+                  color: '#111827',
+                  border: '1px solid #D1D5DB',
+                  '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)' },
+                  transition: 'all 0.2s',
+                  boxShadow: 'none',
+                }}
+              >
+                Download for Windows
+              </Button>
+            </Box>
+
+            <Box sx={{ width: '100%' }}>
+              <InstallationNotes />
+            </Box>
+
+            <Paper elevation={0} sx={{ p: 3, width: '100%', bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px dashed rgba(0,0,0,0.15)', textAlign: 'left' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                <GitHubIcon sx={{ color: '#374151' }} />
+                <Typography variant="body1" sx={{ fontWeight: 600, color: '#111827' }}>
+                  Open Source & Developer Friendly
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ color: '#4B5563', lineHeight: 1.6, mb: 2 }}>
+                Strictly Spending is an open-source project. We invite developers and tinkerers to install via GitHub. Feel free to collaborate, fork the project, and contribute to building the most private budgeting app available!
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => window.open('https://github.com/barnesy/strictly-spending', '_blank')}
+                sx={{ textTransform: 'none', fontWeight: 600, color: '#374151', borderColor: 'rgba(0,0,0,0.15)', '&:hover': { bgcolor: 'rgba(0,0,0,0.04)', borderColor: 'rgba(0,0,0,0.3)' } }}
+              >
+                View on GitHub
+              </Button>
+            </Paper>
           </Box>
         </Box>
 
