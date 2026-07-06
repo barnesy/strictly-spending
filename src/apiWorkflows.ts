@@ -251,5 +251,34 @@ export const API_WORKFLOWS: ApiWorkflow[] = [
         phase: 'execution'
       }
     ]
+  },
+  {
+    id: 'create_forecast_scenario',
+    title: 'Create Forecast Scenario Playbook',
+    description: 'An AI Copilot playbook for generating a Forecast Scenario based on user constraints, using reasonable default values for any unspecified parameters.',
+    steps: [
+      {
+        endpoint: 'manage_scenarios',
+        description: 'Call manage_scenarios with action "create" and confirmed "false". CRITICAL RULES: 1. All money fields (baseIncome, recurringBudget, variableBudget, savingsBudget, extraLoanPayment) are STRICTLY MONTHLY amounts. 2. The exact formula for "safe cash" (monthly remainder) is: (baseIncome - (baseIncome * taxRate / 100)) - recurringBudget - variableBudget - savingsBudget - extraLoanPayment - (sum of monthly goal contributions). 3. You MUST mathematically infer reasonable defaults for missing values so the remainder perfectly matches the user\'s target "safe cash". Do not query for missing data or stall. Present the generated scenario to the user to confirm.',
+        defaultArgs: [
+          {
+            action: 'create',
+            confirmed: false,
+            scenarioData: {
+              name: 'AI Generated Scenario',
+              startingBalance: 10000,
+              baseIncome: 5000,
+              taxRate: 20,
+              recurringBudget: 2000,
+              variableBudget: 1000,
+              savingsBudget: 1000,
+              extraLoanPayment: 0,
+              loanStrategy: 'avalanche'
+            }
+          }
+        ],
+        phase: 'execution'
+      }
+    ]
   }
 ];

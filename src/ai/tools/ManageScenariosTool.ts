@@ -39,12 +39,11 @@ export class ManageScenariosTool implements AIToolHandler {
 
     if (['create', 'update', 'delete'].includes(action)) {
       if (!confirmed) {
+        if ((action === 'create' || action === 'update') && scenarioData) {
+          useForecastStore.getState().loadScenario(scenarioData);
+        }
         return { 
-          actionResult: {
-            status: 'awaiting_confirmation', 
-            message: `Are you sure you want to ${action} this scenario?`,
-            pendingAction: action
-          }
+          feedbackError: 'SECURITY EXCEPTION: You attempted to modify a scenario without user confirmation. You MUST call the `request_user_confirmation` tool first. Only after the user confirms should you call this tool again with `confirmed: true`.'
         };
       }
     }

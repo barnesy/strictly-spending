@@ -93,6 +93,28 @@ export function buildDemoTransactions(
     });
   }
 
+  // Home loan (Mortgage) — 1st
+  for (const m of months) {
+    out.push({
+      date: isoDate(year, m, 1),
+      description: 'DEMO HOME MORTGAGE',
+      amount: -2150,
+      category: 'Home Loan',
+      account: 'checking',
+    });
+  }
+
+  // Student loan — 28th
+  for (const m of months) {
+    out.push({
+      date: isoDate(year, m, 28),
+      description: 'DEMO STUDENT LOAN',
+      amount: -450,
+      category: 'Student Loan',
+      account: 'checking',
+    });
+  }
+
   // Insurance — 20th
   for (const m of months) {
     out.push({
@@ -421,6 +443,11 @@ export async function seedDemoData(): Promise<SeedResult> {
   await api.putMerchantOverride({ merchantKey: 'claudeai', recurrence: 'monthly' });
   await api.putMerchantOverride({ merchantKey: 'spotify', recurrence: 'monthly' });
   await api.putMerchantOverride({ merchantKey: 'applemusic', recurrence: 'monthly' });
+  
+  // Link demo loans to their merchants for recurring tracking
+  await api.putMerchantOverride({ merchantKey: 'autofinance', recurrence: 'monthly' });
+  await api.putMerchantOverride({ merchantKey: 'homemortgage', recurrence: 'monthly' });
+  await api.putMerchantOverride({ merchantKey: 'studentloan', recurrence: 'monthly' });
 
   // 2. Build transactions for the current year through this month, and all of last year
   const demoTxnsThisYear = buildDemoTransactions(year, throughMonth);
@@ -481,6 +508,9 @@ export async function clearDemoData(): Promise<ClearResult> {
   await api.deleteMerchantOverride('claudeai');
   await api.deleteMerchantOverride('spotify');
   await api.deleteMerchantOverride('applemusic');
+  await api.deleteMerchantOverride('autofinance');
+  await api.deleteMerchantOverride('homemortgage');
+  await api.deleteMerchantOverride('studentloan');
 
   return {
     removedTransactions: demoTxns.length,

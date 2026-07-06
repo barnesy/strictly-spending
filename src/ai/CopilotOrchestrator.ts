@@ -320,6 +320,10 @@ ${JSON.stringify(runwayData, null, 2)}`;
           }
         }
 
+        if (Array.isArray(parsedArgs) && parsedArgs.length > 0) {
+          parsedArgs = parsedArgs[0];
+        }
+
         actionObj = {
           toolName: call.name,
           ...parsedArgs

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Box, Typography, Paper, Slider, useTheme, Grid, ToggleButtonGroup, ToggleButton, TextField, Button, IconButton, Snackbar, FormControl, InputLabel, Select, MenuItem, Stack, Switch, FormControlLabel } from '@mui/material';
+import { Box, Typography, Paper, Slider, useTheme, Grid, ToggleButtonGroup, ToggleButton, TextField, Button, IconButton, Snackbar, FormControl, InputLabel, Select, MenuItem, Stack, Switch, FormControlLabel, Dialog, DialogTitle, DialogContent, DialogActions, Menu, Tooltip } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Group as PanelGroup,
@@ -10,6 +10,8 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import SettingsIcon from '@mui/icons-material/Settings';
 import FlagIcon from '@mui/icons-material/Flag';
+import SaveIcon from '@mui/icons-material/Save';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { invoke } from '@tauri-apps/api/core';
 import * as echarts from 'echarts';
 import { usd } from '../lib';
@@ -70,6 +72,51 @@ export default function Forecast() {
   // selectedScenarioId was duplicated, keeping only one declaration
   const [selectedScenarioId, setSelectedScenarioId] = useState<number | ''>('');
   const [scenarioName, setScenarioName] = useState('');
+  
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveMenuAnchorEl, setSaveMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const saveMenuOpen = Boolean(saveMenuAnchorEl);
+
+  const saveScenarioToDb = (name: string, idToUpdate?: number) => {
+    const data: Scenario = {
+      name,
+      startingBalance,
+      baseIncome,
+      taxRate,
+      recurringBudget,
+      variableBudget,
+      savingsBudget,
+      investmentGrowthRate,
+      extraLoanPayment,
+      divertExtraToSavings,
+      loanStrategy,
+      goals
+    };
+    if (idToUpdate) {
+      updateScenario.mutate({ ...data, id: idToUpdate }, {
+        onSuccess: () => setSnackbarMessage('Scenario updated')
+      });
+    } else {
+      createScenario.mutate(data, {
+        onSuccess: (id: number) => {
+          setSelectedScenarioId(id);
+          setSnackbarMessage('Scenario created');
+        }
+      });
+    }
+  };
+
+  const handleQuickSave = () => {
+    if (selectedScenarioId) {
+      const s = scenarios.find(x => x.id === selectedScenarioId);
+      if (s) {
+        saveScenarioToDb(s.name, selectedScenarioId as number);
+        return;
+      }
+    }
+    setScenarioName('');
+    setSaveDialogOpen(true);
+  };
 
   const debtChartRef = useRef<HTMLDivElement>(null);
   const cashflowChartRef = useRef<HTMLDivElement>(null);
@@ -228,10 +275,83 @@ export default function Forecast() {
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'flex-end' }, mb: 4, gap: 2, flexShrink: 0 }}>
         <Box>
           <Typography variant="h4" fontWeight={700} mb={1}>Financial Forecast</Typography>
-          <Typography variant="subtitle1" color="text.secondary">Gamify your debt payoff and savings goals.</Typography>
         </Box>
         
         <Stack direction="row" spacing={2} alignItems="flex-end">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, height: 40 }}>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <Select
+                variant="standard"
+                value={selectedScenarioId}
+                displayEmpty
+                onChange={(e) => {
+                  const id = e.target.value as number;
+                  const s = scenarios.find(x => x.id === id);
+                  if (s) {
+                    setSelectedScenarioId(s.id || '');
+                    setScenarioName(s.name);
+                    useForecastStore.getState().loadScenario(s);
+                  } else {
+                    setSelectedScenarioId('');
+                  }
+                }}
+                renderValue={(selected) => {
+                  if (!selected) {
+                    return <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary', fontWeight: 500 }}>Unsaved Scenario</Typography>;
+                  }
+                  return <Typography variant="body2" sx={{ fontWeight: 600 }}>{scenarios.find(s => s.id === selected)?.name}</Typography>;
+                }}
+              >
+                <MenuItem value=""><em>Unsaved Scenario</em></MenuItem>
+                {scenarios.map(s => (
+                  <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Tooltip title={selectedScenarioId ? "Update Scenario" : "Save Scenario"}>
+              <IconButton size="small" onClick={handleQuickSave} color="primary">
+                <SaveIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="More Options">
+              <IconButton size="small" onClick={(e) => setSaveMenuAnchorEl(e.currentTarget)}>
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={saveMenuAnchorEl}
+              open={saveMenuOpen}
+              onClose={() => setSaveMenuAnchorEl(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <MenuItem onClick={() => {
+                setSaveMenuAnchorEl(null);
+                setScenarioName(selectedScenarioId ? `${scenarios.find(s => s.id === selectedScenarioId)?.name} (Copy)` : '');
+                setSaveDialogOpen(true);
+              }}>
+                Save As New...
+              </MenuItem>
+              <MenuItem 
+                disabled={!selectedScenarioId} 
+                onClick={() => {
+                  setSaveMenuAnchorEl(null);
+                  if (selectedScenarioId) {
+                    deleteScenario.mutate(selectedScenarioId as number, {
+                      onSuccess: () => {
+                        setSelectedScenarioId('');
+                        setScenarioName('');
+                        setSnackbarMessage('Scenario deleted');
+                      }
+                    });
+                  }
+                }}
+                sx={{ color: 'error.main' }}
+              >
+                Delete Scenario
+              </MenuItem>
+            </Menu>
+          </Box>
           <ToggleButtonGroup size="small" sx={{ height: 40 }}>
             <ToggleButton
               value="settings"
@@ -275,89 +395,6 @@ export default function Forecast() {
           <Box sx={{ height: '100%', overflow: 'auto' }}>
             <Paper sx={{ minWidth: 320, minHeight: '100%', p: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
               <Typography variant="h6" fontWeight="600" mb={4}>Simulator Settings</Typography>
-            
-            <Box sx={{ mb: 4, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-              <Typography variant="subtitle2" fontWeight="600" gutterBottom>Saved Scenarios</Typography>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Load Scenario</InputLabel>
-                  <Select
-                    label="Load Scenario"
-                    value={selectedScenarioId}
-                    onChange={(e) => {
-                      const id = e.target.value as number;
-                      const s = scenarios.find(x => x.id === id);
-                      if (s) {
-                        setSelectedScenarioId(s.id || '');
-                        setScenarioName(s.name);
-                        useForecastStore.getState().loadScenario(s);
-                      }
-                    }}
-                  >
-                    <MenuItem value=""><em>None</em></MenuItem>
-                    {scenarios.map(s => (
-                      <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {selectedScenarioId !== '' && (
-                  <IconButton color="error" onClick={() => {
-                    deleteScenario.mutate(selectedScenarioId as number, {
-                      onSuccess: () => {
-                        setSelectedScenarioId('');
-                        setScenarioName('');
-                        setSnackbarMessage('Scenario deleted');
-                      }
-                    });
-                  }}>
-                    <DeleteIcon />
-                  </IconButton>
-                )}
-              </Box>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <TextField
-                  size="small"
-                  label="Scenario Name"
-                  fullWidth
-                  value={scenarioName}
-                  onChange={(e) => setScenarioName(e.target.value)}
-                />
-                <Button 
-                  variant="contained" 
-                  disabled={!scenarioName}
-                  onClick={() => {
-                    const data: Scenario = {
-                      name: scenarioName,
-                      startingBalance,
-                      baseIncome,
-                      taxRate,
-                      recurringBudget,
-                      variableBudget,
-                      savingsBudget,
-                      investmentGrowthRate,
-                      extraLoanPayment,
-                      divertExtraToSavings,
-                      loanStrategy,
-                      goals
-                    };
-                    if (selectedScenarioId) {
-                      updateScenario.mutate({ ...data, id: selectedScenarioId as number }, {
-                        onSuccess: () => setSnackbarMessage('Scenario updated')
-                      });
-                    } else {
-                      createScenario.mutate(data, {
-                        onSuccess: (id: number) => {
-                          setSelectedScenarioId(id);
-                          setSnackbarMessage('Scenario created');
-                        }
-                      });
-                    }
-                  }}
-                >
-                  Save
-                </Button>
-              </Box>
-            </Box>
 
             <Typography variant="subtitle2" fontWeight="600" gutterBottom>Starting Balance</Typography>
             <Typography variant="h5" mb={1} color="success.main" fontWeight="700">{usd.format(startingBalance)}</Typography>
@@ -607,6 +644,48 @@ export default function Forecast() {
         onClose={() => setSnackbarMessage(null)}
         message={snackbarMessage || ''}
       />
+
+      <Dialog 
+        open={saveDialogOpen} 
+        onClose={() => setSaveDialogOpen(false)} 
+        maxWidth="xs" 
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle>Save Scenario</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Scenario Name"
+            type="text"
+            fullWidth
+            variant="standard"
+            value={scenarioName}
+            onChange={(e) => setScenarioName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && scenarioName) {
+                saveScenarioToDb(scenarioName);
+                setSaveDialogOpen(false);
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setSaveDialogOpen(false)} color="inherit" sx={{ textTransform: 'none' }}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              saveScenarioToDb(scenarioName);
+              setSaveDialogOpen(false);
+            }} 
+            disabled={!scenarioName}
+            variant="contained"
+            sx={{ textTransform: 'none' }}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
