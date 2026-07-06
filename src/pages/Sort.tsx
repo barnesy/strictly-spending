@@ -728,13 +728,12 @@ export default function Sort() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     position: 'relative',
-                    overflowX: 'hidden',
-                    overflowY: 'auto',
+                    overflow: 'hidden',
                     p: 3,
                     ml: 2,
                   }}
                 >
-                  <Box sx={{ position: 'relative', width: '100%', maxWidth: 680, height: '100%', minHeight: 0, my: 'auto' }}>
+                  <Box sx={{ position: 'relative', width: '100%', maxWidth: 680, height: '85%', maxHeight: 420, minHeight: 0, my: 'auto' }}>
                 {(() => {
                   const windowStart = Math.max(0, currentIndex - 2);
                   const windowEnd = Math.min(visibleQueue.length - 1, currentIndex + 3);
@@ -786,7 +785,7 @@ export default function Sort() {
           ) : (
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 1, overflow: 'hidden' }}>
-                <Box sx={{ position: 'relative', width: '100%', maxWidth: '100%', height: '100%', minHeight: 0, my: 'auto' }}>
+                <Box sx={{ position: 'relative', width: '100%', maxWidth: '100%', height: '85%', maxHeight: 420, minHeight: 0, my: 'auto' }}>
                 {(() => {
                   const windowStart = Math.max(0, currentIndex - 2);
                   const windowEnd = Math.min(visibleQueue.length - 1, currentIndex + 3);

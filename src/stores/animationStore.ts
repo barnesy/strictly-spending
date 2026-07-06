@@ -61,8 +61,8 @@ export const DEFAULT_ANIMATION_CONFIG: AnimationConfig = {
   startScale: 1.0,
 
   // Step 2: Midpoint
-  midStepPct: 20,
-  exitXRight: 280,
+  midStepPct: 60,
+  exitXRight: 480,
   exitXLeft: -200,
   exitY: -20,
   exitZ: -60,

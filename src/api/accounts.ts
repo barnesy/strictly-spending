@@ -7,10 +7,10 @@ export const accountSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['checking', 'credit', 'savings']),
   institution: z.string().min(1),
-  last4: z.string().optional(),
+  last4: z.string().nullish(),
   source: z.enum(['chase', 'boa-credit', 'boa-checking', 'truist-checking', 'demo', 'custom']),
   enabled: z.boolean(),
-  currentBalance: z.number().optional()
+  currentBalance: z.number().nullish()
 });
 
 export const accountsApi = {
