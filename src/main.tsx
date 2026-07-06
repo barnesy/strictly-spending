@@ -23,7 +23,7 @@ import App from './App';
 import { ErrorBoundary } from './ErrorBoundary';
 import { seedAndMigrate } from './seed';
 import { hasDemoData, seedDemoData } from './demoData';
-import { useFilters } from './store';
+import { useFilters } from './stores/store';
 import './testBridge';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queryClient';

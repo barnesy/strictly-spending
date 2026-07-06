@@ -13,7 +13,7 @@ import {
   useFilters,
   resolveDateRange,
   type DateRangePreset,
-} from '../store';
+} from '../stores/store';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { parseISO, format } from 'date-fns';
 

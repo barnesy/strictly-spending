@@ -1,5 +1,5 @@
-import { useFilters } from '../store';
-import { useBudgetStore } from '../budgetStore';
+import { useFilters } from '../stores/store';
+import { useBudgetStore } from '../stores/budgetStore';
 import { api } from '../api';
 
 export async function calculateGlobalRunwayData() {

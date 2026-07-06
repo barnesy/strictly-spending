@@ -6,7 +6,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { getAppTheme } from './theme';
 
-import { useChatStore } from './chatStore';
+import { useChatStore } from './stores/chatStore';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import Landing from './pages/Landing';
 import { LANDING_ONLY_BUILD } from './env';

@@ -5,7 +5,7 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FilterListIcon from '@mui/icons-material/FilterList';
 
 import RecategorizeDialog from './RecategorizeDialog';
-import { useFilters } from '../store';
+import { useFilters } from '../stores/store';
 
 import type { SubscriptionAlerts, SpendingAnomalies } from '../copilotAnalytics';
 import type { AccessibilityReport } from '../accessibilityAuditor';

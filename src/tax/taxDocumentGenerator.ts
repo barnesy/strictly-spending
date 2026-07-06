@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
-import { SCHEDULE_C_CATEGORIES } from './taxUtils';
-import type { TaxSettings, ChatArtifact, Transaction, Account } from './types';
+import { SCHEDULE_C_CATEGORIES } from '../tax/taxUtils';
+import type { TaxSettings, ChatArtifact, Transaction, Account } from '../types';
 
 export function calculateTaxYearStats(transactions: Transaction[], taxYear: number) {
   const yearTransactions = transactions.filter(t => {

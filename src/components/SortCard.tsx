@@ -13,7 +13,7 @@ import {
 import RepeatIcon from '@mui/icons-material/Repeat';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { usdCents } from '../lib';
-import { recurrenceLabel, isRecurring } from '../recurrence';
+import { recurrenceLabel, isRecurring } from '../domain/recurrence';
 import type { SortCard as SortCardData } from '../types';
 import AnimatedCard from './AnimatedCard';
 

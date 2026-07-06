@@ -61,7 +61,7 @@ describe('resolveDateRange - allTime scoping', () => {
   });
 });
 
-import { matchCategories, matchAccounts, cleanChatHistory, getMonthsInRange, calculateBudgetStatus, executeCopilotCommand, aggregateTransactions } from './copilotMatcher';
+import { matchCategories, matchAccounts, cleanChatHistory, getMonthsInRange, calculateBudgetStatus, executeCopilotCommand, aggregateTransactions } from '../copilotMatcher';
 
 describe('copilotMatcher - Category Matching', () => {
   const mockCategories = [
@@ -416,8 +416,8 @@ describe('copilotMatcher - Transaction Aggregation (Deterministic Math)', () => 
   });
 });
 
-import { detectSubscriptionAlerts, detectSpendingAnomalies } from './copilotAnalytics';
-import type { Transaction, MerchantOverride } from './types';
+import { detectSubscriptionAlerts, detectSpendingAnomalies } from '../copilotAnalytics';
+import type { Transaction, MerchantOverride } from '../types';
 
 describe('copilotAnalytics - Subscription Alerts', () => {
   it('detects subscription price spikes', () => {
@@ -635,7 +635,7 @@ vi.mock('./db', () => {
   };
 });
 
-import { parseAIResponse, extractFieldUsingRegex, getMessageDisplayContent, localAI, forceBoldAndTwoDecimals } from './ai';
+import { parseAIResponse, extractFieldUsingRegex, getMessageDisplayContent, localAI, forceBoldAndTwoDecimals } from '../ai';
 
 describe('parseAIResponse & cleanJSONString', () => {
   it('raw input formatting checks', () => {

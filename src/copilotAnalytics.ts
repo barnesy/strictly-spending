@@ -1,5 +1,5 @@
 import type { Transaction, MerchantOverride } from './types';
-import { detectRecurrence } from './recurrence';
+import { detectRecurrence } from './domain/recurrence';
 
 export interface PriceSpike {
   merchantKey: string;

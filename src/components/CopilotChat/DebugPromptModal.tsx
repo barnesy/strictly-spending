@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, Tabs, Tab, Alert, AlertTitle, Chip, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useChatStore } from '../../chatStore';
+import { useChatStore } from '../../stores/chatStore';
 
 interface DebugPromptModalProps {
   open: boolean;

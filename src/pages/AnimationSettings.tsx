@@ -12,8 +12,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
-import { useAnimationStore } from '../animationStore';
-import type { AnimationConfig } from '../animationStore';
+import { useAnimationStore } from '../stores/animationStore';
+import type { AnimationConfig } from '../stores/animationStore';
 import AnimatedCard from '../components/AnimatedCard';
 
 const MOCK_CARDS = [

@@ -1,8 +1,8 @@
-import { api } from './api';
-import type { CategoryRule, Source, Transaction } from './types';
+import { api } from '../api';
+import type { CategoryRule, Source, Transaction } from '../types';
 
 import { refreshRecurrenceAll } from './recurrence';
-import { normalizeForMatch } from './lib';
+import { normalizeForMatch } from '../lib';
 
 const SOURCE_CATEGORY_MAP: Record<string, string> = {
   // Chase top-level Categories

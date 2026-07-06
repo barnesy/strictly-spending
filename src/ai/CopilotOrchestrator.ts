@@ -1,13 +1,13 @@
-import { useChatStore, formatModelName } from '../chatStore';
-import { useFilters } from '../store';
-import { useBudgetStore } from '../budgetStore';
+import { useChatStore, formatModelName } from '../stores/chatStore';
+import { useFilters } from '../stores/store';
+import { useBudgetStore } from '../stores/budgetStore';
 import { localAI, calculateGlobalRunwayData } from './index';
 import type { ChatMessage } from './index';
 import { toolRegistry } from './tools';
 import { executeCopilotCommand } from '../copilotMatcher';
 import { queryClient } from '../queryClient';
 import { api } from '../api';
-import { buildRecurrenceMap } from '../recurrence';
+import { buildRecurrenceMap } from '../domain/recurrence';
 import { AGENT_TOOLS } from './architecture';
 import { invoke } from '@tauri-apps/api/core';
 import { parseAIResponse } from './utils';

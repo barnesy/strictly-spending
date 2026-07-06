@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Paper } from '@mui/material';
-import { useAnimationStore } from '../animationStore';
+import { useAnimationStore } from '../stores/animationStore';
 
 interface AnimatedCardProps {
   /** Color of the suggested category, drives the suggestion stripe. */

@@ -38,8 +38,8 @@ import { useSettings, useTaxTransactions, useCategories, useTaxRules, useAccount
 import { api } from '../api';
 import type { TaxSettings, ChatArtifact } from '../types';
 import TaxDocumentUpload from '../components/TaxDocumentUpload';
-import { SCHEDULE_C_CATEGORIES, resolveTaxDeduction } from '../taxUtils';
-import { calculateTaxYearStats, generateBusinessLedgerCsv, generatePersonalDeductionsCsv, generateTaxSummaryMarkdown, generateComprehensiveCsv } from '../taxDocumentGenerator';
+import { SCHEDULE_C_CATEGORIES, resolveTaxDeduction } from '../tax/taxUtils';
+import { calculateTaxYearStats, generateBusinessLedgerCsv, generatePersonalDeductionsCsv, generateTaxSummaryMarkdown, generateComprehensiveCsv } from '../tax/taxDocumentGenerator';
 
 const DEFAULT_TAX_SETTINGS: TaxSettings = {
   hasBusiness: false,

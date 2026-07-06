@@ -8,8 +8,8 @@ import { api } from '../api';
 import { API_WORKFLOWS, type ApiWorkflow, type ApiWorkflowStep } from '../apiWorkflows';
 import { queryClient } from '../queryClient';
 import { toolRegistry } from '../ai/tools/index';
-import { useFilters } from '../store';
-import { useBudgetStore } from '../budgetStore';
+import { useFilters } from '../stores/store';
+import { useBudgetStore } from '../stores/budgetStore';
 
 export default function ApiPlayground() {
   const theme = useTheme();

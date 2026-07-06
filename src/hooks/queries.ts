@@ -1,7 +1,7 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '../api';
-import { buildRecurrenceMap } from '../recurrence';
-import { useFilters, resolveDateRange } from '../store';
+import { buildRecurrenceMap } from '../domain/recurrence';
+import { useFilters, resolveDateRange } from '../stores/store';
 import { useShallow } from 'zustand/react/shallow';
 
 export const useTransactions = (filters?: { category?: string, merchantKey?: string, accountId?: number, deductionStatus?: string }) => {

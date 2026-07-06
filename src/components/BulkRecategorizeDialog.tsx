@@ -26,13 +26,13 @@ import AddIcon from '@mui/icons-material/Add';
 
 import type { RecurrenceKind } from '../types';
 import { usdCents } from '../lib';
-import { recategorizeAll } from '../categorize';
+import { recategorizeAll } from '../domain/categorize';
 import {
   detectRecurrence,
   isRecurring,
   recurrenceLabel,
   refreshRecurrenceAll,
-} from '../recurrence';
+} from '../domain/recurrence';
 
 interface Props {
   merchantKey: string;

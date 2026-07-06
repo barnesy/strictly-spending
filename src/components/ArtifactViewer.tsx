@@ -30,7 +30,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { useNavigate } from 'react-router-dom';
-import { useChatStore } from '../chatStore';
+import { useChatStore } from '../stores/chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettings } from '../hooks/queries';
 import { parseSpreadsheet } from '../spreadsheetUtils';

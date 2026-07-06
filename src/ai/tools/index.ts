@@ -1,4 +1,4 @@
-import type { FiltersState } from '../../store';
+import type { FiltersState } from '../../stores/store';
 
 export interface AIToolContext {
   filters: FiltersState;

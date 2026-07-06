@@ -26,12 +26,12 @@ import { useDeleteArtifact } from '../hooks/mutations';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { confirmDialog } from '../utils/confirmDialog';
-import { useFilters } from '../store';
+import { useFilters } from '../stores/store';
 import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@mui/material';
 
 
-import { useChatStore } from '../chatStore';
+import { useChatStore } from '../stores/chatStore';
 
 export default function Artifacts() {
   const theme = useTheme();

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolveRecurrenceForTransaction } from './recurrence';
-import type { Category, MerchantOverride, Transaction } from './types';
+import type { Category, MerchantOverride, Transaction } from '../types';
 
 describe('Recurrence Resolution Hierarchy', () => {
   const categoryMap = new Map<string, Category>([

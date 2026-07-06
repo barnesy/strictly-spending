@@ -32,7 +32,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
 
 
-import { useChatStore, formatModelName } from '../chatStore';
+import { useChatStore, formatModelName } from '../stores/chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { localAI } from '../ai';
 

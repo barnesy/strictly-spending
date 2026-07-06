@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useFilters } from '../store';
+import { useFilters } from '../stores/store';
 import { useLoans, useUniqueMerchants, useCategories } from '../hooks/queries';
 import { useAddLoan, useUpdateLoan, useDeleteLoan } from '../hooks/mutations';
 import { useQuery } from '@tanstack/react-query';

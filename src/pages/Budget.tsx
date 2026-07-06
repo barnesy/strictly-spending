@@ -24,8 +24,8 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 
 import { usd, usdCents } from '../lib';
 import { type ConsolidatedMerchant } from '../budgets';
-import { useBudgetStore } from '../budgetStore';
-import { useFilters } from '../store';
+import { useBudgetStore } from '../stores/budgetStore';
+import { useFilters } from '../stores/store';
 import PageLoader from '../components/PageLoader';
 import DataTable from '../components/DataTable';
 import type { Budget as BudgetType, Category } from '../types';

@@ -1,10 +1,10 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
 import { invoke } from '@tauri-apps/api/core';
-import { resolveDateRange } from '../../store';
-import { useBudgetStore } from '../../budgetStore';
-import { buildRecurrenceMap } from '../../recurrence';
-import { buildForecast } from '../../forecast';
+import { resolveDateRange } from '../../stores/store';
+import { useBudgetStore } from '../../stores/budgetStore';
+import { buildRecurrenceMap } from '../../domain/recurrence';
+import { buildForecast } from '../../domain/forecast';
 import { matchCategories, matchAccounts, getMonthsInRange, calculateBudgetStatus } from '../../copilotMatcher';
 
 export class QueryDataTool implements AIToolHandler {

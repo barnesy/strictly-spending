@@ -1,10 +1,10 @@
-import { api } from './api';
+import { api } from '../api';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { localAI, type ChatMessage } from './ai';
-import { deleteLocalModel, getLocalModels } from './ai/ollamaApi';
+import { localAI, type ChatMessage } from '../ai';
+import { deleteLocalModel, getLocalModels } from '../ai/ollamaApi';
 
-import type { WorkspaceConfig, ChatArtifact, ChatThread } from './types';
+import type { WorkspaceConfig, ChatArtifact, ChatThread } from '../types';
 
 let cachedTauriInvoke: any = null;
 async function getTauriInvoke() {

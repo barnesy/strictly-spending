@@ -1,7 +1,7 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
 import { api } from '../../api';
-import { useChatStore } from '../../chatStore';
+import { useChatStore } from '../../stores/chatStore';
 
 export class UpdateArtifactTool implements AIToolHandler {
   name = 'update_artifact';

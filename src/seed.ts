@@ -12,8 +12,8 @@ import { api } from './api';
 // which is gitignored. See `src/seed.local.example.ts` for the template.
 
 
-import { recategorizeAll } from './categorize';
-import { refreshRecurrenceAll } from './recurrence';
+import { recategorizeAll } from './domain/categorize';
+import { refreshRecurrenceAll } from './domain/recurrence';
 import type { Category, CategoryRule } from './types';
 import { DEFAULT_SKILLS } from './defaultSkills';
 

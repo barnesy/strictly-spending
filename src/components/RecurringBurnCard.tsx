@@ -20,7 +20,7 @@ import {
   isRecurring,
   recurrenceLabel,
   type RecurrenceInfo,
-} from '../recurrence';
+} from '../domain/recurrence';
 import type { Category, Transaction } from '../types';
 import BulkRecategorizeDialog from './BulkRecategorizeDialog';
 

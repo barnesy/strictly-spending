@@ -27,7 +27,7 @@ import {
   forceBoldAndTwoDecimals,
 } from '../../ai';
 
-import { useChatStore } from '../../chatStore';
+import { useChatStore } from '../../stores/chatStore';
 import SimpleMarkdown from '../SimpleMarkdown';
 import CopilotQueryResult from '../CopilotQueryResult';
 import { GenUXConfirmation, GenUXForm, ProposedCategorizationReportUX } from './GenUXComponents';

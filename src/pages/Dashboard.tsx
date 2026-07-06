@@ -35,7 +35,7 @@ import {
   TextField,
   Drawer,
 } from '@mui/material';
-import { SCHEDULE_C_CATEGORIES } from '../taxUtils';
+import { SCHEDULE_C_CATEGORIES } from '../tax/taxUtils';
 import PageLoader from '../components/PageLoader';
 import DataTable from '../components/DataTable';
 import EditIcon from '@mui/icons-material/Edit';
@@ -46,13 +46,13 @@ import CloseIcon from '@mui/icons-material/Close';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 
-import { useChatStore } from '../chatStore';
+import { useChatStore } from '../stores/chatStore';
 
 
 import {
   useFilters,
   resolveDateRange,
-} from '../store';
+} from '../stores/store';
 import { usd, usdCents, monthsBetween } from '../lib';
 import SpendChart from '../components/SpendChart';
 import BulkRecategorizeDialog from '../components/BulkRecategorizeDialog';
@@ -65,7 +65,7 @@ import {
   isRecurring,
   recurrenceLabel,
   type RecurrenceInfo
-} from '../recurrence';
+} from '../domain/recurrence';
 import type { Transaction } from '../types';
 import { useDeferredRender } from '../hooks/useDeferredRender';
 

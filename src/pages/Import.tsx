@@ -32,7 +32,7 @@ import Papa from 'papaparse';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import RestoreIcon from '@mui/icons-material/Restore';
-import { buildPreview, commitPreview, type ImportPreview } from '../import';
+import { buildPreview, commitPreview, type ImportPreview } from '../domain/import';
 import { usdCents } from '../lib';
 
 import { sha256 } from '../hash';

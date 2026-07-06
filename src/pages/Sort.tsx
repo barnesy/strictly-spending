@@ -32,12 +32,12 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import { guessTaxFields } from '../taxUtils';
+import { guessTaxFields } from '../tax/taxUtils';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 
-import { useFilters } from '../store';
+import { useFilters } from '../stores/store';
 import { type SortCard as SortCardData, type Transaction } from '../types';
 
 import SortCard from '../components/SortCard';

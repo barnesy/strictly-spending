@@ -16,8 +16,8 @@ import {
 import AnimatedLogo from './AnimatedLogo';
 import CopilotChat from './CopilotChat';
 import ArtifactViewer from './ArtifactViewer';
-import { useFilters } from '../store';
-import { useChatStore } from '../chatStore';
+import { useFilters } from '../stores/store';
+import { useChatStore } from '../stores/chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useTransactionBounds, useUncategorizedCount, useArtifactsCount } from '../hooks/queries';
 

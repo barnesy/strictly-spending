@@ -1,7 +1,7 @@
 import { Box, Button, Paper, Stack, Typography } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { Link as RouterLink } from 'react-router-dom';
-import { sessionStats, useSortStore } from '../sortStore';
+import { sessionStats, useSortStore } from '../stores/sortStore';
 
 /** Stats-driven empty state shown when the Sort queue is empty. */
 export default function SortEmptyState() {

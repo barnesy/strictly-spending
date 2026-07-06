@@ -5,12 +5,12 @@ import { monthKey, monthLabel, usd } from '../lib';
 import { ACCOUNT_COLORS } from '../theme';
 import type { Account, Category, Transaction } from '../types';
 import type { SpendChartGroup, DashboardAggregates } from '../api';
-import type { GroupBy } from '../store';
-import type { RecurrenceInfo } from '../recurrence';
-import { isRecurring } from '../recurrence';
+import type { GroupBy } from '../stores/store';
+import type { RecurrenceInfo } from '../domain/recurrence';
+import { isRecurring } from '../domain/recurrence';
 import { useBudgets, useConsolidatedRecurringMerchants } from '../hooks/queries';
-import { useFilters } from '../store';
-import { useBudgetStore } from '../budgetStore';
+import { useFilters } from '../stores/store';
+import { useBudgetStore } from '../stores/budgetStore';
 
 /** Track a parent element's height via ResizeObserver */
 function useElementHeight(minHeight = 240) {

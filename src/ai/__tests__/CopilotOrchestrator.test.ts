@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CopilotOrchestrator } from '../CopilotOrchestrator';
-import { useChatStore } from '../../chatStore';
+import { useChatStore } from '../../stores/chatStore';
 import { localAI } from '../index';
 
 // We mock localAI to control the "LLM" responses for orchestrator testing.
@@ -12,7 +12,7 @@ vi.mock('../index', () => ({
   calculateGlobalRunwayData: vi.fn().mockResolvedValue({})
 }));
 
-vi.mock('../../chatStore', () => {
+vi.mock('../../stores/chatStore', () => {
   const mockChatStore = {
     startStreamingMessage: vi.fn(),
     appendStreamingToken: vi.fn(),

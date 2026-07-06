@@ -18,8 +18,8 @@ import {
 } from '@mui/material';
 import { api } from '../api';
 import type { Transaction } from '../types';
-import { recategorizeAll } from '../categorize';
-import { refreshRecurrenceAll } from '../recurrence';
+import { recategorizeAll } from '../domain/categorize';
+import { refreshRecurrenceAll } from '../domain/recurrence';
 
 interface Props {
   txn: Transaction;

@@ -157,7 +157,7 @@ export class OllamaProvider implements AIProvider {
       }
 
       try {
-        const { useChatStore } = await import('../../chatStore');
+        const { useChatStore } = await import('../../stores/chatStore');
         useChatStore.getState().setLastDebugPayload(JSON.stringify(body, null, 2));
       } catch (e) {
         console.error("Failed to save debug payload", e);

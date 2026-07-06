@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { buildPreview, commitPreview } from './import';
-import { api } from './api';
-import { localAI } from './ai';
+import { api } from '../api';
+import { localAI } from '../ai';
 
 const rulesData: any[] = [];
 const transactionsData: any[] = [];
@@ -11,7 +11,7 @@ const csvMappingsData: any[] = [];
 const categoriesData: any[] = [{ name: 'Groceries' }, { name: 'Utilities' }];
 let licenseSetting: any = { active: false };
 
-vi.mock('./api', () => ({
+vi.mock('../api', () => ({
   api: {
     getRules: async () => [...rulesData],
     getTaxRules: async () => [],
@@ -55,7 +55,7 @@ vi.mock('./api', () => ({
   }
 }));
 
-vi.mock('./ai', () => ({
+vi.mock('../ai', () => ({
   localAI: {
     isLoaded: true,
     reviewTransactions: vi.fn(async (txns, _categories) => {

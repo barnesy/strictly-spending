@@ -2,7 +2,7 @@ import { api } from '../../api';
 import React, { useState, useEffect } from 'react';
 import { Box, Stack, Paper, Button, TextField, Checkbox, Select, MenuItem, Typography, Divider } from '@mui/material';
 import { useSettings, useCategories } from '../../hooks/queries';
-import { refreshRecurrenceAll } from '../../recurrence';
+import { refreshRecurrenceAll } from '../../domain/recurrence';
 import type { ProposedCategorizationItem, ProposedCategorizationReport } from '../../types';
 import type { ChatMessage } from '../../ai';
 

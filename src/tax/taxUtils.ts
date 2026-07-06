@@ -1,5 +1,5 @@
-import { normalizeForMatch } from './lib';
-import type { TaxRule } from './types';
+import { normalizeForMatch } from '../lib';
+import type { TaxRule } from '../types';
 
 export interface TaxGuess {
   isBusiness: boolean;

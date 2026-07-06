@@ -1,7 +1,7 @@
 import { api } from './api';
-import { categorize, inferTypeCategory } from './categorize';
-import type { CategorizeContext } from './categorize';
-import { refreshRecurrenceAll } from './recurrence';
+import { categorize, inferTypeCategory } from './domain/categorize';
+import type { CategorizeContext } from './domain/categorize';
+import { refreshRecurrenceAll } from './domain/recurrence';
 import { normalizeForMatch } from './lib';
 
 export interface TransactionPreview {

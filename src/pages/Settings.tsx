@@ -26,8 +26,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 
 import { seedDemoData, clearDemoData, hasDemoData, clearImportedData } from '../demoData';
-import { useFilters } from '../store';
-import { useChatStore } from '../chatStore';
+import { useFilters } from '../stores/store';
+import { useChatStore } from '../stores/chatStore';
 import AnimatedLogo from '../components/AnimatedLogo';
 
 export default function Settings() {

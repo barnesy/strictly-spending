@@ -7,12 +7,12 @@ import {
   recategorizeAll,
   categorizeBatch,
 } from './categorize';
-import { api } from './api';
+import { api } from '../api';
 
 const rulesData: any[] = [];
 const transactionsData: any[] = [];
 
-vi.mock('./api', () => {
+vi.mock('../api', () => {
   return {
     api: {
       getRules: async () => [...rulesData],

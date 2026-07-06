@@ -1,4 +1,4 @@
-import { useAnimationStore } from '../animationStore';
+import { useAnimationStore } from '../stores/animationStore';
 
 export default function DynamicAnimationStyles() {
   const config = useAnimationStore();

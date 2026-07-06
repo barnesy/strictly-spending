@@ -18,8 +18,8 @@ import { api } from './api';
 
 
 import type { Transaction } from './types';
-import { extractMerchantKey } from './categorize';
-import { refreshRecurrenceAll } from './recurrence';
+import { extractMerchantKey } from './domain/categorize';
+import { refreshRecurrenceAll } from './domain/recurrence';
 
 const ACCOUNTS = {
   checking: 'Demo: Checking',

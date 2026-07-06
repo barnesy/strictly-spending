@@ -17,7 +17,7 @@ import { usePutArtifact } from '../hooks/mutations';
 import { useScenarios } from '../hooks/queries';
 import { useCreateScenario, useUpdateScenario, useDeleteScenario } from '../hooks/mutations';
 import type { Scenario, Goal } from '../api/scenarios';
-import { useForecastStore } from '../store/forecastStore';
+import { useForecastStore } from '../stores/forecastStore';
 import { ForecastCharts } from '../components/ForecastCharts';
 import type { ProjectionPoint } from '../components/ForecastCharts';
 

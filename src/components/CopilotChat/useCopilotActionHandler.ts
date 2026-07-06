@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useChatStore } from '../../chatStore';
+import { useChatStore } from '../../stores/chatStore';
 import type { ChatMessage } from '../../ai';
 import { CopilotOrchestrator } from '../../ai/CopilotOrchestrator';
 

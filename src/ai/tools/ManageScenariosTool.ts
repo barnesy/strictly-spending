@@ -1,7 +1,7 @@
 import { api } from '../../api';
 import type { AIToolHandler, AIToolContext, ToolExecutionResult } from './index';
 import type { Scenario } from '../../api/scenarios';
-import { useForecastStore } from '../../store/forecastStore';
+import { useForecastStore } from '../../stores/forecastStore';
 
 interface ManageScenariosAction {
   action: 'list' | 'get' | 'create' | 'update' | 'delete';

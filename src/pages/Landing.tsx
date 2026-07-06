@@ -148,7 +148,7 @@ export default function Landing() {
         </Typography>
 
         <Typography variant="h5" sx={{ mb: 6, maxWidth: '700px', mx: 'auto', lineHeight: 1.5, color: '#4B5563', fontWeight: 400 }}>
-          <b>Note: This is an Early Access version.</b> Ingest multi-bank CSVs, apply intelligent categorization, and manage your budget entirely on your machine. Featuring an unlimited, free, and completely local AI assistant.
+          <b>Note: This is an Early Access version.</b> Ingest multi-bank CSVs, apply intelligent categorization, and forecast your life. Featuring an unlimited, free, and completely local AI assistant.
         </Typography>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '700px', width: '100%', mx: 'auto', px: 2, mb: 10 }}>

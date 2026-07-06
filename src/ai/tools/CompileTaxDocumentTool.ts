@@ -2,13 +2,13 @@ import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
 import { api } from '../../api';
 import { queryClient } from '../../queryClient';
-import { useChatStore } from '../../chatStore';
+import { useChatStore } from '../../stores/chatStore';
 import {
   generateBusinessLedgerCsv,
   generateBusinessPnlCsv,
   generatePersonalDeductionsCsv,
   generateTaxSummaryMarkdown
-} from '../../taxDocumentGenerator';
+} from '../../tax/taxDocumentGenerator';
 import type { ChatArtifact } from '../../types';
 
 export class CompileTaxDocumentTool implements AIToolHandler {

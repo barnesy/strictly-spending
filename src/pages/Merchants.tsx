@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { api } from '../api';
 import { useTransactions, useCategories, useTaxRules, useMerchantGroups } from '../hooks/queries';
 import { useBulkUpdateTransactions } from '../hooks/mutations';
-import { resolveTaxDeduction } from '../taxUtils';
+import { resolveTaxDeduction } from '../tax/taxUtils';
 import {
   Box,
   Paper,

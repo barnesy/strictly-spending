@@ -13,13 +13,13 @@ import {
   InputAdornment,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { useFilters, resolveDateRange } from '../store';
+import { useFilters, resolveDateRange } from '../stores/store';
 import type { Account, Category, Transaction } from '../types';
 import { usd, monthKey, monthsBetween } from '../lib';
 import { useMemo, useState, useEffect } from 'react';
-import { type RecurrenceInfo } from '../recurrence';
+import { type RecurrenceInfo } from '../domain/recurrence';
 import { useBudgets, useConsolidatedRecurringMerchants, useSpendChartData } from '../hooks/queries';
-import { useBudgetStore } from '../budgetStore';
+import { useBudgetStore } from '../stores/budgetStore';
 import type { DashboardAggregates } from '../api';
 
 export default function FilterPanel({

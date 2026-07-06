@@ -1,7 +1,7 @@
 import type { AIToolHandler, ToolExecutionResult } from './index';
 import type { AIToolContext } from './index';
 import { api } from '../../api';
-import { resolveDateRange } from '../../store';
+import { resolveDateRange } from '../../stores/store';
 import { matchCategories } from '../../copilotMatcher';
 import { detectSpendingAnomalies } from '../../copilotAnalytics';
 

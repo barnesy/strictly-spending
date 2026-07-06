@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 import { useCategories, useCategoryTransactionCounts } from '../hooks/queries';
 
-import { refreshRecurrenceAll } from '../recurrence';
+import { refreshRecurrenceAll } from '../domain/recurrence';
 import PageLoader from '../components/PageLoader';
 import DataTable from '../components/DataTable';
 import FilterListIcon from '@mui/icons-material/FilterList';

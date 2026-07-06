@@ -1,15 +1,15 @@
-import { api } from './api';
+import { api } from '../api';
 
-import type { ParsedTransaction, Transaction, Source } from './types';
+import type { ParsedTransaction, Transaction, Source } from '../types';
 import { refreshRecurrenceAll } from './recurrence';
-import { parseCsv, detectSource, extractCsvHeaders, parseCustomCsv } from './parsers';
+import { parseCsv, detectSource, extractCsvHeaders, parseCustomCsv } from '../parsers';
 import {
   categorize,
   extractMerchantKey,
   inferTypeCategory,
 } from './categorize';
-import { localAI } from './ai';
-import { resolveTaxDeduction } from './taxUtils';
+import { localAI } from '../ai';
+import { resolveTaxDeduction } from '../tax/taxUtils';
 
 export interface ImportPreview {
   filename: string;
