@@ -59,7 +59,6 @@ const SETTINGS_SECTIONS = [
     items: [
       { to: '/import', label: 'Import' },
       { to: '/settings', label: 'Settings' },
-      { to: '/animation-playground', label: 'Animations' },
       { to: '/theme', label: 'Theme' },
     ]
   }

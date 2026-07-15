@@ -13,7 +13,6 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const ThemeManager = React.lazy(() => import('./pages/ThemeManager'));
 const LocalModel = React.lazy(() => import('./pages/LocalModel'));
 const Sort = React.lazy(() => import('./pages/Sort'));
-const AnimationSettings = React.lazy(() => import('./pages/AnimationSettings'));
 const Merchants = React.lazy(() => import('./pages/Merchants'));
 const Taxes = React.lazy(() => import('./pages/Taxes'));
 const Loans = React.lazy(() => import('./pages/Loans'));
@@ -44,7 +43,6 @@ export function AppRoutes() {
           <Route path="/local-model" element={<LocalModel />} />
           <Route path="/ai-reference" element={<ToolsReference />} />
           <Route path="/api-playground" element={<ApiPlayground />} />
-          <Route path="/animation-playground" element={<AnimationSettings />} />
           <Route path="/merchants" element={<Merchants />} />
           <Route path="/taxes" element={<Taxes />} />
           <Route path="/loans" element={<Loans />} />

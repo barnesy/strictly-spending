@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState, useRef } from 'react';
-import { Box, useTheme, useMediaQuery } from '@mui/material';
+import { Box, Typography, useTheme, useMediaQuery } from '@mui/material';
 import * as echarts from 'echarts';
 import { monthKey, monthLabel, usd } from '../lib';
 import { ACCOUNT_COLORS } from '../theme';
@@ -550,22 +550,29 @@ export default function SpendChart({
     
   }, [finalSeries, finalLabels, showBudgetLine, totalBudget, spendOnly, onMonthClick, monthList, chartHeight, isMobile]);
 
-  if (series.length === 0 || labels.length === 0) {
-    return (
-      <Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-        No spend in range.
-      </Box>
-    );
-  }
-
   return (
-    <Box ref={containerRef} sx={{ width: '100%', height: '100%', minHeight: 240 }}>
+    <Box ref={containerRef} sx={{ width: '100%', height: '100%', minHeight: 240, position: 'relative' }}>
+      {(series.length === 0 || labels.length === 0) && (
+        <Box sx={{ 
+          position: 'absolute', 
+          top: 0, left: 0, right: 0, bottom: 0, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 10,
+          bgcolor: 'background.paper'
+        }}>
+          <Typography color="text.secondary">No spend in range.</Typography>
+        </Box>
+      )}
       <div 
         ref={chartRef} 
         style={{ 
           width: '100%', 
           height: chartHeight,
-          cursor: (onMonthClick && monthList.length > 1) ? 'pointer' : 'default' 
+          cursor: (onMonthClick && monthList.length > 1) ? 'pointer' : 'default',
+          opacity: (series.length === 0 || labels.length === 0) ? 0 : 1,
+          pointerEvents: (series.length === 0 || labels.length === 0) ? 'none' : 'auto'
         }} 
       />
     </Box>

@@ -25,20 +25,16 @@ import ScienceIcon from '@mui/icons-material/Science';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 
-import { seedDemoData, clearDemoData, hasDemoData, clearImportedData } from '../demoData';
-import { useFilters } from '../stores/store';
+import { clearImportedData } from '../demoData';
 import { useChatStore } from '../stores/chatStore';
 import AnimatedLogo from '../components/AnimatedLogo';
 
 export default function Settings() {
-  const demoMode = useFilters((s) => s.demoMode);
-  const setDemoMode = useFilters((s) => s.setDemoMode);
-
   // Custom confirmation dialog states
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('');
   const [confirmMessage, setConfirmMessage] = useState('');
-  const [confirmType, setConfirmType] = useState<'clearDemo' | 'deactivateLicense' | 'clearImported' | null>(null);
+  const [confirmType, setConfirmType] = useState<'deactivateLicense' | 'clearImported' | null>(null);
 
   const [clearImportedBusy, setClearImportedBusy] = useState(false);
   const [clearImportedMsg, setClearImportedMsg] = useState<string | null>(null);
@@ -94,63 +90,6 @@ export default function Settings() {
   useEffect(() => {
     checkAIStatus();
   }, [checkAIStatus]);
-
-  // Demo data state
-  const [demoLoaded, setDemoLoaded] = useState(false);
-  const [demoBusy, setDemoBusy] = useState(false);
-  const [demoMsg, setDemoMsg] = useState<string | null>(null);
-  useEffect(() => {
-    hasDemoData().then(setDemoLoaded);
-  }, [demoMsg]);
-
-  const onLoadDemo = async () => {
-    setDemoBusy(true);
-    setDemoMsg(null);
-    try {
-      const r = await seedDemoData();
-      setDemoMsg(
-        r.alreadyPresent
-          ? 'Demo data already present. Nothing added.'
-          : `Added ${r.added} demo transactions across 3 demo accounts`
-      );
-    } catch (e) {
-      setDemoMsg(`Error: ${(e as Error).message}`);
-    } finally {
-      setDemoBusy(false);
-    }
-  };
-
-  const executeClearDemo = async () => {
-    setDemoBusy(true);
-    try {
-      const r = await clearDemoData();
-      setDemoMode(false);
-      window.dispatchEvent(new Event('db-update'));
-      setDemoMsg(
-        `Removed ${r.removedTransactions} demo transactions and ${r.removedAccounts} demo accounts`
-      );
-    } catch (e) {
-      setDemoMsg(`Error: ${(e as Error).message}`);
-    } finally {
-      setDemoBusy(false);
-    }
-  };
-
-  const onClearDemo = async (e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    const skipConfirm = new URLSearchParams(window.location.search).get('noconfirm') === 'true';
-    if (skipConfirm) {
-      await executeClearDemo();
-    } else {
-      setConfirmTitle('Clear Demo Data');
-      setConfirmMessage('Remove all demo accounts and demo transactions? Your real data is untouched.');
-      setConfirmType('clearDemo');
-      setConfirmOpen(true);
-    }
-  };
 
   const executeClearImported = async () => {
     setClearImportedBusy(true);
@@ -286,98 +225,6 @@ export default function Settings() {
         <Stack spacing={2}>
           <Box>
             <Stack direction="row" spacing={1} alignItems="center">
-              <ScienceIcon fontSize="small" color="primary" />
-              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
-                Demo data
-              </Typography>
-            </Stack>
-            <Typography variant="caption" color="text.secondary">
-              Adds 3 sample accounts with ~250 fake transactions spanning Jan
-              through the current month. Useful for exploring features
-              without your real data, screenshots, or sharing the app
-              without exposing personal finances. Your real accounts are
-              never touched. Demo accounts are clearly labelled with{' '}
-              <code>Demo:</code> prefixes.
-            </Typography>
-          </Box>
-
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Button
-              variant="contained"
-              startIcon={<ScienceIcon />}
-              onClick={onLoadDemo}
-              disabled={demoBusy || demoLoaded}
-            >
-              {demoLoaded ? 'Demo data loaded' : 'Load demo data'}
-            </Button>
-            <Button
-              startIcon={<DeleteIcon />}
-              onClick={onClearDemo}
-              color="error"
-              disabled={demoBusy || !demoLoaded}
-            >
-              Clear demo data
-            </Button>
-          </Stack>
-
-          <Divider />
-
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <VisibilityIcon fontSize="small" color="primary" />
-              <Typography variant="subtitle2" component="h3" sx={{ fontWeight: 600 }}>
-                Demo mode
-              </Typography>
-              {demoMode && (
-                <Chip label="On" size="small" color="warning" />
-              )}
-            </Stack>
-            <Typography variant="caption" color="text.secondary">
-              Hides your real accounts and transactions across every view
-              (Dashboard, Budget, Transactions) and shows only the{' '}
-              <code>Demo:</code> data. Your real data stays on disk; turn this
-              off to see it again. Handy for screenshots, demos, and
-              share-screen moments.
-            </Typography>
-            <Box sx={{ mt: 1 }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={demoMode}
-                    onChange={(e) => setDemoMode(e.target.checked)}
-                    disabled={!demoLoaded && !demoMode}
-                  />
-                }
-                label={
-                  <Typography variant="body2">
-                    {demoMode
-                      ? 'Showing demo data only (real data hidden)'
-                      : demoLoaded
-                      ? 'Showing real data (toggle on to hide it)'
-                      : 'Load demo data first to enable'}
-                  </Typography>
-                }
-              />
-            </Box>
-          </Box>
-
-          {demoMsg && (
-            <Alert
-              severity={
-                demoMsg.startsWith('Error') ? 'error' : 'success'
-              }
-              onClose={() => setDemoMsg(null)}
-            >
-              {demoMsg}
-            </Alert>
-          )}
-        </Stack>
-      </Paper>
-
-      <Paper sx={{ p: 3 }}>
-        <Stack spacing={2}>
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center">
               <DeleteIcon fontSize="small" color="error" />
               <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, color: 'error.main' }}>
                 Imported data
@@ -473,9 +320,7 @@ export default function Settings() {
             color="error"
             onClick={async () => {
               setConfirmOpen(false);
-              if (confirmType === 'clearDemo') {
-                await executeClearDemo();
-              } else if (confirmType === 'clearImported') {
+              if (confirmType === 'clearImported') {
                 await executeClearImported();
               } else if (confirmType === 'deactivateLicense') {
                 await deleteSetting.mutateAsync('license');
