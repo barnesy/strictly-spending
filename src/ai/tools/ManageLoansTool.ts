@@ -7,7 +7,7 @@ export class ManageLoansTool implements AIToolHandler {
   name = 'manage_loans';
 
   async execute(actionObj: any, context: AIToolContext): Promise<ToolExecutionResult> {
-    if (actionObj.confirmed !== true && !['get', 'create'].includes(actionObj.action)) {
+    if (actionObj.confirmed !== true && actionObj.action !== 'get') {
       return { 
         feedbackError: 'SECURITY EXCEPTION: You attempted to modify a loan without user confirmation. You MUST call the `request_user_confirmation` tool first. Only after the user confirms should you call this tool again with `confirmed: true`.' 
       };
@@ -24,12 +24,10 @@ export class ManageLoansTool implements AIToolHandler {
     }
 
     if (action === 'create') {
-      loanData = loanData || {};
-      loanData.name = loanData.name || 'New Loan';
-      loanData.type = loanData.type || 'house';
-      loanData.principal = loanData.principal ?? 0;
-      loanData.rate = loanData.rate ?? 6.5;
-      loanData.termYears = loanData.termYears ?? 30;
+      if (!loanData || !loanData.name || !loanData.type || loanData.principal == null || loanData.rate == null || loanData.termYears == null) {
+        return { feedbackError: 'Missing required loan fields (name, type, principal, rate, termYears)' };
+      }
+      
       loanData.startDate = loanData.startDate || new Date().toISOString().split('T')[0];
       loanData.category = loanData.category || 'Debt';
 

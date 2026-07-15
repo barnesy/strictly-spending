@@ -366,9 +366,8 @@ export default function Loans() {
       // Scheduled calculations
       let sInterest = sBalance * r;
       let sPrincipal = scheduledMonthlyPayment - sInterest;
-      if (sBalance < sPrincipal) {
+      if (sPrincipal > sBalance) {
         sPrincipal = sBalance;
-        sInterest = 0;
       }
       sBalance = Math.max(0, sBalance - sPrincipal);
       cumulativeScheduledInterest += sInterest;
@@ -400,8 +399,10 @@ export default function Loans() {
             paymentAmount += currentConfig.extraOneTimePayment;
           }
 
-          aPrincipal = Math.min(aBalance, Math.max(0, paymentAmount - aInterest));
+          aPrincipal = paymentAmount - aInterest;
+          if (aPrincipal > aBalance) aPrincipal = aBalance;
           aBalance = Math.max(0, aBalance - aPrincipal);
+          
           totalActualPaid += paymentAmount;
           cumulativeActualInterest += aInterest;
           extra = yearMonth >= todayStr
@@ -409,8 +410,10 @@ export default function Loans() {
             : 0;
         } else {
           // Matched past month: use actual transactions
-          aPrincipal = Math.min(aBalance, Math.max(0, actualPaid - aInterest));
+          aPrincipal = actualPaid - aInterest;
+          if (aPrincipal > aBalance) aPrincipal = aBalance;
           aBalance = Math.max(0, aBalance - aPrincipal);
+          
           extra = Math.max(0, actualPaid - scheduledMonthlyPayment);
           totalActualPaid += actualPaid;
           cumulativeActualInterest += aInterest;
@@ -470,7 +473,7 @@ export default function Loans() {
         if (!isNaN(num)) {
           monthsRemaining = -num / Math.log(1 + r);
         } else {
-          monthsRemaining = balanceAsOfToday / scheduledMonthlyPayment;
+          monthsRemaining = Infinity;
         }
       }
     }
@@ -1093,7 +1096,7 @@ export default function Loans() {
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CalendarMonthIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                   <Typography variant="body2" color="text.secondary">
-                    <strong>{scheduleData.monthsRemaining}</strong> months remaining
+                    <strong>{scheduleData.monthsRemaining === Infinity ? '∞' : scheduleData.monthsRemaining}</strong> months remaining
                   </Typography>
                 </Stack>
               </Box>

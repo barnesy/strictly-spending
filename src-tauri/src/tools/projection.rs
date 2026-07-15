@@ -227,10 +227,6 @@ pub fn calculate_projection(state: State<DbState>, params: ProjectionParams) -> 
             }
 
             let mut principal_payment = payment - interest;
-            if principal_payment < 0.0 {
-                principal_payment = 0.0; // Negative amortization
-            }
-
             if principal_payment > loan.principal {
                 principal_payment = loan.principal;
                 payment = principal_payment + interest;
