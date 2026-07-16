@@ -152,7 +152,7 @@ export default function Landing() {
         </Typography>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '700px', width: '100%', mx: 'auto', px: 2, mb: 10 }}>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, justifyContent: 'center' }}>
             <Button
               variant="contained"
               size="large"
@@ -160,7 +160,7 @@ export default function Landing() {
               onClick={() => handleDownload('mac')}
               sx={{
                 flex: 1,
-                width: { xs: '100%', sm: 'auto' },
+                width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
                 py: 3.5,
                 px: 3,
@@ -182,7 +182,7 @@ export default function Landing() {
               onClick={() => handleDownload('windows')}
               sx={{
                 flex: 1,
-                width: { xs: '100%', sm: 'auto' },
+                width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
                 py: 3.5,
                 px: 3,
@@ -336,7 +336,7 @@ export default function Landing() {
             Ready to take control?
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '700px', width: '100%', mx: 'auto', px: 2, mb: 4 }}>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, justifyContent: 'center' }}>
               <Button
                 variant="contained"
                 size="large"
@@ -344,7 +344,7 @@ export default function Landing() {
                 onClick={() => handleDownload('mac')}
                 sx={{
                   flex: 1,
-                  width: { xs: '100%', sm: 'auto' },
+                  width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
                   py: 4,
                   px: 3,
@@ -366,7 +366,7 @@ export default function Landing() {
                 onClick={() => handleDownload('windows')}
                 sx={{
                   flex: 1,
-                  width: { xs: '100%', sm: 'auto' },
+                  width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
                   py: 4,
                   px: 3,
