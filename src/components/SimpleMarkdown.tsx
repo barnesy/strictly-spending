@@ -337,11 +337,12 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
                 </TableContainer>
               );
             case 'code':
-              if (['echarts', 'json', 'javascript', 'js', ''].includes(block.language.toLowerCase())) {
+              const langLower = block.language.toLowerCase();
+              if (['echarts', 'json', 'javascript', 'js', ''].includes(langLower)) {
                 try {
                   const parsedOption = JSON.parse(block.text);
                   if (parsedOption && typeof parsedOption === 'object') {
-                    if (block.language === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
+                    if (langLower === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
                       return <ArtifactChart key={idx} option={parsedOption} />;
                     }
                   }
@@ -352,7 +353,7 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
                     const fn = new Function('return (' + block.text + ')');
                     const parsedOption = fn();
                     if (parsedOption && typeof parsedOption === 'object') {
-                      if (block.language === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
+                      if (langLower === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
                         return <ArtifactChart key={idx} option={parsedOption} />;
                       }
                     }

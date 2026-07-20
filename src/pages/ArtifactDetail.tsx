@@ -10,7 +10,7 @@ import SimpleMarkdown from '../components/SimpleMarkdown';
 import ArticleIcon from '@mui/icons-material/Article';
 import GridOnIcon from '@mui/icons-material/GridOn';
 import { parseSpreadsheet } from '../spreadsheetUtils';
-import { downloadFile } from '../downloadUtils';
+import { downloadFile, downloadMarkdownWithCharts } from '../downloadUtils';
 import Papa from 'papaparse';
 
 export default function ArtifactDetail() {
@@ -102,34 +102,8 @@ export default function ArtifactDetail() {
               color="primary"
               startIcon={<ArticleIcon />}
               onClick={() => {
-                let contentToDownload = artifact.content;
-                
-                const canvases = document.querySelectorAll('.artifact-chart canvas') as NodeListOf<HTMLCanvasElement>;
-                let canvasIndex = 0;
-                contentToDownload = contentToDownload.replace(/```(.*)\n([\s\S]*?)```/g, (match, lang, innerText) => {
-                  const language = lang.trim().toLowerCase();
-                  if (['echarts', 'json', 'javascript', 'js', ''].includes(language)) {
-                    try {
-                      let parsed = null;
-                      try { parsed = JSON.parse(innerText); }
-                      catch(e) { const fn = new Function('return (' + innerText + ')'); parsed = fn(); }
-                      
-                      if (parsed && typeof parsed === 'object') {
-                        if (language === 'echarts' || (parsed.series && Array.isArray(parsed.series))) {
-                          const canvas = canvases[canvasIndex++];
-                          if (canvas) {
-                            const dataUrl = canvas.toDataURL('image/png');
-                            return `<details>\n<summary>View Chart Data</summary>\n\n${match}\n\n</details>\n\n![Chart Snapshot](${dataUrl})`;
-                          }
-                        }
-                      }
-                    } catch(e) {}
-                  }
-                  return match;
-                });
-
                 const filename = `${artifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.md`;
-                downloadFile(contentToDownload, filename, 'text/markdown;charset=utf-8;');
+                downloadMarkdownWithCharts(artifact.content, filename, document.getElementById('artifact-detail-content'));
               }}
             >
               Download MD
@@ -167,7 +141,7 @@ export default function ArtifactDetail() {
         </Box>
       </Box>
 
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <Box id="artifact-detail-content" sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Box sx={{ width: '100%', maxWidth: 900 }}>
           {isEditing ? (
             <TextField

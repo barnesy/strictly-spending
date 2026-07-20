@@ -60,7 +60,7 @@ export default function ArtifactChart({ option, height = 400 }: ArtifactChartPro
         overflow: 'hidden'
       }}
     >
-      <div className="artifact-chart" ref={chartRef} style={{ width: '100%', height: '100%' }} />
+      <div className="artifact-chart" data-chart-index={option.id || ''} ref={chartRef} style={{ width: '100%', height: '100%' }} />
     </Box>
   );
 }

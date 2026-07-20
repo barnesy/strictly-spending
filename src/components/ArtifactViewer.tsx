@@ -34,7 +34,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettings } from '../hooks/queries';
 import { parseSpreadsheet } from '../spreadsheetUtils';
-import { downloadFile } from '../downloadUtils';
+import { downloadFile, downloadMarkdownWithCharts } from '../downloadUtils';
 import Papa from 'papaparse';
 
 import type { AgentSkill, ChatArtifactVersion } from '../types';
@@ -251,34 +251,8 @@ export default function ArtifactViewer() {
               variant="outlined"
               startIcon={<ArticleIcon />}
               onClick={() => {
-                let contentToDownload = activeArtifact.content;
-                
-                const canvases = document.querySelectorAll('.artifact-chart canvas') as NodeListOf<HTMLCanvasElement>;
-                let canvasIndex = 0;
-                contentToDownload = contentToDownload.replace(/```(.*)\n([\s\S]*?)```/g, (match, lang, innerText) => {
-                  const language = lang.trim().toLowerCase();
-                  if (['echarts', 'json', 'javascript', 'js', ''].includes(language)) {
-                    try {
-                      let parsed = null;
-                      try { parsed = JSON.parse(innerText); }
-                      catch(e) { const fn = new Function('return (' + innerText + ')'); parsed = fn(); }
-                      
-                      if (parsed && typeof parsed === 'object') {
-                        if (language === 'echarts' || (parsed.series && Array.isArray(parsed.series))) {
-                          const canvas = canvases[canvasIndex++];
-                          if (canvas) {
-                            const dataUrl = canvas.toDataURL('image/png');
-                            return `<details>\n<summary>View Chart Data</summary>\n\n${match}\n\n</details>\n\n![Chart Snapshot](${dataUrl})`;
-                          }
-                        }
-                      }
-                    } catch(e) {}
-                  }
-                  return match;
-                });
-
                 const filename = `${activeArtifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.md`;
-                downloadFile(contentToDownload, filename, 'text/markdown;charset=utf-8;');
+                downloadMarkdownWithCharts(activeArtifact.content, filename, document.getElementById('artifact-viewer-content'));
               }}
               sx={{ textTransform: 'none', fontSize: 11, py: 0.5 }}
             >
@@ -376,7 +350,7 @@ export default function ArtifactViewer() {
       </Box>
 
       {/* Content Area */}
-      <Box sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <Box id="artifact-viewer-content" sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Box sx={{ width: '100%', maxWidth: 900, display: 'flex', flexDirection: 'column' }}>
           {isPdf ? (
             <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
