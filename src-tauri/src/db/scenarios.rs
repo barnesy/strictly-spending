@@ -67,11 +67,12 @@ pub fn get_scenarios(state: State<DbState>) -> Result<Vec<Scenario>, String> {
 
 #[tauri::command]
 pub fn create_scenario(state: State<DbState>, scenario: Scenario) -> Result<i64, String> {
-    let conn = state.conn.lock().unwrap();
+    let mut conn = state.conn.lock().unwrap();
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
     let created_at = chrono::Utc::now().to_rfc3339();
     let goals_str = scenario.goals.as_ref().map(|g| serde_json::to_string(g).unwrap_or_default());
     
-    conn.execute(
+    tx.execute(
         "INSERT INTO scenarios (name, starting_balance, base_income, tax_rate, recurring_budget, variable_budget, savings_budget, extra_loan_payment, loan_strategy, created_at, goals, investment_growth_rate, divert_extra_to_savings)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
@@ -90,8 +91,10 @@ pub fn create_scenario(state: State<DbState>, scenario: Scenario) -> Result<i64,
             scenario.divert_extra_to_savings,
         ],
     ).map_err(|e| e.to_string())?;
+    let row_id = tx.last_insert_rowid();
+    tx.commit().map_err(|e| e.to_string())?;
     
-    Ok(conn.last_insert_rowid())
+    Ok(row_id)
 }
 
 #[tauri::command]
@@ -99,10 +102,11 @@ pub fn update_scenario(state: State<DbState>, scenario: Scenario) -> Result<(), 
     if scenario.id.is_none() {
         return Err("Scenario ID is required for update".into());
     }
-    let conn = state.conn.lock().unwrap();
+    let mut conn = state.conn.lock().unwrap();
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
     let goals_str = scenario.goals.as_ref().map(|g| serde_json::to_string(g).unwrap_or_default());
     
-    conn.execute(
+    tx.execute(
         "UPDATE scenarios SET name=?1, starting_balance=?2, base_income=?3, tax_rate=?4, recurring_budget=?5, variable_budget=?6, savings_budget=?7, extra_loan_payment=?8, loan_strategy=?9, goals=?10, investment_growth_rate=?11, divert_extra_to_savings=?12 WHERE id=?13",
         params![
             scenario.name,
@@ -120,13 +124,16 @@ pub fn update_scenario(state: State<DbState>, scenario: Scenario) -> Result<(), 
             scenario.id,
         ],
     ).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
     
     Ok(())
 }
 
 #[tauri::command]
 pub fn delete_scenario(state: State<DbState>, id: i64) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute("DELETE FROM scenarios WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    let mut conn = state.conn.lock().unwrap();
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM scenarios WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }

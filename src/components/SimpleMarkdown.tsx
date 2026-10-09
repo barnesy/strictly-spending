@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import ArtifactChart from './ArtifactChart';
+import { safeParseChartOption } from '../utils/safeJson';
 import {
   Box,
   Typography,
@@ -336,29 +337,13 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
                   </Table>
                 </TableContainer>
               );
-            case 'code':
+            case 'code': {
               const langLower = block.language.toLowerCase();
               if (['echarts', 'json', 'javascript', 'js', ''].includes(langLower)) {
-                try {
-                  const parsedOption = JSON.parse(block.text);
-                  if (parsedOption && typeof parsedOption === 'object') {
-                    if (langLower === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
-                      return <ArtifactChart key={idx} option={parsedOption} />;
-                    }
-                  }
-                } catch (e1) {
-                  try {
-                    // LLMs sometimes output JS objects instead of strict JSON (unquoted keys, trailing commas, comments)
-                    // Evaluated in a function to allow valid JS object syntax
-                    const fn = new Function('return (' + block.text + ')');
-                    const parsedOption = fn();
-                    if (parsedOption && typeof parsedOption === 'object') {
-                      if (langLower === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
-                        return <ArtifactChart key={idx} option={parsedOption} />;
-                      }
-                    }
-                  } catch (e2) {
-                    // fall back to rendering as normal code block
+                const parsedOption = safeParseChartOption(block.text);
+                if (parsedOption && typeof parsedOption === 'object') {
+                  if (langLower === 'echarts' || (parsedOption.series && Array.isArray(parsedOption.series))) {
+                    return <ArtifactChart key={idx} option={parsedOption} />;
                   }
                 }
               }
@@ -379,6 +364,7 @@ export default function SimpleMarkdown({ content, onLinkClick }: { content: stri
                   <pre style={{ margin: 0 }}>{block.text}</pre>
                 </Box>
               );
+            }
             case 'text':
             default:
               return (

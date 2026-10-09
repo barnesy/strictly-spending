@@ -8,7 +8,8 @@ import { csvMappingsApi } from './csvMappings';
 import { taxApi } from './tax';
 import { loansApi, loanSchema } from './loans';
 import { chatApi } from './chat';
-import { scenariosApi } from './scenarios';
+import { scenariosApi, scenarioSchema, goalSchema } from './scenarios';
+import { forecastApi } from './forecast';
 import type { AppSetting } from './settings';
 
 export {
@@ -17,11 +18,15 @@ export {
   categorySchema,
   budgetSchema,
   loanSchema,
-  scenariosApi
+  scenarioSchema,
+  goalSchema,
+  scenariosApi,
+  forecastApi,
 };
 
 export type { AppSetting };
 export * from './types';
+export * from './forecast';
 
 export const api = {
   ...accountsApi,
@@ -36,5 +41,6 @@ export const api = {
   ...taxApi,
   ...loansApi,
   ...chatApi,
+  ...forecastApi,
   scenariosApi,
 };

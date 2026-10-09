@@ -12,7 +12,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import FlagIcon from '@mui/icons-material/Flag';
 import SaveIcon from '@mui/icons-material/Save';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '../api';
 import * as echarts from 'echarts';
 import { usd } from '../lib';
 import { usePutArtifact } from '../hooks/mutations';
@@ -125,22 +125,20 @@ export default function Forecast() {
     async function load() {
       try {
         const monthlyTax = baseIncome * (taxRate / 100);
-        const res: ProjectionPoint[] = await invoke('calculate_projection', {
-          params: {
-            base_income: baseIncome - monthlyTax,
-            recurring_budget: recurringBudget,
-            savings_budget: savingsBudget,
-            starting_balance: startingBalance,
-            income_gaps: [],
-            windfalls: [],
-            variable_budget: variableBudget,
-            investment_growth_rate: investmentGrowthRate,
-            global_extra_loan_payment: extraLoanPayment,
-            divert_extra_to_savings: divertExtraToSavings,
-            loan_strategy: loanStrategy,
-            months: months,
-            goals: goals.map(g => ({ name: g.name, target_amount: g.amount, monthly_contribution: g.monthlyContribution })),
-          }
+        const res = await api.calculateProjection({
+          base_income: baseIncome - monthlyTax,
+          recurring_budget: recurringBudget,
+          savings_budget: savingsBudget,
+          starting_balance: startingBalance,
+          income_gaps: [],
+          windfalls: [],
+          variable_budget: variableBudget,
+          investment_growth_rate: investmentGrowthRate,
+          global_extra_loan_payment: extraLoanPayment,
+          divert_extra_to_savings: divertExtraToSavings,
+          loan_strategy: loanStrategy,
+          months: months,
+          goals: goals.map(g => ({ name: g.name, target_amount: g.amount, monthly_contribution: g.monthlyContribution })),
         });
         setPoints(res);
       } catch (err) {
@@ -152,48 +150,48 @@ export default function Forecast() {
 
   useEffect(() => {
     async function fetchInitialData() {
-        try {
-            const budgets: any[] = await invoke('get_budgets');
-            const categories: any[] = await invoke('get_categories');
-            
-            let totalVariable = 0;
-            let totalRecurring = 0;
-            let totalIncome = 0;
-            for (const b of budgets) {
-                const cat = categories.find((c: any) => c.name === b.category);
-                if (cat) {
-                    if (cat.type === 'income') {
-                        totalIncome += b.monthly_amount;
-                    } else if (cat.default_recurrence === 'recurring') {
-                        totalRecurring += b.monthly_amount;
-                    } else {
-                        totalVariable += b.monthly_amount;
-                    }
-                }
+      try {
+        const budgets = await api.getBudgets();
+        const categories = await api.getCategories();
+        
+        let totalVariable = 0;
+        let totalRecurring = 0;
+        let totalIncome = 0;
+        for (const b of budgets) {
+          const cat = categories.find((c) => c.name === b.category);
+          if (cat) {
+            if (cat.type === 'income') {
+              totalIncome += b.monthlyAmount;
+            } else if (cat.defaultRecurrence === 'recurring') {
+              totalRecurring += b.monthlyAmount;
+            } else {
+              totalVariable += b.monthlyAmount;
             }
-            if (totalVariable > 0) {
-                setVariableBudget(totalVariable);
-            }
-            if (totalRecurring > 0) {
-                setRecurringBudget(totalRecurring);
-            }
-            if (totalIncome > 0) {
-                setBaseIncome(totalIncome);
-            }
-
-            const accounts: any[] = await invoke('get_accounts');
-            let totalCash = 0;
-            for (const a of accounts) {
-                if (a.type === 'checking' || a.type === 'savings') {
-                    totalCash += a.current_balance || 0;
-                }
-            }
-            if (totalCash > 0) {
-                setStartingBalance(totalCash);
-            }
-        } catch (err) {
-            console.error("Failed to fetch initial data:", err);
+          }
         }
+        if (totalVariable > 0) {
+          setVariableBudget(totalVariable);
+        }
+        if (totalRecurring > 0) {
+          setRecurringBudget(totalRecurring);
+        }
+        if (totalIncome > 0) {
+          setBaseIncome(totalIncome);
+        }
+
+        const accounts = await api.getAccounts();
+        let totalCash = 0;
+        for (const a of accounts) {
+          if (a.type === 'checking' || a.type === 'savings') {
+            totalCash += a.currentBalance || 0;
+          }
+        }
+        if (totalCash > 0) {
+          setStartingBalance(totalCash);
+        }
+      } catch (err) {
+        console.error("Failed to fetch initial data:", err);
+      }
     }
     fetchInitialData();
   }, []);

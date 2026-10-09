@@ -35,6 +35,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { useChatStore, formatModelName } from '../stores/chatStore';
 import { useShallow } from 'zustand/react/shallow';
 import { localAI } from '../ai';
+import { safeFetch } from '../ai/utils';
 
 const RECOMMENDED_OLLAMA_MODELS = [
   { name: 'gemma4:e2b', label: 'Gemma 4 E2B (Lightweight)', desc: 'Optimized for mobile and low-resource devices. Fast with a tiny footprint.', size: '7.2 GB' },
@@ -123,7 +124,7 @@ export default function LocalModel() {
   const refreshInstalledModels = useCallback(async () => {
     setFetchingModels(true);
     try {
-      const res = await fetch('http://localhost:11434/api/tags');
+      const res = await safeFetch('http://localhost:11434/api/tags');
       if (res.ok) {
         const data = await res.json();
         setInstalledModels(data.models || []);

@@ -1,4 +1,5 @@
 import * as echarts from 'echarts';
+import { safeParseChartOption } from './utils/safeJson';
 
 export const downloadFile = async (content: string | Uint8Array, filename: string, contentType: string) => {
   const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
@@ -56,10 +57,7 @@ export const downloadMarkdownWithCharts = (originalContent: string, filename: st
     const language = lang.trim().toLowerCase();
     if (['echarts', 'json', 'javascript', 'js', ''].includes(language)) {
       try {
-        let parsed = null;
-        try { parsed = JSON.parse(innerText); }
-        catch(e) { const fn = new Function('return (' + innerText + ')'); parsed = fn(); }
-        
+        const parsed = safeParseChartOption(innerText);
         if (parsed && typeof parsed === 'object') {
           if (language === 'echarts' || (parsed.series && Array.isArray(parsed.series))) {
             const div = chartDivs[chartIndex++];

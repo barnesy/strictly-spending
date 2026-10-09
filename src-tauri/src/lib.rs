@@ -10,6 +10,12 @@ fn is_safe_mode() -> bool {
     std::env::var("STRICTLY_SPENDING_SAFE_MODE").is_ok()
 }
 
+#[tauri::command]
+fn open_document(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_shell::ShellExt;
+    app.shell().open(path, None).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -19,6 +25,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_playwright::init())
         .invoke_handler(tauri::generate_handler![
+            open_document,
             ollama::check_ollama_status,
             ollama::install_ollama,
             ollama::start_ollama,

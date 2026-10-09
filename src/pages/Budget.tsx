@@ -23,7 +23,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 
 import { usd, usdCents } from '../lib';
-import { type ConsolidatedMerchant } from '../budgets';
+import { type ConsolidatedMerchant } from '../domain/budgets';
 import { useBudgetStore } from '../stores/budgetStore';
 import { useFilters } from '../stores/store';
 import PageLoader from '../components/PageLoader';
