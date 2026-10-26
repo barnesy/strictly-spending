@@ -64,8 +64,8 @@ export const SimpleFinBankSyncCard: React.FC = () => {
     fetchAccounts();
   }, [fetchConfig, fetchAccounts]);
 
-  const isConnected = Boolean(config.access_url && config.access_url.trim().length > 0);
-  const mappedCount = accounts.filter((a) => a.strictly_account_id !== null).length;
+  const isConnected = Boolean(config?.access_url && config.access_url.trim().length > 0);
+  const mappedCount = (accounts || []).filter((a) => a.strictly_account_id !== null).length;
   const isPaymentRequired = error?.toLowerCase().includes('payment required');
 
   const handleConnect = async () => {

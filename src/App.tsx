@@ -113,7 +113,20 @@ export default function App() {
       return false;
     }
   });
-  const [inBrowserDemo, setInBrowserDemo] = useState<boolean>(() => isInstalledPwa);
+  const [inBrowserDemo, setInBrowserDemo] = useState<boolean>(() => {
+    if (isInstalledPwa && LANDING_ONLY_BUILD) {
+      useFilters.getState().setDemoMode(true);
+    }
+    return isInstalledPwa;
+  });
+
+  useEffect(() => {
+    if (LANDING_ONLY_BUILD && accounts.length > 0 && accounts.every((a) => a.source === 'demo')) {
+      if (!useFilters.getState().demoMode) {
+        useFilters.getState().setDemoMode(true);
+      }
+    }
+  }, [accounts]);
 
   const applyMcpUiCommand = useCallback(
     (cmd: McpUiCommand) => {

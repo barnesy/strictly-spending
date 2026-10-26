@@ -497,10 +497,16 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       s.scenarios = s.scenarios.filter((sc) => sc.id !== args.id);
       return null;
     }
+    case 'get_transaction': {
+      return s.transactions.find((t) => t.id === args.id) ?? null;
+    }
     case 'get_transactions': {
       return filterTransactions(s.transactions, {
         startDate: args.startDate,
         endDate: args.endDate,
+        category: args.category,
+        merchantKey: args.merchantKey,
+        ...(args.accountId ? { enabledAccountIds: [args.accountId] } : {}),
         ...(args.filters || {}),
       });
     }
@@ -742,20 +748,96 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     }
     case 'calculate_projection':
       return computeDemoProjection(args.params || {});
+    case 'last_month_actual_spend': {
+      const now = new Date();
+      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const ym = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
+      const accountFilter = args.accountId ? { enabledAccountIds: [args.accountId] } : {};
+      const txns = filterTransactions(s.transactions, { ...accountFilter, spendOnly: true });
+      const total = txns
+        .filter((t) => t.date.startsWith(ym) && t.amount < 0)
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      return Math.round(total * 100) / 100;
+    }
+    case 'get_unique_merchants': {
+      const set = new Set<string>();
+      for (const t of s.transactions) {
+        set.add(t.merchantKey || extractMerchantKey(t.description));
+      }
+      return Array.from(set).sort();
+    }
+    case 'preview_rule_matches': {
+      const pat = String(args.pattern || '').toLowerCase();
+      if (!pat) return { matchCount: 0, samples: [] };
+      const matches = s.transactions.filter((t) => t.description.toLowerCase().includes(pat));
+      return { matchCount: matches.length, samples: matches.slice(0, 10) };
+    }
+    case 'recategorize_all':
+      return 0;
+    case 'add_import':
+      return 1;
     case 'get_settings':
       return s.settings;
     case 'get_setting':
       return s.settings.find((x) => x.key === args.key)?.value ?? null;
     case 'put_setting': {
-      const existing = s.settings.find((x) => x.key === args.key);
-      if (existing) existing.value = args.value;
-      else s.settings.push({ key: args.key, value: args.value });
+      const key = args.item?.key ?? args.key;
+      const val = args.item?.value ?? args.value;
+      if (key) {
+        const existing = s.settings.find((x) => x.key === key);
+        if (existing) existing.value = val;
+        else s.settings.push({ key, value: val });
+      }
       return null;
     }
-    case 'simplefin_get_config':
+    case 'delete_setting': {
+      s.settings = s.settings.filter((x) => x.key !== args.key);
       return null;
+    }
+    case 'is_safe_mode':
+      return false;
+    case 'get_mcp_server_info':
+      return {
+        executablePath: '',
+        dbPath: 'Browser Local Memory',
+        configJson: '{}',
+        localUrls: [],
+      };
+    case 'simplefin_get_config': {
+      const saved = s.settings.find((x) => x.key === 'simplefin_config')?.value;
+      if (saved && typeof saved === 'object' && 'access_url' in saved) {
+        return saved;
+      }
+      return {
+        access_url: '',
+        claimed_at: null,
+        last_synced_at: null,
+      };
+    }
+    case 'simplefin_save_config': {
+      const cfg = args.config || { access_url: '', claimed_at: null, last_synced_at: null };
+      const existing = s.settings.find((x) => x.key === 'simplefin_config');
+      if (existing) existing.value = cfg;
+      else s.settings.push({ key: 'simplefin_config', value: cfg });
+      return null;
+    }
+    case 'simplefin_remove_connection': {
+      s.settings = s.settings.filter((x) => x.key !== 'simplefin_config');
+      return null;
+    }
     case 'simplefin_get_accounts':
       return [];
+    case 'simplefin_map_account':
+      return null;
+    case 'simplefin_claim_setup_token':
+    case 'simplefin_sync_transactions':
+      throw new Error(
+        'Direct SimpleFIN Bridge sync requires the native desktop or Android APK app (browsers block cross-origin SimpleFIN API requests). You can import bank CSVs directly below!'
+      );
+    case 'plugin:event|listen':
+      return 1;
+    case 'plugin:event|unlisten':
+      return null;
     default:
       return [];
   }

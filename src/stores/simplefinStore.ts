@@ -52,7 +52,10 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
   fetchConfig: async () => {
     try {
       const config = await simplefinGetConfig();
-      set({ config, error: null });
+      set({
+        config: config ?? { access_url: '', claimed_at: null, last_synced_at: null },
+        error: null,
+      });
     } catch (err: unknown) {
       set({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -73,14 +76,15 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
     set({ isLoading: true, error: null, successMessage: null });
     try {
       const config = await simplefinClaimSetupToken(tokenInput);
+      const safeConfig = config ?? { access_url: '', claimed_at: null, last_synced_at: null };
       set({
-        config,
+        config: safeConfig,
         isLoading: false,
         successMessage: 'SimpleFIN connected successfully! Fetching bank accounts...',
       });
       // Automatically attempt to fetch accounts right after connecting
       await get().fetchAccounts();
-      return config;
+      return safeConfig;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       set({ isLoading: false, error: msg });
@@ -92,7 +96,7 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const accounts = await simplefinGetAccounts();
-      set({ accounts, isLoading: false });
+      set({ accounts: Array.isArray(accounts) ? accounts : [], isLoading: false });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       set({ isLoading: false, error: msg });

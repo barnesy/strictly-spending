@@ -35,7 +35,9 @@ jobs:
         run: npm ci
 
       - name: Build Landing Page (dist-landing)
-        run: npm run build:landing
+        run: |
+          npm run build:landing
+          cp dist-landing/index.html dist-landing/404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -55,7 +55,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <Router>
+        <Router basename={import.meta.env.BASE_URL}>
           <App />
         </Router>
       </QueryClientProvider>
