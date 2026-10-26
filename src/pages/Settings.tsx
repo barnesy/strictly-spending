@@ -151,7 +151,8 @@ export default function Settings() {
     2
   );
 
-  const displayMcpJson = mcpInfo?.configJson || fallbackMcpJson;
+  const displayMcpJson =
+    mcpInfo?.configJson && mcpInfo.configJson.trim() !== '{}' ? mcpInfo.configJson : fallbackMcpJson;
 
   const handleCopyMcpConfig = async () => {
     try {

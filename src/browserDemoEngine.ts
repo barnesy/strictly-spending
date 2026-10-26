@@ -1883,13 +1883,24 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     }
     case 'is_safe_mode':
       return false;
-    case 'get_mcp_server_info':
-      return {
-        executablePath: '',
-        dbPath: 'Browser Local Storage',
-        configJson: '{}',
-        localUrls: [],
+    case 'get_mcp_server_info': {
+      const executablePath = 'strictly-spending';
+      const dbPath = '%APPDATA%\\com.strictlyspending.finance\\spending-viz.sqlite';
+      const configObj = {
+        mcpServers: {
+          'strictly-spending': {
+            command: executablePath,
+            args: ['--mcp', '--db-path', dbPath],
+          },
+        },
       };
+      return {
+        executablePath,
+        dbPath,
+        configJson: JSON.stringify(configObj, null, 2),
+        localUrls: ['http://192.168.1.94:5173', 'http://100.78.187.58:5173'],
+      };
+    }
     case 'simplefin_get_config': {
       return getSavedSimpleFinConfig(s);
     }
