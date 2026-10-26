@@ -1062,7 +1062,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       const recurringMerchants = new Set<string>();
       for (const [k, txns] of byMerchant.entries()) {
         const override = overrideMap.get(k);
-        if (override && override !== 'onetime' && override !== 'irregular') {
+        if (override && String(override) !== 'none' && String(override) !== 'onetime' && String(override) !== 'irregular') {
           recurringMerchants.add(k);
           continue;
         }
