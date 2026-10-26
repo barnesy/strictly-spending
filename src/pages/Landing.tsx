@@ -110,8 +110,21 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
       letterSpacing: '-0.02em',
     }}>
       {/* Header */}
-      <Box component="header" sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '1200px', width: '100%', mx: 'auto', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <Box
+        component="header"
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: { xs: 2, sm: 2.5 },
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: { xs: 'center', sm: onLaunchDemo ? 'space-between' : 'center' },
+          maxWidth: '1200px',
+          width: '100%',
+          mx: 'auto',
+          borderBottom: '1px solid rgba(0,0,0,0.08)',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
           <AnimatedLogo />
           <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.03em', color: '#111827' }}>
             Strictly Spending
@@ -124,12 +137,14 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
             startIcon={<PlayArrowIcon />}
             onClick={onLaunchDemo}
             sx={{
+              display: { xs: 'none', sm: 'inline-flex' },
               borderRadius: '8px',
               textTransform: 'none',
-              fontWeight: 700,
-              borderColor: '#2563EB',
-              color: '#2563EB',
-              '&:hover': { bgcolor: 'rgba(37,99,235,0.06)', borderColor: '#1D4ED8' }
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              borderColor: '#D1D5DB',
+              color: '#111827',
+              '&:hover': { bgcolor: '#F3F4F6', borderColor: '#9CA3AF' },
             }}
           >
             Try Live Demo
@@ -138,25 +153,31 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
       </Box>
 
       {/* Hero Section */}
-      <Container maxWidth="lg" sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', py: { xs: 8, md: 12 }, textAlign: 'center' }}>
+      <Container maxWidth="lg" sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', py: { xs: 5, md: 12 }, textAlign: 'center' }}>
 
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', mb: 3, gap: 1 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', mb: { xs: 2.5, md: 3 }, gap: 1 }}>
           <Chip
             label="Free Early Access · No Subscription"
+            size="small"
             sx={{
               bgcolor: 'rgba(16,185,129,0.1)',
               color: '#047857',
               fontWeight: 700,
+              fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+              height: { xs: 28, sm: 32 },
               border: '1px solid rgba(16,185,129,0.25)',
               backdropFilter: 'blur(10px)',
             }}
           />
           <Chip
             label="100% Local SQLite & Private AI"
+            size="small"
             sx={{
               bgcolor: 'rgba(0,0,0,0.04)',
               color: '#374151',
               fontWeight: 600,
+              fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+              height: { xs: 28, sm: 32 },
               border: '1px solid rgba(0,0,0,0.1)',
               backdropFilter: 'blur(10px)',
             }}
@@ -165,9 +186,9 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
 
         <Typography variant="h1" component="h1" sx={{
           fontWeight: 800,
-          fontSize: { xs: '3rem', md: '4.5rem' },
+          fontSize: { xs: '2.5rem', sm: '3.25rem', md: '4.5rem' },
           lineHeight: 1.1,
-          mb: 3,
+          mb: { xs: 2, md: 3 },
           background: 'linear-gradient(180deg, #111827 0%, #4B5563 100%)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
@@ -176,11 +197,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
           Unlimited intelligence,<br />Absolute Privacy.
         </Typography>
 
-        <Typography variant="h5" sx={{ mb: 5, maxWidth: '700px', mx: 'auto', lineHeight: 1.5, color: '#4B5563', fontWeight: 400 }}>
+        <Typography variant="h5" sx={{ mb: { xs: 4, md: 5 }, maxWidth: '700px', mx: 'auto', lineHeight: 1.5, color: '#4B5563', fontWeight: 400, fontSize: { xs: '1.05rem', md: '1.5rem' }, px: 1 }}>
           Ingest multi-bank CSVs, sync 12,000+ banks via SimpleFIN, automate categorization rules, and forecast your net worth—without monthly cloud fees.
         </Typography>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '780px', width: '100%', mx: 'auto', px: 2, mb: 10 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '780px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: { xs: 6, md: 10 } }}>
           {onLaunchDemo && (
             <Button
               variant="contained"
@@ -189,28 +210,29 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
               onClick={onLaunchDemo}
               sx={{
                 width: '100%',
-                borderRadius: '10px',
-                py: 2.25,
-                px: 3,
+                borderRadius: '8px',
+                py: { xs: 1.75, md: 2.25 },
+                px: 2.5,
                 textTransform: 'none',
-                fontWeight: 700,
-                fontSize: '1.1rem',
-                background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                fontWeight: 600,
+                fontSize: { xs: '1rem', md: '1.05rem' },
+                whiteSpace: 'nowrap',
+                bgcolor: '#2563EB',
                 color: '#FFFFFF',
-                boxShadow: '0 8px 24px rgba(37, 99, 235, 0.25)',
+                boxShadow: 'none',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%)',
+                  bgcolor: '#1D4ED8',
                   transform: 'translateY(-2px)',
-                  boxShadow: '0 12px 28px rgba(37, 99, 235, 0.35)',
+                  boxShadow: 'none',
                 },
                 transition: 'all 0.2s'
               }}
             >
-              Try Interactive Live Demo in Browser (No Install Required)
+              Try Interactive Live Demo
             </Button>
           )}
 
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, justifyContent: 'center' }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center' }}>
             <Button
               variant="contained"
               size="large"
@@ -220,14 +242,16 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
-                py: 3,
+                py: { xs: 1.75, md: 2.5 },
                 px: 2.5,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: '1.05rem',
+                fontSize: { xs: '1rem', md: '1.05rem' },
+                whiteSpace: 'nowrap',
                 bgcolor: '#000000',
                 color: '#FFFFFF',
-                '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)' },
+                boxShadow: 'none',
+                '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)', boxShadow: 'none' },
                 transition: 'all 0.2s'
               }}
             >
@@ -242,15 +266,16 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
-                py: 3,
+                py: { xs: 1.75, md: 2.5 },
                 px: 2.5,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: '1.05rem',
+                fontSize: { xs: '1rem', md: '1.05rem' },
+                whiteSpace: 'nowrap',
                 bgcolor: '#FFFFFF',
                 color: '#111827',
                 border: '1px solid #D1D5DB',
-                '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)' },
+                '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)', boxShadow: 'none' },
                 transition: 'all 0.2s',
                 boxShadow: 'none',
               }}
@@ -266,14 +291,15 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
-                py: 3,
+                py: { xs: 1.75, md: 2.5 },
                 px: 2.5,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: '1.05rem',
+                fontSize: { xs: '1rem', md: '1.05rem' },
+                whiteSpace: 'nowrap',
                 bgcolor: '#059669',
                 color: '#FFFFFF',
-                '&:hover': { bgcolor: '#047857', transform: 'translateY(-2px)' },
+                '&:hover': { bgcolor: '#047857', transform: 'translateY(-2px)', boxShadow: 'none' },
                 transition: 'all 0.2s',
                 boxShadow: 'none',
               }}
@@ -416,8 +442,8 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 4, color: '#111827' }}>
             Ready to take control?
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '700px', width: '100%', mx: 'auto', px: 2, mb: 4 }}>
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, justifyContent: 'center' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '700px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: 4 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center' }}>
               <Button
                 variant="contained"
                 size="large"
@@ -427,14 +453,16 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                   flex: 1,
                   width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
-                  py: 4,
+                  py: { xs: 1.75, md: 3 },
                   px: 3,
                   textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: '1.2rem',
+                  fontWeight: 600,
+                  fontSize: { xs: '1rem', md: '1.1rem' },
+                  whiteSpace: 'nowrap',
                   bgcolor: '#000000',
                   color: '#FFFFFF',
-                  '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)' },
+                  boxShadow: 'none',
+                  '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)', boxShadow: 'none' },
                   transition: 'all 0.2s'
                 }}
               >
@@ -449,15 +477,16 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                   flex: 1,
                   width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
-                  py: 4,
+                  py: { xs: 1.75, md: 3 },
                   px: 3,
                   textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: '1.2rem',
+                  fontWeight: 600,
+                  fontSize: { xs: '1rem', md: '1.1rem' },
+                  whiteSpace: 'nowrap',
                   bgcolor: '#FFFFFF',
                   color: '#111827',
                   border: '1px solid #D1D5DB',
-                  '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)' },
+                  '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)', boxShadow: 'none' },
                   transition: 'all 0.2s',
                   boxShadow: 'none',
                 }}

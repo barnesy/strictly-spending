@@ -190,11 +190,13 @@ export function TopMerchantsCard({
   );
 }
 
+import { LANDING_ONLY_BUILD } from '../../env';
+
 export function DemoModeBanner() {
   const demoMode = useFilters((s) => s.demoMode);
   const setDemoMode = useFilters((s) => s.setDemoMode);
 
-  if (!demoMode) return null;
+  if (!demoMode || LANDING_ONLY_BUILD) return null;
 
   return (
     <Alert
@@ -205,14 +207,34 @@ export function DemoModeBanner() {
           variant="contained"
           color="warning"
           onClick={() => setDemoMode(false)}
-          sx={{ textTransform: 'none', mr: 1 }}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            px: { xs: 1.25, sm: 1.5 },
+            mr: { xs: 0, sm: 0.5 },
+          }}
         >
-          Switch to Real Data
+          <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+            Exit Demo
+          </Box>
+          <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+            Switch to Real Data
+          </Box>
         </Button>
       }
-      sx={{ alignItems: 'center' }}
+      sx={{
+        alignItems: 'center',
+        py: { xs: 0.25, sm: 0.5 },
+        '& .MuiAlert-message': { py: 0.5 },
+        '& .MuiAlert-action': { pt: 0, alignItems: 'center' },
+      }}
     >
-      <strong>Demo Mode is active.</strong> Your real accounts and transactions are hidden.
+      <strong>Demo Mode active.</strong>{' '}
+      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+        Your real accounts and transactions are hidden.
+      </Box>
     </Alert>
   );
 }

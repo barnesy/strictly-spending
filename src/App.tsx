@@ -399,18 +399,31 @@ export default function App() {
             sx={{
               bgcolor: '#1E40AF',
               color: '#FFFFFF',
-              px: 2,
-              py: 0.75,
+              px: { xs: 1.5, sm: 2 },
+              py: 0.6,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 1.5,
-              fontSize: '0.8rem',
+              gap: 1,
               zIndex: 1300,
             }}
           >
-            <Typography variant="caption" sx={{ fontWeight: 700, color: '#FFFFFF' }}>
-              Interactive Browser Demo — Exploring Sample Financial Data
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 700,
+                color: '#FFFFFF',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+                Live Browser Demo (Sample Data)
+              </Box>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                Interactive Browser Demo — Exploring Sample Financial Data
+              </Box>
             </Typography>
             <Button
               size="small"
@@ -420,14 +433,21 @@ export default function App() {
                 color: '#FFFFFF',
                 borderColor: 'rgba(255,255,255,0.45)',
                 py: 0.25,
-                px: 1.25,
+                px: 1.1,
                 fontSize: '0.75rem',
                 fontWeight: 700,
                 textTransform: 'none',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
                 '&:hover': { borderColor: '#FFFFFF', bgcolor: 'rgba(255,255,255,0.1)' },
               }}
             >
-              ← Back to Download Page
+              <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+                ← Exit Demo
+              </Box>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                ← Back to Download Page
+              </Box>
             </Button>
           </Box>
         )}
