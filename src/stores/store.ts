@@ -56,7 +56,7 @@ export interface FiltersState {
   demoMode: boolean;
   showRunway: boolean;
   forecastHorizon: number;
-  dashboardViewMode: DashboardViewMode;
+  dashboardViewMode?: DashboardViewMode;
   earliestTransactionDate?: string;
   latestTransactionDate?: string;
   minPrice?: number;
