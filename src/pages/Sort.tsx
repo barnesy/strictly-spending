@@ -61,7 +61,10 @@ export default function Sort() {
   const isDataLoading = isCatLoading || isQueueLoading;
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const visibleQueue = queue;
+  const visibleQueue = useMemo(
+    () => (Array.isArray(queue) ? queue.filter((c) => c && Array.isArray(c.txns) && c.txns.length > 0) : []),
+    [queue]
+  );
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -122,7 +125,7 @@ export default function Sort() {
       setSaveRule(sel.saveRule);
       setRecurrence(sel.recurrence || '');
     } else {
-      setRulePattern(deriveRulePattern(currentCard.txns[0]?.description || key) || key);
+      setRulePattern(deriveRulePattern(currentCard.txns?.[0]?.description || key) || key);
       setSaveRule(true);
       setRecurrence('');
     }

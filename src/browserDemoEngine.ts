@@ -1,4 +1,4 @@
-import type { Account, Budget, Category, CategoryRule, CsvMapping, ImportBatch, Loan, MerchantOverride, RecurrenceInfo, Transaction } from './types';
+import type { Account, Budget, Category, CategoryRule, CsvMapping, ImportBatch, Loan, MerchantOverride, RecurrenceInfo, SortCard, Transaction } from './types';
 import type { Scenario } from './api/scenarios';
 import type { ProjectionParams } from './api/forecast';
 import type { SimpleFinAccountRecord, SimpleFinConfig, SimpleFinSyncResponse } from './api/simplefin';
@@ -78,11 +78,35 @@ function ensureInitialized(): BrowserDemoState {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.accounts) && Array.isArray(parsed.transactions)) {
+          const loadedCategories: Category[] =
+            Array.isArray(parsed.categories) && parsed.categories.length > 0 ? parsed.categories : [...DEMO_CATEGORIES];
+          const loadedRules: CategoryRule[] = Array.isArray(parsed.rules) ? parsed.rules : [];
+          const validCats = new Set(loadedCategories.map((c) => c.name));
+          const ctx = { rules: loadedRules };
+          let upgraded = false;
+          const upgradedTxns: Transaction[] = (parsed.transactions as Transaction[]).map((t) => {
+            if (t.category === 'Uncategorized' && !t.userOverridden) {
+              const nextCat =
+                categorize(t.description, t.merchantKey, t.rawCategory, ctx) !== 'Uncategorized'
+                  ? categorize(t.description, t.merchantKey, t.rawCategory, ctx)
+                  : inferTypeCategory(t.amount, t.source, t.rawCategory, undefined, t.description) ||
+                    heuristicCategory(`${t.merchantKey || ''} ${t.description}`, t.amount, validCats);
+              if (nextCat && nextCat !== 'Uncategorized') {
+                upgraded = true;
+                return {
+                  ...t,
+                  category: nextCat,
+                  recurrence: RECURRING_CATEGORIES.has(nextCat) ? 'recurring' : t.recurrence || 'onetime',
+                };
+              }
+            }
+            return t;
+          });
           state = {
             accounts: parsed.accounts,
-            categories: Array.isArray(parsed.categories) && parsed.categories.length > 0 ? parsed.categories : [...DEMO_CATEGORIES],
-            rules: Array.isArray(parsed.rules) ? parsed.rules : [],
-            transactions: parsed.transactions,
+            categories: loadedCategories,
+            rules: loadedRules,
+            transactions: upgradedTxns,
             budgets: Array.isArray(parsed.budgets) ? parsed.budgets : [],
             loans: Array.isArray(parsed.loans) ? parsed.loans : [],
             scenarios: Array.isArray(parsed.scenarios) ? parsed.scenarios : [],
@@ -92,6 +116,7 @@ function ensureInitialized(): BrowserDemoState {
             csvMappings: Array.isArray(parsed.csvMappings) ? parsed.csvMappings : [],
             imports: Array.isArray(parsed.imports) ? parsed.imports : [],
           };
+          if (upgraded) persistState();
           return state;
         }
       }
@@ -430,6 +455,108 @@ function saveSimpleFinConfigToState(s: BrowserDemoState, cfg: SimpleFinConfig): 
   persistState();
 }
 
+const KNOWN_BRANDS = [
+  'the home depot', 'home depot', 'the ups store', 'ups store',
+  'racetrac', 'chevron', 'quiktrip', 'circle k', 'citgo', 'shell',
+  'dunkin', 'xero', 'amc', 'starbucks', 'walmart', 'target',
+  'publix', 'kroger', 'trader joe', 'whole foods', 'mcdonald',
+  'chick fil a', 'waffle house', 'marathon', 'valero', 'exxon',
+  'speedway', 'costco', 'sams club', 'apple', 'google', 'amazon',
+  'netflix', 'spotify', 'hulu', 'disney', 'uber', 'lyft',
+  'cvs', 'walgreens', 'zelle', 'venmo', 'paypal', 'robinhood',
+  'coinbase', 'fidelity', 'vanguard', 'schwab', 'wealthfront', 'betterment',
+  'ally', 'sofi', 'marcus', 'truist', 'chase', 'amex', 'citi', 'discover',
+  'capital one', 'wells fargo', 'gusto', 'adp', 'workday', 'paychex', 'rippling',
+];
+
+const NOISE_WORDS = new Set([
+  'trn', 'id', 'des', 'indn', 'co', 'ref', 'conf', 'confirmation',
+  'date', 'time', 'et', 'est', 'edt', 'pmt', 'ach', 'pos', 'ppd',
+  'web', 'tel', 'seq', 'orig', 'bnf', 'srf', 'mobile', 'purchase',
+  'debit', 'card', 'withdrwl', 'withdrawal', 'recurring', 'online',
+  'banking', 'from', 'to', 'chk', 'sav', 'acct', 'account', 'type',
+  'al', 'ak', 'az', 'ar', 'ca', 'ct', 'de', 'fl', 'ga', 'hi', 'il',
+  'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms',
+  'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh',
+  'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va',
+  'wa', 'wv', 'wi', 'wy',
+]);
+
+function normalizeSortMerchantKey(rawKey: string, description: string): string {
+  const source = rawKey.trim() || description;
+  const cleaned = source.toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+  const padded = ` ${cleaned} `;
+  for (const brand of KNOWN_BRANDS) {
+    if (padded.includes(` ${brand} `)) {
+      return brand;
+    }
+  }
+  const words = cleaned
+    .split(/\s+/)
+    .filter((w) => {
+      if (w.length < 2) return false;
+      if (/^x+$/.test(w) || w.startsWith('xx')) return false;
+      if (/\d/.test(w)) return false;
+      return !NOISE_WORDS.has(w);
+    });
+  if (words.length > 0) {
+    return words.slice(0, 3).join(' ');
+  }
+  return rawKey.replace(/_/g, ' ').trim().toLowerCase() || description.trim().toLowerCase();
+}
+
+function heuristicCategory(text: string, netSum: number, validCategories: Set<string>): string | null {
+  const padded = ` ${text.toLowerCase()} `;
+  const hasAny = (keywords: string[]) =>
+    keywords.some((kw) => (kw.includes(' ') ? padded.includes(kw) : padded.includes(` ${kw} `) || padded.includes(kw)));
+
+  if (
+    validCategories.has('Transfers') &&
+    hasAny([
+      'wire', 'xfer', 'transfer', 'zelle', 'venmo', 'cash app', 'robinhood',
+      'coinbase', 'fidelity', 'vanguard', 'schwab', 'wealthfront', 'betterment',
+      'autopay', 'credit card pmt', 'crcardpmt', 'epayment', 'mobile pymt',
+      'online pmt', 'bill pay', 'payment thank you', 'online transfer', 'check',
+    ])
+  ) {
+    return 'Transfers';
+  }
+
+  if (
+    netSum > 0 &&
+    validCategories.has('Income') &&
+    hasAny([
+      'payroll', 'direct dep', 'salary', 'dividend', 'interest', 'tax refund',
+      'irs treas', 'paycheck', 'deposit', 'gusto', 'adp', 'workday', 'paychex',
+      'rippling', 'paylocity', 'justworks',
+    ])
+  ) {
+    return 'Income';
+  }
+
+  const rules: Array<[string, string[]]> = [
+    ['Groceries', ['publix', 'kroger', 'whole foods', 'trader joe', 'aldi', 'costco', 'sams club', 'safeway', 'wegmans', 'sprouts', 'instacart', 'food lion', 'piggly wiggly', 'supermarket', 'grocery', 'market']],
+    ['Restaurants & Coffee', ['starbucks', 'dunkin', 'mcdonald', 'chick fil a', 'chipotle', 'panera', 'wendys', 'taco bell', 'burger king', 'subway', 'dominos', 'pizza', 'cafe', 'coffee', 'bakery', 'grill', 'kitchen', 'bistro', 'tavern', 'restaurant', 'doordash', 'ubereats', 'grubhub', 'waffle house', 'sweetgreen', 'cava', 'shake shack', 'popeyes', 'zaxby', 'bojangles']],
+    ['Transportation', ['chevron', 'shell', 'exxon', 'mobil', 'racetrac', 'quiktrip', 'wawa', 'sheetz', 'speedway', 'marathon', 'valero', 'citgo', 'circle k', 'sunoco', 'uber', 'lyft', 'parking', 'parkmobile', 'peach pass', 'sunpass', 'ezpass', 'toll', 'marta', 'delta', 'united', 'southwest', 'autozone', 'jiffy lube', 'discount tire']],
+    ['Utilities', ['georgia power', 'duke energy', 'fpl', 'comcast', 'xfinity', 'att', 'verizon', 't mobile', 'tmobile', 'spectrum', 'cox', 'google fiber', 'electric', 'gas south', 'scana', 'sanitation', 'utility', 'water']],
+    ['Subscriptions', ['netflix', 'spotify', 'hulu', 'disney', 'icloud', 'youtube', 'openai', 'chatgpt', 'claude', 'anthropic', 'github', 'cursor', 'adobe', 'microsoft', 'dropbox', 'nytimes', 'patreon', 'substack', 'xero', 'quickbooks', 'audible', 'kindle']],
+    ['Shopping', ['amazon', 'amzn', 'target', 'walmart', 'home depot', 'lowes', 'ikea', 'best buy', 'etsy', 'ebay', 'wayfair', 'tj maxx', 'marshalls', 'ross', 'nordstrom', 'macys', 'kohls', 'old navy', 'nike', 'lululemon', 'chewy', 'petco', 'petsmart', 'ups store', 'fedex', 'usps']],
+    ['Health', ['cvs', 'walgreens', 'rite aid', 'pharmacy', 'medical', 'dental', 'dentist', 'doctor', 'clinic', 'hospital', 'urgent care', 'quest diag', 'labcorp', 'optometry', 'vision', 'therapy', 'fitness', 'peloton', 'ymca']],
+    ['Entertainment', ['amc', 'regal', 'cinemark', 'cinema', 'movie', 'ticketmaster', 'stubhub', 'seatgeek', 'steam', 'playstation', 'xbox', 'nintendo', 'golf', 'bowling', 'museum', 'zoo', 'aquarium']],
+    ['Insurance', ['geico', 'state farm', 'progressive', 'allstate', 'usaa', 'liberty mutual', 'farmers', 'insurance']],
+    ['Housing', ['mortgage', 'rent', 'hoa', 'property mgmt', 'apartments']],
+    ['Taxes', ['internal revenue', 'dept of rev', 'property tax', 'county tax']],
+    ['Fees & Interest', ['overdraft', 'late charge', 'interest charge', 'service charge', 'wire fee', 'atm fee', 'annual fee', 'maintenance fee']],
+  ];
+
+  for (const [cat, keywords] of rules) {
+    if (validCategories.has(cat) && hasAny(keywords)) {
+      return cat;
+    }
+  }
+  return null;
+}
+
 function filterTransactions(txns: Transaction[], filters: Record<string, any> = {}): Transaction[] {
   const s = ensureInitialized();
   const incomeCats = new Set(s.categories.filter((c) => c.type === 'income').map((c) => c.name));
@@ -669,9 +796,14 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return null;
     }
     case 'bulk_put_budgets': {
-      for (const item of args.items || []) {
+      for (const item of args.budgets || args.items || []) {
         await handleBrowserDemoIpc('put_budget', { item });
       }
+      persistState();
+      return null;
+    }
+    case 'clear_budgets': {
+      s.budgets = [];
       persistState();
       return null;
     }
@@ -756,7 +888,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return nextId;
     }
     case 'bulk_add_transactions': {
-      const items: Omit<Transaction, 'id'>[] = args.items || [];
+      const items: Omit<Transaction, 'id'>[] = args.transactions || args.items || [];
       let nextId = Math.max(0, ...s.transactions.map((t) => t.id || 0)) + 1;
       const existingKeys = new Set(s.transactions.map((t) => t.dedupKey).filter(Boolean));
       const added: Transaction[] = [];
@@ -790,9 +922,18 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     }
     case 'bulk_update_transactions': {
       const updateMap = new Map<number, Partial<Transaction>>();
-      for (const u of args.updates || []) {
-        if (u && typeof u.id === 'number') {
-          updateMap.set(u.id, u.updates || {});
+      if (Array.isArray(args.transactions)) {
+        for (const tx of args.transactions) {
+          if (tx && typeof tx.id === 'number') {
+            updateMap.set(tx.id, tx);
+          }
+        }
+      }
+      if (Array.isArray(args.updates)) {
+        for (const u of args.updates) {
+          if (u && typeof u.id === 'number') {
+            updateMap.set(u.id, u.updates || u);
+          }
         }
       }
       if (updateMap.size > 0) {
@@ -816,10 +957,133 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return null;
     }
     case 'get_sort_queue': {
-      const limit = args.limit || 50;
-      return filterTransactions(s.transactions, {})
-        .filter((t) => !t.userOverridden && t.category === 'Uncategorized')
-        .slice(0, limit);
+      const validCats = new Set(s.categories.map((c) => c.name));
+      const visible = filterTransactions(s.transactions, { demoMode: args.demoMode });
+      const uncategorized = visible.filter((t) => t.category === 'Uncategorized');
+
+      const historicalCategories = new Map<string, string>();
+      for (const t of visible) {
+        if (t.category && t.category !== 'Uncategorized') {
+          if (t.merchantKey && !historicalCategories.has(t.merchantKey)) {
+            historicalCategories.set(t.merchantKey, t.category);
+          }
+          const stem = normalizeSortMerchantKey(t.merchantKey || '', t.description);
+          if (stem && !historicalCategories.has(stem)) {
+            historicalCategories.set(stem, t.category);
+          }
+        }
+      }
+
+      const byKey = new Map<string, Transaction[]>();
+      for (const t of uncategorized) {
+        const k = normalizeSortMerchantKey(t.merchantKey || '', t.description);
+        const arr = byKey.get(k) || [];
+        arr.push(t);
+        byKey.set(k, arr);
+      }
+
+      const ctx = { rules: s.rules };
+      const cards: SortCard[] = [];
+
+      for (const [merchantKey, txns] of byKey.entries()) {
+        if (txns.length === 0) continue;
+        const sorted = [...txns].sort((a, b) => b.date.localeCompare(a.date));
+        const sampleTxns = sorted.slice(0, 10);
+        const totalAbs = Math.round(sorted.reduce((sum, t) => sum + Math.abs(t.amount), 0) * 100) / 100;
+        const netSum = sorted.reduce((sum, t) => sum + t.amount, 0);
+        const amountSign: 'spend' | 'income' = netSum >= 0 ? 'income' : 'spend';
+
+        const first = sorted[0];
+        let suggestedCategory: string | null = null;
+        const ruleCat = categorize(first.description, first.merchantKey, first.rawCategory, ctx);
+        if (ruleCat && ruleCat !== 'Uncategorized' && validCats.has(ruleCat)) {
+          suggestedCategory = ruleCat;
+        }
+        if (!suggestedCategory) {
+          const inferred = inferTypeCategory(first.amount, first.source, first.rawCategory, undefined, first.description);
+          if (inferred && validCats.has(inferred)) {
+            suggestedCategory = inferred;
+          }
+        }
+        if (!suggestedCategory) {
+          suggestedCategory =
+            historicalCategories.get(merchantKey) ||
+            sorted.map((t) => historicalCategories.get(t.merchantKey)).find(Boolean) ||
+            heuristicCategory(`${merchantKey} ${first.description}`, netSum, validCats);
+        }
+
+        cards.push({
+          merchantKey,
+          txns: sorted,
+          totalAbs,
+          sampleTxns,
+          suggestedCategory: suggestedCategory ?? null,
+          amountSign,
+        });
+      }
+
+      return cards.sort((a, b) => b.totalAbs - a.totalAbs);
+    }
+    case 'mine_rule_suggestions': {
+      const visible = filterTransactions(s.transactions, { demoMode: args.demoMode });
+      const counts = new Map<string, { pattern: string; category: string; count: number; sampleDescription: string }>();
+      for (const t of visible) {
+        if (!t.userOverridden || !t.merchantKey || t.category === 'Uncategorized') continue;
+        const key = `${t.merchantKey}:::${t.category}`;
+        const cur = counts.get(key) || {
+          pattern: t.merchantKey,
+          category: t.category,
+          count: 0,
+          sampleDescription: t.description,
+        };
+        cur.count += 1;
+        counts.set(key, cur);
+      }
+      const existingPatterns = new Set(s.rules.map((r) => r.pattern.toLowerCase()));
+      return Array.from(counts.values())
+        .filter((c) => c.count >= 2 && !existingPatterns.has(c.pattern.toLowerCase()))
+        .sort((a, b) => b.count - a.count)
+        .map((c) => ({
+          pattern: c.pattern,
+          category: c.category,
+          overridesCount: c.count,
+          sampleDescription: c.sampleDescription,
+        }));
+    }
+    case 'refresh_recurrence_all': {
+      const overrideMap = new Map(s.merchantOverrides.map((o) => [o.merchantKey, o.recurrence]));
+      const byMerchant = new Map<string, Transaction[]>();
+      for (const t of s.transactions) {
+        const k = t.merchantKey || extractMerchantKey(t.description);
+        const arr = byMerchant.get(k) || [];
+        arr.push(t);
+        byMerchant.set(k, arr);
+      }
+      const recurringMerchants = new Set<string>();
+      for (const [k, txns] of byMerchant.entries()) {
+        const override = overrideMap.get(k);
+        if (override && override !== 'onetime' && override !== 'irregular') {
+          recurringMerchants.add(k);
+          continue;
+        }
+        const distinctMonths = new Set(txns.map((t) => t.date.slice(0, 7)));
+        if (distinctMonths.size >= 2) {
+          recurringMerchants.add(k);
+        }
+      }
+      let updated = 0;
+      s.transactions = s.transactions.map((t) => {
+        const k = t.merchantKey || extractMerchantKey(t.description);
+        const nextRec: 'recurring' | 'onetime' =
+          RECURRING_CATEGORIES.has(t.category) || recurringMerchants.has(k) ? 'recurring' : 'onetime';
+        if (t.recurrence !== nextRec) {
+          updated += 1;
+          return { ...t, recurrence: nextRec };
+        }
+        return t;
+      });
+      if (updated > 0) persistState();
+      return { updated };
     }
     case 'get_dashboard_aggregates': {
       const filtered = filterTransactions(s.transactions, args.filters || {});
@@ -1004,51 +1268,52 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       for (const r of s.rules) {
         if (!r.id) continue;
         const pat = r.pattern.toLowerCase();
-        counts[r.id] = visible.filter((t) => t.description.toLowerCase().includes(pat)).length;
+        counts[r.id] = visible.filter((t) => t.description.toLowerCase().includes(pat) || (t.merchantKey || '').toLowerCase().includes(pat)).length;
       }
       return counts;
     }
     case 'get_merchant_groups': {
       const groups = new Map<string, {
         merchantKey: string;
-        displayName: string;
-        category: string;
-        count: number;
         totalSpend: number;
-        avgSpend: number;
-        lastDate: string;
-        recurrence: string;
-        amounts: number[];
+        totalTransactions: number;
+        categories: Record<string, number>;
+        mostCommonCategory: string;
+        earliestDate: string;
+        latestDate: string;
       }>();
-      for (const t of filterTransactions(s.transactions, {})) {
-        const key = t.merchantKey || extractMerchantKey(t.description);
+      for (const t of filterTransactions(s.transactions, { demoMode: args.demoMode })) {
+        const key = t.merchantKey || extractMerchantKey(t.description) || 'Unknown';
         const g = groups.get(key) || {
           merchantKey: key,
-          displayName: t.description,
-          category: t.category,
-          count: 0,
           totalSpend: 0,
-          avgSpend: 0,
-          lastDate: t.date,
-          recurrence: t.recurrence || 'onetime',
-          amounts: [],
+          totalTransactions: 0,
+          categories: {},
+          mostCommonCategory: t.category || 'Uncategorized',
+          earliestDate: t.date,
+          latestDate: t.date,
         };
-        g.count += 1;
-        g.totalSpend = Math.round((g.totalSpend + t.amount) * 100) / 100;
-        if (t.date > g.lastDate) g.lastDate = t.date;
-        if (t.recurrence === 'recurring') g.recurrence = 'recurring';
-        g.amounts.push(Math.abs(t.amount));
+        g.totalTransactions += 1;
+        if (t.amount < 0) {
+          g.totalSpend = Math.round((g.totalSpend + Math.abs(t.amount)) * 100) / 100;
+        }
+        g.categories[t.category] = (g.categories[t.category] || 0) + 1;
+        if (t.date < g.earliestDate) g.earliestDate = t.date;
+        if (t.date > g.latestDate) g.latestDate = t.date;
         groups.set(key, g);
       }
-      return Array.from(groups.values()).map((g) => ({
-        ...g,
-        avgSpend: Math.round((g.totalSpend / Math.max(1, g.count)) * 100) / 100,
-        latestAmount: g.amounts[0] || 0,
-        previousAvgAmount:
-          g.amounts.length > 1
-            ? Math.round((g.amounts.slice(1).reduce((a, b) => a + b, 0) / (g.amounts.length - 1)) * 100) / 100
-            : g.amounts[0] || 0,
-      }));
+      for (const g of groups.values()) {
+        let maxCount = -1;
+        let bestCat = 'Uncategorized';
+        for (const [cat, cnt] of Object.entries(g.categories)) {
+          if (cnt > maxCount) {
+            maxCount = cnt;
+            bestCat = cat;
+          }
+        }
+        g.mostCommonCategory = bestCat;
+      }
+      return Array.from(groups.values());
     }
     case 'calculate_projection':
       return computeDemoProjection(args.params || {});
@@ -1072,18 +1337,29 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     }
     case 'preview_rule_matches': {
       const pat = String(args.pattern || '').toLowerCase();
-      if (!pat) return { matchCount: 0, samples: [] };
-      const matches = filterTransactions(s.transactions, {}).filter((t) => t.description.toLowerCase().includes(pat));
-      return { matchCount: matches.length, samples: matches.slice(0, 10) };
+      const targetCat = String(args.category || '');
+      if (!pat) return { totalMatches: 0, affectedCount: 0, sampleTransactions: [] };
+      const matches = filterTransactions(s.transactions, { demoMode: args.demoMode }).filter(
+        (t) => t.description.toLowerCase().includes(pat) || (t.merchantKey || '').toLowerCase().includes(pat)
+      );
+      const affectedCount = matches.filter((t) => t.category !== targetCat).length;
+      return {
+        totalMatches: matches.length,
+        affectedCount,
+        sampleTransactions: matches.slice(0, 5),
+      };
     }
     case 'recategorize_all': {
       let updatedCount = 0;
       const ctx = { rules: s.rules };
+      const validCats = new Set(s.categories.map((c) => c.name));
       s.transactions = s.transactions.map((t) => {
         if (t.userOverridden && !args.forceUserRules) return t;
         let nextCat = categorize(t.description, t.merchantKey, t.rawCategory, ctx);
         if (nextCat === 'Uncategorized') {
-          const inferred = inferTypeCategory(t.amount, t.source, t.rawCategory, undefined, t.description);
+          const inferred =
+            inferTypeCategory(t.amount, t.source, t.rawCategory, undefined, t.description) ||
+            heuristicCategory(`${t.merchantKey || ''} ${t.description}`, t.amount, validCats);
           if (inferred) nextCat = inferred;
         }
         if (nextCat !== t.category) {
@@ -1457,9 +1733,12 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
             existingKeys.add(dedupKey);
 
             const merchantKey = extractMerchantKey(description);
+            const validCats = new Set(s.categories.map((c) => c.name));
             let category = categorize(description, merchantKey, undefined, ctx);
             if (category === 'Uncategorized') {
-              const inferred = inferTypeCategory(amountNum, 'simplefin', undefined, accountType, description);
+              const inferred =
+                inferTypeCategory(amountNum, 'simplefin', undefined, accountType, description) ||
+                heuristicCategory(`${merchantKey} ${description}`, amountNum, validCats);
               if (inferred) category = inferred;
             }
             const isRecurring = RECURRING_CATEGORIES.has(category);
@@ -1504,6 +1783,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         s.transactions = [...newTransactions, ...s.transactions.filter((t) => t.source !== 'demo')].sort((a, b) =>
           b.date.localeCompare(a.date)
         );
+        await handleBrowserDemoIpc('refresh_recurrence_all');
       }
 
       s.simplefinAccounts = updatedSfAccounts;
