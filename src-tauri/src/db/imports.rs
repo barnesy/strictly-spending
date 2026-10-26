@@ -60,35 +60,16 @@ pub fn add_import(state: State<DbState>, item: ImportBatch) -> Result<i64, Strin
 }
 
 #[tauri::command]
-pub fn put_import(state: State<DbState>, item: ImportBatch) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "INSERT OR REPLACE INTO imports (filename, source, imported_at, row_count, new_count, duplicate_count, content_hash, id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params![item.filename, item.source, item.imported_at, item.row_count, item.new_count, item.duplicate_count, item.content_hash, item.id],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn update_import(state: State<DbState>, id: i64, updates: ImportBatch) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "UPDATE imports SET filename=?1, source=?2, imported_at=?3, row_count=?4, new_count=?5, duplicate_count=?6, content_hash=?7 WHERE id = ?8",
-        params![updates.filename, updates.source, updates.imported_at, updates.row_count, updates.new_count, updates.duplicate_count, updates.content_hash, id],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
 pub fn delete_import(state: State<DbState>, id: i64) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM imports WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn clear_imports(state: State<DbState>) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM imports", []).map_err(|e| e.to_string())?;
     Ok(())
 }
+

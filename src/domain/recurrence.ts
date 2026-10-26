@@ -1,27 +1,31 @@
-import { invoke } from '@tauri-apps/api/core';
-import type { RecurrenceKind, Transaction, Category } from '../types';
+import { api } from '../api';
+import type { RecurrenceKind, RecurrenceInfo, Transaction, Category } from '../types';
 
-export interface RecurrenceInfo {
-  kind: RecurrenceKind;
-  count: number;
-  meanIntervalDays: number;
-  meanAmount: number;
-  estMonthlyCost: number;
-  lastDate: string | null;
-  source: 'auto' | 'override';
-}
+export type { RecurrenceInfo };
 
-export async function buildRecurrenceMap(isDemo: boolean = false): Promise<Record<string, RecurrenceInfo>> {
+export async function buildRecurrenceMap(isDemo: boolean = false, accountId?: number): Promise<Record<string, RecurrenceInfo>> {
   try {
-    return await invoke<Record<string, RecurrenceInfo>>('build_recurrence_map', { isDemo });
+    const res = await api.buildRecurrenceMap(isDemo, accountId);
+    return res || {};
   } catch (e) {
     console.error("Failed to build recurrence map natively:", e);
     return {};
   }
 }
 
-export function isRecurring(kind: RecurrenceKind): boolean {
-  return kind !== 'none';
+export function isRecurring(
+  kindOrTxn: RecurrenceKind | Transaction,
+  recurrenceMap?: Map<string, RecurrenceInfo>
+): boolean {
+  if (typeof kindOrTxn === 'string') {
+    return kindOrTxn !== 'none';
+  }
+  if (kindOrTxn.recurrence === 'recurring') return true;
+  if (kindOrTxn.merchantKey && recurrenceMap) {
+    const info = recurrenceMap.get(kindOrTxn.merchantKey);
+    if (info && info.kind !== 'none') return true;
+  }
+  return false;
 }
 
 export function recurrenceLabel(kind: RecurrenceKind): string {
@@ -41,7 +45,7 @@ export function recurrenceLabel(kind: RecurrenceKind): string {
 
 export async function refreshRecurrenceAll(): Promise<{ updated: number }> {
   try {
-    return await invoke<{ updated: number }>('refresh_recurrence_all');
+    return await api.refreshRecurrenceAll();
   } catch (e) {
     console.error("Failed to refresh recurrence natively:", e);
     return { updated: 0 };
@@ -64,14 +68,35 @@ function daysBetween(a: string, b: string): number {
   );
 }
 
+function computePriceHike(spend: Transaction[]): Pick<RecurrenceInfo, 'lastAmount' | 'priorAmount' | 'priceHikeDelta' | 'priceHikePct'> {
+  if (spend.length === 0) return {};
+  const lastAmount = Math.abs(spend[spend.length - 1].amount);
+  if (spend.length < 2) return { lastAmount };
+  const priorSlice = spend.slice(Math.max(0, spend.length - 4), spend.length - 1);
+  if (priorSlice.length === 0) return { lastAmount };
+  const priorAmount = priorSlice.reduce((s, t) => s + Math.abs(t.amount), 0) / priorSlice.length;
+  const delta = lastAmount - priorAmount;
+  if (priorAmount > 1 && delta >= 1 && delta / priorAmount >= 0.03 && delta / priorAmount <= 1.5) {
+    return {
+      lastAmount,
+      priorAmount,
+      priceHikeDelta: delta,
+      priceHikePct: (delta / priorAmount) * 100,
+    };
+  }
+  return { lastAmount, priorAmount };
+}
+
 export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
   const spend = txns
     .filter((t) => t.amount < 0)
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  const hikeFields = computePriceHike(spend);
+
   if (spend.length < 3) {
-    return { ...NONE, count: spend.length, lastDate: spend.at(-1)?.date ?? null };
+    return { ...NONE, count: spend.length, lastDate: spend.at(-1)?.date ?? null, ...hikeFields };
   }
 
   const intervals: number[] = [];
@@ -126,6 +151,7 @@ export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
     estMonthlyCost,
     lastDate: spend[spend.length - 1].date,
     source: 'auto',
+    ...hikeFields,
   };
 }
 

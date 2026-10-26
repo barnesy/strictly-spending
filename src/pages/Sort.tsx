@@ -11,7 +11,9 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api';
-import { useSettings, useCategories, useSortQueue } from '../hooks/queries';
+import { queryClient } from '../queryClient';
+import { useCategories, useSortQueue } from '../hooks/queries';
+import { recategorizeAll, deriveRulePattern } from '../domain/categorize';
 import PageLoader from '../components/PageLoader';
 import {
   Box,
@@ -26,14 +28,18 @@ import {
   DialogContent,
   Alert,
   Chip,
-  Switch,
   TextField,
   Drawer,
   useTheme,
   useMediaQuery,
+  CircularProgress,
+  LinearProgress,
 } from '@mui/material';
 import { guessTaxFields } from '../tax/taxUtils';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import AutoCleanupDialog from '../components/AutoCleanupDialog';
 
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 
@@ -43,19 +49,11 @@ import { type SortCard as SortCardData, type Transaction } from '../types';
 import SortCard from '../components/SortCard';
 import SortCategoryGrid from '../components/SortCategoryGrid';
 import SortEmptyState from '../components/SortEmptyState';
-import { localAI } from '../ai';
-import { playThinkingSound, stopThinkingSound, playSuccessSound, playFailSound } from '../audio';
 import { useDeferredRender } from '../hooks/useDeferredRender';
+import { UNIFORM_TOOLBAR_BUTTON_SX } from '../components/AccountFilterDropdown';
 
 export default function Sort() {
   const demoMode = useFilters((s) => s.demoMode);
-
-  const [aiSuggestEnabled, setAiSuggestEnabled] = useState(() => {
-    return localStorage.getItem('app:aiSuggestEnabled') === 'true';
-  });
-  const [aiSuggestions, setAiSuggestions] = useState<Record<string, { category: string; pattern: string; recurrence?: string }>>({});
-  const [aiSuggesting, setAiSuggesting] = useState<Record<string, boolean>>({});
-  const [aiErrors, setAiErrors] = useState<Record<string, string>>({});
 
   const { data: categories = [], isLoading: isCatLoading } = useCategories();
   const { data: queue = [], isLoading: isQueueLoading } = useSortQueue(demoMode);
@@ -78,7 +76,6 @@ export default function Sort() {
     }
   }, [currentIndex, visibleQueue]);
 
-  
   useEffect(() => {
     if (visibleQueue.length > 0 && currentIndex >= visibleQueue.length) {
       setCurrentIndex(Math.max(0, visibleQueue.length - 1));
@@ -92,15 +89,26 @@ export default function Sort() {
   const [recurrence, setRecurrence] = useState('');
   const [saveRule, setSaveRule] = useState(true);
   const [rulePattern, setRulePattern] = useState('');
-
-  const fetchingKeysRef = useRef<Set<string>>(new Set());
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyProgress, setApplyProgress] = useState<{
+    phase: string;
+    percent: number;
+    current?: number;
+    total?: number;
+  }>({
+    phase: '',
+    percent: 0,
+  });
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const [touchDeltaX, setTouchDeltaX] = useState(0);
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const [helpOpen, setHelpOpen] = useState(false);
+  const [autoCleanupOpen, setAutoCleanupOpen] = useState(false);
 
-  // Sync state when active card or suggestions or selections change
+  // Sync state when active card or selections change
   useEffect(() => {
     if (!currentCard) {
       setRulePattern('');
@@ -114,12 +122,11 @@ export default function Sort() {
       setSaveRule(sel.saveRule);
       setRecurrence(sel.recurrence || '');
     } else {
-      const aiSug = aiSuggestions[key];
-      setRulePattern(aiSug ? aiSug.pattern : key);
+      setRulePattern(deriveRulePattern(currentCard.txns[0]?.description || key) || key);
       setSaveRule(true);
-      setRecurrence(aiSug && aiSug.recurrence ? aiSug.recurrence : '');
+      setRecurrence('');
     }
-  }, [currentCard, selections, aiSuggestions]);
+  }, [currentCard, selections]);
 
   // Sync rulePattern and saveRule changes into selections state if they edit them without selecting category first
   const handlePatternChange = (val: string) => {
@@ -134,7 +141,6 @@ export default function Sort() {
     }
   };
 
-  
   const handleRecurrenceChange = (val: string) => {
     if (!currentCard) return;
     const key = currentCard.merchantKey;
@@ -159,132 +165,12 @@ export default function Sort() {
     }
   };
 
-  const { data: settings = [] } = useSettings();
-  const scoreSetting = settings.find(s => s.key === 'app:aiGuessScore');
-  const score = scoreSetting?.value as { correctCount: number; totalCount: number } | undefined;
-
-  const updateScore = useCallback(async (correct: boolean) => {
-    await (async () => {
-      const existing = await api.getSetting<{ correctCount: number; totalCount: number }>('app:aiGuessScore');
-      const val = existing || { correctCount: 0, totalCount: 0 };
-      const updated = {
-        correctCount: val.correctCount + (correct ? 1 : 0),
-        totalCount: val.totalCount + 1,
-      };
-      await api.putSetting('app:aiGuessScore', updated).catch(e => console.error(e));
-    })();
-  }, []);
-
-  const handleToggleAiSuggest = (enabled: boolean) => {
-    setAiSuggestEnabled(enabled);
-    localStorage.setItem('app:aiSuggestEnabled', String(enabled));
-  };
-
-  useEffect(() => {
-    if (!aiSuggestEnabled || !currentCard) return;
-    const key = currentCard.merchantKey;
-    if (aiSuggestions[key] || fetchingKeysRef.current.has(key)) return;
-
-    const controller = new AbortController();
-    let active = true;
-
-    async function fetchSuggestion() {
-      fetchingKeysRef.current.add(key);
-      console.log('[Sort.tsx] fetchSuggestion started for merchant key:', key);
-      setAiSuggesting(prev => ({ ...prev, [key]: true }));
-      setAiErrors(prev => {
-        const updated = { ...prev };
-        delete updated[key];
-        return updated;
-      });
-
-      playThinkingSound();
-
-      try {
-        if (!localAI.isLoaded) {
-          console.log('[Sort.tsx] localAI is not loaded. Initializing...');
-          await localAI.init();
-          console.log('[Sort.tsx] localAI initialization finished.');
-        }
-
-        if (!active) {
-          console.log('[Sort.tsx] fetchSuggestion aborted because component unmounted or active is false.');
-          stopThinkingSound();
-          return;
-        }
-
-        const catNames = (categories || [])
-          .map((c) => c.name)
-          .filter((name) => name !== 'Uncategorized');
-
-        const desc = currentCard.txns[0]?.description || key || '';
-        const toReview = [
-          {
-            desc,
-            ruleCategory: currentCard.suggestedCategory || 'Uncategorized',
-          },
-        ];
-
-        console.log('[Sort.tsx] Calling localAI.reviewTransactionsWithRules with desc:', desc);
-        const results = await localAI.reviewTransactionsWithRules(toReview, catNames, controller.signal);
-        console.log('[Sort.tsx] localAI.reviewTransactionsWithRules results:', results);
-
-        if (!active) {
-          stopThinkingSound();
-          return;
-        }
-        if (results && results.length > 0) {
-          const result = results[0];
-          if (result) {
-            console.log('[Sort.tsx] Setting AI suggestion for key:', key, result);
-            playSuccessSound();
-            setAiSuggestions(prev => ({ ...prev, [key]: result }));
-          } else {
-            console.log('[Sort.tsx] Suggestion invalid:', result);
-            playFailSound();
-          }
-        } else {
-          console.log('[Sort.tsx] No results returned.');
-          playFailSound();
-        }
-      } catch (err: unknown) {
-        if (active && (err as Error).name !== 'AbortError') {
-          console.error('[Sort.tsx] AI Auto-Suggest failed:', err);
-          playFailSound();
-          setAiErrors(prev => ({ ...prev, [key]: (err as Error).message || String(err) }));
-        } else if ((err as Error).name === 'AbortError') {
-          stopThinkingSound();
-        }
-      } finally {
-        fetchingKeysRef.current.delete(key);
-        if (active) {
-          console.log('[Sort.tsx] fetchSuggestion finished for merchant key:', key);
-          setAiSuggesting(prev => {
-            const updated = { ...prev };
-            delete updated[key];
-            return updated;
-          });
-        }
-      }
-    }
-
-    fetchSuggestion();
-
-    return () => {
-      active = false;
-      controller.abort();
-      stopThinkingSound();
-    };
-  }, [currentCard, aiSuggestEnabled, categories, aiSuggestions]);
-
-  const isInteractive = !!currentCard;
+  const isInteractive = !isApplying && !!currentCard;
 
   const activeSuggestion = useMemo(() => {
     if (!currentCard) return undefined;
-    const key = currentCard.merchantKey;
-    const activeAiCategory = aiSuggestions[key]?.category || null;
-    return (aiSuggestEnabled && activeAiCategory) ? activeAiCategory : currentCard.suggestedCategory;
-  }, [currentCard, aiSuggestions, aiSuggestEnabled]);
+    return currentCard.suggestedCategory;
+  }, [currentCard]);
 
   const lookupCategoryColor = useCallback(
     (name: string): string => {
@@ -295,7 +181,7 @@ export default function Sort() {
   );
 
   const handleClearSelection = () => {
-    if (!currentCard) return;
+    if (!currentCard || isApplying) return;
     const key = currentCard.merchantKey;
     setSelections(prev => {
       const updated = { ...prev };
@@ -306,14 +192,19 @@ export default function Sort() {
 
   const handleApplySelections = useCallback(async () => {
     const selectionKeys = Object.keys(selections);
-    if (selectionKeys.length === 0) return;
+    if (selectionKeys.length === 0 || isApplying) return;
 
-    await (async () => {
+    setIsApplying(true);
+    setApplyProgress({ phase: 'Preparing selections...', percent: 5 });
+
+    try {
       const toUpdateTxns: Transaction[] = [];
       const addedPatterns = new Set<string>();
+
+      let processedCount = 0;
       for (const key of selectionKeys) {
         const sel = selections[key];
-        const card = queue.find(c => c.merchantKey === key);
+        const card = queue.find((c) => c.merchantKey === key);
         if (!card) continue;
 
         const txs = card.txns;
@@ -331,32 +222,95 @@ export default function Sort() {
 
         const patternToSave = sel.rulePattern.trim();
         if (sel.recurrence) {
-          await api.putMerchantOverride({ merchantKey: key, recurrence: sel.recurrence as any }).catch(e => console.error(e));
+          const overrideKeys = Array.from(new Set([key, ...txs.map((t) => t.merchantKey).filter(Boolean)]));
+          for (const mk of overrideKeys) {
+            await api.putMerchantOverride({ merchantKey: mk, recurrence: sel.recurrence as import('../types').RecurrenceKind }).catch((e) => console.error(e));
+          }
         }
 
         if (sel.saveRule && patternToSave && !addedPatterns.has(patternToSave)) {
           addedPatterns.add(patternToSave);
-          await api.addRule({ pattern: patternToSave, category: sel.category, priority: 1000, createdAt: new Date().toISOString() } as any).catch(e => console.error(e));
+          await api.addRule({
+            pattern: patternToSave,
+            category: sel.category,
+            priority: 1000,
+            createdAt: new Date().toISOString(),
+          }).catch((e) => console.error(e));
         }
+
+        processedCount++;
+        setApplyProgress({
+          phase: `Configuring rules (${processedCount}/${selectionKeys.length})...`,
+          percent: Math.round(5 + (processedCount / selectionKeys.length) * 15),
+        });
+        await new Promise((r) => setTimeout(r, 0));
       }
 
       if (toUpdateTxns.length > 0) {
-        // We use raw invoke to avoid the reactive mut() which spams db-update
-        await api.bulkUpdateTransactions(toUpdateTxns).catch(e => console.error(e));
-        import('../queryClient').then(({ queryClient }) => {
-          queryClient.invalidateQueries({ queryKey: ['sortQueue'] });
-          queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        setApplyProgress({
+          phase: `Updating ${toUpdateTxns.length} selected transaction(s)...`,
+          percent: 25,
+        });
+        await new Promise((r) => setTimeout(r, 0));
+        await api.bulkUpdateTransactions(toUpdateTxns);
+      }
+
+      if (addedPatterns.size > 0) {
+        await recategorizeAll({
+          onProgress: (p) => {
+            const scaled = Math.round(30 + (p.percent / 100) * 60);
+            setApplyProgress({
+              phase: p.phase,
+              percent: scaled,
+              current: p.processed,
+              total: p.total,
+            });
+          },
         });
       }
-    })();
 
-    setSelections({});
-    setCurrentIndex(0);
-  }, [selections, queue]);
+      setApplyProgress({ phase: 'Refreshing views...', percent: 95 });
+      await new Promise((r) => setTimeout(r, 0));
+      await queryClient.invalidateQueries();
+      window.dispatchEvent(new Event('db-update'));
+
+      setApplyProgress({ phase: 'All changes applied successfully!', percent: 100 });
+      await new Promise((r) => setTimeout(r, 350));
+
+      setSelections({});
+      setCurrentIndex(0);
+    } catch (err) {
+      console.error('[Sort.tsx] Failed to apply selections:', err);
+    } finally {
+      setIsApplying(false);
+      setApplyProgress({ phase: '', percent: 0 });
+    }
+  }, [selections, queue, isApplying]);
+
+  const suggestedCardsCount = useMemo(() => {
+    return visibleQueue.filter((c) => !!c.suggestedCategory && !selections[c.merchantKey]?.category).length;
+  }, [visibleQueue, selections]);
+
+  const handleSelectAllSuggested = useCallback(() => {
+    if (isApplying) return;
+    setSelections((prev) => {
+      const next = { ...prev };
+      for (const card of visibleQueue) {
+        if (card.suggestedCategory && !next[card.merchantKey]?.category) {
+          next[card.merchantKey] = {
+            category: card.suggestedCategory,
+            saveRule: true,
+            rulePattern: deriveRulePattern(card.txns[0]?.description || card.merchantKey) || card.merchantKey,
+          };
+        }
+      }
+      return next;
+    });
+  }, [visibleQueue, isApplying]);
 
   const onPick = useCallback(
     async (categoryName: string) => {
-      if (!currentCard) return;
+      if (!currentCard || isApplying) return;
       const key = currentCard.merchantKey;
 
       setMobileDrawerOpen(false);
@@ -364,17 +318,15 @@ export default function Sort() {
         category: categoryName,
         saveRule,
         rulePattern: rulePattern || key,
+        recurrence: selections[key]?.recurrence,
       };
-
-      const activeAiCategory = aiSuggestions[key]?.category || null;
-      if (aiSuggestEnabled && activeAiCategory) {
-        const isCorrect = activeAiCategory === categoryName;
-        await updateScore(isCorrect);
-      }
 
       setSelections(prev => ({
         ...prev,
-        [key]: nextSelection
+        [key]: {
+          ...nextSelection,
+          recurrence: prev[key]?.recurrence ?? nextSelection.recurrence,
+        }
       }));
 
       const tempSelections = {
@@ -393,7 +345,7 @@ export default function Sort() {
         }
       }
     },
-    [currentCard, currentIndex, visibleQueue, selections, rulePattern, saveRule, aiSuggestEnabled, aiSuggestions, updateScore]
+    [currentCard, currentIndex, visibleQueue, selections, rulePattern, saveRule, isApplying]
   );
 
   // Keyboard handler — single global listener while the page is mounted.
@@ -412,6 +364,8 @@ export default function Sort() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isApplying) return;
+
       // Ignore when focus is in inputs/textareas
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
@@ -459,7 +413,7 @@ export default function Sort() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onPick, isInteractive, helpOpen, activeSuggestion, visibleQueue.length]);
+  }, [onPick, isInteractive, helpOpen, activeSuggestion, visibleQueue.length, isApplying]);
 
 
   const isLoading = isDataLoading || categories === undefined;
@@ -473,101 +427,169 @@ export default function Sort() {
 
   return (
     <PageLoader isLoading={isLoading}>
-      <Stack spacing={2} sx={{ width: '100%', height: 'calc(100vh - 120px)', pb: 2 }}>
+      <Stack spacing={2} sx={{ width: '100%', height: { xs: 'auto', md: 'calc(100vh - 120px)' }, minHeight: { xs: 'calc(100dvh - 140px)', md: 0 }, pb: 2 }}>
       {/* Header row */}
       <Stack
         direction="row"
-        spacing={2}
+        spacing={1}
         alignItems="center"
         justifyContent="space-between"
+        flexWrap="wrap"
+        useFlexGap
       >
-        <Box>
+        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             Sort
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
-                    <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={aiSuggestEnabled}
-                onChange={(e) => handleToggleAiSuggest(e.target.checked)}
-              />
-            }
-            label={
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                AI Auto-Suggest
-              </Typography>
-            }
-            sx={{ m: 0 }}
-          />
-          {score && score.totalCount > 0 && (
-            <Chip
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          {suggestedCardsCount > 0 && (
+            <Button
+              variant="contained"
+              color="primary"
               size="small"
-              label={`AI Accuracy: ${Math.round((score.correctCount / score.totalCount) * 100)}% (${score.correctCount}/${score.totalCount})`}
-              color="secondary"
-              variant="outlined"
-              onDelete={async () => {
-                if (window.confirm('Reset AI accuracy statistics?')) {
-                  await api.deleteSetting('app:aiGuessScore');
-                }
-              }}
-              sx={{ height: 26, borderRadius: 2 }}
-            />
+              startIcon={<DoneAllIcon />}
+              disabled={isApplying}
+              onClick={handleSelectAllSuggested}
+              sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontWeight: 700 }}
+            >
+              Select Suggested ({suggestedCardsCount})
+            </Button>
           )}
-
           <Button
+            variant="outlined"
+            size="small"
+            startIcon={<AutoFixHighIcon />}
+            onClick={() => setAutoCleanupOpen(true)}
+            sx={UNIFORM_TOOLBAR_BUTTON_SX}
+          >
+            Auto Cleanup
+          </Button>
+          <Button
+            variant="outlined"
             size="small"
             startIcon={<HelpOutlineIcon />}
             onClick={() => setHelpOpen(true)}
-            sx={{ color: 'text.secondary' }}
+            sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, display: { xs: 'none', sm: 'inline-flex' } }}
           >
             Shortcuts
           </Button>
         </Stack>
       </Stack>
       
-            {/* Global Apply Bar */}
-      {selectionsCount > 0 && (
+      {/* Global Apply Bar */}
+      {(selectionsCount > 0 || isApplying) && (
         <Paper
+          elevation={isApplying ? 3 : 1}
           sx={{
-            p: 2,
+            p: { xs: 1.5, sm: 2 },
             border: '1px solid',
-            borderColor: 'success.main',
+            borderColor: isApplying ? 'primary.main' : 'success.main',
+            borderRadius: 2,
+            transition: 'all 0.3s ease',
             background: (theme) =>
               theme.palette.mode === 'dark'
-                ? 'linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(76, 175, 80, 0.05) 100%)'
-                : 'linear-gradient(135deg, rgba(76, 175, 80, 0.08) 0%, rgba(76, 175, 80, 0.02) 100%)',
+                ? isApplying
+                  ? 'linear-gradient(135deg, rgba(25, 118, 210, 0.18) 0%, rgba(25, 118, 210, 0.06) 100%)'
+                  : 'linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(76, 175, 80, 0.05) 100%)'
+                : isApplying
+                  ? 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(25, 118, 210, 0.03) 100%)'
+                  : 'linear-gradient(135deg, rgba(76, 175, 80, 0.08) 0%, rgba(76, 175, 80, 0.02) 100%)',
           }}
         >
-          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-            <Box>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Selections Ready to Apply
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Button
-                size="small"
-                onClick={() => {
-                  if (window.confirm('Clear all your current pending selections?')) {
-                    setSelections({});
-                  }
-                }}
-                sx={{ color: 'error.main', fontWeight: 600 }}
+          <Stack spacing={1.5}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              justifyContent="space-between"
+              alignItems={{ xs: 'stretch', sm: 'center' }}
+              spacing={1.5}
+            >
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                  {isApplying && <CircularProgress size={18} thickness={5} color="primary" />}
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                    {isApplying ? 'Applying Selections...' : 'Selections Ready to Apply'}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={`${selectionsCount} merchant${selectionsCount === 1 ? '' : 's'}`}
+                    color={isApplying ? 'primary' : 'success'}
+                    variant={isApplying ? 'filled' : 'outlined'}
+                    sx={{ height: 22, fontWeight: 700, fontSize: '0.75rem' }}
+                  />
+                </Stack>
+                {isApplying && applyProgress.phase && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, mt: 0.5, display: 'block' }}>
+                    {applyProgress.phase}
+                  </Typography>
+                )}
+              </Box>
+
+              <Stack
+                direction="row"
+                spacing={1.5}
+                alignItems="center"
+                justifyContent={{ xs: 'space-between', sm: 'flex-end' }}
               >
-                Reset selections
-              </Button>
-              <Button
-                variant="contained"
-                color="success"
-                onClick={handleApplySelections}
-                sx={{ fontWeight: 700 }}
-              >
-                Apply {selectionsCount} selection(s)
-              </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  disabled={isApplying}
+                  onClick={() => {
+                    if (window.confirm('Clear all your current pending selections?')) {
+                      setSelections({});
+                    }
+                  }}
+                  sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                >
+                  Reset selections
+                </Button>
+                <Button
+                  variant="contained"
+                  color={isApplying ? 'primary' : 'success'}
+                  disabled={isApplying}
+                  onClick={handleApplySelections}
+                  startIcon={isApplying ? <CircularProgress size={16} color="inherit" /> : undefined}
+                  sx={{
+                    ...UNIFORM_TOOLBAR_BUTTON_SX,
+                    fontWeight: 700,
+                    minWidth: { xs: 140, sm: 160 },
+                    flex: { xs: 1, sm: 'initial' },
+                    boxShadow: 2,
+                  }}
+                >
+                  {isApplying ? 'Applying...' : `Apply ${selectionsCount} selection${selectionsCount === 1 ? '' : 's'}`}
+                </Button>
+              </Stack>
             </Stack>
+
+            {isApplying && (
+              <Box sx={{ width: '100%', pt: 0.5 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                    Overall Progress
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                    {applyProgress.percent}%
+                  </Typography>
+                </Stack>
+                <LinearProgress
+                  variant="determinate"
+                  value={applyProgress.percent}
+                  sx={{
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: (theme) =>
+                      theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      transition: 'transform 0.2s linear',
+                    },
+                  }}
+                />
+              </Box>
+            )}
           </Stack>
         </Paper>
       )}
@@ -586,7 +608,7 @@ export default function Sort() {
                   <Stack spacing={2}>
                 <Paper sx={{ p: 3 }}>
                   <Stack spacing={1.5}>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Typography
                           variant="caption"
@@ -625,7 +647,7 @@ export default function Sort() {
                   </Stack>
                   
                   {saveRule && (
-                    <Box sx={{ mt: 0.5, mb: 1, p: 1.5, borderRadius: 2, border: aiSuggestions[currentCard.merchantKey]?.pattern === rulePattern ? '2px solid' : '1px solid', borderColor: aiSuggestions[currentCard.merchantKey]?.pattern === rulePattern ? 'primary.main' : 'divider' }}>
+                    <Box sx={{ mt: 0.5, mb: 1, p: 1.5, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                       <TextField
                         fullWidth
                         size="small"
@@ -647,22 +669,11 @@ export default function Sort() {
                           value={recurrence}
                           onChange={(e) => handleRecurrenceChange(e.target.value)}
                           SelectProps={{ native: true }}
-                          sx={{
-                            '.MuiOutlinedInput-notchedOutline': {
-                              borderColor: aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence ? 'primary.main' : 'inherit',
-                              borderWidth: aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence ? 2 : 1
-                            }
-                          }}
                         >
                           <option value=""></option>
                           <option value="recurring">Recurring</option>
                           <option value="onetime">One-time</option>
                         </TextField>
-                        {aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence && (
-                          <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5, px: 1 }}>
-                            ✨ AI Suggested Recurrence
-                          </Typography>
-                        )}
                       </Box>
                     </Box>
                   )}
@@ -673,7 +684,7 @@ export default function Sort() {
                     selected={selections[currentCard.merchantKey]?.category || null}
                     onPick={onPick}
                     spendOnly={false}
-                    isAiSuggested={aiSuggestEnabled && (aiSuggestions[currentCard.merchantKey]?.category !== undefined)}
+                    isAiSuggested={false}
                     hideNewCategory={false}
                   />
                   </Stack>
@@ -749,9 +760,7 @@ export default function Sort() {
                   const sortedCards = [...visibleCards].sort((a, b) => b.stackIndex - a.stackIndex);
 
                   return sortedCards.map(({ card, stackIndex }) => {
-                    const cardSuggestion = aiSuggestEnabled
-                      ? (aiSuggestions[card.merchantKey]?.category || null)
-                      : card.suggestedCategory;
+                    const cardSuggestion = card.suggestedCategory;
 
                     const selection = selections[card.merchantKey];
                     const chosenColor = selection ? lookupCategoryColor(selection.category) : undefined;
@@ -767,11 +776,6 @@ export default function Sort() {
                             : undefined
                         }
                         chosenColor={chosenColor}
-                        suggestedCategoryOverride={
-                          aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined
-                        }
-                        aiSuggesting={aiSuggesting[card.merchantKey] || false}
-                        aiError={aiErrors[card.merchantKey] || null}
                         stackIndex={stackIndex}
                         zipDirection={zipDirection}
                       />
@@ -784,8 +788,71 @@ export default function Sort() {
             </PanelGroup>
           ) : (
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
-              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 1, overflow: 'hidden' }}>
-                <Box sx={{ position: 'relative', width: '100%', maxWidth: '100%', height: '85%', maxHeight: 420, minHeight: 0, my: 'auto' }}>
+              <Box
+                onTouchStart={(e) => {
+                  touchStartXRef.current = e.touches[0]?.clientX ?? null;
+                  setTouchDeltaX(0);
+                }}
+                onTouchMove={(e) => {
+                  if (touchStartXRef.current === null) return;
+                  const curX = e.touches[0]?.clientX ?? touchStartXRef.current;
+                  setTouchDeltaX(curX - touchStartXRef.current);
+                }}
+                onTouchEnd={(e) => {
+                  if (touchStartXRef.current === null) return;
+                  const endX = e.changedTouches[0]?.clientX ?? touchStartXRef.current;
+                  const deltaX = endX - touchStartXRef.current;
+                  touchStartXRef.current = null;
+                  setTouchDeltaX(0);
+                  if (Math.abs(deltaX) > 55) {
+                    if (deltaX > 0) {
+                      if (activeSuggestion) {
+                        onPick(activeSuggestion);
+                      } else {
+                        setCurrentIndex((prev) => Math.max(0, prev - 1));
+                      }
+                    } else {
+                      setCurrentIndex((prev) => Math.min(visibleQueue.length - 1, prev + 1));
+                    }
+                  }
+                }}
+                sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 0.5, overflow: 'hidden', minHeight: 340, position: 'relative' }}
+              >
+                {Math.abs(touchDeltaX) > 25 && (
+                  <Chip
+                    size="small"
+                    color={touchDeltaX > 0 && activeSuggestion ? 'success' : 'default'}
+                    label={
+                      touchDeltaX > 0
+                        ? activeSuggestion
+                          ? `✓ Accept: ${activeSuggestion}`
+                          : '← Previous Card'
+                        : 'Skip / Next →'
+                    }
+                    sx={{
+                      position: 'absolute',
+                      top: 12,
+                      zIndex: 25,
+                      fontWeight: 700,
+                      boxShadow: 2,
+                    }}
+                  />
+                )}
+                <Box
+                  sx={{
+                    position: 'relative',
+                    width: '100%',
+                    maxWidth: '100%',
+                    height: 340,
+                    maxHeight: 400,
+                    minHeight: 300,
+                    my: 'auto',
+                    transform: touchDeltaX
+                      ? `translateX(${Math.max(-90, Math.min(90, touchDeltaX * 0.45))}px) rotate(${Math.max(-6, Math.min(6, touchDeltaX * 0.03))}deg)`
+                      : 'none',
+                    transition: touchDeltaX ? 'none' : 'transform 180ms ease-out',
+                  }}
+                >
                 {(() => {
                   const windowStart = Math.max(0, currentIndex - 2);
                   const windowEnd = Math.min(visibleQueue.length - 1, currentIndex + 3);
@@ -801,9 +868,7 @@ export default function Sort() {
                   const sortedCards = [...visibleCards].sort((a, b) => b.stackIndex - a.stackIndex);
 
                   return sortedCards.map(({ card, stackIndex }) => {
-                    const cardSuggestion = aiSuggestEnabled
-                      ? (aiSuggestions[card.merchantKey]?.category || null)
-                      : card.suggestedCategory;
+                    const cardSuggestion = card.suggestedCategory;
 
                     const selection = selections[card.merchantKey];
                     const chosenColor = selection ? lookupCategoryColor(selection.category) : undefined;
@@ -819,11 +884,6 @@ export default function Sort() {
                             : undefined
                         }
                         chosenColor={chosenColor}
-                        suggestedCategoryOverride={
-                          aiSuggestEnabled ? (aiSuggestions[card.merchantKey]?.category || undefined) : undefined
-                        }
-                        aiSuggesting={aiSuggesting[card.merchantKey] || false}
-                        aiError={aiErrors[card.merchantKey] || null}
                         stackIndex={stackIndex}
                         zipDirection={zipDirection}
                       />
@@ -832,27 +892,81 @@ export default function Sort() {
                 })()}
               </Box>
               </Box>
-              <Box sx={{ p: 2, display: 'flex', justifyContent: 'center', zIndex: 10 }}>
+              <Stack spacing={1} sx={{ py: 1.5, zIndex: 10 }}>
+                {visibleQueue.length > 1 && (
+                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="inherit"
+                      disabled={currentIndex === 0}
+                      onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
+                      sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, minWidth: 92 }}
+                    >
+                      ← Prev
+                    </Button>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textAlign: 'center' }}>
+                      {activeSuggestion ? 'Swipe ← Skip · Swipe → Accept' : 'Swipe ← / →'} · {currentIndex + 1} / {visibleQueue.length}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="inherit"
+                      disabled={currentIndex >= visibleQueue.length - 1}
+                      onClick={() => setCurrentIndex((prev) => Math.min(visibleQueue.length - 1, prev + 1))}
+                      sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, minWidth: 92 }}
+                    >
+                      Next →
+                    </Button>
+                  </Stack>
+                )}
+                {activeSuggestion && (
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    fullWidth
+                    onClick={() => onPick(activeSuggestion)}
+                    sx={{
+                      ...UNIFORM_TOOLBAR_BUTTON_SX,
+                      height: 44,
+                      fontWeight: 700,
+                      borderColor: lookupCategoryColor(activeSuggestion),
+                      color: lookupCategoryColor(activeSuggestion),
+                    }}
+                  >
+                    Accept Suggested: {activeSuggestion}
+                  </Button>
+                )}
                 <Button 
                   variant="contained" 
                   size="large" 
                   fullWidth
-                  onClick={() => setMobileDrawerOpen(true)} 
+                  onClick={() => setMobileDrawerOpen(true)}
+                  sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, height: 44, fontWeight: 700 }}
                 >
-                  Pick Category
+                  {selections[currentCard.merchantKey]?.category
+                    ? `Selected: ${selections[currentCard.merchantKey].category} (Change)`
+                    : 'Pick Category'}
                 </Button>
-              </Box>
+              </Stack>
               <Drawer 
                 anchor="bottom" 
                 open={mobileDrawerOpen} 
                 onClose={() => setMobileDrawerOpen(false)}
-                PaperProps={{ sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85vh' } }}
+                PaperProps={{
+                  sx: {
+                    borderTopLeftRadius: 16,
+                    borderTopRightRadius: 16,
+                    maxHeight: '85vh',
+                    pb: 'env(safe-area-inset-bottom)',
+                  },
+                }}
               >
                 <Box sx={{ p: 2, overflowY: 'auto' }}>
                   <Stack spacing={2}>
-                <Paper sx={{ p: 3 }}>
+                <Paper sx={{ p: { xs: 2, sm: 3 } }}>
                   <Stack spacing={1.5}>
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Typography
                           variant="caption"
@@ -891,7 +1005,7 @@ export default function Sort() {
                   </Stack>
                   
                   {saveRule && (
-                    <Box sx={{ mt: 0.5, mb: 1, p: 1.5, borderRadius: 2, border: aiSuggestions[currentCard.merchantKey]?.pattern === rulePattern ? '2px solid' : '1px solid', borderColor: aiSuggestions[currentCard.merchantKey]?.pattern === rulePattern ? 'primary.main' : 'divider' }}>
+                    <Box sx={{ mt: 0.5, mb: 1, p: 1.5, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                       <TextField
                         fullWidth
                         size="small"
@@ -913,22 +1027,11 @@ export default function Sort() {
                           value={recurrence}
                           onChange={(e) => handleRecurrenceChange(e.target.value)}
                           SelectProps={{ native: true }}
-                          sx={{
-                            '.MuiOutlinedInput-notchedOutline': {
-                              borderColor: aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence ? 'primary.main' : 'inherit',
-                              borderWidth: aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence ? 2 : 1
-                            }
-                          }}
                         >
                           <option value=""></option>
                           <option value="recurring">Recurring</option>
                           <option value="onetime">One-time</option>
                         </TextField>
-                        {aiSuggestions[currentCard.merchantKey]?.recurrence && aiSuggestions[currentCard.merchantKey]?.recurrence === recurrence && (
-                          <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5, px: 1 }}>
-                            ✨ AI Suggested Recurrence
-                          </Typography>
-                        )}
                       </Box>
                     </Box>
                   )}
@@ -939,25 +1042,11 @@ export default function Sort() {
                     selected={selections[currentCard.merchantKey]?.category || null}
                     onPick={onPick}
                     spendOnly={false}
-                    isAiSuggested={aiSuggestEnabled && (aiSuggestions[currentCard.merchantKey]?.category !== undefined)}
+                    isAiSuggested={false}
                     hideNewCategory={false}
                   />
                   </Stack>
                 </Paper>
-
-                {/* Footer hint */}
-                <Stack
-                  direction="row"
-                  spacing={1.5}
-                  justifyContent="center"
-                  sx={{ opacity: 0.7, py: 1 }}
-                  flexWrap="wrap"
-                >
-                  <KeyHint k="Enter" desc="accept suggested" />
-                  <KeyHint k="1–9" desc="grid pick" />
-                  <KeyHint k="← / →" desc="navigate cards" />
-                  <KeyHint k="?" desc="help" />
-                </Stack>
               </Stack>
                 </Box>
               </Drawer>
@@ -1055,6 +1144,16 @@ export default function Sort() {
           </Alert>
         </DialogContent>
       </Dialog>
+
+      <AutoCleanupDialog
+        open={autoCleanupOpen}
+        onClose={() => setAutoCleanupOpen(false)}
+        categories={categories || []}
+        onComplete={() => {
+          queryClient.invalidateQueries();
+          window.dispatchEvent(new Event('db-update'));
+        }}
+      />
       </Stack>
     </PageLoader>
   );

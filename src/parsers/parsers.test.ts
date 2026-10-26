@@ -181,4 +181,50 @@ describe('Custom CSV Parsing', () => {
     expect(result.transactions[1].amount).toBe(10.00);
     expect(result.transactions[1].balance).toBe(1010.00);
   });
+
+  it('auto-detects and parses Capital One, Discover, Amex, and Apple Card CSV exports out of the box', () => {
+    const capOneCsv = [
+      'Transaction Date,Posted Date,Card No.,Description,Category,Debit,Credit',
+      '2026-09-10,2026-09-11,4812,STARBUCKS,Dining,6.45,',
+      '2026-09-15,2026-09-15,4812,CAPITAL ONE MOBILE PYMT,Payment/Credit,,250.00',
+    ].join('\n');
+    const capRes = parseCsv('capital_one_4812.csv', capOneCsv);
+    expect('error' in capRes).toBe(false);
+    if (!('error' in capRes)) {
+      expect(capRes.transactions).toHaveLength(2);
+      expect(capRes.transactions[0].amount).toBe(-6.45);
+      expect(capRes.transactions[0].rawCategory).toBe('Dining');
+      expect(capRes.transactions[0].institution).toBe('Capital One');
+      expect(capRes.transactions[1].amount).toBe(250.00);
+    }
+
+    const amexCsv = [
+      'Date,Description,Card Member,Account #,Amount',
+      '09/12/2026,DELTA AIR LINES,JANE DOE,-71004,340.50',
+      '09/20/2026,AUTOPAY PAYMENT - THANK YOU,JANE DOE,-71004,-340.50',
+    ].join('\n');
+    const amexRes = parseCsv('activity.csv', amexCsv);
+    expect('error' in amexRes).toBe(false);
+    if (!('error' in amexRes)) {
+      expect(amexRes.transactions).toHaveLength(2);
+      expect(amexRes.transactions[0].amount).toBe(-340.50);
+      expect(amexRes.transactions[0].accountName).toBe('Amex 1004');
+      expect(amexRes.transactions[1].amount).toBe(340.50);
+    }
+
+    const appleCsv = [
+      'Transaction Date,Clearing Date,Description,Merchant,Category,Type,Amount (USD)',
+      '09/14/2026,09/15/2026,APPLE STORE,Apple,Merchandise,Purchase,99.00',
+      '09/25/2026,09/25/2026,ACH DEPOSIT INTERNET,Ach Deposit,Payment,Payment,-99.00',
+    ].join('\n');
+    const appleRes = parseCsv('apple_card.csv', appleCsv);
+    expect('error' in appleRes).toBe(false);
+    if (!('error' in appleRes)) {
+      expect(appleRes.transactions).toHaveLength(2);
+      expect(appleRes.transactions[0].amount).toBe(-99.00);
+      expect(appleRes.transactions[0].institution).toBe('Apple Card');
+      expect(appleRes.transactions[1].amount).toBe(99.00);
+    }
+  });
 });
+

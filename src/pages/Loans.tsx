@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useFilters } from '../stores/store';
-import { useLoans, useUniqueMerchants, useCategories } from '../hooks/queries';
+import { useLoans, useUniqueMerchants, useCategories, useAccounts } from '../hooks/queries';
 import { useAddLoan, useUpdateLoan, useDeleteLoan } from '../hooks/mutations';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
@@ -12,132 +12,49 @@ import {
 } from 'react-resizable-panels';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
-  Grid,
-  TextField,
   Button,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Tab,
   Tabs,
   Stack,
   Paper,
-  Divider,
-  LinearProgress,
   Snackbar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  InputAdornment,
-  Chip,
-  Slider,
-  Collapse,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Autocomplete,
   Drawer,
+  Alert,
+  AlertTitle,
   useMediaQuery,
 } from '@mui/material';
 import HomeIcon from '@mui/icons-material/Home';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import SchoolIcon from '@mui/icons-material/School';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import PercentIcon from '@mui/icons-material/Percent';
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import TuneIcon from '@mui/icons-material/Tune';
 
 import { useTheme } from '@mui/material/styles';
 
 import { useDeferredRender } from '../hooks/useDeferredRender';
 import PageLoader from '../components/PageLoader';
-
+import { UNIFORM_TOOLBAR_BUTTON_SX } from '../components/AccountFilterDropdown';
 import { usdCents } from '../lib';
 
-import type { Loan } from '../types';
-
-const DEFAULT_HOUSE_CONFIG: Omit<Loan, 'id' | 'createdAt'> = {
-  name: 'Primary Residence',
-  type: 'house',
-  principal: 450000,
-  rate: 6.5,
-  termYears: 30,
-  startDate: '2024-01-15',
-  category: 'Mortgage',
-  monthlyPayment: undefined,
-  propertyValue: 500000,
-  downPayment: 50000,
-  extraMonthlyPayment: undefined,
-  extraOneTimePayment: undefined,
-  extraOneTimeMonth: undefined,
-};
-
-const DEFAULT_STUDENT_CONFIG: Omit<Loan, 'id' | 'createdAt'> = {
-  name: 'Student Loan',
-  type: 'student',
-  principal: 30000,
-  rate: 5.5,
-  termYears: 10,
-  startDate: '2024-01-01',
-  category: 'Student Loan',
-  monthlyPayment: undefined,
-  propertyValue: undefined,
-  downPayment: undefined,
-  extraMonthlyPayment: undefined,
-  extraOneTimePayment: undefined,
-  extraOneTimeMonth: undefined,
-};
-
-const DEFAULT_CAR_CONFIG: Omit<Loan, 'id' | 'createdAt'> = {
-  name: 'Car Loan',
-  type: 'car',
-  principal: 35000,
-  rate: 5.5,
-  termYears: 5,
-  startDate: '2024-06-15',
-  category: 'Auto Loan',
-  monthlyPayment: 389,
-  propertyValue: 40000,
-  downPayment: 5000,
-  extraMonthlyPayment: undefined,
-  extraOneTimePayment: undefined,
-  extraOneTimeMonth: undefined,
-};
-
-interface PaymentRow {
-  paymentNumber: number;
-  date: string;
-  scheduledPayment: number;
-  scheduledInterest: number;
-  scheduledPrincipal: number;
-  scheduledBalance: number;
-  actualPayment: number;
-  actualInterest: number;
-  actualPrincipal: number;
-  actualBalance: number;
-  extraPayment: number;
-  isMatched: boolean;
-  isAssumed: boolean;
-  isFuture: boolean;
-  isPast: boolean;
-  transactions: any[];
-  cumulativeScheduledInterest: number;
-  cumulativeActualInterest: number;
-  cumulativeActualPrincipal: number;
-  cumulativeActualPayment: number;
-}
+import type { Loan, Account } from '../types';
+import {
+  LoanChart,
+  DEFAULT_HOUSE_CONFIG,
+  DEFAULT_STUDENT_CONFIG,
+  DEFAULT_CAR_CONFIG,
+  type PaymentRow,
+} from '../components/loans/LoanChart';
+import {
+  AddLoanDialog,
+  RestoreLoansDialog,
+  MatchedTransactionsDialog,
+  AmortizationScheduleCard,
+} from '../components/loans/LoanDialogs';
+import { LoanSummaryCards } from '../components/loans/LoanSummaryCards';
+import { LoanParametersPanel } from '../components/loans/LoanParametersPanel';
 
 export default function Loans() {
   const theme = useTheme();
@@ -156,10 +73,12 @@ export default function Loans() {
   const [addMerchant, setAddMerchant] = useState('');
   const [addPrincipal, setAddPrincipal] = useState('450000');
   const [addDownPayment, setAddDownPayment] = useState('50000');
+  const [addDetectedPayment, setAddDetectedPayment] = useState<number | undefined>(undefined);
+  const [selectedConnectedAccId, setSelectedConnectedAccId] = useState<number | ''>('');
 
   useEffect(() => {
+    if (selectedConnectedAccId !== '') return;
     if (addType === 'house') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setAddPrincipal('450000');
       setAddDownPayment('50000');
@@ -170,7 +89,7 @@ export default function Loans() {
       setAddPrincipal('35000');
       setAddDownPayment('5000');
     }
-  }, [addType]);
+  }, [addType, selectedConnectedAccId]);
 
   const panelIds = useMemo(() => ['loan-parameters', 'loan-graph'], []);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -180,14 +99,85 @@ export default function Loans() {
   });
 
   const { data: loans = [], isLoading } = useLoans();
+  const safeLoans = loans || [];
+
+  const { data: accountsAll = [] } = useAccounts();
+  const connectedLoanAccounts = useMemo(() => {
+    return accountsAll.filter((a) =>
+      (a.type === 'loan' || a.type === 'mortgage') &&
+      (demoMode ? a.source === 'demo' : a.source !== 'demo')
+    );
+  }, [accountsAll, demoMode]);
+
+  const isStudentLoanAccount = (acc: Account): boolean => {
+    const combined = `${acc.name || ''} ${acc.institution || ''}`.toLowerCase();
+    return /student|nelnet|aidvantage|mohela|navient|sallie\s*mae|edfinancial|pheaa|fedloan|great\s*lakes|earnest|dept\s*of\s*ed/i.test(
+      combined
+    );
+  };
+
+  const estimatePropertyValue = (
+    loanType: 'house' | 'car' | 'student',
+    principal: number,
+    downPayment = 0
+  ): number | undefined => {
+    if (loanType === 'student') return undefined;
+    if (downPayment > 0) return principal;
+    if (loanType === 'house') {
+      return principal > 0 ? Math.round((principal * 1.25) / 1000) * 1000 : 400000;
+    }
+    return principal > 0 ? Math.round((principal * 1.15) / 500) * 500 : 30000;
+  };
+
+  const getConnectedAccount = (loan: Loan | null | undefined): Account | null => {
+    if (!loan) return null;
+
+    // 1. Direct match by merchant or institution
+    if (loan.merchant) {
+      const norm = loan.merchant.toLowerCase().trim();
+      const found = connectedLoanAccounts.find((a) =>
+        (a.institution && (a.institution.toLowerCase().includes(norm) || norm.includes(a.institution.toLowerCase()))) ||
+        a.name.toLowerCase().includes(norm) ||
+        norm.includes(a.name.toLowerCase())
+      );
+      if (found) return found;
+    }
+
+    // 2. Match by loan name
+    const normName = loan.name.toLowerCase().trim();
+    const byName = connectedLoanAccounts.find((a) =>
+      a.name.toLowerCase().includes(normName) ||
+      normName.includes(a.name.toLowerCase()) ||
+      (a.institution && normName.includes(a.institution.toLowerCase()))
+    );
+    if (byName) return byName;
+
+    // 3. Fallback by loan type match
+    if (loan.type === 'house') {
+      const m = connectedLoanAccounts.find((a) => a.type === 'mortgage');
+      if (m) return m;
+    } else if (loan.type === 'student') {
+      const s =
+        connectedLoanAccounts.find((a) => a.type === 'loan' && isStudentLoanAccount(a)) ||
+        connectedLoanAccounts.find((a) => a.type === 'loan');
+      if (s) return s;
+    } else if (loan.type === 'car') {
+      const c =
+        connectedLoanAccounts.find((a) => a.type === 'loan' && !isStudentLoanAccount(a)) ||
+        connectedLoanAccounts.find((a) => a.type === 'loan');
+      if (c) return c;
+    }
+
+    return null;
+  };
 
   const activeLoans = useMemo(() => {
-    return loans.filter((l) => l.enabled !== false);
-  }, [loans]);
+    return safeLoans.filter((l) => l.enabled !== false);
+  }, [safeLoans]);
 
   const inactiveLoans = useMemo(() => {
-    return loans.filter((l) => l.enabled === false);
-  }, [loans]);
+    return safeLoans.filter((l) => l.enabled === false);
+  }, [safeLoans]);
 
   const currentLoan = useMemo(() => {
     return activeLoans.find((l) => l.id === activeLoanId) || null;
@@ -195,6 +185,20 @@ export default function Loans() {
 
   const currentConfig = currentLoan;
   const activeTab = currentConfig ? currentConfig.type : 'house';
+
+  const connectedAccount = useMemo(() => getConnectedAccount(currentConfig), [currentConfig, connectedLoanAccounts]);
+  const connectedLiveBalance = connectedAccount?.currentBalance !== undefined
+    ? Math.abs(connectedAccount.currentBalance)
+    : null;
+
+  const unlinkedAccounts = useMemo(() => {
+    return connectedLoanAccounts.filter((acc) =>
+      !safeLoans.some((l) => {
+        const matched = getConnectedAccount(l);
+        return matched?.id === acc.id;
+      })
+    );
+  }, [connectedLoanAccounts, safeLoans]);
 
   useEffect(() => {
     if (activeLoans.length > 0) {
@@ -242,25 +246,107 @@ export default function Loans() {
     }
   }, [currentConfig, activeLoanId]);
 
+  // Live effective configuration merging saved loan config with current valid form inputs
+  const effectiveConfig = useMemo<Loan | null>(() => {
+    if (!currentConfig) return null;
+    const p = parseFloat(formPrincipal);
+    const r = parseFloat(formRate);
+    const t = parseInt(formTerm, 10);
+    const mp = parseFloat(formMonthlyPayment);
+    const pv = parseFloat(formPropertyValue);
+    const dp = parseFloat(formDownPayment);
+    const emp = parseFloat(formExtraMonthlyPayment);
+    const eotp = parseFloat(formExtraOneTimePayment);
+    const eotm = parseInt(formExtraOneTimeMonth, 10);
+
+    return {
+      ...currentConfig,
+      name: formName.trim() || currentConfig.name,
+      principal: !isNaN(p) && p > 0 ? p : currentConfig.principal,
+      rate: !isNaN(r) && r >= 0 ? r : currentConfig.rate,
+      termYears: !isNaN(t) && t > 0 && t <= 60 ? t : currentConfig.termYears,
+      startDate: /^\d{4}-\d{2}-\d{2}$/.test(formStartDate) ? formStartDate : currentConfig.startDate,
+      category: formCategory,
+      merchant: formMerchant.trim() || undefined,
+      monthlyPayment: !isNaN(mp) && mp > 0 ? mp : undefined,
+      propertyValue: currentConfig.type === 'student' || isNaN(pv) || pv <= 0 ? undefined : pv,
+      downPayment: currentConfig.type === 'student' || isNaN(dp) || dp < 0 ? undefined : dp,
+      extraMonthlyPayment: !isNaN(emp) && emp > 0 ? emp : undefined,
+      extraOneTimePayment: !isNaN(eotp) && eotp > 0 ? eotp : undefined,
+      extraOneTimeMonth: !isNaN(eotm) && eotm > 0 ? eotm : undefined,
+    };
+  }, [
+    currentConfig,
+    formName,
+    formPrincipal,
+    formRate,
+    formTerm,
+    formStartDate,
+    formCategory,
+    formMerchant,
+    formMonthlyPayment,
+    formPropertyValue,
+    formDownPayment,
+    formExtraMonthlyPayment,
+    formExtraOneTimePayment,
+    formExtraOneTimeMonth,
+  ]);
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!currentConfig || !effectiveConfig) return false;
+    return (
+      effectiveConfig.name !== currentConfig.name ||
+      effectiveConfig.principal !== currentConfig.principal ||
+      effectiveConfig.rate !== currentConfig.rate ||
+      effectiveConfig.termYears !== currentConfig.termYears ||
+      effectiveConfig.startDate !== currentConfig.startDate ||
+      (effectiveConfig.category || '') !== (currentConfig.category || '') ||
+      (effectiveConfig.merchant || '') !== (currentConfig.merchant || '') ||
+      (effectiveConfig.monthlyPayment || 0) !== (currentConfig.monthlyPayment || 0) ||
+      (effectiveConfig.propertyValue || 0) !== (currentConfig.propertyValue || 0) ||
+      (effectiveConfig.downPayment || 0) !== (currentConfig.downPayment || 0) ||
+      (effectiveConfig.extraMonthlyPayment || 0) !== (currentConfig.extraMonthlyPayment || 0) ||
+      (effectiveConfig.extraOneTimePayment || 0) !== (currentConfig.extraOneTimePayment || 0) ||
+      (effectiveConfig.extraOneTimeMonth || 0) !== (currentConfig.extraOneTimeMonth || 0)
+    );
+  }, [currentConfig, effectiveConfig]);
+
+  const handleRevertChanges = () => {
+    if (!currentConfig) return;
+    setFormName(currentConfig.name);
+    setFormPrincipal(String(currentConfig.principal));
+    setFormRate(String(currentConfig.rate));
+    setFormTerm(String(currentConfig.termYears));
+    setFormStartDate(currentConfig.startDate);
+    setFormCategory(currentConfig.category);
+    setFormMerchant(currentConfig.merchant || '');
+    setFormMonthlyPayment(String(currentConfig.monthlyPayment ?? ''));
+    setFormPropertyValue(currentConfig.propertyValue ? String(currentConfig.propertyValue) : '');
+    setFormDownPayment(currentConfig.downPayment ? String(currentConfig.downPayment) : '');
+    setFormExtraMonthlyPayment(currentConfig.extraMonthlyPayment ? String(currentConfig.extraMonthlyPayment) : '');
+    setFormExtraOneTimePayment(currentConfig.extraOneTimePayment ? String(currentConfig.extraOneTimePayment) : '');
+    setFormExtraOneTimeMonth(currentConfig.extraOneTimeMonth ? String(currentConfig.extraOneTimeMonth) : '');
+  };
+
   // Global Categories and Transactions
   const { data: merchantOptions = [] } = useUniqueMerchants();
   const { data: categories = [] } = useCategories();
 
   const { data: rawTransactions = [] } = useQuery({
-    queryKey: ['active_loan_transactions', activeLoanId, currentConfig?.category, currentConfig?.merchant],
+    queryKey: ['active_loan_transactions', activeLoanId, effectiveConfig?.category, effectiveConfig?.merchant],
     queryFn: () => {
-      if (!currentConfig) return [];
+      if (!effectiveConfig) return [];
       const filters: any = {};
-      if (currentConfig.merchant) {
-        filters.merchantKey = currentConfig.merchant;
-      } else if (currentConfig.category) {
-        filters.category = currentConfig.category;
+      if (effectiveConfig.merchant) {
+        filters.merchantKey = effectiveConfig.merchant;
+      } else if (effectiveConfig.category) {
+        filters.category = effectiveConfig.category;
       } else {
         return [];
       }
       return api.getTransactions('1970-01-01', '2100-01-01', filters);
     },
-    enabled: !!currentConfig,
+    enabled: !!effectiveConfig,
   });
 
   const transactions = useMemo(() => {
@@ -310,35 +396,39 @@ export default function Loans() {
     }
   };
 
-  // Amortization engine calculation
+  // Amortization engine calculation (live-preview enabled via effectiveConfig)
   const scheduleData = useMemo(() => {
-    if (!currentConfig) return null;
-    const P = currentConfig.principal - (currentConfig.downPayment || 0);
-    const r = (currentConfig.rate / 100) / 12;
-    const n = currentConfig.termYears * 12;
-    const startDate = new Date(currentConfig.startDate + 'T00:00:00');
-
-    // Use monthly payment override if specified, otherwise calculate mathematically
-    let scheduledMonthlyPayment = currentConfig.monthlyPayment || 0;
-    if (scheduledMonthlyPayment <= 0) {
-      if (r === 0) {
-        scheduledMonthlyPayment = P / n;
-      } else {
-        scheduledMonthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+    if (!effectiveConfig) return null;
+    let P = effectiveConfig.principal;
+    if (effectiveConfig.downPayment && effectiveConfig.downPayment > 0) {
+      if (
+        effectiveConfig.propertyValue &&
+        Math.abs(effectiveConfig.principal - effectiveConfig.propertyValue) < 1 &&
+        effectiveConfig.principal > effectiveConfig.downPayment
+      ) {
+        P = effectiveConfig.principal - effectiveConfig.downPayment;
+      } else if (!connectedAccount && !effectiveConfig.propertyValue && effectiveConfig.principal > effectiveConfig.downPayment * 2) {
+        P = effectiveConfig.principal - effectiveConfig.downPayment;
       }
     }
+    P = Math.max(1, P);
+    const r = (effectiveConfig.rate / 100) / 12;
+    const n = effectiveConfig.termYears * 12;
+    const startDate = new Date(effectiveConfig.startDate + 'T00:00:00');
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     // Filter and group transactions by calendar month (YYYY-MM)
     const txByMonth = new Map<string, any[]>();
     for (const t of transactions) {
       let isMatch = false;
-      if (currentConfig.merchant) {
-        const normMerchant = currentConfig.merchant.toLowerCase().trim();
+      if (effectiveConfig.merchant) {
+        const normMerchant = effectiveConfig.merchant.toLowerCase().trim();
         const normDesc = t.description.toLowerCase();
         const normKey = (t.merchantKey || '').toLowerCase();
         isMatch = normDesc.includes(normMerchant) || normKey.includes(normMerchant);
       } else {
-        isMatch = t.category === currentConfig.category;
+        isMatch = t.category === effectiveConfig.category;
       }
 
       if (isMatch) {
@@ -349,6 +439,80 @@ export default function Loans() {
       }
     }
 
+    // Normalize weekend/end-of-month ACH shifts: if a month has >= 2 transactions,
+    // its earliest transaction posted on day 1..5, and the previous calendar month had 0 transactions,
+    // attribute that early-month payment to the previous month.
+    const sortedMonths = Array.from(txByMonth.keys()).sort();
+    for (const monthKey of sortedMonths) {
+      const list = txByMonth.get(monthKey);
+      if (!list || list.length < 2) continue;
+      list.sort((a, b) => a.date.localeCompare(b.date));
+      const firstTx = list[0];
+      const dayOfMonth = parseInt(firstTx.date.substring(8, 10), 10);
+      if (dayOfMonth >= 1 && dayOfMonth <= 5) {
+        const [yr, mo] = monthKey.split('-').map(Number);
+        const prevDate = new Date(yr, mo - 2, 15);
+        const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+        if (!txByMonth.has(prevMonthKey)) {
+          txByMonth.set(prevMonthKey, [firstTx]);
+          txByMonth.set(monthKey, list.slice(1));
+        }
+      }
+    }
+
+    // Determine how many monthly payment cycles have elapsed up to Today
+    const monthsSinceStart =
+      (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
+    const todayPaymentIndex = monthsSinceStart >= 0 ? monthsSinceStart + 1 : 0;
+    const todayHasMatchedTx = (txByMonth.get(todayStr)?.length ?? 0) > 0;
+    // If today's month already has a posted payment (e.g. paid on the 3rd-5th), the live balance is post-payment.
+    // If today's month has NOT had a payment yet (e.g. paid on the 29th), the live balance is pre-payment (end of prior month).
+    const completedPaymentsCount =
+      todayPaymentIndex > 0 ? (todayHasMatchedTx ? todayPaymentIndex : todayPaymentIndex - 1) : 0;
+
+    // Determine whether P / connectedLiveBalance represents the current balance as of Today
+    // rather than the original starting principal at startDate.
+    const userEditedPrincipal =
+      currentConfig !== null && Math.abs(effectiveConfig.principal - currentConfig.principal) >= 1;
+    let anchorBalance: number | null = null;
+    if (connectedLiveBalance !== null && completedPaymentsCount > 0) {
+      anchorBalance = userEditedPrincipal ? P : connectedLiveBalance;
+    } else if (
+      completedPaymentsCount >= 6 &&
+      effectiveConfig.monthlyPayment &&
+      effectiveConfig.monthlyPayment > P * r
+    ) {
+      const m = effectiveConfig.monthlyPayment;
+      const monthsFromP =
+        r === 0 ? P / m : -Math.log(1 - (P * r) / m) / Math.log(1 + r);
+      if (!isNaN(monthsFromP) && monthsFromP < n * 0.85 && completedPaymentsCount + monthsFromP >= n * 0.85) {
+        anchorBalance = P;
+      }
+    }
+
+    // Use monthly payment override if specified, otherwise calculate mathematically
+    let scheduledMonthlyPayment = effectiveConfig.monthlyPayment || 0;
+    if (scheduledMonthlyPayment <= 0) {
+      const targetPrincipal = anchorBalance !== null ? anchorBalance : P;
+      const targetMonths = anchorBalance !== null ? Math.max(1, n - completedPaymentsCount) : n;
+      if (r === 0) {
+        scheduledMonthlyPayment = targetPrincipal / targetMonths;
+      } else {
+        scheduledMonthlyPayment =
+          (targetPrincipal * (r * Math.pow(1 + r, targetMonths))) / (Math.pow(1 + r, targetMonths) - 1);
+      }
+    }
+
+    // If anchored to Today's balance after `completedPaymentsCount` payments, reconstruct the
+    // starting principal P at startDate so that forward amortization reaches exact `anchorBalance` at Today.
+    if (anchorBalance !== null && completedPaymentsCount > 0 && scheduledMonthlyPayment > anchorBalance * r) {
+      let b = anchorBalance;
+      for (let k = completedPaymentsCount; k >= 1; k--) {
+        b = (b + scheduledMonthlyPayment) / (1 + r);
+      }
+      P = b;
+    }
+
     const rows: PaymentRow[] = [];
     let sBalance = P;
     let aBalance = P;
@@ -356,23 +520,28 @@ export default function Loans() {
     let cumulativeActualInterest = 0;
     let totalActualPaid = 0;
     let matchedPaymentsCount = 0;
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const maxMonths = Math.max(n, 600);
 
-    for (let i = 1; i <= n; i++) {
+    for (let i = 1; i <= maxMonths; i++) {
       const pDate = new Date(startDate.getFullYear(), startDate.getMonth() + i - 1, 15);
       const yearMonth = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}`;
+      const startingBalanceThisMonth = aBalance;
 
-      // Scheduled calculations
-      let sInterest = sBalance * r;
-      let sPrincipal = scheduledMonthlyPayment - sInterest;
-      if (sPrincipal > sBalance) {
-        sPrincipal = sBalance;
+      // Baseline scheduled calculations
+      let sInterest = 0;
+      let sPrincipal = 0;
+      if (sBalance > 0.005) {
+        sInterest = sBalance * r;
+        sPrincipal = Math.max(0, scheduledMonthlyPayment - sInterest);
+        if (sPrincipal > sBalance) {
+          sPrincipal = sBalance;
+        }
+        sBalance = Math.max(0, sBalance - sPrincipal);
+        cumulativeScheduledInterest += sInterest;
       }
-      sBalance = Math.max(0, sBalance - sPrincipal);
-      cumulativeScheduledInterest += sInterest;
+      const sPaymentThisMonth = sPrincipal + sInterest;
 
-      // Actual calculations
+      // Actual / accelerated calculations
       const monthTxns = txByMonth.get(yearMonth) || [];
       const actualPaid = monthTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
       const isMatched = monthTxns.length > 0;
@@ -382,38 +551,63 @@ export default function Loans() {
 
       let aInterest = 0;
       let aPrincipal = 0;
+      let aPaymentThisMonth = 0;
       let extra = 0;
+      let hasOneTimeExtra = false;
 
       const isFuture = yearMonth > todayStr;
+      const isToday = yearMonth === todayStr;
       const isAssumed = !isMatched && !isFuture;
 
-      if (aBalance > 0) {
+      if (anchorBalance !== null && i <= completedPaymentsCount) {
+        // Completed past months prior to the live-balance anchor: keep sBalance and aBalance
+        // aligned so both arrive at the exact live bank balance entering Today.
+        aInterest = sInterest;
+        aPrincipal = sPrincipal;
+        aBalance = sBalance;
+        aPaymentThisMonth = isMatched ? actualPaid : sPaymentThisMonth;
+        extra = isMatched ? Math.max(0, actualPaid - scheduledMonthlyPayment) : 0;
+        totalActualPaid += aPaymentThisMonth;
+        cumulativeActualInterest += aInterest;
+      } else if (aBalance > 0.005) {
         aInterest = aBalance * r;
         if (isFuture || isAssumed) {
-          // Project or assume standard payment plus any extra payments (only from present date onwards)
-          let paymentAmount = scheduledMonthlyPayment;
-          if (yearMonth >= todayStr && currentConfig.extraMonthlyPayment && currentConfig.extraMonthlyPayment > 0) {
-            paymentAmount += currentConfig.extraMonthlyPayment;
-          }
-          if (yearMonth >= todayStr && currentConfig.extraOneTimePayment && currentConfig.extraOneTimePayment > 0 && currentConfig.extraOneTimeMonth === i) {
-            paymentAmount += currentConfig.extraOneTimePayment;
-          }
+          const recurringExtra =
+            yearMonth >= todayStr && effectiveConfig.extraMonthlyPayment && effectiveConfig.extraMonthlyPayment > 0
+              ? effectiveConfig.extraMonthlyPayment
+              : 0;
+          const oneTimeExtra =
+            yearMonth >= todayStr &&
+            effectiveConfig.extraOneTimePayment &&
+            effectiveConfig.extraOneTimePayment > 0 &&
+            effectiveConfig.extraOneTimeMonth === i
+              ? effectiveConfig.extraOneTimePayment
+              : 0;
+          hasOneTimeExtra = oneTimeExtra > 0;
 
-          aPrincipal = paymentAmount - aInterest;
-          if (aPrincipal > aBalance) aPrincipal = aBalance;
+          const desiredPayment = scheduledMonthlyPayment + recurringExtra + oneTimeExtra;
+          const balanceBefore = aBalance;
+          aPrincipal = Math.max(0, desiredPayment - aInterest);
+          if (aPrincipal > aBalance) {
+            aPrincipal = aBalance;
+          }
+          aPaymentThisMonth = aPrincipal + aInterest;
           aBalance = Math.max(0, aBalance - aPrincipal);
-          
-          totalActualPaid += paymentAmount;
+
+          const basePrincipal = Math.min(balanceBefore, Math.max(0, scheduledMonthlyPayment - aInterest));
+          extra = Math.max(0, aPrincipal - basePrincipal);
+
+          totalActualPaid += aPaymentThisMonth;
           cumulativeActualInterest += aInterest;
-          extra = yearMonth >= todayStr
-            ? (currentConfig.extraMonthlyPayment || 0) + (currentConfig.extraOneTimeMonth === i ? (currentConfig.extraOneTimePayment || 0) : 0)
-            : 0;
         } else {
-          // Matched past month: use actual transactions
-          aPrincipal = actualPaid - aInterest;
-          if (aPrincipal > aBalance) aPrincipal = aBalance;
+          // Matched past/present month: use actual transactions
+          aPrincipal = Math.max(0, actualPaid - aInterest);
+          if (aPrincipal > aBalance) {
+            aPrincipal = aBalance;
+          }
+          aPaymentThisMonth = actualPaid;
           aBalance = Math.max(0, aBalance - aPrincipal);
-          
+
           extra = Math.max(0, actualPaid - scheduledMonthlyPayment);
           totalActualPaid += actualPaid;
           cumulativeActualInterest += aInterest;
@@ -426,19 +620,19 @@ export default function Loans() {
       rows.push({
         paymentNumber: i,
         date: pDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        scheduledPayment: scheduledMonthlyPayment,
+        yearMonth,
+        scheduledPayment: sPaymentThisMonth,
         scheduledInterest: sInterest,
         scheduledPrincipal: sPrincipal,
         scheduledBalance: sBalance,
-        actualPayment: isFuture || isAssumed 
-          ? scheduledMonthlyPayment + 
-            (yearMonth >= todayStr ? (currentConfig.extraMonthlyPayment || 0) : 0) + 
-            (yearMonth >= todayStr && currentConfig.extraOneTimeMonth === i ? (currentConfig.extraOneTimePayment || 0) : 0)
-          : actualPaid,
+        actualPayment: aPaymentThisMonth,
         actualInterest: aInterest,
         actualPrincipal: aPrincipal,
         actualBalance: aBalance,
+        startingBalance: startingBalanceThisMonth,
         extraPayment: extra,
+        hasOneTimeExtra,
+        isToday,
         isMatched: isMatched && !isFuture,
         isAssumed,
         isFuture,
@@ -450,49 +644,188 @@ export default function Loans() {
         cumulativeActualPayment,
       });
 
-      if (sBalance === 0 && aBalance === 0 && isFuture) {
+      const canAmortize = scheduledMonthlyPayment > sBalance * r + 0.01;
+      if (i >= completedPaymentsCount && sBalance <= 0.005 && aBalance <= 0.005 && (isFuture || i >= n)) {
+        break;
+      }
+      if (i >= n && !canAmortize) {
         break;
       }
     }
 
     const interestSaved = Math.max(0, cumulativeScheduledInterest - cumulativeActualInterest);
 
-    const elapsedRows = rows.filter(r => !r.isFuture);
-    const amountPaidUpToToday = elapsedRows.reduce((sum, r) => sum + r.actualPayment, 0);
-    const paymentsCountUpToToday = elapsedRows.length;
-    const balanceAsOfToday = elapsedRows.length > 0 ? elapsedRows[elapsedRows.length - 1].actualBalance : P;
+    const completedRows =
+      completedPaymentsCount > 0
+        ? rows.slice(0, completedPaymentsCount)
+        : rows.filter((row) => !row.isFuture);
+    const amountPaidUpToToday = completedRows.reduce((sum, row) => sum + row.actualPayment, 0);
+    const paymentsCountUpToToday = completedRows.length;
+    const balanceAsOfToday =
+      anchorBalance !== null
+        ? anchorBalance
+        : completedRows.length > 0
+        ? completedRows[completedRows.length - 1].actualBalance
+        : P;
     const percentPaid = Math.max(0, Math.min(100, ((P - balanceAsOfToday) / P) * 100));
 
-    // Calculate months remaining
-    let monthsRemaining = 0;
-    if (balanceAsOfToday > 0 && scheduledMonthlyPayment > 0) {
-      if (r === 0) {
-        monthsRemaining = balanceAsOfToday / scheduledMonthlyPayment;
-      } else {
-        const num = Math.log(1 - (balanceAsOfToday * r) / scheduledMonthlyPayment);
-        if (!isNaN(num)) {
-          monthsRemaining = -num / Math.log(1 + r);
-        } else {
-          monthsRemaining = Infinity;
-        }
-      }
-    }
+    // Calculate remaining payments & payoff dates from actual simulated rows (respecting extra monthly & one-time payments)
+    const remainingActualActiveRows = rows.filter(
+      (row) => row.paymentNumber > completedPaymentsCount && row.actualPayment > 0.01
+    );
+    const remainingScheduledActiveRows = rows.filter(
+      (row) => row.paymentNumber > completedPaymentsCount && row.scheduledPayment > 0.01
+    );
+    const monthsRemaining = remainingActualActiveRows.length;
+    const scheduledMonthsRemaining = remainingScheduledActiveRows.length;
+
+    const lastActualPaymentRow = [...rows].reverse().find((row) => row.actualPayment > 0.01);
+    const lastScheduledPaymentRow = [...rows].reverse().find((row) => row.scheduledPayment > 0.01);
+    const totalScheduledPayments = lastScheduledPaymentRow?.paymentNumber ?? n;
+    const payoffDate = lastActualPaymentRow?.date ?? null;
+    const scheduledPayoffDate = lastScheduledPaymentRow?.date ?? null;
+    const monthsSaved = Math.max(
+      0,
+      totalScheduledPayments - (lastActualPaymentRow?.paymentNumber ?? totalScheduledPayments)
+    );
 
     return {
       rows,
+      originalPrincipal: P,
       scheduledMonthlyPayment,
       totalScheduledInterest: cumulativeScheduledInterest,
       totalActualInterest: cumulativeActualInterest,
       interestSaved,
       actualBalance: balanceAsOfToday,
-      monthsRemaining: Math.ceil(monthsRemaining),
+      monthsRemaining,
+      scheduledMonthsRemaining,
+      totalScheduledPayments,
+      monthsSaved,
+      payoffDate,
+      scheduledPayoffDate,
       totalActualPaid,
       percentPaid,
       matchedPaymentsCount,
       amountPaidUpToToday,
       paymentsCountUpToToday,
     };
-  }, [currentConfig, transactions]);
+  }, [effectiveConfig, currentConfig, connectedAccount, connectedLiveBalance, transactions]);
+
+  const loanPrincipal = scheduleData?.originalPrincipal ?? currentConfig?.principal ?? 0;
+
+  const handleSyncBalanceToLive = async () => {
+    if (!currentConfig || currentConfig.id === undefined || connectedLiveBalance === null) return;
+
+    const updated: Loan = {
+      ...currentConfig,
+      principal: connectedLiveBalance,
+      downPayment: 0,
+    };
+    setFormPrincipal(String(connectedLiveBalance));
+    setFormDownPayment('0');
+    await updateLoanMutation.mutateAsync({ id: currentConfig.id, updates: updated });
+    setSnackbarMsg(`Loan balance synced to live connection: ${usdCents.format(connectedLiveBalance)}`);
+  };
+
+  const handleImportAllConnectedAccounts = async (accountsToImport: Account[]) => {
+    for (const acc of accountsToImport) {
+      const rawBalance = Math.abs(acc.currentBalance || 0);
+      const isMortgage = acc.type === 'mortgage' || /mortgage|home\s*loan/i.test(`${acc.name} ${acc.institution}`);
+      const isStudent = isStudentLoanAccount(acc);
+      const loanType: 'house' | 'car' | 'student' = isMortgage ? 'house' : (isStudent ? 'student' : 'car');
+      const merchantStr = acc.institution ? acc.institution.toLowerCase() : '';
+      const category = loanType === 'house' ? 'Mortgage' : (loanType === 'student' ? 'Student Loans' : 'Auto Loan');
+
+      let detectedPayment: number | undefined = undefined;
+      try {
+        const txns = await api.getTransactions('1970-01-01', '2100-01-01', { merchantKey: merchantStr || undefined, category });
+        const filtered = txns.filter((t) => demoMode ? t.source === 'demo' : t.source !== 'demo');
+        if (filtered.length > 0) {
+          const amounts = filtered.map((t) => Math.abs(t.amount));
+          const counts: Record<number, number> = {};
+          let mostCommon = 0;
+          let maxC = 0;
+          for (const a of amounts) {
+            counts[a] = (counts[a] || 0) + 1;
+            if (counts[a] > maxC) {
+              maxC = counts[a];
+              mostCommon = a;
+            }
+          }
+          if (mostCommon > 0) detectedPayment = mostCommon;
+        }
+      } catch (e) {
+        console.error('Error auto-detecting payment during import:', e);
+      }
+
+      const defaultVal = loanType === 'house' ? DEFAULT_HOUSE_CONFIG : (loanType === 'student' ? DEFAULT_STUDENT_CONFIG : DEFAULT_CAR_CONFIG);
+      const newLoan: Loan = {
+        ...defaultVal,
+        name: acc.name,
+        type: loanType,
+        principal: rawBalance,
+        downPayment: 0,
+        propertyValue: estimatePropertyValue(loanType, rawBalance, 0),
+        merchant: merchantStr || undefined,
+        category,
+        monthlyPayment: detectedPayment || defaultVal.monthlyPayment,
+        enabled: true,
+        createdAt: new Date().toISOString(),
+      };
+      await addLoanMutation.mutateAsync(newLoan as Loan);
+    }
+    setSnackbarMsg(`Imported ${accountsToImport.length} connected loan(s) successfully!`);
+  };
+
+  const handleSelectConnectedAccount = async (accId: number | '') => {
+    setSelectedConnectedAccId(accId);
+    setAddDetectedPayment(undefined);
+    if (!accId) return;
+    const acc = connectedLoanAccounts.find((a) => a.id === accId);
+    if (!acc) return;
+
+    const rawBalance = Math.abs(acc.currentBalance || 0);
+    const isMortgage = acc.type === 'mortgage' || /mortgage|home\s*loan/i.test(`${acc.name} ${acc.institution}`);
+    const isStudent = isStudentLoanAccount(acc);
+    const loanType: 'house' | 'car' | 'student' = isMortgage ? 'house' : (isStudent ? 'student' : 'car');
+
+    setAddName(acc.name);
+    setAddType(loanType);
+    setAddPrincipal(String(rawBalance));
+    setAddDownPayment('0');
+    const merchantStr = acc.institution ? acc.institution.toLowerCase() : '';
+    setAddMerchant(merchantStr);
+
+    try {
+      const filters: any = {};
+      if (merchantStr) {
+        filters.merchantKey = merchantStr;
+      } else {
+        filters.category = loanType === 'house' ? 'Mortgage' : (loanType === 'student' ? 'Student Loans' : 'Auto Loan');
+      }
+      const txns = await api.getTransactions('1970-01-01', '2100-01-01', filters);
+      const filtered = txns.filter((t) => demoMode ? t.source === 'demo' : t.source !== 'demo');
+      if (filtered.length > 0) {
+        const amounts = filtered.map((t) => Math.abs(t.amount));
+        const counts: Record<number, number> = {};
+        let mostCommon = 0;
+        let maxC = 0;
+        for (const a of amounts) {
+          counts[a] = (counts[a] || 0) + 1;
+          if (counts[a] > maxC) {
+            maxC = counts[a];
+            mostCommon = a;
+          }
+        }
+        if (mostCommon > 0) {
+          setAddDetectedPayment(mostCommon);
+          setSnackbarMsg(`Auto-detected recurring payment of ${usdCents.format(mostCommon)} from checking history!`);
+        }
+      }
+    } catch (err) {
+      console.error('Error auto-detecting payment:', err);
+    }
+  };
 
   const handleSaveSettings = async () => {
     const P = parseFloat(formPrincipal);
@@ -575,7 +908,7 @@ export default function Loans() {
     const downPaymentVal = addType === 'student' ? 0 : parseFloat(addDownPayment);
 
     if (isNaN(principalVal) || principalVal <= 0) {
-      alert('Please enter a valid purchase price.');
+      alert('Please enter a valid loan balance or purchase price.');
       return;
     }
 
@@ -591,8 +924,10 @@ export default function Loans() {
       type: addType,
       principal: principalVal,
       downPayment: addType === 'student' ? undefined : downPaymentVal,
-      propertyValue: addType === 'student' ? undefined : principalVal,
+      propertyValue: estimatePropertyValue(addType, principalVal, downPaymentVal),
       merchant: addMerchant.trim() || undefined,
+      category: addType === 'house' ? 'Mortgage' : (addType === 'student' ? 'Student Loans' : 'Auto Loan'),
+      monthlyPayment: addDetectedPayment ?? defaultVal.monthlyPayment,
       enabled: true,
       createdAt: new Date().toISOString(),
     };
@@ -600,6 +935,8 @@ export default function Loans() {
     const newId = await addLoanMutation.mutateAsync(newLoan as Loan);
     setActiveLoanId(newId);
     setAddDialogOpen(false);
+    setSelectedConnectedAccId('');
+    setAddDetectedPayment(undefined);
     setAddName('');
     setAddMerchant('');
     setAddType('house');
@@ -636,6 +973,7 @@ export default function Loans() {
 
   const handleCloseAddDialog = () => {
     setAddDialogOpen(false);
+    setSelectedConnectedAccId('');
     setAddName('');
     setAddMerchant('');
     setAddType('house');
@@ -644,153 +982,43 @@ export default function Loans() {
   };
 
   const renderAddLoanDialog = () => (
-    <Dialog open={addDialogOpen} onClose={handleCloseAddDialog} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700 }}>Add New Loan</DialogTitle>
-      <DialogContent sx={{ pt: 1 }}>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            fullWidth
-            size="small"
-            label="Loan Name"
-            value={addName}
-            onChange={(e) => setAddName(e.target.value)}
-            placeholder="e.g. Primary Residence or Tesla Model Y"
-          />
-          <FormControl fullWidth size="small">
-            <InputLabel id="add-loan-type-label">Loan Type</InputLabel>
-            <Select
-              labelId="add-loan-type-label"
-              value={addType}
-              onChange={(e) => setAddType(e.target.value as 'house' | 'car' | 'student')}
-              label="Loan Type"
-            >
-              <MenuItem value="house">House Mortgage</MenuItem>
-              <MenuItem value="car">Car Loan / Lease</MenuItem>
-              <MenuItem value="student">Student Loan</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField
-            fullWidth
-            size="small"
-            label={activeTab === 'student' ? "Loan Amount" : "Purchase Price"}
-            value={addPrincipal}
-            onChange={(e) => setAddPrincipal(e.target.value)}
-            InputProps={{
-              startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-            }}
-          />
-          {addType !== 'student' && (
-            <TextField
-              fullWidth
-              size="small"
-              label="Down Payment"
-              value={addDownPayment}
-              onChange={(e) => setAddDownPayment(e.target.value)}
-              InputProps={{
-                startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-              }}
-            />
-          )}
-          <Autocomplete
-            freeSolo
-            options={merchantOptions}
-            value={addMerchant}
-            onChange={(_, newValue) => setAddMerchant(newValue || '')}
-            onInputChange={(_, newInputValue) => setAddMerchant(newInputValue || '')}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                size="small"
-                label="Linked Merchant (Optional)"
-                placeholder="e.g. TOYOTA FIN"
-                helperText="Select or type a merchant pattern to match payments."
-              />
-            )}
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={handleCloseAddDialog} variant="outlined" color="inherit" size="small">
-          Cancel
-        </Button>
-        <Button onClick={handleAddLoanSubmit} variant="contained" color="primary" size="small">
-          Add Loan
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <AddLoanDialog
+      open={addDialogOpen}
+      onClose={handleCloseAddDialog}
+      onSubmit={handleAddLoanSubmit}
+      connectedLoanAccounts={connectedLoanAccounts}
+      selectedConnectedAccId={selectedConnectedAccId}
+      onSelectConnectedAccount={handleSelectConnectedAccount}
+      addName={addName}
+      setAddName={setAddName}
+      addType={addType}
+      setAddType={setAddType}
+      addPrincipal={addPrincipal}
+      setAddPrincipal={setAddPrincipal}
+      addDownPayment={addDownPayment}
+      setAddDownPayment={setAddDownPayment}
+      merchantOptions={merchantOptions}
+      addMerchant={addMerchant}
+      setAddMerchant={setAddMerchant}
+    />
   );
 
   const renderRestoreDialog = () => (
-    <Dialog open={restoreDialogOpen} onClose={() => setRestoreDialogOpen(false)} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700 }}>Restore Removed Loans</DialogTitle>
-      <DialogContent dividers>
-        {inactiveLoans.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            No removed loans to restore.
-          </Typography>
-        ) : (
-          <TableContainer sx={{ maxHeight: 300 }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {inactiveLoans.map((loan) => (
-                  <TableRow key={loan.id} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        {loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18, color: 'primary.main' }} /> : loan.type === 'student' ? <SchoolIcon sx={{ fontSize: 18, color: 'info.main' }} /> : <DirectionsCarIcon sx={{ fontSize: 18, color: 'secondary.main' }} />}
-                        <Typography variant="body2">{loan.name}</Typography>
-                      </Stack>
-                    </TableCell>
-                    <TableCell sx={{ textTransform: 'capitalize' }}>{loan.type}</TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          color="primary"
-                          onClick={() => handleRestoreLoan(loan)}
-                          sx={{ textTransform: 'none', py: 0.5 }}
-                        >
-                          Restore
-                        </Button>
-                        <Button
-                          variant="text"
-                          size="small"
-                          color="error"
-                          onClick={() => loan.id !== undefined && handleDeleteLoanById(loan.id, loan.name)}
-                          sx={{ textTransform: 'none', py: 0.5 }}
-                        >
-                          Delete
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={() => setRestoreDialogOpen(false)} variant="contained" color="primary" size="small">
-          Close
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <RestoreLoansDialog
+      open={restoreDialogOpen}
+      onClose={() => setRestoreDialogOpen(false)}
+      inactiveLoans={inactiveLoans}
+      onRestoreLoan={handleRestoreLoan}
+      onDeleteLoanById={handleDeleteLoanById}
+    />
   );
 
   if (activeLoans.length === 0) {
     return (
-      <Stack spacing={3} sx={{ width: '100%', pb: 5 }}>
+      <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: '100%', pb: 5 }}>
         {/* Header */}
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Box>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
               Loans Tracker
             </Typography>
@@ -798,22 +1026,28 @@ export default function Loans() {
               Visualize your amortization schedules and match against transaction histories.
             </Typography>
           </Box>
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
             {inactiveLoans.length > 0 && (
               <Button
                 variant="outlined"
-                color="primary"
+                color="inherit"
+                size="small"
                 onClick={() => setRestoreDialogOpen(true)}
-                sx={{ textTransform: 'none', fontWeight: 600 }}
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
               >
-                Restore Loans ({inactiveLoans.length})
+                Restore ({inactiveLoans.length})
               </Button>
             )}
             <Button
               variant="contained"
               color="primary"
+              size="small"
               onClick={() => setAddDialogOpen(true)}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
+              sx={{
+                ...UNIFORM_TOOLBAR_BUTTON_SX,
+                border: '1px solid',
+                borderColor: 'primary.main',
+              }}
             >
               + Add Loan
             </Button>
@@ -823,10 +1057,10 @@ export default function Loans() {
         <Paper
           elevation={0}
           sx={{
-            p: 6,
+            p: { xs: 3, sm: 6 },
             border: '1px dashed',
             borderColor: 'divider',
-            borderRadius: 2,
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
             textAlign: 'center',
             bgcolor: 'background.default'
           }}
@@ -835,18 +1069,37 @@ export default function Loans() {
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
             No Active Loans
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
-            {inactiveLoans.length > 0
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 480, mx: 'auto' }}>
+            {connectedLoanAccounts.length > 0
+              ? `We detected ${connectedLoanAccounts.length} connected loan/mortgage account(s) from your bank connections (${connectedLoanAccounts.map((a) => a.name).join(', ')}). You can import them automatically with live balances or create a custom loan.`
+              : inactiveLoans.length > 0
               ? `You have ${inactiveLoans.length} removed loan(s). You can restore them or create a new active loan.`
               : 'Get started by adding a house mortgage or auto loan to simulate payment schedules, extra payments, and match against actual bank transactions.'}
           </Typography>
-          <Stack direction="row" spacing={2} justifyContent="center">
+          <Stack direction="row" spacing={1.5} justifyContent="center" flexWrap="wrap" useFlexGap>
+            {connectedLoanAccounts.length > 0 && (
+              <Button
+                variant="contained"
+                color="success"
+                size="small"
+                startIcon={<AutoAwesomeIcon fontSize="small" />}
+                onClick={() => handleImportAllConnectedAccounts(connectedLoanAccounts)}
+                sx={{
+                  ...UNIFORM_TOOLBAR_BUTTON_SX,
+                  border: '1px solid',
+                  borderColor: 'success.main',
+                }}
+              >
+                Import {connectedLoanAccounts.length} Connected Loan(s)
+              </Button>
+            )}
             {inactiveLoans.length > 0 && (
               <Button
                 variant="outlined"
-                color="primary"
+                color="inherit"
+                size="small"
                 onClick={() => setRestoreDialogOpen(true)}
-                sx={{ textTransform: 'none', fontWeight: 600 }}
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
               >
                 Restore Removed Loans
               </Button>
@@ -854,8 +1107,13 @@ export default function Loans() {
             <Button
               variant="contained"
               color="primary"
+              size="small"
               onClick={() => setAddDialogOpen(true)}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
+              sx={{
+                ...UNIFORM_TOOLBAR_BUTTON_SX,
+                border: '1px solid',
+                borderColor: 'primary.main',
+              }}
             >
               Create New Loan
             </Button>
@@ -869,15 +1127,87 @@ export default function Loans() {
   }
 
   if (!shouldRender) return <PageLoader isLoading={true}><div /></PageLoader>;
-  if (!scheduleData || !currentConfig) return null;
+  if (!scheduleData || !currentConfig || !effectiveConfig) return null;
 
-  const cardWidth = currentConfig.propertyValue ? 2.4 : 3;
+  const cardWidth = effectiveConfig.propertyValue ? 2.4 : 3;
+  const displayedBalance = connectedLiveBalance !== null ? connectedLiveBalance : scheduleData.actualBalance;
+  const displayedPercentPaid =
+    connectedLiveBalance !== null && connectedLiveBalance < loanPrincipal
+      ? Math.max(0, Math.min(100, ((loanPrincipal - connectedLiveBalance) / loanPrincipal) * 100))
+      : scheduleData.percentPaid;
+  const loanParametersPanel = (
+    <LoanParametersPanel
+      hasUnsavedChanges={hasUnsavedChanges}
+      connectedAccount={connectedAccount}
+      connectedLiveBalance={connectedLiveBalance}
+      connectedLoanAccounts={connectedLoanAccounts}
+      handleSyncBalanceToLive={handleSyncBalanceToLive}
+      activeTab={activeTab}
+      formName={formName}
+      setFormName={setFormName}
+      formPrincipal={formPrincipal}
+      setFormPrincipal={setFormPrincipal}
+      formDownPayment={formDownPayment}
+      setFormDownPayment={setFormDownPayment}
+      formRate={formRate}
+      setFormRate={setFormRate}
+      formTerm={formTerm}
+      setFormTerm={setFormTerm}
+      formStartDate={formStartDate}
+      setFormStartDate={setFormStartDate}
+      formCategory={formCategory}
+      handleCategoryChange={handleCategoryChange}
+      categories={categories}
+      merchantOptions={merchantOptions}
+      formMerchant={formMerchant}
+      setFormMerchant={setFormMerchant}
+      formMonthlyPayment={formMonthlyPayment}
+      setFormMonthlyPayment={setFormMonthlyPayment}
+      formPropertyValue={formPropertyValue}
+      setFormPropertyValue={setFormPropertyValue}
+      formExtraMonthlyPayment={formExtraMonthlyPayment}
+      setFormExtraMonthlyPayment={setFormExtraMonthlyPayment}
+      formExtraOneTimePayment={formExtraOneTimePayment}
+      setFormExtraOneTimePayment={setFormExtraOneTimePayment}
+      formExtraOneTimeMonth={formExtraOneTimeMonth}
+      setFormExtraOneTimeMonth={setFormExtraOneTimeMonth}
+      setSnackbarMsg={setSnackbarMsg}
+      handleRevertChanges={handleRevertChanges}
+      handleSaveSettings={handleSaveSettings}
+      scheduleData={scheduleData}
+    />
+  );
+
+  const loanChartCard = (
+    <Paper sx={{ p: { xs: 1.5, sm: 3 }, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.25, flexWrap: 'wrap', gap: 1 }}>
+        <Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+            Remaining Balance & Payoff Trajectory
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
+            Compare your baseline amortization schedule against accelerated payoff with extra payments.
+          </Typography>
+        </Box>
+      </Stack>
+
+      <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%' }}>
+        <LoanChart
+          rows={scheduleData.rows}
+          originalPrincipal={loanPrincipal}
+          interestSaved={scheduleData.interestSaved}
+          monthsSaved={scheduleData.monthsSaved}
+          payoffDate={scheduleData.payoffDate}
+        />
+      </Box>
+    </Paper>
+  );
 
   return (
-    <Stack spacing={3} sx={{ width: '100%', pb: 5 }}>
+    <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: '100%', pb: 5 }}>
       {/* Header */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Box>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.25}>
+        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             Loans Tracker
           </Typography>
@@ -885,30 +1215,82 @@ export default function Loans() {
             Visualize your amortization schedules and match against transaction histories.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+          {!isDesktop && (
+            <Button
+              variant="outlined"
+              color="inherit"
+              size="small"
+              startIcon={<TuneIcon fontSize="small" />}
+              onClick={() => setMobileSettingsOpen(true)}
+              sx={UNIFORM_TOOLBAR_BUTTON_SX}
+            >
+              Settings
+            </Button>
+          )}
           {inactiveLoans.length > 0 && (
             <Button
               variant="outlined"
-              color="primary"
+              color="inherit"
+              size="small"
               onClick={() => setRestoreDialogOpen(true)}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
+              sx={UNIFORM_TOOLBAR_BUTTON_SX}
             >
-              Restore Loans ({inactiveLoans.length})
+              Restore ({inactiveLoans.length})
             </Button>
           )}
           <Button
             variant="contained"
             color="primary"
+            size="small"
             onClick={() => setAddDialogOpen(true)}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
+            sx={{
+              ...UNIFORM_TOOLBAR_BUTTON_SX,
+              border: '1px solid',
+              borderColor: 'primary.main',
+            }}
           >
             + Add Loan
           </Button>
         </Stack>
       </Stack>
 
+      {/* Unlinked Connected Accounts Alert */}
+      {unlinkedAccounts.length > 0 && (
+        <Alert
+          severity="info"
+          icon={<AutoAwesomeIcon />}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              variant="outlined"
+              onClick={() => handleImportAllConnectedAccounts(unlinkedAccounts)}
+              sx={{
+                ...UNIFORM_TOOLBAR_BUTTON_SX,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Import {unlinkedAccounts.length === 1 ? 'Loan' : 'Loans'}
+            </Button>
+          }
+          sx={{
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+            '& .MuiAlert-action': {
+              alignItems: 'center',
+              pt: { xs: 1, sm: 0.5 },
+              pl: { xs: 0, sm: 2 },
+            },
+            flexWrap: { xs: 'wrap', sm: 'nowrap' },
+          }}
+        >
+          <AlertTitle sx={{ fontWeight: 700 }}>Connected Financial Accounts Detected</AlertTitle>
+          We detected {unlinkedAccounts.length} connected loan/mortgage account(s) ({unlinkedAccounts.map((a) => a.name).join(', ')}) from your bank connections. Click import to track them with live balances and detected payment schedules.
+        </Alert>
+      )}
+
       {/* Tabs */}
-      <Paper sx={{ borderBottom: 1, borderColor: 'divider' }}>
+      <Paper sx={{ borderBottom: 1, borderColor: 'divider', borderRadius: (theme) => `${theme.shape.borderRadius}px` }}>
         <Tabs
           value={activeLoanId}
           onChange={(_, val) => {
@@ -917,234 +1299,57 @@ export default function Loans() {
           }}
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ px: 2 }}
+          sx={{ px: { xs: 1, sm: 2 } }}
         >
           {activeLoans.map((loan) => (
             <Tab
               key={loan.id}
               icon={loan.type === 'house' ? <HomeIcon sx={{ fontSize: 18 }} /> : loan.type === 'student' ? <SchoolIcon sx={{ fontSize: 18 }} /> : <DirectionsCarIcon sx={{ fontSize: 18 }} />}
               iconPosition="start"
-              label={loan.name}
+              label={
+                <Tooltip title={loan.name} arrow placement="top">
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'inline-block',
+                      maxWidth: { xs: 140, sm: 200, md: 240 },
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      verticalAlign: 'bottom',
+                    }}
+                  >
+                    {loan.name}
+                  </Box>
+                </Tooltip>
+              }
               value={loan.id}
-              sx={{ fontWeight: 600, minHeight: 48 }}
+              sx={{
+                fontWeight: 600,
+                minHeight: 48,
+                maxWidth: { xs: 180, sm: 240, md: 280 },
+                '& .MuiTab-iconWrapper': { mr: 1, mb: '0 !important' },
+              }}
             />
           ))}
         </Tabs>
       </Paper>
 
       {/* Summary Cards */}
-      <Grid container spacing={3}>
-        {/* Card 1: Remaining Balance */}
-        <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
-          <Card
-            elevation={0}
-            sx={{
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              border: '1px solid',
-              borderColor: 'divider',
-              background: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(25, 118, 210, 0.02) 100%)'
-                  : 'linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(25, 118, 210, 0.01) 100%)',
-            }}
-          >
-            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                  Remaining Balance
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
-                  {usdCents.format(scheduleData.actualBalance)}
-                </Typography>
-              </Box>
-              <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    {scheduleData.percentPaid.toFixed(1)}% paid
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Original Loan: {usdCents.format(currentConfig.principal - (currentConfig.downPayment || 0))}
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={scheduleData.percentPaid}
-                  color="primary"
-                  sx={{ height: 6, borderRadius: 3 }}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Card 2: Equity (rendered dynamically when Property Value is available) */}
-        {!!currentConfig.propertyValue && (
-          <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
-            <Card
-              elevation={0}
-              sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                border: '1px solid',
-                borderColor: 'divider',
-                background: (theme) =>
-                  theme.palette.mode === 'dark'
-                    ? 'linear-gradient(135deg, rgba(156, 39, 176, 0.1) 0%, rgba(156, 39, 176, 0.02) 100%)'
-                    : 'linear-gradient(135deg, rgba(156, 39, 176, 0.05) 0%, rgba(156, 39, 176, 0.01) 100%)',
-              }}
-            >
-              <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                    {activeTab === 'house' ? 'Estimated Home Equity' : 'Estimated Vehicle Equity'}
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums', color: 'secondary.main' }}>
-                    {usdCents.format(Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance))}
-                  </Typography>
-                </Box>
-                <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                  <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {currentConfig.propertyValue && currentConfig.propertyValue > 0 
-                        ? `${((Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance) / currentConfig.propertyValue) * 100).toFixed(1)}% equity`
-                        : '0.0% equity'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Value: {usdCents.format(currentConfig.propertyValue || 0)}
-                    </Typography>
-                  </Stack>
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(100, (Math.max(0, currentConfig.propertyValue - scheduleData.actualBalance) / (currentConfig.propertyValue || 1)) * 100)}
-                    color="secondary"
-                    sx={{ height: 6, borderRadius: 3, mb: currentConfig.downPayment && currentConfig.downPayment > 0 ? 1 : 0 }}
-                  />
-                  {currentConfig.downPayment !== undefined && currentConfig.downPayment > 0 && (
-                    <Stack direction="row" justifyContent="space-between">
-                      <Typography variant="caption" color="text.secondary">
-                        Down Payment
-                      </Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                        {usdCents.format(currentConfig.downPayment)}
-                      </Typography>
-                    </Stack>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {/* Card 3: Amount Paid / Payments (Progress to Date) */}
-        <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
-          <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider' }}>
-            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                  Payments to Date
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
-                  {usdCents.format(scheduleData.amountPaidUpToToday)}
-                </Typography>
-              </Box>
-              <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    {((scheduleData.paymentsCountUpToToday / (currentConfig.termYears * 12)) * 100).toFixed(1)}% elapsed
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {scheduleData.paymentsCountUpToToday} / {currentConfig.termYears * 12} pmts
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(100, (scheduleData.paymentsCountUpToToday / (currentConfig.termYears * 12)) * 100)}
-                  color="info"
-                  sx={{ height: 6, borderRadius: 3, mb: currentConfig.downPayment && currentConfig.downPayment > 0 ? 1 : 0 }}
-                />
-                {currentConfig.downPayment !== undefined && currentConfig.downPayment > 0 && (
-                  <Stack direction="row" justifyContent="space-between">
-                    <Typography variant="caption" color="text.secondary">
-                      Down Payment
-                    </Typography>
-                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                      {usdCents.format(currentConfig.downPayment)}
-                    </Typography>
-                  </Stack>
-                )}
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Card 4: Monthly Payment Details */}
-        <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
-          <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid', borderColor: 'divider' }}>
-            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                  Monthly Payment Details
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontVariantNumeric: 'tabular-nums' }}>
-                  {usdCents.format(scheduleData.scheduledMonthlyPayment)}
-                </Typography>
-              </Box>
-              <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CalendarMonthIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>{scheduleData.monthsRemaining === Infinity ? '∞' : scheduleData.monthsRemaining}</strong> months remaining
-                  </Typography>
-                </Stack>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Card 5: Interest Saved & Matching */}
-        <Grid size={{ xs: 12, sm: 6, md: cardWidth }}>
-          <Card
-            elevation={0}
-            sx={{
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              border: '1px solid',
-              borderColor: 'divider',
-              background: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(135deg, rgba(76, 175, 80, 0.1) 0%, rgba(76, 175, 80, 0.02) 100%)'
-                  : 'linear-gradient(135deg, rgba(76, 175, 80, 0.05) 0%, rgba(76, 175, 80, 0.01) 100%)',
-            }}
-          >
-            <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, '&:last-child': { pb: 2 } }}>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
-                  Interest Saved & Matching
-                </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, my: 1, color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
-                  {usdCents.format(scheduleData.interestSaved)}
-                </Typography>
-              </Box>
-              <Box sx={{ mt: 2, minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CheckCircleOutlineIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>{scheduleData.matchedPaymentsCount}</strong> payments matched
-                  </Typography>
-                </Stack>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <LoanSummaryCards
+        cardWidth={cardWidth}
+        connectedAccount={connectedAccount}
+        connectedLiveBalance={connectedLiveBalance}
+        displayedBalance={displayedBalance}
+        displayedPercentPaid={displayedPercentPaid}
+        loanPrincipal={loanPrincipal}
+        effectiveConfig={effectiveConfig}
+        activeTab={activeTab}
+        scheduleData={scheduleData}
+      />
 
       {/* Resizable Config Sidebar & Graph Panel */}
-            {/* Resizable Config Sidebar & Graph Panel */}
-      <Box sx={{ width: '100%', height: isDesktop ? 600 : 'auto', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ width: '100%', height: isDesktop ? 620 : 'auto', display: 'flex', flexDirection: 'column' }}>
         {isDesktop ? (
           <PanelGroup
             key="loans-panels"
@@ -1155,323 +1360,31 @@ export default function Loans() {
           >
             {/* Left Panel: Parameters/Filters */}
             <Panel id="loan-parameters" defaultSize="30%" minSize="25%" maxSize="45%">
-              <Paper
-              sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                border: '1px solid',
-                borderColor: 'divider',
-                overflow: 'hidden',
-              }}
-            >
-              <Box sx={{ p: 3, pb: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  Loan Parameters
-                </Typography>
-              </Box>
-              
-              <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 3, pb: 3 }}>
-                <Stack spacing={2.5}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Loan Name"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Purchase Price"
-                    value={formPrincipal}
-                    onChange={(e) => setFormPrincipal(e.target.value)}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
-                  {activeTab !== 'student' && (
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Down Payment"
-                      value={formDownPayment}
-                      onChange={(e) => setFormDownPayment(e.target.value)}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                      }}
-                    />
-                  )}
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Interest Rate (APR)"
-                    value={formRate}
-                    onChange={(e) => setFormRate(e.target.value)}
-                    InputProps={{
-                      endAdornment: <InputAdornment position="end"><PercentIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Loan Term"
-                    value={formTerm}
-                    onChange={(e) => setFormTerm(e.target.value)}
-                    InputProps={{
-                      endAdornment: <InputAdornment position="end">years</InputAdornment>,
-                    }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Start Date"
-                    type="date"
-                    value={formStartDate}
-                    onChange={(e) => setFormStartDate(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="loan-category-label">Linked Category</InputLabel>
-                    <Select
-                      labelId="loan-category-label"
-                      value={formCategory}
-                      onChange={(e) => handleCategoryChange(e.target.value)}
-                      label="Linked Category"
-                    >
-                      <MenuItem value=""><em>None</em></MenuItem>
-                      {categories.map((cat) => (
-                        <MenuItem key={cat.id} value={cat.name}>
-                          {cat.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <Autocomplete
-                    freeSolo
-                    options={merchantOptions}
-                    value={formMerchant}
-                    onChange={(_, newValue) => {
-                      setFormMerchant(newValue || '');
-                      if (!newValue && !formCategory) {
-                        setFormMonthlyPayment('');
-                        setSnackbarMsg('Monthly payment reset to standard schedule.');
-                      }
-                    }}
-                    onInputChange={(_, newInputValue) => {
-                      setFormMerchant(newInputValue || '');
-                      if (!newInputValue && !formCategory) {
-                        setFormMonthlyPayment('');
-                      }
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        size="small"
-                        label="Linked Merchant Pattern (Optional)"
-                        placeholder="e.g. TOYOTA FIN"
-                        helperText="If specified, matches transactions by merchant name instead of category."
-                      />
-                    )}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Monthly Payment (Scheduled)"
-                    value={formMonthlyPayment}
-                    onChange={(e) => setFormMonthlyPayment(e.target.value)}
-                    helperText="Calculated from loan amount if left empty"
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
-                  {activeTab !== 'student' && (
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label={activeTab === 'house' ? "Current Home Value" : "Estimated Resale Value"}
-                      value={formPropertyValue}
-                      onChange={(e) => setFormPropertyValue(e.target.value)}
-                      helperText={activeTab === 'house' ? "Estimated resale value of the house for equity tracking" : "Estimated resale value of the car for equity tracking"}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                      }}
-                    />
-                  )}
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Extra Payments (Accelerate Payoff)
-                  </Typography>
-                  <Box>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                        Monthly Extra Payment
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
-                        {usdCents.format(Number(formExtraMonthlyPayment) || 0)}
-                      </Typography>
-                    </Stack>
-                    <Slider
-                      value={Number(formExtraMonthlyPayment) || 0}
-                      min={0}
-                      max={2000}
-                      step={10}
-                      onChange={(_, val) => setFormExtraMonthlyPayment(String(val))}
-                      valueLabelDisplay="auto"
-                      valueLabelFormat={(val) => `$${val}`}
-                      sx={{
-                        color: 'success.main',
-                        py: 1,
-                        '& .MuiSlider-thumb': {
-                          width: 14,
-                          height: 14,
-                          '&:hover, &.Mui-focusVisible': {
-                            boxShadow: (theme) => `0px 0px 0px 8px ${theme.palette.success.main}1a`,
-                          },
-                          '&.Mui-active': {
-                            boxShadow: (theme) => `0px 0px 0px 14px ${theme.palette.success.main}2a`,
-                          },
-                        },
-                      }}
-                    />
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -0.5 }}>
-                      Additional principal paid every month
-                    </Typography>
-                  </Box>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="One-Time Extra Payment"
-                    value={formExtraOneTimePayment}
-                    onChange={(e) => setFormExtraOneTimePayment(e.target.value)}
-                    helperText="Additional principal paid once"
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
-                  <FormControl fullWidth size="small" disabled={!formExtraOneTimePayment || parseFloat(formExtraOneTimePayment) <= 0}>
-                    <InputLabel id="one-time-month-label">Apply One-Time Payment At</InputLabel>
-                    <Select
-                      labelId="one-time-month-label"
-                      value={formExtraOneTimeMonth}
-                      onChange={(e) => setFormExtraOneTimeMonth(e.target.value)}
-                      label="Apply One-Time Payment At"
-                    >
-                      <MenuItem value=""><em>None</em></MenuItem>
-                      {scheduleData.rows
-                        .filter((row) => !row.isPast)
-                        .map((row) => (
-                          <MenuItem key={row.paymentNumber} value={row.paymentNumber}>
-                            Month {row.paymentNumber} ({row.date})
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
-                </Stack>
-              </Box>
-
-              <Box sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  size="medium"
-                  color="primary"
-                  onClick={handleSaveSettings}
-                  sx={{ textTransform: 'none', fontWeight: 700, py: 1 }}
-                >
-                  Save Settings
-                </Button>
-              </Box>
-            </Paper>
+              {loanParametersPanel}
             </Panel>
 
             <StyledResizeHandle ariaLabel="Resize loan config panel" />
 
             {/* Right Panel: Graph */}
             <Panel id="loan-graph" defaultSize="70%">
-              <Paper sx={{ p: 3, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', gap: 2 }}>
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    Remaining Balance & Payment Projections
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Visualizing balance, payments, principal, and interest totals over time.
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={2} sx={{ display: { xs: 'none', sm: 'flex' }, flexWrap: 'wrap', gap: 1 }}>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-primary-main, #1976d2)', borderRadius: 0.5 }} />
-                    <Typography variant="caption" color="text.secondary">Balance</Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-secondary-main, #9c27b0)', borderRadius: 0.5 }} />
-                    <Typography variant="caption" color="text.secondary">Total Payments</Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-success-main, #2e7d32)', borderRadius: 0.5 }} />
-                    <Typography variant="caption" color="text.secondary">Principal Paid</Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-warning-main, #ed6c02)', borderRadius: 0.5 }} />
-                    <Typography variant="caption" color="text.secondary">Interest Paid</Typography>
-                  </Stack>
-                </Stack>
-              </Stack>
-              
-              <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%' }}>
-                <LoanChart 
-                  rows={scheduleData.rows} 
-                  originalPrincipal={currentConfig.principal - (currentConfig.downPayment || 0)} 
-                />
-              </Box>
-            </Paper>
+              {loanChartCard}
             </Panel>
           </PanelGroup>
         ) : (
           <>
-            <Box sx={{ height: 400, mb: 2 }}>
-              <Paper sx={{ p: 3, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2, flexWrap: 'wrap', gap: 2 }}>
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    Remaining Balance & Payment Projections
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Visualizing balance, payments, principal, and interest totals over time.
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={2} sx={{ display: { xs: 'none', sm: 'flex' }, flexWrap: 'wrap', gap: 1 }}>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-primary-main, #1976d2)', borderRadius: 0.5 }} />
-                    <Typography variant="caption" color="text.secondary">Balance</Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-secondary-main, #9c27b0)', borderRadius: 0.5 }} />
-                    <Typography variant="caption" color="text.secondary">Total Payments</Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-success-main, #2e7d32)', borderRadius: 0.5 }} />
-                    <Typography variant="caption" color="text.secondary">Principal Paid</Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, bgcolor: 'var(--mui-palette-warning-main, #ed6c02)', borderRadius: 0.5 }} />
-                    <Typography variant="caption" color="text.secondary">Interest Paid</Typography>
-                  </Stack>
-                </Stack>
-              </Stack>
-              
-              <Box sx={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%' }}>
-                <LoanChart 
-                  rows={scheduleData.rows} 
-                  originalPrincipal={currentConfig.principal - (currentConfig.downPayment || 0)} 
-                />
-              </Box>
-            </Paper>
+            <Box sx={{ height: 420, mb: 1.5 }}>
+              {loanChartCard}
             </Box>
-            <Box sx={{ px: 2, pb: 2, display: 'flex', justifyContent: 'center' }}>
-              <Button variant="contained" fullWidth size="large" onClick={() => setMobileSettingsOpen(true)}>
-                Edit Loan Settings
+            <Box sx={{ pb: 1, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="outlined"
+                color="inherit"
+                fullWidth
+                startIcon={<TuneIcon fontSize="small" />}
+                onClick={() => setMobileSettingsOpen(true)}
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
+              >
+                Edit Loan Parameters & Extra Payments
               </Button>
             </Box>
             <Drawer
@@ -1480,364 +1393,24 @@ export default function Loans() {
               onClose={() => setMobileSettingsOpen(false)}
               PaperProps={{ sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85vh', pb: 4 } }}
             >
-              <Paper
-              sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                border: '1px solid',
-                borderColor: 'divider',
-                overflow: 'hidden',
-              }}
-            >
-              <Box sx={{ p: 3, pb: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  Loan Parameters
-                </Typography>
-              </Box>
-              
-              <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 3, pb: 3 }}>
-                <Stack spacing={2.5}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Loan Name"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Purchase Price"
-                    value={formPrincipal}
-                    onChange={(e) => setFormPrincipal(e.target.value)}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
-                  {activeTab !== 'student' && (
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Down Payment"
-                      value={formDownPayment}
-                      onChange={(e) => setFormDownPayment(e.target.value)}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                      }}
-                    />
-                  )}
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Interest Rate (APR)"
-                    value={formRate}
-                    onChange={(e) => setFormRate(e.target.value)}
-                    InputProps={{
-                      endAdornment: <InputAdornment position="end"><PercentIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Loan Term"
-                    value={formTerm}
-                    onChange={(e) => setFormTerm(e.target.value)}
-                    InputProps={{
-                      endAdornment: <InputAdornment position="end">years</InputAdornment>,
-                    }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Start Date"
-                    type="date"
-                    value={formStartDate}
-                    onChange={(e) => setFormStartDate(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="loan-category-label">Linked Category</InputLabel>
-                    <Select
-                      labelId="loan-category-label"
-                      value={formCategory}
-                      onChange={(e) => handleCategoryChange(e.target.value)}
-                      label="Linked Category"
-                    >
-                      <MenuItem value=""><em>None</em></MenuItem>
-                      {categories.map((cat) => (
-                        <MenuItem key={cat.id} value={cat.name}>
-                          {cat.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <Autocomplete
-                    freeSolo
-                    options={merchantOptions}
-                    value={formMerchant}
-                    onChange={(_, newValue) => {
-                      setFormMerchant(newValue || '');
-                      if (!newValue && !formCategory) {
-                        setFormMonthlyPayment('');
-                        setSnackbarMsg('Monthly payment reset to standard schedule.');
-                      }
-                    }}
-                    onInputChange={(_, newInputValue) => {
-                      setFormMerchant(newInputValue || '');
-                      if (!newInputValue && !formCategory) {
-                        setFormMonthlyPayment('');
-                      }
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        size="small"
-                        label="Linked Merchant Pattern (Optional)"
-                        placeholder="e.g. TOYOTA FIN"
-                        helperText="If specified, matches transactions by merchant name instead of category."
-                      />
-                    )}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Monthly Payment (Scheduled)"
-                    value={formMonthlyPayment}
-                    onChange={(e) => setFormMonthlyPayment(e.target.value)}
-                    helperText="Calculated from loan amount if left empty"
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
-                  {activeTab !== 'student' && (
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label={activeTab === 'house' ? "Current Home Value" : "Estimated Resale Value"}
-                      value={formPropertyValue}
-                      onChange={(e) => setFormPropertyValue(e.target.value)}
-                      helperText={activeTab === 'house' ? "Estimated resale value of the house for equity tracking" : "Estimated resale value of the car for equity tracking"}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                      }}
-                    />
-                  )}
-                  <Divider sx={{ my: 1 }} />
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Extra Payments (Accelerate Payoff)
-                  </Typography>
-                  <Box>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                        Monthly Extra Payment
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
-                        {usdCents.format(Number(formExtraMonthlyPayment) || 0)}
-                      </Typography>
-                    </Stack>
-                    <Slider
-                      value={Number(formExtraMonthlyPayment) || 0}
-                      min={0}
-                      max={2000}
-                      step={10}
-                      onChange={(_, val) => setFormExtraMonthlyPayment(String(val))}
-                      valueLabelDisplay="auto"
-                      valueLabelFormat={(val) => `$${val}`}
-                      sx={{
-                        color: 'success.main',
-                        py: 1,
-                        '& .MuiSlider-thumb': {
-                          width: 14,
-                          height: 14,
-                          '&:hover, &.Mui-focusVisible': {
-                            boxShadow: (theme) => `0px 0px 0px 8px ${theme.palette.success.main}1a`,
-                          },
-                          '&.Mui-active': {
-                            boxShadow: (theme) => `0px 0px 0px 14px ${theme.palette.success.main}2a`,
-                          },
-                        },
-                      }}
-                    />
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -0.5 }}>
-                      Additional principal paid every month
-                    </Typography>
-                  </Box>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="One-Time Extra Payment"
-                    value={formExtraOneTimePayment}
-                    onChange={(e) => setFormExtraOneTimePayment(e.target.value)}
-                    helperText="Additional principal paid once"
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start"><AttachMoneyIcon fontSize="small" /></InputAdornment>,
-                    }}
-                  />
-                  <FormControl fullWidth size="small" disabled={!formExtraOneTimePayment || parseFloat(formExtraOneTimePayment) <= 0}>
-                    <InputLabel id="one-time-month-label">Apply One-Time Payment At</InputLabel>
-                    <Select
-                      labelId="one-time-month-label"
-                      value={formExtraOneTimeMonth}
-                      onChange={(e) => setFormExtraOneTimeMonth(e.target.value)}
-                      label="Apply One-Time Payment At"
-                    >
-                      <MenuItem value=""><em>None</em></MenuItem>
-                      {scheduleData.rows
-                        .filter((row) => !row.isPast)
-                        .map((row) => (
-                          <MenuItem key={row.paymentNumber} value={row.paymentNumber}>
-                            Month {row.paymentNumber} ({row.date})
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
-                </Stack>
-              </Box>
-
-              <Box sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  size="medium"
-                  color="primary"
-                  onClick={handleSaveSettings}
-                  sx={{ textTransform: 'none', fontWeight: 700, py: 1 }}
-                >
-                  Save Settings
-                </Button>
-              </Box>
-            </Paper>
+              {loanParametersPanel}
             </Drawer>
           </>
         )}
       </Box>
 
       {/* Schedule Table Container */}
-      <Paper sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-        <Button
-          fullWidth
-          variant="text"
-          color="inherit"
-          onClick={() => setShowScheduleDetails(!showScheduleDetails)}
-          endIcon={showScheduleDetails ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-          sx={{
-            justifyContent: 'space-between',
-            px: 3,
-            py: 2,
-            textTransform: 'none',
-            fontSize: '0.9rem',
-            fontWeight: 700,
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
-        >
-          Detailed Amortization & Transaction Matching
-        </Button>
-        
-        <Collapse in={showScheduleDetails}>
-          <Divider />
-          <Box sx={{ p: 2, bgcolor: 'background.default', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-              Showing {scheduleData.rows.length} schedule periods
-            </Typography>
-            <FormControlLabelCustom
-              label="Only show linked months"
-              checked={onlyShowMatched}
-              onChange={(e) => setOnlyShowMatched(e)}
-            />
-          </Box>
-          <TableContainer sx={{ maxHeight: 440, overflowY: 'auto' }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell align="center" sx={{ fontWeight: 700, width: 60 }}>#</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 110 }}>Period</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Payment</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Interest</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>Principal</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Link Status</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Outstanding Balance</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {scheduleData.rows
-                  .filter((row) => !onlyShowMatched || row.isMatched)
-                  .map((row) => {
-                    const hasExtra = row.extraPayment > 0.01;
-                    
-                    return (
-                      <TableRow
-                        key={row.paymentNumber}
-                        hover
-                        sx={{
-                          bgcolor: row.isMatched
-                            ? (theme) => theme.palette.mode === 'dark' ? 'rgba(76, 175, 80, 0.05)' : 'rgba(76, 175, 80, 0.02)'
-                            : row.isAssumed
-                            ? (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.05)' : 'rgba(255, 152, 0, 0.02)'
-                            : 'inherit',
-                          '& td': { fontVariantNumeric: 'tabular-nums' }
-                        }}
-                      >
-                        <TableCell align="center" color="text.secondary">{row.paymentNumber}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{row.date}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: row.isMatched ? 600 : 400 }}>
-                          {usdCents.format(row.actualPayment)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'table-cell' } }}>
-                          {usdCents.format(row.actualInterest)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'text.secondary', display: { xs: 'none', md: 'table-cell' } }}>
-                          {usdCents.format(row.actualPrincipal)}
-                        </TableCell>
-                        <TableCell>
-                          {row.isMatched ? (
-                            <Tooltip title="Click to view matched transactions">
-                              <Chip
-                                size="small"
-                                label="Matched"
-                                color="success"
-                                variant="outlined"
-                                onClick={() => {
-                                  setActiveTxDialogRows(row.transactions);
-                                  setActiveTxDialogDate(row.date);
-                                }}
-                                sx={{ height: 20, fontSize: '0.65rem', borderRadius: 1, cursor: 'pointer' }}
-                              />
-                            </Tooltip>
-                          ) : row.isAssumed ? (
-                            <Chip
-                              size="small"
-                              label="Assumed"
-                              color="warning"
-                              variant="outlined"
-                              sx={{ height: 20, fontSize: '0.65rem', borderRadius: 1 }}
-                            />
-                          ) : (
-                            <Chip
-                              size="small"
-                              label="Projected"
-                              color="default"
-                              variant="outlined"
-                              sx={{ height: 20, fontSize: '0.65rem', borderRadius: 1 }}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>
-                          {usdCents.format(row.actualBalance)}
-                          {hasExtra && (
-                            <Typography variant="caption" sx={{ display: 'block', color: 'success.main', fontSize: '0.65rem' }}>
-                              +{usdCents.format(row.extraPayment)} extra
-                            </Typography>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Collapse>
-      </Paper>
+      <AmortizationScheduleCard
+        rows={scheduleData.rows}
+        showScheduleDetails={showScheduleDetails}
+        setShowScheduleDetails={setShowScheduleDetails}
+        onlyShowMatched={onlyShowMatched}
+        setOnlyShowMatched={setOnlyShowMatched}
+        onSelectMatchedRow={(txns, date) => {
+          setActiveTxDialogRows(txns);
+          setActiveTxDialogDate(date);
+        }}
+      />
 
       {/* Danger Zone */}
       <Paper
@@ -1889,49 +1462,11 @@ export default function Loans() {
         </Stack>
       </Paper>
 
-      {/* Matched Transactions Dialog */}
-      <Dialog
-        open={activeTxDialogRows !== null}
+      <MatchedTransactionsDialog
+        rows={activeTxDialogRows}
+        date={activeTxDialogDate}
         onClose={() => setActiveTxDialogRows(null)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { borderRadius: 2, p: 1 }
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
-          Matched Transactions — {activeTxDialogDate}
-        </DialogTitle>
-        <DialogContent dividers sx={{ p: 2 }}>
-          <TableContainer component={Paper} variant="outlined" sx={{ border: '1px solid', borderColor: 'divider' }}>
-            <Table size="small">
-              <TableHead sx={{ bgcolor: 'action.hover' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="right">Amount</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {activeTxDialogRows?.map((t, idx) => (
-                  <TableRow key={t.id || idx}>
-                    <TableCell sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{t.date}</TableCell>
-                    <TableCell>{t.description}</TableCell>
-                    <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                      {usdCents.format(Math.abs(t.amount))}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5 }}>
-          <Button onClick={() => setActiveTxDialogRows(null)} variant="outlined" color="inherit" size="small">
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
+      />
 
       {renderAddLoanDialog()}
       {renderRestoreDialog()}
@@ -1943,22 +1478,6 @@ export default function Loans() {
         onClose={() => setSnackbarMsg('')}
         message={snackbarMsg}
       />
-    </Stack>
-  );
-}
-
-function FormControlLabelCustom({ label, checked, onChange }: { label: string; checked: boolean; onChange: (val: boolean) => void }) {
-  return (
-    <Stack direction="row" spacing={1} alignItems="center" onClick={() => onChange(!checked)} sx={{ cursor: 'pointer', userSelect: 'none' }}>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={() => {}} // handled by click
-        style={{ cursor: 'pointer' }}
-      />
-      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-        {label}
-      </Typography>
     </Stack>
   );
 }
@@ -1985,433 +1504,4 @@ function StyledResizeHandle({ ariaLabel }: { ariaLabel: string }) {
   );
 }
 
-function LoanChart({ 
-  rows, 
-  originalPrincipal 
-}: { 
-  rows: PaymentRow[]; 
-  originalPrincipal: number; 
-}) {
-  const theme = useTheme();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const measure = () => {
-      const rect = el.getBoundingClientRect();
-      setSize({
-        width: Math.max(100, Math.floor(rect.width || el.clientWidth)),
-        height: Math.max(100, Math.floor(rect.height || el.clientHeight)),
-      });
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const pointsCount = rows.length;
-
-  if (pointsCount === 0) return null;
-
-  const width = size.width || 600;
-  const height = size.height || 240;
-  const padding = { top: 15, right: 15, bottom: 30, left: 75 };
-
-  const usableWidth = width - padding.left - padding.right;
-  const usableHeight = height - padding.top - padding.bottom;
-
-  // Determine Y-axis max value dynamically by looking at max cumulative payments
-  const lastRow = rows[rows.length - 1];
-  const finalPayment = lastRow && !isNaN(lastRow.cumulativeActualPayment) 
-    ? lastRow.cumulativeActualPayment 
-    : 0;
-
-  const maxVal = Math.max(
-    originalPrincipal || 1,
-    finalPayment
-  ) || 1;
-
-  const divisor = pointsCount > 1 ? pointsCount - 1 : 1;
-
-  // Build outstanding balance points
-  const balPoints = rows.map((r, i) => {
-    const x = padding.left + (i / divisor) * usableWidth;
-    const val = !isNaN(r.actualBalance) ? r.actualBalance : 0;
-    const y = padding.top + usableHeight - (val / maxVal) * usableHeight;
-    return `${x},${y}`;
-  });
-
-  // Build cumulative payments points
-  const pmPoints = rows.map((r, i) => {
-    const x = padding.left + (i / divisor) * usableWidth;
-    const val = !isNaN(r.cumulativeActualPayment) ? r.cumulativeActualPayment : 0;
-    const y = padding.top + usableHeight - (val / maxVal) * usableHeight;
-    return `${x},${y}`;
-  });
-
-  // Build cumulative principal points
-  const prPoints = rows.map((r, i) => {
-    const x = padding.left + (i / divisor) * usableWidth;
-    const val = !isNaN(r.cumulativeActualPrincipal) ? r.cumulativeActualPrincipal : 0;
-    const y = padding.top + usableHeight - (val / maxVal) * usableHeight;
-    return `${x},${y}`;
-  });
-
-  // Build cumulative interest points
-  const intPoints = rows.map((r, i) => {
-    const x = padding.left + (i / divisor) * usableWidth;
-    const val = !isNaN(r.cumulativeActualInterest) ? r.cumulativeActualInterest : 0;
-    const y = padding.top + usableHeight - (val / maxVal) * usableHeight;
-    return `${x},${y}`;
-  });
-
-  const balPath = `M ${balPoints.join(' L ')}`;
-  const pmPath = `M ${pmPoints.join(' L ')}`;
-  const prPath = `M ${prPoints.join(' L ')}`;
-  const intPath = `M ${intPoints.join(' L ')}`;
-
-  // Grid lines
-  const gridLines = [];
-  for (let i = 0; i <= 4; i++) {
-    const ratio = i / 4;
-    const y = padding.top + ratio * usableHeight;
-    const val = maxVal * (1 - ratio);
-    gridLines.push({ y, val });
-  }
-
-  // Monthly ticks (approx 5 ticks)
-  const ticks = [];
-  const step = Math.max(1, Math.floor(pointsCount / 5));
-  for (let i = 0; i < pointsCount; i += step) {
-    const x = padding.left + (i / divisor) * usableWidth;
-    ticks.push({ x, label: rows[i].date });
-  }
-  if ((pointsCount - 1) % step !== 0) {
-    ticks.push({ x: padding.left + usableWidth, label: rows[pointsCount - 1].date });
-  }
-
-  // Mouse / Touch handlers for interactivity
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const svgX = (mouseX / rect.width) * width;
-    const relativeX = svgX - padding.left;
-
-    const index = Math.min(
-      rows.length - 1,
-      Math.max(0, Math.round((relativeX / usableWidth) * (rows.length - 1)))
-    );
-
-    const percentX = ((padding.left + (index / (rows.length - 1)) * usableWidth) / width) * 100;
-    
-    setHoverIndex(index);
-    setHoverPos({ x: percentX, y: 0 });
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
-    if (!e.touches[0]) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.touches[0].clientX - rect.left;
-    const svgX = (mouseX / rect.width) * width;
-    const relativeX = svgX - padding.left;
-
-    const index = Math.min(
-      rows.length - 1,
-      Math.max(0, Math.round((relativeX / usableWidth) * (rows.length - 1)))
-    );
-
-    const percentX = ((padding.left + (index / (rows.length - 1)) * usableWidth) / width) * 100;
-
-    setHoverIndex(index);
-    setHoverPos({ x: percentX, y: 0 });
-  };
-
-  // Hover markers calculations
-  let hoverX = 0;
-  let balY = 0;
-  let pmY = 0;
-  let prY = 0;
-  let intY = 0;
-  if (hoverIndex !== null && rows[hoverIndex]) {
-    const row = rows[hoverIndex];
-    hoverX = padding.left + (hoverIndex / divisor) * usableWidth;
-    
-    const balVal = !isNaN(row.actualBalance) ? row.actualBalance : 0;
-    const pmVal = !isNaN(row.cumulativeActualPayment) ? row.cumulativeActualPayment : 0;
-    const prVal = !isNaN(row.cumulativeActualPrincipal) ? row.cumulativeActualPrincipal : 0;
-    const intVal = !isNaN(row.cumulativeActualInterest) ? row.cumulativeActualInterest : 0;
-
-    balY = padding.top + usableHeight - (balVal / maxVal) * usableHeight;
-    pmY = padding.top + usableHeight - (pmVal / maxVal) * usableHeight;
-    prY = padding.top + usableHeight - (prVal / maxVal) * usableHeight;
-    intY = padding.top + usableHeight - (intVal / maxVal) * usableHeight;
-  }
-
-  return (
-    <Box 
-      ref={containerRef}
-      sx={{ position: 'relative', width: '100%', height: '100%' }}
-      onMouseLeave={() => { setHoverIndex(null); setHoverPos(null); }}
-      onTouchEnd={() => { setHoverIndex(null); setHoverPos(null); }}
-    >
-      <svg 
-        viewBox={`0 0 ${width} ${height}`} 
-        width="100%" 
-        height="100%" 
-        style={{ overflow: 'visible', width: '100%', height: '100%' }}
-        onMouseMove={handleMouseMove}
-        onTouchMove={handleTouchMove}
-      >
-        {/* Background grid */}
-        {gridLines.map((line, idx) => (
-          <g key={idx}>
-            <line
-              x1={padding.left}
-              y1={line.y}
-              x2={width - padding.right}
-              y2={line.y}
-              stroke={theme.palette.divider}
-              strokeDasharray="4 4"
-            />
-            <text
-              x={padding.left - 8}
-              y={line.y + 4}
-              textAnchor="end"
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                fill: theme.palette.text.secondary,
-                fontFamily: 'monospace',
-              }}
-            >
-              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(line.val)}
-            </text>
-          </g>
-        ))}
-
-        {/* X axis ticks */}
-        {ticks.map((tick, idx) => (
-          <g key={idx}>
-            <line
-              x1={tick.x}
-              y1={height - padding.bottom}
-              x2={tick.x}
-              y2={height - padding.bottom + 4}
-              stroke={theme.palette.divider}
-            />
-            <text
-              x={tick.x}
-              y={height - padding.bottom + 18}
-              textAnchor="middle"
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                fill: theme.palette.text.secondary,
-              }}
-            >
-              {tick.label}
-            </text>
-          </g>
-        ))}
-
-        {/* Remaining Balance Line */}
-        <path
-          d={balPath}
-          fill="none"
-          stroke={theme.palette.primary.main}
-          strokeWidth="3"
-        />
-
-        {/* Total Payments Line */}
-        <path
-          d={pmPath}
-          fill="none"
-          stroke={theme.palette.secondary.main}
-          strokeWidth="3"
-        />
-
-        {/* Principal Paid Line */}
-        <path
-          d={prPath}
-          fill="none"
-          stroke={theme.palette.success.main}
-          strokeWidth="3"
-        />
-
-        {/* Interest Paid Line */}
-        <path
-          d={intPath}
-          fill="none"
-          stroke={theme.palette.warning.main}
-          strokeWidth="3"
-        />
-
-        {/* Interactive Guideline and Dots */}
-        {hoverIndex !== null && (
-          <g>
-            {/* Vertical Guideline */}
-            <line
-              x1={hoverX}
-              y1={padding.top}
-              x2={hoverX}
-              y2={height - padding.bottom}
-              stroke={theme.palette.text.secondary}
-              strokeDasharray="3 3"
-              strokeWidth="1.5"
-            />
-            
-            {/* Balance Dot */}
-            <circle
-              cx={hoverX}
-              cy={balY}
-              r={5}
-              fill={theme.palette.primary.main}
-              stroke={theme.palette.background.paper}
-              strokeWidth={1.5}
-            />
-
-            {/* Total Payments Dot */}
-            <circle
-              cx={hoverX}
-              cy={pmY}
-              r={5}
-              fill={theme.palette.secondary.main}
-              stroke={theme.palette.background.paper}
-              strokeWidth={1.5}
-            />
-
-            {/* Principal Dot */}
-            <circle
-              cx={hoverX}
-              cy={prY}
-              r={5}
-              fill={theme.palette.success.main}
-              stroke={theme.palette.background.paper}
-              strokeWidth={1.5}
-            />
-
-            {/* Interest Dot */}
-            <circle
-              cx={hoverX}
-              cy={intY}
-              r={5}
-              fill={theme.palette.warning.main}
-              stroke={theme.palette.background.paper}
-              strokeWidth={1.5}
-            />
-          </g>
-        )}
-      </svg>
-
-      {/* HTML Interactive Tooltip Overlay */}
-      {hoverIndex !== null && hoverPos && rows[hoverIndex] && (
-        <Paper
-          elevation={4}
-          sx={{
-            position: 'absolute',
-            left: hoverPos.x > 50 ? `calc(${hoverPos.x}% - 240px)` : `calc(${hoverPos.x}% + 15px)`,
-            top: '10px',
-            p: 1.5,
-            width: 220,
-            zIndex: 10,
-            pointerEvents: 'none',
-            bgcolor: 'background.paper',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1.5,
-            boxShadow: (theme) => theme.shadows[3],
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, borderBottom: '1px solid', borderColor: 'divider', pb: 0.5 }}>
-            {rows[hoverIndex].date}
-          </Typography>
-          <Stack spacing={0.5}>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography variant="caption" color="text.secondary">Remaining Balance:</Typography>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>
-                {usdCents.format(rows[hoverIndex].actualBalance)}
-              </Typography>
-            </Stack>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography variant="caption" color="text.secondary">Total Payments:</Typography>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: 'secondary.main', fontVariantNumeric: 'tabular-nums' }}>
-                {usdCents.format(rows[hoverIndex].cumulativeActualPayment)}
-              </Typography>
-            </Stack>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography variant="caption" color="text.secondary">Principal Paid:</Typography>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
-                {usdCents.format(rows[hoverIndex].cumulativeActualPrincipal)}
-              </Typography>
-            </Stack>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography variant="caption" color="text.secondary">Interest Paid:</Typography>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.main', fontVariantNumeric: 'tabular-nums' }}>
-                {usdCents.format(rows[hoverIndex].cumulativeActualInterest)}
-              </Typography>
-            </Stack>
-            
-            <Divider sx={{ my: 0.5 }} />
-            <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', color: 'text.secondary', fontSize: '0.7rem', mt: 0.5 }}>
-              MONTHLY PAYMENT BREAKDOWN
-            </Typography>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography variant="caption" color="text.secondary">Payment Amount:</Typography>
-              <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                {usdCents.format(rows[hoverIndex].actualPayment)}
-              </Typography>
-            </Stack>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography variant="caption" color="text.secondary">↳ Principal portion:</Typography>
-              <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums', color: 'success.main', fontWeight: 600 }}>
-                {usdCents.format(rows[hoverIndex].actualPrincipal)}
-              </Typography>
-            </Stack>
-            <Stack direction="row" justifyContent="space-between">
-              <Typography variant="caption" color="text.secondary">↳ Interest portion:</Typography>
-              <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums', color: 'warning.main', fontWeight: 600 }}>
-                {usdCents.format(rows[hoverIndex].actualInterest)}
-              </Typography>
-            </Stack>
-
-            {/* Visual ratio bar */}
-            {rows[hoverIndex].actualPayment > 0 && (
-              <Box sx={{ mt: 1, width: '100%' }}>
-                <Box sx={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', bgcolor: 'divider' }}>
-                  <Box 
-                    sx={{ 
-                      width: `${(rows[hoverIndex].actualPrincipal / rows[hoverIndex].actualPayment) * 100}%`, 
-                      bgcolor: 'success.main' 
-                    }} 
-                  />
-                  <Box 
-                    sx={{ 
-                      width: `${(rows[hoverIndex].actualInterest / rows[hoverIndex].actualPayment) * 100}%`, 
-                      bgcolor: 'warning.main' 
-                    }} 
-                  />
-                </Box>
-                <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
-                  <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', fontWeight: 600 }}>
-                    {((rows[hoverIndex].actualPrincipal / rows[hoverIndex].actualPayment) * 100).toFixed(0)}% Prin
-                  </Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', fontWeight: 600 }}>
-                    {((rows[hoverIndex].actualInterest / rows[hoverIndex].actualPayment) * 100).toFixed(0)}% Int
-                  </Typography>
-                </Stack>
-              </Box>
-            )}
-          </Stack>
-        </Paper>
-      )}
-    </Box>
-  );
-}
 

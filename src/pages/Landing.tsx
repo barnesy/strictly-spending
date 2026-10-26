@@ -2,6 +2,7 @@ import { Box, Button, Container, Typography, Grid, Paper, Chip, IconButton, Tool
 import { useState } from 'react';
 import AppleIcon from '@mui/icons-material/Apple';
 import WindowIcon from '@mui/icons-material/Window';
+import AndroidIcon from '@mui/icons-material/Android';
 import SecurityIcon from '@mui/icons-material/Security';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import RuleIcon from '@mui/icons-material/Rule';
@@ -14,6 +15,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GitHubIcon from '@mui/icons-material/GitHub';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AnimatedLogo from '../components/AnimatedLogo';
 import packageJson from '../../package.json';
 
@@ -57,13 +59,20 @@ function InstallationNotes() {
         <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5, mt: 2 }}>
           <b>Windows:</b> You may need to allow the app to run on your PC. If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
         </Typography>
+        <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5, mt: 1 }}>
+          <b>Android:</b> Open the downloaded <code>.apk</code> file on your phone or foldable and allow installation from your browser if prompted.
+        </Typography>
       </AccordionDetails>
     </Accordion>
   );
 }
 
-export default function Landing() {
-  const handleDownload = async (platform: 'mac' | 'windows') => {
+interface LandingProps {
+  onLaunchDemo?: () => void;
+}
+
+export default function Landing({ onLaunchDemo }: LandingProps) {
+  const handleDownload = async (platform: 'mac' | 'windows' | 'android') => {
     try {
       const response = await fetch('https://api.github.com/repos/barnesy/strictly-spending/releases/latest');
       if (!response.ok) throw new Error('Failed to fetch release');
@@ -74,6 +83,8 @@ export default function Landing() {
         asset = data.assets.find((a: any) => a.name.endsWith('.dmg') || a.name.endsWith('.app.tar.gz'));
       } else if (platform === 'windows') {
         asset = data.assets.find((a: any) => a.name.endsWith('.exe') || a.name.endsWith('.msi'));
+      } else if (platform === 'android') {
+        asset = data.assets.find((a: any) => a.name.endsWith('.apk'));
       }
 
       if (asset && asset.browser_download_url) {
@@ -99,31 +110,49 @@ export default function Landing() {
       letterSpacing: '-0.02em',
     }}>
       {/* Header */}
-      <Box component="header" sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box component="header" sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '1200px', width: '100%', mx: 'auto', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <AnimatedLogo />
           <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.03em', color: '#111827' }}>
             Strictly Spending
           </Typography>
         </Box>
+        {onLaunchDemo && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<PlayArrowIcon />}
+            onClick={onLaunchDemo}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 700,
+              borderColor: '#2563EB',
+              color: '#2563EB',
+              '&:hover': { bgcolor: 'rgba(37,99,235,0.06)', borderColor: '#1D4ED8' }
+            }}
+          >
+            Try Live Demo
+          </Button>
+        )}
       </Box>
 
       {/* Hero Section */}
       <Container maxWidth="lg" sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', py: { xs: 8, md: 12 }, textAlign: 'center' }}>
 
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3, gap: 1 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', mb: 3, gap: 1 }}>
           <Chip
-            label="Beta Version"
+            label="Free Early Access · No Subscription"
             sx={{
-              bgcolor: 'rgba(239,68,68,0.1)',
-              color: '#DC2626',
+              bgcolor: 'rgba(16,185,129,0.1)',
+              color: '#047857',
               fontWeight: 700,
-              border: '1px solid rgba(239,68,68,0.2)',
+              border: '1px solid rgba(16,185,129,0.25)',
               backdropFilter: 'blur(10px)',
             }}
           />
           <Chip
-            label="Fully Private Budgeting & Local AI"
+            label="100% Local SQLite & Private AI"
             sx={{
               bgcolor: 'rgba(0,0,0,0.04)',
               color: '#374151',
@@ -147,11 +176,40 @@ export default function Landing() {
           Unlimited intelligence,<br />Absolute Privacy.
         </Typography>
 
-        <Typography variant="h5" sx={{ mb: 6, maxWidth: '700px', mx: 'auto', lineHeight: 1.5, color: '#4B5563', fontWeight: 400 }}>
-          <b>Note: This is an Early Access version.</b> Ingest multi-bank CSVs, apply intelligent categorization, and forecast your life. Featuring an unlimited, free, and completely local AI assistant.
+        <Typography variant="h5" sx={{ mb: 5, maxWidth: '700px', mx: 'auto', lineHeight: 1.5, color: '#4B5563', fontWeight: 400 }}>
+          Ingest multi-bank CSVs, sync 12,000+ banks via SimpleFIN, automate categorization rules, and forecast your net worth—without monthly cloud fees.
         </Typography>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '700px', width: '100%', mx: 'auto', px: 2, mb: 10 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: '780px', width: '100%', mx: 'auto', px: 2, mb: 10 }}>
+          {onLaunchDemo && (
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<PlayArrowIcon />}
+              onClick={onLaunchDemo}
+              sx={{
+                width: '100%',
+                borderRadius: '10px',
+                py: 2.25,
+                px: 3,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: '1.1rem',
+                background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                color: '#FFFFFF',
+                boxShadow: '0 8px 24px rgba(37, 99, 235, 0.25)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 12px 28px rgba(37, 99, 235, 0.35)',
+                },
+                transition: 'all 0.2s'
+              }}
+            >
+              Try Interactive Live Demo in Browser (No Install Required)
+            </Button>
+          )}
+
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, justifyContent: 'center' }}>
             <Button
               variant="contained"
@@ -162,11 +220,11 @@ export default function Landing() {
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
-                py: 3.5,
-                px: 3,
+                py: 3,
+                px: 2.5,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: '1.1rem',
+                fontSize: '1.05rem',
                 bgcolor: '#000000',
                 color: '#FFFFFF',
                 '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)' },
@@ -184,11 +242,11 @@ export default function Landing() {
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
-                py: 3.5,
-                px: 3,
+                py: 3,
+                px: 2.5,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: '1.1rem',
+                fontSize: '1.05rem',
                 bgcolor: '#FFFFFF',
                 color: '#111827',
                 border: '1px solid #D1D5DB',
@@ -198,6 +256,29 @@ export default function Landing() {
               }}
             >
               Download for Windows
+            </Button>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<AndroidIcon />}
+              onClick={() => handleDownload('android')}
+              sx={{
+                flex: 1,
+                width: { xs: '100%', md: 'auto' },
+                borderRadius: '8px',
+                py: 3,
+                px: 2.5,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '1.05rem',
+                bgcolor: '#059669',
+                color: '#FFFFFF',
+                '&:hover': { bgcolor: '#047857', transform: 'translateY(-2px)' },
+                transition: 'all 0.2s',
+                boxShadow: 'none',
+              }}
+            >
+              Download for Android
             </Button>
           </Box>
 
@@ -411,10 +492,19 @@ export default function Landing() {
           </Box>
         </Box>
 
-        {/* Footer Version */}
-        <Box sx={{ mt: 8, textAlign: 'center' }}>
+        {/* Footer Version & Privacy Policy */}
+        <Box sx={{ mt: 8, textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2 }}>
           <Typography variant="caption" sx={{ color: '#9CA3AF' }}>
             v{packageJson.version}
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#D1D5DB' }}>•</Typography>
+          <Typography
+            component="a"
+            href="./privacy.html"
+            variant="caption"
+            sx={{ color: '#6B7280', textDecoration: 'none', fontWeight: 600, '&:hover': { textDecoration: 'underline', color: '#111827' } }}
+          >
+            Privacy Policy
           </Typography>
         </Box>
 

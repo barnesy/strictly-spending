@@ -15,7 +15,6 @@ import { api } from './api';
 import { recategorizeAll } from './domain/categorize';
 import { refreshRecurrenceAll } from './domain/recurrence';
 import type { Category, CategoryRule } from './types';
-import { DEFAULT_SKILLS } from './defaultSkills';
 
 export const SEED_VERSION = 8;
 
@@ -193,11 +192,11 @@ const STARTER_RULES: StarterRule[] = [
   { pattern: 'CAVIAR', category: 'Restaurants & Coffee', priority: 100 },
   { pattern: 'SEAMLESS', category: 'Restaurants & Coffee', priority: 100 },
 
-  // --- Transportation (gas, rideshare, transit, rentals, parking) ---
+  // --- Gas Stations ---
   { pattern: 'SHELL', category: 'Transportation', priority: 100 },
   { pattern: 'CHEVRON', category: 'Transportation', priority: 100 },
   { pattern: 'EXXON', category: 'Transportation', priority: 100 },
-  { pattern: 'MOBIL', category: 'Transportation', priority: 95 },
+  { pattern: 'MOBIL GAS', category: 'Transportation', priority: 95 },
   { pattern: 'BP#', category: 'Transportation', priority: 100 },
   { pattern: '76 GAS', category: 'Transportation', priority: 100 },
   { pattern: 'ARCO', category: 'Transportation', priority: 100 },
@@ -622,10 +621,19 @@ const STARTER_RULES: StarterRule[] = [
   { pattern: 'BANK OF AMERICA CREDIT CARD', category: 'Transfers', priority: 100 },
   { pattern: 'CHASE CREDIT CRD', category: 'Transfers', priority: 100 },
   { pattern: 'CITI CARD PAYMENT', category: 'Transfers', priority: 100 },
+  { pattern: 'CITI AUTOPAY', category: 'Transfers', priority: 100 },
   { pattern: 'AMEX EPAYMENT', category: 'Transfers', priority: 100 },
   { pattern: 'DISCOVER PAYMENT', category: 'Transfers', priority: 100 },
+  { pattern: 'DISCOVER E-PAYMENT', category: 'Transfers', priority: 100 },
   { pattern: 'CAPITAL ONE PAYMENT', category: 'Transfers', priority: 100 },
+  { pattern: 'CAPITAL ONE MOBILE PYMT', category: 'Transfers', priority: 100 },
+  { pattern: 'CAPITAL ONE AUTOPAY', category: 'Transfers', priority: 100 },
+  { pattern: 'APPLE CARD GSBANK', category: 'Transfers', priority: 100 },
+  { pattern: 'WELLS FARGO CARD', category: 'Transfers', priority: 100 },
+  { pattern: 'CRCARDPMT', category: 'Transfers', priority: 100 },
   { pattern: 'ONLINE PAYMENT', category: 'Transfers', priority: 90 },
+  { pattern: 'MOBILE PYMT', category: 'Transfers', priority: 90 },
+  { pattern: 'AUTOPAY PAYMENT', category: 'Transfers', priority: 95 },
   { pattern: 'TRANSFER', category: 'Transfers', priority: 90 },
   { pattern: 'ONLINE TRANSFER', category: 'Transfers', priority: 100 },
   { pattern: 'ATM CASH WITHDRAWAL', category: 'Transfers', priority: 90 },
@@ -640,6 +648,8 @@ const STARTER_RULES: StarterRule[] = [
   { pattern: 'VANGUARD', category: 'Transfers', priority: 90 },
   { pattern: 'FIDELITY', category: 'Transfers', priority: 90 },
   { pattern: 'SCHWAB', category: 'Transfers', priority: 90 },
+  { pattern: 'WEALTHFRONT', category: 'Transfers', priority: 90 },
+  { pattern: 'BETTERMENT', category: 'Transfers', priority: 90 },
   { pattern: 'GREENLIGHT', category: 'Transfers', priority: 90 },
   { pattern: 'CREDIT KARMA', category: 'Transfers', priority: 90 },
 
@@ -648,6 +658,14 @@ const STARTER_RULES: StarterRule[] = [
   { pattern: 'DIRECT DEP', category: 'Income', priority: 100 },
   { pattern: 'DIRECT DEPOSIT', category: 'Income', priority: 100 },
   { pattern: 'SALARY', category: 'Income', priority: 100 },
+  { pattern: 'GUSTO PAY', category: 'Income', priority: 100 },
+  { pattern: 'ADP WAGE PAY', category: 'Income', priority: 100 },
+  { pattern: 'ADP PAYROLL', category: 'Income', priority: 100 },
+  { pattern: 'WORKDAY PAYROLL', category: 'Income', priority: 100 },
+  { pattern: 'PAYCHEX', category: 'Income', priority: 100 },
+  { pattern: 'RIPPLING', category: 'Income', priority: 100 },
+  { pattern: 'PAYLOCITY', category: 'Income', priority: 100 },
+  { pattern: 'JUSTWORKS', category: 'Income', priority: 100 },
   { pattern: 'ACH CREDIT', category: 'Income', priority: 70 },
 ];
 
@@ -721,49 +739,5 @@ export async function seedAndMigrate(): Promise<void> {
       await refreshRecurrenceAll();
     }
     localStorage.setItem('seed_version', String(SEED_VERSION));
-  }
-
-  // Ensure default agent skills are seeded globally on bootstrap
-  try {
-    const setting = await api.getSetting('app:agentSkills');
-    const currentSkills = (setting as any[]) || [];
-    
-    let hasChanges = false;
-    const updatedSkills = [...currentSkills];
-    
-    const upsertBuiltInSkill = (def: any): void => {
-      const idx = updatedSkills.findIndex(s => s.id === def.id);
-      if (idx >= 0) {
-        const existing = updatedSkills[idx];
-        if (existing.isModified) {
-          // Skip overwriting user modifications
-          return;
-        }
-        if (
-          existing.name !== def.name ||
-          existing.description !== def.description ||
-          existing.systemPromptExtension !== def.systemPromptExtension ||
-          JSON.stringify(existing.stages) !== JSON.stringify(def.stages) ||
-          JSON.stringify(existing.testCases) !== JSON.stringify(def.testCases)
-        ) {
-          updatedSkills[idx] = { ...def, enabled: existing.enabled, isModified: false };
-          hasChanges = true;
-        }
-      } else {
-        updatedSkills.push(def);
-        hasChanges = true;
-      }
-    };
-
-    DEFAULT_SKILLS.forEach(skill => upsertBuiltInSkill(skill));
-
-    const defaultIds = new Set(DEFAULT_SKILLS.map(s => s.id));
-    const filteredSkills = updatedSkills.filter(s => !s.isBuiltIn || defaultIds.has(s.id));
-
-    if (hasChanges || filteredSkills.length !== currentSkills.length) {
-      await api.putSetting('app:agentSkills', filteredSkills);
-    }
-  } catch (err) {
-    console.error('Failed to seed agent skills globally:', err);
   }
 }

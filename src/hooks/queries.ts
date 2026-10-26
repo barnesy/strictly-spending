@@ -1,12 +1,17 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '../api';
 import { buildRecurrenceMap } from '../domain/recurrence';
-import { useFilters, resolveDateRange } from '../stores/store';
+import { useFilters, resolveDateRange, formatLocalDate } from '../stores/store';
 import { useShallow } from 'zustand/react/shallow';
 
-export const useTransactions = (filters?: { category?: string, merchantKey?: string, accountId?: number, deductionStatus?: string }) => {
-  const startDate = useFilters((state) => resolveDateRange(state).start.toISOString().split('T')[0]);
-  const endDate = useFilters((state) => resolveDateRange(state).end.toISOString().split('T')[0]);
+export const useTransactions = (
+  filters?: { category?: string; merchantKey?: string; accountId?: number; deductionStatus?: string },
+  dateRange?: { startDate: string; endDate: string }
+) => {
+  const defaultStartDate = useFilters((state) => formatLocalDate(resolveDateRange(state).start));
+  const defaultEndDate = useFilters((state) => formatLocalDate(resolveDateRange(state).end));
+  const startDate = dateRange?.startDate ?? defaultStartDate;
+  const endDate = dateRange?.endDate ?? defaultEndDate;
 
   return useQuery({
     queryKey: ['transactions', filters, startDate, endDate],
@@ -15,14 +20,26 @@ export const useTransactions = (filters?: { category?: string, merchantKey?: str
   });
 };
 
+export const useMerchantTransactions = (merchantKey: string) => {
+  return useQuery({
+    queryKey: ['transactions', 'merchant', merchantKey],
+    queryFn: () => api.getTransactions('1970-01-01', '2100-01-01', { merchantKey }),
+    enabled: Boolean(merchantKey),
+    placeholderData: keepPreviousData,
+  });
+};
+
 export const buildDashboardFilters = (state: any) => {
   const range = resolveDateRange(state);
   return {
-    startDate: range.start.toISOString().split('T')[0],
-    endDate: range.end.toISOString().split('T')[0],
-    enabledAccountIds: state.enabledAccountIds,
+    startDate: formatLocalDate(range.start),
+    endDate: formatLocalDate(range.end),
+    enabledAccountIds: state.seenAccountIds && state.seenAccountIds.length > 0
+      ? state.enabledAccountIds
+      : (state.enabledAccountIds && state.enabledAccountIds.length > 0 ? state.enabledAccountIds : undefined),
     disabledCategories: state.disabledCategories,
     spendOnly: state.spendOnly,
+    transactionType: state.transactionType,
     recurrenceFilter: state.recurrenceFilter,
     searchQuery: state.searchQuery,
     minPrice: state.minPrice,
@@ -91,6 +108,31 @@ export const useSpendChartData = () => {
   });
 };
 
+export const useComparisonMonthSpendChartData = (comparisonMonth: string | null, groupBy: 'category' | 'account' | 'recurring' | 'none' = 'category', enabled: boolean = true) => {
+  const filters = useFilters(useShallow(buildDashboardFilters));
+  return useQuery({
+    queryKey: ['comparison_month_spend_chart_data', comparisonMonth, filters.enabledAccountIds, filters.disabledCategories, filters.transactionType, filters.demoMode, groupBy],
+    queryFn: async () => {
+      if (!comparisonMonth || comparisonMonth === 'none') return [];
+      const [yearStr, monthStr] = comparisonMonth.split('-');
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      const lastDay = new Date(year, month, 0).getDate();
+      const startDate = `${comparisonMonth}-01`;
+      const endDate = `${comparisonMonth}-${String(lastDay).padStart(2, '0')}`;
+      return api.getSpendChartData({
+        ...filters,
+        startDate,
+        endDate,
+      }, groupBy);
+    },
+    enabled: Boolean(comparisonMonth && comparisonMonth !== 'none') && enabled,
+    staleTime: 60_000,
+  });
+};
+
+export const usePriorYearSpendChartData = useComparisonMonthSpendChartData;
+
 export const useIncomeChartData = () => {
   const filters = useFilters(useShallow(buildDashboardFilters));
   return useQuery({
@@ -100,21 +142,133 @@ export const useIncomeChartData = () => {
   });
 };
 
-export const useConsolidatedRecurringMerchants = () => {
-  const demoMode = useFilters((state) => state.demoMode);
+export const useComparisonMonthIncomeChartData = (comparisonMonth: string | null, enabled: boolean = true) => {
+  const filters = useFilters(useShallow(buildDashboardFilters));
   return useQuery({
-    queryKey: ['consolidated_recurring_merchants', demoMode],
-    queryFn: () => api.getConsolidatedRecurringMerchants(demoMode),
+    queryKey: ['comparison_month_income_chart_data', comparisonMonth, filters.enabledAccountIds, filters.disabledCategories, filters.demoMode],
+    queryFn: async () => {
+      if (!comparisonMonth || comparisonMonth === 'none') return [];
+      const [yearStr, monthStr] = comparisonMonth.split('-');
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      const lastDay = new Date(year, month, 0).getDate();
+      const startDate = `${comparisonMonth}-01`;
+      const endDate = `${comparisonMonth}-${String(lastDay).padStart(2, '0')}`;
+      return api.getIncomeChartData({
+        ...filters,
+        startDate,
+        endDate,
+      });
+    },
+    enabled: Boolean(comparisonMonth && comparisonMonth !== 'none') && enabled,
+    staleTime: 60_000,
+  });
+};
+
+export const usePriorYearIncomeChartData = useComparisonMonthIncomeChartData;
+
+const normalizeAccountScope = (accountScope?: number | number[]): number[] | undefined => {
+  if (Array.isArray(accountScope)) {
+    return accountScope.length > 0 ? [...accountScope].sort((a, b) => a - b) : undefined;
+  }
+  return accountScope !== undefined ? [accountScope] : undefined;
+};
+
+export const useConsolidatedRecurringMerchants = (accountScope?: number | number[]) => {
+  const demoMode = useFilters((state) => state.demoMode);
+  const ids = normalizeAccountScope(accountScope);
+  return useQuery({
+    queryKey: ['consolidated_recurring_merchants', demoMode, ids ?? 'all'],
+    queryFn: async () => {
+      if (!ids) return api.getConsolidatedRecurringMerchants(demoMode, undefined);
+      if (ids.length === 1) return api.getConsolidatedRecurringMerchants(demoMode, ids[0]);
+      const lists = await Promise.all(ids.map((id) => api.getConsolidatedRecurringMerchants(demoMode, id)));
+      const byKey = new Map<string, { merchantKey: string; category: string; monthlyAverage: number }>();
+      for (const list of lists) {
+        for (const item of list) {
+          const k = `${item.merchantKey}:::${item.category}`;
+          const prev = byKey.get(k);
+          if (prev) {
+            prev.monthlyAverage += item.monthlyAverage;
+          } else {
+            byKey.set(k, { ...item });
+          }
+        }
+      }
+      return Array.from(byKey.values()).sort((a, b) => b.monthlyAverage - a.monthlyAverage);
+    },
     placeholderData: keepPreviousData,
   });
 };
 
-export const useCategoryTrailingAverages = () => {
+export const useCategoryTrailingAverages = (accountScope?: number | number[]) => {
   const demoMode = useFilters((state) => state.demoMode);
+  const ids = normalizeAccountScope(accountScope);
   return useQuery({
-    queryKey: ['category_trailing_averages', demoMode],
-    queryFn: () => api.getCategoryTrailingAverages(demoMode),
+    queryKey: ['category_trailing_averages', demoMode, ids ?? 'all'],
+    queryFn: async () => {
+      if (!ids) return api.getCategoryTrailingAverages(demoMode, undefined);
+      if (ids.length === 1) return api.getCategoryTrailingAverages(demoMode, ids[0]);
+      const lists = await Promise.all(ids.map((id) => api.getCategoryTrailingAverages(demoMode, id)));
+      const byCat = new Map<string, number>();
+      for (const list of lists) {
+        for (const item of list) {
+          byCat.set(item.category, (byCat.get(item.category) || 0) + item.average);
+        }
+      }
+      return Array.from(byCat.entries()).map(([category, average]) => ({ category, average }));
+    },
     placeholderData: keepPreviousData,
+  });
+};
+
+export const useHistoricalSpendByCategory = (accountScope?: number | number[]) => {
+  const demoMode = useFilters((state) => state.demoMode);
+  const enabledAccountIds = useFilters((state) => state.enabledAccountIds);
+  const disabledCategories = useFilters((state) => state.disabledCategories);
+  const scopedIds = normalizeAccountScope(accountScope);
+  const effectiveAccountIds =
+    scopedIds !== undefined
+      ? scopedIds
+      : enabledAccountIds && enabledAccountIds.length > 0
+      ? enabledAccountIds
+      : undefined;
+  return useQuery({
+    queryKey: ['historical_spend_by_category', demoMode, effectiveAccountIds, disabledCategories],
+    queryFn: () => api.getSpendChartData({
+      startDate: '1970-01-01',
+      endDate: '2100-01-01',
+      enabledAccountIds: effectiveAccountIds,
+      disabledCategories,
+      spendOnly: true,
+      transactionType: 'spend',
+      demoMode,
+    }, 'category'),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+};
+
+export const useHistoricalMonthlyIncome = (accountScope?: number | number[]) => {
+  const demoMode = useFilters((state) => state.demoMode);
+  const enabledAccountIds = useFilters((state) => state.enabledAccountIds);
+  const scopedIds = normalizeAccountScope(accountScope);
+  const effectiveAccountIds =
+    scopedIds !== undefined
+      ? scopedIds
+      : enabledAccountIds && enabledAccountIds.length > 0
+      ? enabledAccountIds
+      : undefined;
+  return useQuery({
+    queryKey: ['historical_monthly_income', demoMode, effectiveAccountIds],
+    queryFn: () => api.getIncomeChartData({
+      startDate: '1970-01-01',
+      endDate: '2100-01-01',
+      enabledAccountIds: effectiveAccountIds,
+      demoMode,
+    }),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 };
 
@@ -127,11 +281,17 @@ export const useUniqueMerchants = () => {
   });
 };
 
-export const useLastMonthActualSpend = () => {
+export const useLastMonthActualSpend = (accountScope?: number | number[]) => {
   const demoMode = useFilters((state) => state.demoMode);
+  const ids = normalizeAccountScope(accountScope);
   return useQuery({
-    queryKey: ['last_month_actual_spend', demoMode],
-    queryFn: () => api.lastMonthActualSpend(demoMode),
+    queryKey: ['last_month_actual_spend', demoMode, ids ?? 'all'],
+    queryFn: async () => {
+      if (!ids) return api.lastMonthActualSpend(demoMode, undefined);
+      if (ids.length === 1) return api.lastMonthActualSpend(demoMode, ids[0]);
+      const totals = await Promise.all(ids.map((id) => api.lastMonthActualSpend(demoMode, id)));
+      return totals.reduce((sum, val) => sum + val, 0);
+    },
     placeholderData: keepPreviousData,
   });
 };
@@ -194,21 +354,6 @@ export const useArtifacts = () => {
   });
 };
 
-export const useThreads = () => {
-  return useQuery({
-    queryKey: ['threads'],
-    queryFn: () => api.getThreads(),
-  });
-};
-
-export const useMessages = () => {
-  return useQuery({
-    queryKey: ['messages'],
-    queryFn: () => api.getMessages(),
-  });
-};
-
-
 export const useLoans = () => {
   return useQuery({
     queryKey: ['loans'],
@@ -230,10 +375,16 @@ export const useCsvMappings = () => {
   });
 };
 
-export const useRecurrenceMap = (isDemo: boolean = false) => {
+export const useRecurrenceMap = (isDemo: boolean = false, accountScope?: number | number[]) => {
+  const ids = normalizeAccountScope(accountScope);
   return useQuery({
-    queryKey: ['recurrenceMap', isDemo],
-    queryFn: () => buildRecurrenceMap(isDemo),
+    queryKey: ['recurrenceMap', isDemo, ids ?? 'all'],
+    queryFn: async () => {
+      if (!ids) return buildRecurrenceMap(isDemo, undefined);
+      if (ids.length === 1) return buildRecurrenceMap(isDemo, ids[0]);
+      const maps = await Promise.all(ids.map((id) => buildRecurrenceMap(isDemo, id)));
+      return Object.assign({}, ...maps);
+    },
   });
 };
 

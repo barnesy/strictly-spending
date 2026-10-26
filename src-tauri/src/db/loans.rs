@@ -103,18 +103,10 @@ pub fn update_loan(state: State<DbState>, id: i64, updates: Loan) -> Result<(), 
 
 #[tauri::command]
 pub fn delete_loan(state: State<DbState>, id: i64) -> Result<(), String> {
-    let mut conn = state.conn.lock().unwrap();
+    let mut conn = state.conn.lock().map_err(|e| e.to_string())?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute("DELETE FROM loans WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
 
-#[tauri::command]
-pub fn clear_loans(state: State<DbState>) -> Result<(), String> {
-    let mut conn = state.conn.lock().unwrap();
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM loans", []).map_err(|e| e.to_string())?;
-    tx.commit().map_err(|e| e.to_string())?;
-    Ok(())
-}

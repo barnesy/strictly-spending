@@ -36,18 +36,8 @@ pub fn get_tax_rules(state: State<DbState>) -> Result<Vec<TaxRule>, String> {
 }
 
 #[tauri::command]
-pub fn add_tax_rule(state: State<DbState>, item: TaxRule) -> Result<i64, String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "INSERT INTO tax_rules (pattern, is_business, tax_category, priority, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![item.pattern, item.is_business, item.tax_category, item.priority, item.created_at],
-    ).map_err(|e| e.to_string())?;
-    Ok(conn.last_insert_rowid())
-}
-
-#[tauri::command]
 pub fn put_tax_rule(state: State<DbState>, item: TaxRule) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT OR REPLACE INTO tax_rules (pattern, is_business, tax_category, priority, created_at, id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![item.pattern, item.is_business, item.tax_category, item.priority, item.created_at, item.id],
@@ -56,25 +46,9 @@ pub fn put_tax_rule(state: State<DbState>, item: TaxRule) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub fn update_tax_rule(state: State<DbState>, id: i64, updates: TaxRule) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "UPDATE tax_rules SET pattern=?1, is_business=?2, tax_category=?3, priority=?4, created_at=?5 WHERE id = ?6",
-        params![updates.pattern, updates.is_business, updates.tax_category, updates.priority, updates.created_at, id],
-    ).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
 pub fn delete_tax_rule(state: State<DbState>, id: i64) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM tax_rules WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-#[tauri::command]
-pub fn clear_tax_rules(state: State<DbState>) -> Result<(), String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute("DELETE FROM tax_rules", []).map_err(|e| e.to_string())?;
-    Ok(())
-}

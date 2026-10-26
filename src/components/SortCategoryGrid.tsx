@@ -105,9 +105,9 @@ export default function SortCategoryGrid({
           justifyContent: 'flex-start',
           gap: 1,
           px: 1.5,
-          py: 1,
+          py: { xs: 1.25, sm: 1 },
           minWidth: 0,
-          flex: '1 1 calc(33.333% - 8px)',
+          flex: { xs: '1 1 calc(50% - 8px)', sm: '1 1 calc(33.333% - 8px)' },
           borderColor: isSelected ? cat.color : isSuggested ? cat.color : 'divider',
           borderWidth: (isSelected || isSuggested) ? 2 : 1,
           boxShadow: isSelected 

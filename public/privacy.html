@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy — Strictly Spending</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 40px 20px 64px;
+        line-height: 1.65;
+        color: #111827;
+        background: #fafafa;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          color: #f3f4f6;
+          background: #111827;
+        }
+        .card {
+          background: #1f2937 !important;
+          border-color: #374151 !important;
+        }
+        code {
+          background: #374151 !important;
+        }
+      }
+      .card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 28px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      }
+      h1 {
+        margin-top: 0;
+        font-size: 1.75rem;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin-top: 1.75rem;
+        margin-bottom: 0.5rem;
+      }
+      p, li {
+        font-size: 0.95rem;
+        opacity: 0.9;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.85em;
+      }
+      .badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        background: rgba(16, 185, 129, 0.12);
+        color: #059669;
+        margin-right: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div>
+        <span class="badge">Zero Cloud Telemetry</span>
+        <span class="badge">On-Device SQLite</span>
+      </div>
+      <h1 style="margin-top: 12px;">Strictly Spending — Privacy Policy</h1>
+      <p><strong>Last Updated:</strong> October 25, 2026 &middot; <strong>App ID:</strong> <code>com.strictlyspending.app</code></p>
+      <p>
+        Strictly Spending is a local-first personal finance, budgeting, and cashflow forecasting application. Your financial privacy is our foundational architectural principle.
+      </p>
+
+      <h2>1. Zero Cloud Collection &amp; On-Device SQLite Storage</h2>
+      <p>
+        Strictly Spending does not operate remote servers, user accounts, or cloud databases. All financial records—including bank accounts, transactions, categories, categorization rules, budgets, loans, and forecast scenarios—are stored exclusively inside a local SQLite database on your personal device. The application contains zero third-party analytics SDKs, advertising identifiers, or behavioral trackers.
+      </p>
+
+      <h2>2. Optional Bank Synchronization (SimpleFIN Bridge)</h2>
+      <p>
+        If you choose to configure automatic bank synchronization via SimpleFIN Bridge, your SimpleFIN Access Token/URL is stored locally in your on-device SQLite database. When you initiate a bank sync, your device communicates directly with SimpleFIN (<code>https://beta-bridge.simplefin.org</code>) over encrypted HTTPS (TLS) to retrieve read-only account balances and transaction histories. Strictly Spending never proxies, intercepts, or stores your banking credentials or SimpleFIN tokens on any external server.
+      </p>
+
+      <h2>3. Optional Local AI &amp; Model Context Protocol (MCP) Integration</h2>
+      <p>
+        Strictly Spending includes an optional local Model Context Protocol (MCP) server that allows you to connect local AI clients (such as Claude Desktop, Cursor, or Antigravity) to your on-device SQLite database. This interface runs locally on your machine via standard input/output (<code>stdio</code>) or local network HTTP only when explicitly launched by you.
+      </p>
+
+      <h2>4. Data Portability, Retention &amp; Complete Deletion</h2>
+      <ul>
+        <li><strong>Full Data Portability:</strong> You can export your entire database to a human-readable JSON backup file at any time from the <strong>Import &amp; Backup</strong> screen.</li>
+        <li><strong>Instant Data Deletion:</strong> Because all data resides locally on your device, you can permanently delete all imported financial data at any time by navigating to <strong>Settings &rarr; Imported data &rarr; Clear all imported data</strong>, or by uninstalling the application from your device.</li>
+      </ul>
+
+      <h2>5. Contact &amp; Open Source Transparency</h2>
+      <p>
+        If you have questions regarding this Privacy Policy or Strictly Spending's security architecture, please open an issue on our official repository at <a href="https://github.com/barnesy/strictly-spending">https://github.com/barnesy/strictly-spending</a>.
+      </p>
+    </div>
+  </body>
+</html>

@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildPreview, commitPreview } from './import';
+import {
+  buildPreview,
+  commitPreview,
+  updatePreviewAccount,
+  updatePreviewAccountMapping,
+  findBestMatchingAccount,
+} from './import';
 import { api } from '../api';
-import { localAI } from '../ai';
 
 const rulesData: any[] = [];
 const transactionsData: any[] = [];
@@ -40,6 +45,7 @@ vi.mock('../api', () => ({
       importsData.push(newImp);
       return newImp.id;
     },
+    getImports: async () => [...importsData],
     getCategories: async () => [...categoriesData],
     getMerchantOverrides: async () => [],
     getCsvMappings: async () => [...csvMappingsData],
@@ -52,15 +58,6 @@ vi.mock('../api', () => ({
       if (key === 'license') return licenseSetting;
       return null;
     }
-  }
-}));
-
-vi.mock('../ai', () => ({
-  localAI: {
-    isLoaded: true,
-    reviewTransactions: vi.fn(async (txns, _categories) => {
-      return txns.map(() => 'Groceries');
-    })
   }
 }));
 
@@ -124,14 +121,6 @@ JOHN DOE,05/22/2026,05/23/2026,Netflix Card,Subscriptions,Sale,-15.00,`;
       expect(preview.rows[0].dedupKey).toBe('Chase 1234|2026-05-22|-15.00|netflix card|0');
       expect(preview.rows[1].dedupKey).toBe('Chase 1234|2026-05-22|-15.00|netflix card|1');
     });
-
-    it('invokes local AI categorization if license is active', async () => {
-      licenseSetting = { active: true };
-      const preview = await buildPreview('Chase_Chase1234_stmt.CSV', chaseCsvSample, undefined, true);
-      expect(localAI.reviewTransactions).toHaveBeenCalled();
-      expect(preview.rows[0].aiCategory).toBe('Groceries');
-      expect(preview.rows[1].aiCategory).toBe('Groceries');
-    });
   });
 
   describe('commitPreview', () => {
@@ -158,6 +147,64 @@ JOHN DOE,05/22/2026,05/23/2026,Netflix Card,Subscriptions,Sale,-15.00,`;
       expect(commitRes.imported).toBe(1);
       expect(commitRes.skippedDuplicates).toBe(1);
       expect(transactionsData.length).toBe(2); // Initial 1 + Imported 1 = 2
+    });
+
+    it('commits transactions directly into selected targetAccountId', async () => {
+      accountsData.push({
+        id: 99,
+        name: 'My Preferred Checking',
+        institution: 'Community Bank',
+        type: 'checking',
+        source: 'custom',
+        enabled: true,
+      });
+
+      const preview = await buildPreview('Chase_Chase1234_stmt.CSV', chaseCsvSample);
+      const updatedPreview = await updatePreviewAccount(preview, {
+        id: 99,
+        name: 'My Preferred Checking',
+        institution: 'Community Bank',
+        type: 'checking',
+      });
+
+      expect(updatedPreview.targetAccountId).toBe(99);
+      expect(updatedPreview.targetAccountName).toBe('My Preferred Checking');
+      expect(updatedPreview.rows[0].parsed.accountName).toBe('My Preferred Checking');
+      expect(updatedPreview.rows[0].dedupKey).toContain('My Preferred Checking|2026-05-22|540.82');
+
+      const commitRes = await commitPreview(updatedPreview);
+      expect(commitRes.imported).toBe(2);
+      expect(transactionsData.every(t => t.accountId === 99)).toBe(true);
+      // Ensure we did not create another account
+      expect(accountsData.length).toBe(1);
+    });
+  });
+
+  describe('updatePreviewAccount', () => {
+    it('recalculates dedup keys and duplicate counts against existing transactions of the target account', async () => {
+      // Existing transaction in target account
+      transactionsData.push({
+        dedupKey: 'Target Credit|2026-05-22|540.82|payment thank you - web|0'
+      });
+
+      const preview = await buildPreview('Chase_Chase1234_stmt.CSV', chaseCsvSample);
+      // Initially, 0 duplicates because Chase 1234 has no transactions
+      expect(preview.duplicateCount).toBe(0);
+      expect(preview.newCount).toBe(2);
+
+      const switched = await updatePreviewAccount(preview, {
+        id: 15,
+        name: 'Target Credit',
+        institution: 'Target Bank',
+        type: 'credit',
+      });
+
+      expect(switched.targetAccountId).toBe(15);
+      expect(switched.targetAccountName).toBe('Target Credit');
+      expect(switched.duplicateCount).toBe(1);
+      expect(switched.newCount).toBe(1);
+      expect(switched.rows[0].duplicate).toBe(true);
+      expect(switched.rows[1].duplicate).toBe(false);
     });
   });
 
@@ -195,6 +242,216 @@ JOHN DOE,05/22/2026,05/23/2026,Netflix Card,Subscriptions,Sale,-15.00,`;
       expect(preview.rows[0].parsed.description).toBe('Coffee Shop');
       expect(preview.rows[0].parsed.balance).toBe(100.0);
       expect(preview.rows[1].parsed.amount).toBe(2500.0);
+    });
+  });
+
+  describe('findBestMatchingAccount', () => {
+    const existingAccounts = [
+      { id: 19, name: 'Bank of America Adv Plus Banking- 6669 (6669)', institution: 'Bank of America', type: 'checking' },
+      { id: 20, name: 'Bank of America Business Adv Customized Cash Rewards - 7562', institution: 'Bank of America', type: 'credit' },
+      { id: 22, name: 'Bank of America Customized Cash Rewards - 5592', institution: 'Bank of America', type: 'credit' },
+      { id: 30, name: 'Chase Sapphire Preferred', institution: 'Chase', type: 'credit' },
+    ];
+
+    it('matches Bank of America Adv Plus Banking correctly', () => {
+      const match = findBestMatchingAccount('Bank of America - Bank - ADV PLUS BANKING', existingAccounts);
+      expect(match?.id).toBe(19);
+    });
+
+    it('matches Bank of America personal Customized Cash Rewards correctly', () => {
+      const match = findBestMatchingAccount(
+        'Bank of America - Credit Card - Customized Cash Rewards Visa Signature',
+        existingAccounts
+      );
+      expect(match?.id).toBe(22);
+    });
+
+    it('matches Bank of America Business Adv Customized Cash Rewards correctly', () => {
+      const match = findBestMatchingAccount(
+        'Bank of America - Credit Card - Business Adv Customized Cash Rewards',
+        existingAccounts
+      );
+      expect(match?.id).toBe(20);
+    });
+  });
+
+  describe('Multi-Account CSV Mapped Import', () => {
+    const multiCsvText = `Status,Date,Original Description,Amount,Account Name
+posted,09/17/2024,TESLA MOTORS,-9.99,Bank of America - Bank - ADV PLUS BANKING
+posted,09/16/2024,Microsoft Store,-49.99,Bank of America - Credit Card - Customized Cash Rewards Visa Signature
+posted,09/13/2024,ARROW EXTERMINATOR,-95.00,Bank of America - Credit Card - Business Adv Customized Cash Rewards`;
+
+    it('builds preview and commits transactions with multi-account routing', async () => {
+      // Setup SimpleFIN accounts in mock DB
+      accountsData.push(
+        { id: 19, name: 'Bank of America Adv Plus Banking- 6669 (6669)', institution: 'Bank of America', type: 'checking' },
+        { id: 20, name: 'Bank of America Business Adv Customized Cash Rewards - 7562', institution: 'Bank of America', type: 'credit' },
+        { id: 22, name: 'Bank of America Customized Cash Rewards - 5592', institution: 'Bank of America', type: 'credit' }
+      );
+
+      // Save mapping configuration with accountColumn and accountMappings
+      csvMappingsData.push({
+        name: 'Bank of America Multi-Account',
+        headerHash: 'Status,Date,Original Description,Amount,Account Name',
+        headers: ['Status', 'Date', 'Original Description', 'Amount', 'Account Name'],
+        dateColumn: 'Date',
+        descriptionColumn: 'Original Description',
+        amountColumn: 'Amount',
+        institution: 'Bank of America',
+        accountName: 'Multiple Accounts',
+        accountType: 'checking',
+        accountColumn: 'Account Name',
+        accountMappings: {
+          'Bank of America - Bank - ADV PLUS BANKING': {
+            accountId: 19,
+            accountName: 'Bank of America Adv Plus Banking- 6669 (6669)',
+            institution: 'Bank of America',
+            accountType: 'checking',
+          },
+          'Bank of America - Credit Card - Customized Cash Rewards Visa Signature': {
+            accountId: 22,
+            accountName: 'Bank of America Customized Cash Rewards - 5592',
+            institution: 'Bank of America',
+            accountType: 'credit',
+          },
+          'Bank of America - Credit Card - Business Adv Customized Cash Rewards': {
+            accountId: 20,
+            accountName: 'Bank of America Business Adv Customized Cash Rewards - 7562',
+            institution: 'Bank of America',
+            accountType: 'credit',
+          },
+        },
+      });
+
+      const preview = await buildPreview('bofa_export.csv', multiCsvText);
+      expect(preview.totalCount).toBe(3);
+      expect(preview.newCount).toBe(3);
+      expect(preview.targetAccountMap).toBeDefined();
+      expect(preview.targetAccountMap!['Bank of America - Bank - ADV PLUS BANKING']).toBe(19);
+
+      // Commit and verify each transaction received the right accountId
+      const res = await commitPreview(preview);
+      expect(res.imported).toBe(3);
+
+      const tesla = transactionsData.find(t => t.description === 'TESLA MOTORS');
+      expect(tesla?.accountId).toBe(19);
+
+      const msft = transactionsData.find(t => t.description === 'Microsoft Store');
+      expect(msft?.accountId).toBe(22);
+
+      const arrow = transactionsData.find(t => t.description === 'ARROW EXTERMINATOR');
+      expect(arrow?.accountId).toBe(20);
+    });
+
+    it('allows changing target account mapping for a specific file account group', async () => {
+      accountsData.push(
+        { id: 19, name: 'Checking Account', institution: 'Bank of America', type: 'checking' },
+        { id: 22, name: 'Card 1', institution: 'Bank of America', type: 'credit' },
+        { id: 99, name: 'Custom Re-routed Account', institution: 'Other Bank', type: 'savings' }
+      );
+
+      csvMappingsData.push({
+        name: 'Bank of America Multi-Account',
+        headerHash: 'Status,Date,Original Description,Amount,Account Name',
+        headers: ['Status', 'Date', 'Original Description', 'Amount', 'Account Name'],
+        dateColumn: 'Date',
+        descriptionColumn: 'Original Description',
+        amountColumn: 'Amount',
+        institution: 'Bank of America',
+        accountName: 'Multiple Accounts',
+        accountType: 'checking',
+        accountColumn: 'Account Name',
+      });
+
+      const preview = await buildPreview('bofa_export.csv', multiCsvText);
+      
+      // Update mapping for the checking group to route to custom account 99
+      const updated = await updatePreviewAccountMapping(
+        preview,
+        'Bank of America - Bank - ADV PLUS BANKING',
+        { id: 99, name: 'Custom Re-routed Account', institution: 'Other Bank', type: 'savings' }
+      );
+
+      const res = await commitPreview(updated);
+      expect(res.imported).toBe(3);
+
+      const tesla = transactionsData.find(t => t.description === 'TESLA MOTORS');
+      expect(tesla?.accountId).toBe(99);
+    });
+
+    it('detects duplicate CSV transactions against SimpleFIN records with different dedupKey formats', async () => {
+      accountsData.push({
+        id: 19,
+        name: 'Bank of America Adv Plus Banking- 6669',
+        institution: 'Bank of America',
+        type: 'checking',
+      });
+
+      // Simulate a SimpleFIN transaction already in the database
+      transactionsData.push({
+        id: 999,
+        accountId: 19,
+        date: '2026-05-22',
+        amount: 540.82,
+        description: 'Payment Thank You - Web',
+        dedupKey: 'simplefin_TRN-987654321', // Notice SimpleFIN dedupKey format!
+      });
+
+      // Import CSV containing the exact same transaction
+      const preview = await buildPreview('Chase_Chase1234_stmt.CSV', chaseCsvSample);
+      
+      // Update preview to target account 19
+      const updated = await updatePreviewAccountMapping(
+        preview,
+        'Chase 1234',
+        { id: 19, name: 'Bank of America Adv Plus Banking- 6669', institution: 'Bank of America', type: 'checking' }
+      );
+
+      expect(updated.totalCount).toBe(2);
+      expect(updated.duplicateCount).toBe(1);
+      expect(updated.newCount).toBe(1);
+      expect(updated.rows[0].duplicate).toBe(true);
+      expect(updated.rows[1].duplicate).toBe(false);
+
+      // Verify committing skips the duplicate
+      const initialTxnCount = transactionsData.length;
+      const res = await commitPreview(updated);
+      expect(res.imported).toBe(1);
+      expect(res.skippedDuplicates).toBe(1);
+      expect(transactionsData.length).toBe(initialTxnCount + 1);
+    });
+
+    it('detects duplicate across differently named accounts via source/global semantic matching', async () => {
+      accountsData.push({
+        id: 19,
+        name: 'Bank of America Adv Plus Banking- 6669 (6669)',
+        institution: 'Bank of America',
+        type: 'checking',
+        source: 'boa-checking',
+      });
+
+      // SimpleFIN transaction in DB with clean description 'Rocket Mortgage'
+      transactionsData.push({
+        id: 1001,
+        accountId: 19,
+        date: '2026-10-05',
+        amount: -2288.41,
+        description: 'Rocket Mortgage',
+        dedupKey: 'simplefin_TRN-e6e3b231-fd3f-4e25-9d63-c0b9734b3298',
+      });
+
+      // Raw CSV transaction row from a Bank of America export
+      const rawBoaCsv = `Description,,Summary Amt.
+Beginning balance as of 10/01/2026,,"1,000.00"
+
+Date,Description,Amount,Running Bal.
+10/05/2026,"ROCKET MORTGAGE DES:LOAN ID:3645284 INDN:CHRISTOPHER *BARN CO ID:0000452701 WEB",-2288.41,1000.00`;
+
+      const preview = await buildPreview('stmt.csv', rawBoaCsv);
+      expect(preview.totalCount).toBe(1);
+      expect(preview.duplicateCount).toBe(1);
+      expect(preview.newCount).toBe(0);
+      expect(preview.rows[0].duplicate).toBe(true);
     });
   });
 });

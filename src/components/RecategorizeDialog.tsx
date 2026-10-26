@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useCategories } from '../hooks/queries';
+import { queryClient } from '../queryClient';
 import {
   Dialog,
   DialogTitle,
@@ -15,10 +16,13 @@ import {
   Stack,
   Box,
   Alert,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { api } from '../api';
 import type { Transaction } from '../types';
-import { recategorizeAll } from '../domain/categorize';
+import { recategorizeAll, deriveRulePattern, matchPattern } from '../domain/categorize';
+import { normalizeForMatch } from '../lib';
 import { refreshRecurrenceAll } from '../domain/recurrence';
 
 interface Props {
@@ -27,58 +31,101 @@ interface Props {
 }
 
 export default function RecategorizeDialog({ txn, onClose }: Props) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { data: categories } = useCategories();
   const [category, setCategory] = useState(txn.category);
   const [recurrenceOverride, setRecurrenceOverride] = useState<'recurring' | 'onetime' | 'default'>(
     txn.recurrenceOverride || 'default'
   );
   const [scope, setScope] = useState<'one' | 'rule'>('rule');
-  const derivePattern = (desc: string) => {
-    const cleaned = desc
-      .replace(/^[A-Z]{1,3}\s*\*+/, '')
-      .replace(/[^A-Za-z0-9\s*]/g, ' ')
-      .trim();
-    return cleaned.split(/\s+/).slice(0, 2).join(' ');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const derivePattern = (desc: string, mkey?: string) => {
+    return deriveRulePattern(mkey || desc) || deriveRulePattern(desc) || desc.trim().split(/\s+/).slice(0, 2).join(' ');
   };
 
-  const [pattern, setPattern] = useState(() => derivePattern(txn.description));
+  const [pattern, setPattern] = useState(() => derivePattern(txn.description, txn.merchantKey));
   const [prevTxnId, setPrevTxnId] = useState(txn.id);
 
   if (txn.id !== prevTxnId) {
     setPrevTxnId(txn.id);
-    setPattern(derivePattern(txn.description));
+    setCategory(txn.category);
+    setRecurrenceOverride(txn.recurrenceOverride || 'default');
+    setPattern(derivePattern(txn.description, txn.merchantKey));
+    setError(null);
   }
 
   const onSave = async () => {
-    const ro = recurrenceOverride === 'default' ? null : recurrenceOverride;
-    if (scope === 'one') {
-      await api.updateTransaction(txn.id!, {
-        ...txn,
-        category,
-        userOverridden: true,
-        recurrenceOverride: ro,
-      });
-    } else {
-      // Create a high-priority rule
-      await api.addRule({
-        pattern: pattern.trim(),
-        category,
-        priority: 1000,
-        createdAt: new Date().toISOString(),
-      } as any);
-      // Update recurrence override on this transaction specifically
-      await api.updateTransaction(txn.id!, {
-        ...txn,
-        recurrenceOverride: ro,
-      });
-      await recategorizeAll();
+    setSaving(true);
+    setError(null);
+    try {
+      const ro = recurrenceOverride === 'default' ? null : recurrenceOverride;
+      if (scope === 'one') {
+        await api.updateTransaction(txn.id!, {
+          ...txn,
+          category,
+          userOverridden: true,
+          recurrenceOverride: ro,
+        });
+      } else {
+        const trimmedPattern = pattern.trim();
+        const normNew = normalizeForMatch(trimmedPattern);
+
+        // Remove any existing rules that would shadow this new rule on this transaction or pattern
+        const existingRules = await api.getRules();
+        for (const r of existingRules) {
+          if (!r.id) continue;
+          const normOld = normalizeForMatch(r.pattern);
+          const isSameNormDiffRaw = normOld === normNew && r.pattern !== trimmedPattern;
+          const oldContainsNew = normNew.length > 0 && matchPattern(normOld, normNew) && r.priority >= 1000;
+          const matchesThisTxn =
+            matchPattern(txn.description, r.pattern) ||
+            (txn.merchantKey ? matchPattern(txn.merchantKey, r.pattern) : false);
+          const shadowsOnThisTxn =
+            matchesThisTxn &&
+            r.category !== category &&
+            (r.priority > 1000 || (r.priority === 1000 && normOld.length >= normNew.length));
+
+          if (isSameNormDiffRaw || oldContainsNew || shadowsOnThisTxn) {
+            await api.deleteRule(r.id);
+          }
+        }
+
+        // Create/update the high-priority rule
+        await api.addRule({
+          pattern: trimmedPattern,
+          category,
+          priority: 1000,
+          createdAt: new Date().toISOString(),
+        } as any);
+
+        // Recategorize all matching transactions across the DB first
+        await recategorizeAll({ forceUserRules: true });
+
+        // Explicitly update this transaction afterwards so it is guaranteed to reflect the chosen category & override
+        await api.updateTransaction(txn.id!, {
+          ...txn,
+          category,
+          userOverridden: true,
+          recurrenceOverride: ro,
+        });
+      }
+      await refreshRecurrenceAll();
+      await queryClient.invalidateQueries();
+      window.dispatchEvent(new Event('db-update'));
+      onClose();
+    } catch (e: unknown) {
+      console.error('Failed to recategorize transaction:', e);
+      setError((e as Error)?.message || String(e));
+    } finally {
+      setSaving(false);
     }
-    await refreshRecurrenceAll();
-    onClose();
   };
 
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth fullScreen={isMobile}>
       <DialogTitle>Recategorize</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
@@ -164,16 +211,17 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
               )}
             </>
           )}
+          {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose} disabled={saving}>Cancel</Button>
         <Button
           onClick={onSave}
           variant="contained"
-          disabled={scope === 'rule' && pattern.trim().length === 0}
+          disabled={saving || (scope === 'rule' && pattern.trim().length === 0)}
         >
-          {scope === 'rule' ? 'Save rule & recategorize' : 'Save override'}
+          {saving ? 'Saving…' : scope === 'rule' ? 'Save rule & recategorize' : 'Save override'}
         </Button>
       </DialogActions>
     </Dialog>

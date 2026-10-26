@@ -20,6 +20,7 @@ import { api } from './api';
 import type { Transaction } from './types';
 import { extractMerchantKey } from './domain/categorize';
 import { refreshRecurrenceAll } from './domain/recurrence';
+import { useFilters } from './stores/store';
 
 const ACCOUNTS = {
   checking: 'Demo: Checking',
@@ -99,7 +100,7 @@ export function buildDemoTransactions(
       date: isoDate(year, m, 1),
       description: 'DEMO HOME MORTGAGE',
       amount: -2150,
-      category: 'Home Loan',
+      category: 'Mortgage',
       account: 'checking',
     });
   }
@@ -110,7 +111,7 @@ export function buildDemoTransactions(
       date: isoDate(year, m, 28),
       description: 'DEMO STUDENT LOAN',
       amount: -450,
-      category: 'Student Loan',
+      category: 'Student Loans',
       account: 'checking',
     });
   }
@@ -512,6 +513,10 @@ export async function clearDemoData(): Promise<ClearResult> {
   await api.deleteMerchantOverride('homemortgage');
   await api.deleteMerchantOverride('studentloan');
 
+  useFilters.getState().setEnabledAccounts([]);
+  useFilters.getState().setSeenAccounts([]);
+  useFilters.getState().setTransactionDataBounds(undefined, undefined);
+
   return {
     removedTransactions: demoTxns.length,
     removedAccounts: demoAccts.length,
@@ -537,6 +542,10 @@ export async function clearImportedData(): Promise<ClearResult> {
 
   await api.clearImports();
   await refreshRecurrenceAll();
+
+  useFilters.getState().setEnabledAccounts([]);
+  useFilters.getState().setSeenAccounts([]);
+  useFilters.getState().setTransactionDataBounds(undefined, undefined);
 
   return {
     removedTransactions: importedTxns.length,

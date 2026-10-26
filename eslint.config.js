@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'src-tauri', 'dist-landing', 'drizzle']),
+  globalIgnores(['dist', 'src-tauri', 'dist-landing', 'drizzle', 'coverage', 'scripts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -32,6 +32,11 @@ export default defineConfig([
       'no-useless-assignment': 'warn',
       'no-empty': 'warn',
       'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/purity': 'warn',
+      'react-hooks/refs': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
+      'react-refresh/only-export-components': 'warn',
       '@typescript-eslint/ban-ts-comment': 'warn',
       'no-useless-escape': 'warn',
       'preserve-caught-error': 'warn',

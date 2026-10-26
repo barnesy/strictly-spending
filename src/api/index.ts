@@ -10,7 +10,8 @@ import { loansApi, loanSchema } from './loans';
 import { chatApi } from './chat';
 import { scenariosApi, scenarioSchema, goalSchema } from './scenarios';
 import { forecastApi } from './forecast';
-import type { AppSetting } from './settings';
+import { simplefinApi } from './simplefin';
+import type { AppSetting, McpServerInfo } from './settings';
 
 export {
   accountSchema,
@@ -24,9 +25,10 @@ export {
   forecastApi,
 };
 
-export type { AppSetting };
+export type { AppSetting, McpServerInfo };
 export * from './types';
 export * from './forecast';
+export * from './simplefin';
 
 export const api = {
   ...accountsApi,
@@ -42,5 +44,6 @@ export const api = {
   ...loansApi,
   ...chatApi,
   ...forecastApi,
+  ...simplefinApi,
   scenariosApi,
 };

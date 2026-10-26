@@ -182,7 +182,51 @@ export async function importFromJson(json: string): Promise<RestoreReport> {
   };
 }
 
-export function triggerDownload(filename: string, json: string): void {
+export async function triggerDownload(filename: string, json: string): Promise<void> {
+  const isRealTauri =
+    typeof window !== 'undefined' &&
+    (('__TAURI__' in window) ||
+      ('__TAURI_INTERNALS__' in window && 'metadata' in (window as any).__TAURI_INTERNALS__));
+
+  if (isRealTauri) {
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+      const filePath = await save({
+        defaultPath: filename,
+        filters: [{ name: 'JSON Backup', extensions: ['json'] }],
+      });
+      if (filePath) {
+        await writeTextFile(filePath, json);
+        return;
+      }
+    } catch {
+      // Fall through to Web Share / anchor download if native save dialog fails or is unsupported
+    }
+  }
+
+  const isMobileTouch =
+    typeof navigator !== 'undefined' &&
+    navigator.maxTouchPoints > 0 &&
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+
+  if (isMobileTouch && typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
+    try {
+      const file = new File([json], filename, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: filename,
+          text: 'Strictly Spending JSON Backup',
+          files: [file],
+        });
+        return;
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+      // Fall through to standard anchor download
+    }
+  }
+
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

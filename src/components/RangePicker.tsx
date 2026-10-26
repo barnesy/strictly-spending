@@ -1,21 +1,28 @@
+import { useEffect, useState } from 'react';
 import {
   Stack,
   Typography,
-  Tooltip,
-  IconButton,
   ToggleButtonGroup,
   ToggleButton,
   Button,
+  Popover,
+  Box,
+  Divider,
+  Select,
+  MenuItem,
+  FormControl,
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import {
   useFilters,
   resolveDateRange,
   type DateRangePreset,
 } from '../stores/store';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { parseISO, format } from 'date-fns';
+import { parseISO, format, lastDayOfMonth } from 'date-fns';
 
 const PRESETS: { value: DateRangePreset; label: string }[] = [
   { value: 'ytd', label: 'YTD' },
@@ -39,6 +46,41 @@ function formatDateRange(start: Date, end: Date): string {
   return `${startStr} – ${endStr}`;
 }
 
+function getCompactMobileLabel(
+  preset: DateRangePreset,
+  customStart: string,
+  customEnd: string,
+  start: Date,
+  end: Date
+): string {
+  if (preset === 'ytd') return 'YTD';
+  if (preset === 'last30') return '30D';
+  if (preset === 'last90') return '90D';
+  if (preset === 'allTime') return 'All Time';
+
+  // Check if custom range is an exact single calendar month (e.g. 2026-10-01 to 2026-10-31)
+  if (customStart && customEnd) {
+    try {
+      const s = parseISO(customStart);
+      const e = parseISO(customEnd);
+      if (
+        s.getFullYear() === e.getFullYear() &&
+        s.getMonth() === e.getMonth() &&
+        s.getDate() === 1 &&
+        e.getDate() === lastDayOfMonth(s).getDate()
+      ) {
+        return s.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      }
+    } catch {
+      // ignore parse error
+    }
+  }
+
+  const sShort = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const eShort = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${sShort} – ${eShort}`;
+}
+
 export default function RangePicker() {
   const preset = useFilters((s) => s.preset);
   const customStart = useFilters((s) => s.customStart);
@@ -49,6 +91,14 @@ export default function RangePicker() {
   const setPreset = useFilters((s) => s.setPreset);
   const setCustomRange = useFilters((s) => s.setCustomRange);
 
+  const [mobileAnchorEl, setMobileAnchorEl] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (preset === 'custom' && !customEnd) {
+      setCustomRange(customStart, format(new Date(), 'yyyy-MM-dd'));
+    }
+  }, [preset, customEnd, customStart, setCustomRange]);
+
   const range = resolveDateRange({
     preset,
     customStart,
@@ -57,106 +107,313 @@ export default function RangePicker() {
     latestTransactionDate,
   } as any);
   const label = formatDateRange(range.start, range.end);
+  const mobileLabel = getCompactMobileLabel(preset, customStart, customEnd, range.start, range.end);
+
   return (
-    <Stack direction="row" spacing={2} alignItems="flex-end" flexWrap="wrap" justifyContent="flex-end">
-      <Typography variant="caption" color="text.secondary" sx={{ height: 40, display: 'flex', alignItems: 'center', fontWeight: 500 }}>
-        {label}
-      </Typography>
-      {preset !== 'custom' && (
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          <Tooltip title="Shift earlier">
-            <IconButton
-              size="small"
-              onClick={() => shiftRange(-1)}
-              aria-label="Shift date range earlier"
-              sx={{ height: 40, width: 40 }}
-            >
-              <ChevronLeftIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+    <>
+      {/* Mobile Compact Date Range Dropdown Button */}
+      <Box sx={{ display: { xs: 'inline-flex', md: 'none' } }}>
+        <ToggleButtonGroup
+          size="small"
+          sx={{
+            height: { xs: 42, sm: 36 },
+            '& .MuiToggleButton-root': {
+              height: { xs: 42, sm: 36 },
+              px: { xs: 1.35, sm: 1.2 },
+              gap: 0.5,
+              fontSize: { xs: '0.84rem', sm: '0.8125rem' },
+              fontWeight: 600,
+              textTransform: 'none',
+              whiteSpace: 'nowrap',
+              '&.Mui-selected': { fontWeight: 700 },
+            },
+          }}
+        >
+          <ToggleButton
+            value="mobile-date-range"
+            selected={preset === 'custom'}
+            onClick={(e) => setMobileAnchorEl(e.currentTarget)}
+          >
+            <CalendarTodayIcon sx={{ fontSize: 15 }} />
+            {mobileLabel}
+            <ArrowDropDownIcon sx={{ fontSize: 18, ml: -0.25, mr: -0.5, opacity: 0.75 }} />
+          </ToggleButton>
+        </ToggleButtonGroup>
+
+        <Popover
+          open={Boolean(mobileAnchorEl)}
+          anchorEl={mobileAnchorEl}
+          onClose={() => setMobileAnchorEl(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 0.75,
+                p: 1.5,
+                width: 280,
+                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+              },
+            },
+          }}
+        >
+          <Stack spacing={1.25}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                {label}
+              </Typography>
+              <Stack direction="row" spacing={0.5}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="inherit"
+                  onClick={() => shiftRange(-1)}
+                  sx={{ minWidth: 32, px: 0.75, height: 28, borderColor: 'divider' }}
+                  title="Shift earlier"
+                >
+                  <ChevronLeftIcon fontSize="small" />
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="inherit"
+                  onClick={() => shiftRange(1)}
+                  sx={{ minWidth: 32, px: 0.75, height: 28, borderColor: 'divider' }}
+                  title="Shift later"
+                >
+                  <ChevronRightIcon fontSize="small" />
+                </Button>
+              </Stack>
+            </Stack>
+
+            <FormControl size="small" fullWidth>
+              <Select
+                variant="outlined"
+                value={preset}
+                onChange={(e) => {
+                  const v = e.target.value as DateRangePreset;
+                  if (v === 'custom') {
+                    const todayStr = format(new Date(), 'yyyy-MM-dd');
+                    setCustomRange(customStart, customEnd || todayStr);
+                  } else {
+                    setPreset(v);
+                    setMobileAnchorEl(null);
+                  }
+                }}
+                sx={{
+                  height: 36,
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                }}
+              >
+                <MenuItem value="ytd">Year to Date (YTD)</MenuItem>
+                <MenuItem value="last30">Last 30 Days</MenuItem>
+                <MenuItem value="last90">Last 90 Days</MenuItem>
+                <MenuItem value="allTime">All Time</MenuItem>
+                <MenuItem value="custom">Custom Date Range</MenuItem>
+              </Select>
+            </FormControl>
+
+            {preset === 'custom' && (
+              <>
+                <Divider />
+                <Stack spacing={1}>
+                  <DatePicker
+                    label="Start Date"
+                    value={customStart ? parseISO(customStart) : null}
+                    onChange={(newVal) => {
+                      const todayStr = format(new Date(), 'yyyy-MM-dd');
+                      const effectiveEnd = customEnd || todayStr;
+                      if (newVal && !isNaN(newVal.getTime())) {
+                        setCustomRange(format(newVal, 'yyyy-MM-dd'), effectiveEnd);
+                      } else if (!newVal) {
+                        setCustomRange('', effectiveEnd);
+                      }
+                    }}
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        fullWidth: true,
+                        sx: { '& .MuiInputBase-root': { height: 34, fontSize: '0.8rem' } },
+                      },
+                    }}
+                  />
+                  <DatePicker
+                    label="End Date"
+                    value={customEnd ? parseISO(customEnd) : new Date()}
+                    onChange={(newVal) => {
+                      if (newVal && !isNaN(newVal.getTime())) {
+                        setCustomRange(customStart, format(newVal, 'yyyy-MM-dd'));
+                      } else if (!newVal) {
+                        setCustomRange(customStart, format(new Date(), 'yyyy-MM-dd'));
+                      }
+                    }}
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        fullWidth: true,
+                        sx: { '& .MuiInputBase-root': { height: 34, fontSize: '0.8rem' } },
+                      },
+                    }}
+                  />
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="inherit"
+                      onClick={() => {
+                        setPreset('ytd');
+                        setMobileAnchorEl(null);
+                      }}
+                      sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                    >
+                      Reset to YTD
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() => setMobileAnchorEl(null)}
+                      sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                    >
+                      Done
+                    </Button>
+                  </Stack>
+                </Stack>
+              </>
+            )}
+          </Stack>
+        </Popover>
+      </Box>
+
+      {/* Desktop Full RangePicker */}
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
+        justifyContent="flex-end"
+        sx={{ display: { xs: 'none', md: 'flex' }, width: 'auto' }}
+      >
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+          }}
+        >
+          {label}
+        </Typography>
+        {preset !== 'custom' && (
           <ToggleButtonGroup
             value={preset}
             exclusive
-            onChange={(_, v) => v && setPreset(v)}
-            size="small"
-            sx={{
-              height: 40,
-              '& .MuiToggleButton-root': {
-                height: 40,
+            onChange={(_, v) => {
+              if (!v || v === '__prev__' || v === '__next__') return;
+              if (v === 'custom') {
+                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                setCustomRange(customStart, customEnd || todayStr);
+              } else {
+                setPreset(v);
               }
             }}
+            size="small"
+            sx={{
+              height: 32,
+              '& .MuiToggleButton-root': {
+                height: 32,
+                px: 1.25,
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                '&.Mui-selected': { fontWeight: 600 },
+              },
+            }}
           >
+            <ToggleButton
+              value="__prev__"
+              onClick={() => shiftRange(-1)}
+              aria-label="Shift date range earlier"
+              title="Shift earlier"
+              sx={{ flex: '0 0 auto !important', px: '8px !important' }}
+            >
+              <ChevronLeftIcon fontSize="small" />
+            </ToggleButton>
             {PRESETS.map((p) => (
               <ToggleButton key={p.value} value={p.value}>
                 {p.label}
               </ToggleButton>
             ))}
-          </ToggleButtonGroup>
-          <Tooltip title="Shift later">
-            <IconButton
-              size="small"
+            <ToggleButton
+              value="__next__"
               onClick={() => shiftRange(1)}
               aria-label="Shift date range later"
-              sx={{ height: 40, width: 40 }}
+              title="Shift later"
+              sx={{ flex: '0 0 auto !important', px: '8px !important' }}
             >
               <ChevronRightIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      )}
-      {preset === 'custom' && (
-        <Stack direction="row" spacing={2.5} alignItems="flex-end">
-          <DatePicker
-            value={customStart ? parseISO(customStart) : null}
-            onChange={(newVal) => {
-              if (newVal && !isNaN(newVal.getTime())) {
-                setCustomRange(format(newVal, 'yyyy-MM-dd'), customEnd);
-              } else if (!newVal) {
-                setCustomRange('', customEnd);
-              }
-            }}
-            slotProps={{
-              textField: {
-                size: 'small',
-                placeholder: 'Start Date',
-                sx: {
-                  width: 150,
-                  '& .MuiInputBase-root': { height: 40 },
+            </ToggleButton>
+          </ToggleButtonGroup>
+        )}
+        {preset === 'custom' && (
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <DatePicker
+              value={customStart ? parseISO(customStart) : null}
+              onChange={(newVal) => {
+                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                const effectiveEnd = customEnd || todayStr;
+                if (newVal && !isNaN(newVal.getTime())) {
+                  setCustomRange(format(newVal, 'yyyy-MM-dd'), effectiveEnd);
+                } else if (!newVal) {
+                  setCustomRange('', effectiveEnd);
+                }
+              }}
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  placeholder: 'Start Date',
+                  sx: {
+                    width: 135,
+                    '& .MuiInputBase-root': { height: 32, fontSize: '0.75rem' },
+                  },
                 },
-              },
-            }}
-          />
-          <DatePicker
-            value={customEnd ? parseISO(customEnd) : null}
-            onChange={(newVal) => {
-              if (newVal && !isNaN(newVal.getTime())) {
-                setCustomRange(customStart, format(newVal, 'yyyy-MM-dd'));
-              } else if (!newVal) {
-                setCustomRange(customStart, '');
-              }
-            }}
-            slotProps={{
-              textField: {
-                size: 'small',
-                placeholder: 'End Date',
-                sx: {
-                  width: 150,
-                  '& .MuiInputBase-root': { height: 40 },
+              }}
+            />
+            <DatePicker
+              value={customEnd ? parseISO(customEnd) : new Date()}
+              onChange={(newVal) => {
+                if (newVal && !isNaN(newVal.getTime())) {
+                  setCustomRange(customStart, format(newVal, 'yyyy-MM-dd'));
+                } else if (!newVal) {
+                  setCustomRange(customStart, format(new Date(), 'yyyy-MM-dd'));
+                }
+              }}
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  placeholder: 'End Date',
+                  sx: {
+                    width: 135,
+                    '& .MuiInputBase-root': { height: 32, fontSize: '0.75rem' },
+                  },
                 },
-              },
-            }}
-          />
-          <Button
-            size="small"
-            color="inherit"
-            variant="outlined"
-            onClick={() => setPreset('ytd')}
-            sx={{ textTransform: 'none', height: 40 }}
-          >
-            Cancel
-          </Button>
-        </Stack>
-      )}
-    </Stack>
+              }}
+            />
+            <ToggleButtonGroup size="small" sx={{ height: 32 }}>
+              <ToggleButton
+                value="cancel"
+                selected={false}
+                onClick={() => setPreset('ytd')}
+                sx={{ height: 32, px: 1.25, fontSize: '0.75rem' }}
+              >
+                Cancel
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+        )}
+      </Stack>
+    </>
   );
 }

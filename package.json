@@ -1,18 +1,27 @@
 {
   "name": "strictly-spending",
-  "version": "0.1.10",
+  "version": "0.2.0",
   "description": "A local-first household spending dashboard. Multi-bank CSV ingestion, rule-based categorization, recurring-charge detection, per-category budgets, and a rapid-triage Sort view — all in the browser. No server, no cloud, no account credentials.",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "phone": "vite --host",
     "build": "tsc -b && vite build",
-    "build:landing": "tsc -b && VITE_LANDING_ONLY=true vite build --mode production --base /strictly-spending/ --outDir dist-landing --emptyOutDir",
+    "build:landing": "tsc -b && vite build --mode landing --base /strictly-spending/ --outDir dist-landing --emptyOutDir",
     "preview": "vite preview",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b --noEmit",
     "test": "vitest run src",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "release:desktop": "tauri build --bundles nsis",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:apk": "tauri android build --apk --target aarch64",
+    "android:aab": "tauri android build --aab --target aarch64",
+    "ios:init": "tauri ios init",
+    "ios:dev": "tauri ios dev",
+    "ios:build": "tauri ios build"
   },
   "keywords": [
     "budgeting",

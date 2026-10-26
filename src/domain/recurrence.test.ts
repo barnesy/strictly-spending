@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveRecurrenceForTransaction } from './recurrence';
+import { resolveRecurrenceForTransaction, detectRecurrence } from './recurrence';
 import type { Category, MerchantOverride, Transaction } from '../types';
 
 describe('Recurrence Resolution Hierarchy', () => {
@@ -100,4 +100,20 @@ describe('Recurrence Resolution Hierarchy', () => {
     };
     expect(resolveRecurrenceForTransaction(txn2, categoryMap, merchantOverrideMap, autoRecurringMerchantKeys)).toBe('onetime');
   });
+
+  it('detects monthly subscription price hikes accurately', () => {
+    const netflixTxns: Transaction[] = [
+      { id: 1, accountId: 1, date: '2026-01-15', description: 'Netflix', amount: -15.49, category: 'Subscriptions', source: 'chase', merchantKey: 'netflix', recurrence: 'recurring', userOverridden: false, dedupKey: 'n-1' },
+      { id: 2, accountId: 1, date: '2026-02-15', description: 'Netflix', amount: -15.49, category: 'Subscriptions', source: 'chase', merchantKey: 'netflix', recurrence: 'recurring', userOverridden: false, dedupKey: 'n-2' },
+      { id: 3, accountId: 1, date: '2026-03-15', description: 'Netflix', amount: -15.49, category: 'Subscriptions', source: 'chase', merchantKey: 'netflix', recurrence: 'recurring', userOverridden: false, dedupKey: 'n-3' },
+      { id: 4, accountId: 1, date: '2026-04-15', description: 'Netflix', amount: -22.99, category: 'Subscriptions', source: 'chase', merchantKey: 'netflix', recurrence: 'recurring', userOverridden: false, dedupKey: 'n-4' },
+    ];
+    const info = detectRecurrence(netflixTxns);
+    expect(info.kind).toBe('monthly');
+    expect(info.lastAmount).toBeCloseTo(22.99, 2);
+    expect(info.priorAmount).toBeCloseTo(15.49, 2);
+    expect(info.priceHikeDelta).toBeCloseTo(7.50, 2);
+    expect(info.priceHikePct).toBeGreaterThan(48);
+  });
 });
+

@@ -15,6 +15,10 @@ export const categoriesApi = {
   getCategories: () => invoke<Category[]>('get_categories'),
   addCategory: (item: Category) => invoke<number>('add_category', { item: categorySchema.parse(item) }),
   updateCategory: async (id: number, updates: Partial<Category>) => {
+    const direct = categorySchema.safeParse(updates);
+    if (direct.success) {
+      return invoke<void>('update_category', { id, updates: direct.data });
+    }
     const existing = (await invoke<Category[]>('get_categories')).find(c => c.id === id);
     if (!existing) throw new Error(`Category ${id} not found`);
     const full = { ...existing, ...updates };
@@ -28,6 +32,14 @@ export const rulesApi = {
   getRules: () => invoke<CategoryRule[]>('get_rules'),
   addRule: (item: CategoryRule) => invoke<number>('add_rule', { item }),
   updateRule: async (id: number, updates: Partial<CategoryRule>) => {
+    if (
+      updates.pattern !== undefined &&
+      updates.category !== undefined &&
+      updates.priority !== undefined &&
+      updates.createdAt !== undefined
+    ) {
+      return invoke<void>('update_rule', { id, updates });
+    }
     const existing = (await invoke<CategoryRule[]>('get_rules')).find(r => r.id === id);
     if (!existing) throw new Error(`Rule ${id} not found`);
     const full = { ...existing, ...updates };

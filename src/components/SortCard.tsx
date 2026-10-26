@@ -261,6 +261,15 @@ export default function SortCard({
                   </TableCell>
                   <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
                     {t.description.slice(0, 60)}
+                    {t.isPending && (
+                      <Chip
+                        size="small"
+                        label="⏳ Pending"
+                        color="warning"
+                        variant="outlined"
+                        sx={{ ml: 0.75, height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                      />
+                    )}
                   </TableCell>
                   <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, whiteSpace: 'nowrap' }}>
                     {usdCents.format(t.amount)}

@@ -4,6 +4,7 @@ export interface DashboardFilters {
   enabledAccountIds?: number[];
   disabledCategories?: string[];
   spendOnly?: boolean;
+  transactionType?: 'all' | 'spend' | 'income' | 'transfer';
   recurrenceFilter?: string;
   searchQuery?: string;
   minPrice?: number;
@@ -49,3 +50,17 @@ export interface MerchantGroup {
   earliestDate: string;
   latestDate: string;
 }
+
+export interface RuleSuggestion {
+  pattern: string;
+  category: string;
+  overridesCount: number;
+  sampleDescription: string;
+}
+
+export interface RulePreviewResult {
+  totalMatches: number;
+  affectedCount: number;
+  sampleTransactions: import('../types').Transaction[];
+}
+

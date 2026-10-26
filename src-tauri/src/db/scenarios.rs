@@ -30,16 +30,29 @@ pub struct Scenario {
     #[serde(rename = "createdAt")]
     pub created_at: Option<String>,
     pub goals: Option<serde_json::Value>,
+    pub destinations: Option<serde_json::Value>,
+    #[serde(rename = "incomeStreams")]
+    pub income_streams: Option<serde_json::Value>,
+    #[serde(rename = "includeHomeEquity")]
+    pub include_home_equity: Option<bool>,
+    #[serde(rename = "homePropertyValue")]
+    pub home_property_value: Option<f64>,
+    #[serde(rename = "homeAppreciationRate")]
+    pub home_appreciation_rate: Option<f64>,
 }
 
 #[tauri::command]
 pub fn get_scenarios(state: State<DbState>) -> Result<Vec<Scenario>, String> {
     let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, name, starting_balance, base_income, tax_rate, recurring_budget, variable_budget, savings_budget, extra_loan_payment, loan_strategy, created_at, goals, investment_growth_rate, divert_extra_to_savings FROM scenarios ORDER BY id DESC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, name, starting_balance, base_income, tax_rate, recurring_budget, variable_budget, savings_budget, extra_loan_payment, loan_strategy, created_at, goals, investment_growth_rate, divert_extra_to_savings, destinations, income_streams, include_home_equity, home_property_value, home_appreciation_rate FROM scenarios ORDER BY id DESC").map_err(|e| e.to_string())?;
     
     let iter = stmt.query_map([], |row| {
         let goals_str: Option<String> = row.get(11)?;
         let goals = goals_str.and_then(|s| serde_json::from_str(&s).ok());
+        let destinations_str: Option<String> = row.get(14).unwrap_or(None);
+        let destinations = destinations_str.and_then(|s| serde_json::from_str(&s).ok());
+        let income_streams_str: Option<String> = row.get(15).unwrap_or(None);
+        let income_streams = income_streams_str.and_then(|s| serde_json::from_str(&s).ok());
         Ok(Scenario {
             id: row.get(0)?,
             name: row.get(1)?,
@@ -55,6 +68,11 @@ pub fn get_scenarios(state: State<DbState>) -> Result<Vec<Scenario>, String> {
             goals,
             investment_growth_rate: row.get(12).unwrap_or(Some(7.0)),
             divert_extra_to_savings: row.get(13).unwrap_or(Some(false)),
+            destinations,
+            income_streams,
+            include_home_equity: row.get(16).unwrap_or(Some(true)),
+            home_property_value: row.get(17).unwrap_or(None),
+            home_appreciation_rate: row.get(18).unwrap_or(None),
         })
     }).map_err(|e| e.to_string())?;
 
@@ -71,10 +89,12 @@ pub fn create_scenario(state: State<DbState>, scenario: Scenario) -> Result<i64,
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let created_at = chrono::Utc::now().to_rfc3339();
     let goals_str = scenario.goals.as_ref().map(|g| serde_json::to_string(g).unwrap_or_default());
+    let destinations_str = scenario.destinations.as_ref().map(|d| serde_json::to_string(d).unwrap_or_default());
+    let income_streams_str = scenario.income_streams.as_ref().map(|i| serde_json::to_string(i).unwrap_or_default());
     
     tx.execute(
-        "INSERT INTO scenarios (name, starting_balance, base_income, tax_rate, recurring_budget, variable_budget, savings_budget, extra_loan_payment, loan_strategy, created_at, goals, investment_growth_rate, divert_extra_to_savings)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        "INSERT INTO scenarios (name, starting_balance, base_income, tax_rate, recurring_budget, variable_budget, savings_budget, extra_loan_payment, loan_strategy, created_at, goals, investment_growth_rate, divert_extra_to_savings, destinations, income_streams, include_home_equity, home_property_value, home_appreciation_rate)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
         params![
             scenario.name,
             scenario.starting_balance,
@@ -89,6 +109,11 @@ pub fn create_scenario(state: State<DbState>, scenario: Scenario) -> Result<i64,
             goals_str,
             scenario.investment_growth_rate,
             scenario.divert_extra_to_savings,
+            destinations_str,
+            income_streams_str,
+            scenario.include_home_equity.unwrap_or(true),
+            scenario.home_property_value,
+            scenario.home_appreciation_rate,
         ],
     ).map_err(|e| e.to_string())?;
     let row_id = tx.last_insert_rowid();
@@ -105,9 +130,11 @@ pub fn update_scenario(state: State<DbState>, scenario: Scenario) -> Result<(), 
     let mut conn = state.conn.lock().unwrap();
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let goals_str = scenario.goals.as_ref().map(|g| serde_json::to_string(g).unwrap_or_default());
+    let destinations_str = scenario.destinations.as_ref().map(|d| serde_json::to_string(d).unwrap_or_default());
+    let income_streams_str = scenario.income_streams.as_ref().map(|i| serde_json::to_string(i).unwrap_or_default());
     
     tx.execute(
-        "UPDATE scenarios SET name=?1, starting_balance=?2, base_income=?3, tax_rate=?4, recurring_budget=?5, variable_budget=?6, savings_budget=?7, extra_loan_payment=?8, loan_strategy=?9, goals=?10, investment_growth_rate=?11, divert_extra_to_savings=?12 WHERE id=?13",
+        "UPDATE scenarios SET name=?1, starting_balance=?2, base_income=?3, tax_rate=?4, recurring_budget=?5, variable_budget=?6, savings_budget=?7, extra_loan_payment=?8, loan_strategy=?9, goals=?10, investment_growth_rate=?11, divert_extra_to_savings=?12, destinations=?13, income_streams=?14, include_home_equity=?15, home_property_value=?16, home_appreciation_rate=?17 WHERE id=?18",
         params![
             scenario.name,
             scenario.starting_balance,
@@ -121,6 +148,11 @@ pub fn update_scenario(state: State<DbState>, scenario: Scenario) -> Result<(), 
             goals_str,
             scenario.investment_growth_rate,
             scenario.divert_extra_to_savings,
+            destinations_str,
+            income_streams_str,
+            scenario.include_home_equity.unwrap_or(true),
+            scenario.home_property_value,
+            scenario.home_appreciation_rate,
             scenario.id,
         ],
     ).map_err(|e| e.to_string())?;

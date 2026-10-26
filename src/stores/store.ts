@@ -21,6 +21,20 @@ export interface DrillState {
   customEnd?: string;
 }
 
+export type ProfileType = 'all' | 'personal' | 'business';
+
+export function isBusinessAccount(a: { name: string; type?: string }): boolean {
+  const n = (a.name || '').toLowerCase();
+  return (
+    n.includes('business') ||
+    n.includes('corp') ||
+    n.includes('llc') ||
+    n.includes('webtime')
+  );
+}
+
+export type TransactionType = 'all' | 'spend' | 'income';
+
 export interface FiltersState {
   preset: DateRangePreset;
   customStart?: string;
@@ -28,15 +42,18 @@ export interface FiltersState {
   enabledAccountIds: number[];
   disabledCategories: string[];
   spendOnly: boolean;
+  transactionType: TransactionType;
   groupBy: GroupBy;
   recurrenceFilter: RecurrenceFilter;
   drill: DrillState | null;
   searchQuery: string;
+  profile?: ProfileType;
   /** When true, every view hides real data and shows ONLY `source === 'demo'`
    *  records. Real data stays in IndexedDB — this is purely a presentation
    *  filter for screenshots / share-screen moments. */
   demoMode: boolean;
   showRunway: boolean;
+  forecastHorizon: number;
   earliestTransactionDate?: string;
   latestTransactionDate?: string;
   minPrice?: number;
@@ -53,12 +70,15 @@ const initialState: FiltersState = {
   seenAccountIds: [],
   disabledCategories: [],
   spendOnly: true,
+  transactionType: 'spend',
   groupBy: 'category',
   recurrenceFilter: 'all',
   drill: null,
   searchQuery: '',
+  profile: 'all',
   demoMode: false,
   showRunway: false,
+  forecastHorizon: 0,
   earliestTransactionDate: undefined,
   latestTransactionDate: undefined,
   minPrice: undefined,
@@ -73,9 +93,14 @@ export interface FiltersActions {
   setEnabledAccounts: (ids: number[]) => void;
   setSeenAccounts: (ids: number[]) => void;
   toggleAccount: (id: number) => void;
+  setProfile: (
+    p: ProfileType,
+    allAccounts?: { id?: number; name: string; type?: string }[]
+  ) => void;
   setDisabledCategories: (cats: string[]) => void;
   toggleCategory: (cat: string) => void;
   setSpendOnly: (v: boolean) => void;
+  setTransactionType: (t: TransactionType) => void;
   setGroupBy: (g: GroupBy) => void;
   setRecurrenceFilter: (r: RecurrenceFilter) => void;
   drillToMonth: (monthKey: string) => void;
@@ -84,6 +109,7 @@ export interface FiltersActions {
   setSearchQuery: (q: string) => void;
   setDemoMode: (v: boolean) => void;
   setShowRunway: (v: boolean) => void;
+  setForecastHorizon: (months: number) => void;
   setTransactionDataBounds: (earliest?: string, latest?: string) => void;
   setMinPrice: (price?: number) => void;
   setMaxPrice: (price?: number) => void;
@@ -97,9 +123,17 @@ export const useFilters = create<FiltersStore>()(
   persist(
     (set, _get) => ({
       ...initialState,
-      setPreset: (p) => set({ preset: p }),
+      setPreset: (p) =>
+        set((s) => ({
+          preset: p,
+          customEnd: p === 'custom' && !s.customEnd ? formatLocalDate(new Date()) : s.customEnd,
+        })),
       setCustomRange: (customStart, customEnd) =>
-        set({ customStart, customEnd, preset: 'custom' }),
+        set({
+          customStart,
+          customEnd: customEnd !== undefined && customEnd !== '' ? customEnd : formatLocalDate(new Date()),
+          preset: 'custom',
+        }),
       setEnabledAccounts: (ids) => set({ enabledAccountIds: ids }),
       setSeenAccounts: (ids) => set({ seenAccountIds: ids }),
       toggleAccount: (id) =>
@@ -108,6 +142,29 @@ export const useFilters = create<FiltersStore>()(
             ? s.enabledAccountIds.filter((x) => x !== id)
             : [...s.enabledAccountIds, id],
         })),
+      setProfile: (profile, allAccounts) =>
+        set(() => {
+          if (!allAccounts || allAccounts.length === 0) {
+            return { profile };
+          }
+          let enabledAccountIds: number[];
+          if (profile === 'business') {
+            enabledAccountIds = allAccounts
+              .filter((a) => isBusinessAccount(a))
+              .map((a) => a.id!)
+              .filter((id): id is number => typeof id === 'number');
+          } else if (profile === 'personal') {
+            enabledAccountIds = allAccounts
+              .filter((a) => !isBusinessAccount(a))
+              .map((a) => a.id!)
+              .filter((id): id is number => typeof id === 'number');
+          } else {
+            enabledAccountIds = allAccounts
+              .map((a) => a.id!)
+              .filter((id): id is number => typeof id === 'number');
+          }
+          return { profile, enabledAccountIds };
+        }),
       setDisabledCategories: (cats) => set({ disabledCategories: cats }),
       toggleCategory: (cat) =>
         set((s) => ({
@@ -115,14 +172,15 @@ export const useFilters = create<FiltersStore>()(
             ? s.disabledCategories.filter((x) => x !== cat)
             : [...s.disabledCategories, cat],
         })),
-      setSpendOnly: (v) => set({ spendOnly: v }),
+      setSpendOnly: (v) => set({ spendOnly: v, transactionType: v ? 'spend' : 'all' }),
+      setTransactionType: (t) => set({ transactionType: t, spendOnly: t === 'spend' }),
       setGroupBy: (g) => set({ groupBy: g }),
       setRecurrenceFilter: (r) => set({ recurrenceFilter: r }),
       drillToMonth: (monthKey) =>
         set((s) => {
           const [y, m] = monthKey.split('-').map(Number);
-          const start = new Date(y, m - 1, 1).toISOString().slice(0, 10);
-          const end = new Date(y, m, 0).toISOString().slice(0, 10);
+          const start = formatLocalDate(new Date(y, m - 1, 1));
+          const end = formatLocalDate(new Date(y, m, 0));
           // If already drilled, keep the original drill anchor; otherwise capture it.
           const drill: DrillState = s.drill ?? {
             preset: s.preset,
@@ -156,14 +214,15 @@ export const useFilters = create<FiltersStore>()(
           const newEnd = new Date(range.end.getTime() + direction * lenMs);
           return {
             preset: 'custom',
-            customStart: newStart.toISOString().slice(0, 10),
-            customEnd: newEnd.toISOString().slice(0, 10),
+            customStart: formatLocalDate(newStart),
+            customEnd: formatLocalDate(newEnd),
             drill: null,
           };
         }),
       setSearchQuery: (q) => set({ searchQuery: q }),
       setDemoMode: (v) => set({ demoMode: v }),
       setShowRunway: (v) => set({ showRunway: v }),
+      setForecastHorizon: (months) => set({ forecastHorizon: months }),
       setTransactionDataBounds: (earliest, latest) =>
         set({ earliestTransactionDate: earliest, latestTransactionDate: latest }),
       setMinPrice: (price) => set({ minPrice: price }),
@@ -172,6 +231,7 @@ export const useFilters = create<FiltersStore>()(
       reset: () =>
         set((s) => ({
           ...initialState,
+          demoMode: s.demoMode,
           version: s.version,
           earliestTransactionDate: s.earliestTransactionDate,
           latestTransactionDate: s.latestTransactionDate,
@@ -265,5 +325,13 @@ function parseLocalDate(iso: string): Date {
 function endOfLocalDay(d: Date): Date {
   if (!(d instanceof Date) || isNaN(d.getTime())) return new Date(NaN);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+
+export function formatLocalDate(d: Date): string {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 

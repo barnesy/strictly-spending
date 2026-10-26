@@ -1,9 +1,15 @@
-name: 'Release Tauri App'
+name: 'Release Tauri App (Desktop + Android)'
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag name (e.g. v0.2.0)'
+        required: true
+        default: 'v0.2.0'
 
 jobs:
   publish-tauri:
@@ -13,12 +19,66 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # This builds for arm64 (Apple Silicon) on modern GitHub runners
-            args: ''
+          - platform: 'macos-latest' # Apple Silicon (arm64)
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest' # Intel Mac (x86_64)
+            args: '--target x86_64-apple-darwin'
           - platform: 'windows-latest'
-            args: '--bundles nsis'
+            args: '--bundles nsis,msi'
+          - platform: 'ubuntu-22.04'
+            args: '--bundles deb,appimage'
 
     runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: install frontend dependencies
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: 'Strictly Spending v__VERSION__'
+          releaseBody: |
+            ### Strictly Spending v__VERSION__
+            Download the installer for your platform below:
+            - **Windows**: `.exe` (NSIS installer) or `.msi`
+            - **macOS**: `.dmg` (Apple Silicon `aarch64` or Intel `x64`)
+            - **Linux**: `.AppImage` or `.deb`
+            - **Android**: `.apk` (arm64 for Pixel, Samsung, and foldables)
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  publish-android:
+    needs: publish-tauri
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -26,20 +86,44 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: 'npm'
 
-      - name: install Rust stable
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: setup Android SDK & NDK
+        uses: android-actions/setup-android@v3
+
+      - name: install NDK & build-tools
+        run: |
+          sdkmanager --install "ndk;27.0.12077973" "platforms;android-35" "build-tools;35.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+
+      - name: install Rust stable (Android arm64)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
 
       - name: install frontend dependencies
-        run: npm install
+        run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: initialize Android project if needed and build APK
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            npx tauri android init
+          fi
+          npx tauri android build --apk --target aarch64
+
+      - name: Upload Android APK to GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }} # the action automatically replaces \_\_VERSION\_\_ with the app version
-          releaseName: 'Strictly Spending v__VERSION__'
-          releaseBody: 'See the assets below to download and install this version.'
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          if [ -n "$APK_PATH" ]; then
+            cp "$APK_PATH" "Strictly-Spending-Android-arm64.apk"
+            gh release upload "$TAG" "Strictly-Spending-Android-arm64.apk" --clobber
+          fi

@@ -1,20 +1,263 @@
-import { useSettings } from './hooks/queries';
-import { useEffect, useMemo } from 'react';
+import { useSettings, useAccounts } from './hooks/queries';
+import { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { queryClient } from './queryClient';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider, CssBaseline, Snackbar, Alert, Button, Box, Typography } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { getAppTheme } from './theme';
+import {
+  useFilters,
+  resolveDateRange,
+  type DateRangePreset,
+  type GroupBy,
+  type RecurrenceFilter,
+  type TransactionType,
+  type ProfileType,
+  type DrillState,
+} from './stores/store';
+import { useForecastStore } from './stores/forecastStore';
+import { useSimpleFinStore } from './stores/simplefinStore';
+import { simplefinGetConfig, simplefinGetAccounts } from './api/simplefin';
+import { monthsBetween } from './lib';
 
-import { useChatStore } from './stores/chatStore';
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
-import Landing from './pages/Landing';
 import { LANDING_ONLY_BUILD } from './env';
 import { Layout } from './components/Layout';
 import { AppRoutes } from './AppRoutes';
 
+const Landing = lazy(() => import('./pages/Landing'));
+
+interface McpUiCommand {
+  id?: number;
+  page?: string | null;
+  resetFilters?: boolean;
+  preset?: DateRangePreset | null;
+  month?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  onlyCategories?: string[] | null;
+  excludeCategories?: string[] | null;
+  disabledCategories?: string[] | null;
+  searchQuery?: string | null;
+  transactionType?: TransactionType | null;
+  recurrenceFilter?: RecurrenceFilter | null;
+  groupBy?: GroupBy | null;
+  profile?: ProfileType | null;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  forecastMonths?: number | null;
+  forecastExtraLoanPayment?: number | null;
+  forecastLoanStrategy?: 'avalanche' | 'snowball' | 'custom' | null;
+  forecastSavingsBudget?: number | null;
+  message?: string | null;
+}
+
+interface UiUndoSnapshot {
+  pathname: string;
+  preset: DateRangePreset;
+  customStart?: string;
+  customEnd?: string;
+  disabledCategories: string[];
+  searchQuery: string;
+  transactionType: TransactionType;
+  spendOnly: boolean;
+  recurrenceFilter: RecurrenceFilter;
+  groupBy: GroupBy;
+  profile?: ProfileType;
+  enabledAccountIds: number[];
+  minPrice?: number;
+  maxPrice?: number;
+  drill: DrillState | null;
+}
+
 export default function App() {
   const { data: settings = [] } = useSettings();
+  const { data: accounts = [] } = useAccounts();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const locationRef = useRef(location.pathname);
+  useEffect(() => {
+    locationRef.current = location.pathname;
+  }, [location.pathname]);
+
+  const accountsRef = useRef(accounts);
+  useEffect(() => {
+    accountsRef.current = accounts;
+  }, [accounts]);
+
+  const lastProcessedCmdIdRef = useRef<number | null>(null);
+  const initializedSettingsCmdRef = useRef(false);
+  const autoSyncAttemptedRef = useRef(false);
+  const undoSnapshotRef = useRef<UiUndoSnapshot | null>(null);
+  const [aiToastMessage, setAiToastMessage] = useState<string | null>(null);
+  const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+  const [inBrowserDemo, setInBrowserDemo] = useState(false);
+
+  const applyMcpUiCommand = useCallback(
+    (cmd: McpUiCommand) => {
+      if (!cmd || typeof cmd !== 'object') return;
+      if (typeof cmd.id === 'number') {
+        if (lastProcessedCmdIdRef.current === cmd.id) return;
+        lastProcessedCmdIdRef.current = cmd.id;
+      }
+
+      const currentFilters = useFilters.getState();
+      undoSnapshotRef.current = {
+        pathname: locationRef.current,
+        preset: currentFilters.preset,
+        customStart: currentFilters.customStart,
+        customEnd: currentFilters.customEnd,
+        disabledCategories: [...currentFilters.disabledCategories],
+        searchQuery: currentFilters.searchQuery,
+        transactionType: currentFilters.transactionType,
+        spendOnly: currentFilters.spendOnly,
+        recurrenceFilter: currentFilters.recurrenceFilter,
+        groupBy: currentFilters.groupBy,
+        profile: currentFilters.profile,
+        enabledAccountIds: [...currentFilters.enabledAccountIds],
+        minPrice: currentFilters.minPrice,
+        maxPrice: currentFilters.maxPrice,
+        drill: currentFilters.drill ? { ...currentFilters.drill } : null,
+      };
+
+      if (cmd.resetFilters) {
+        currentFilters.reset();
+      }
+
+      if (cmd.month && /^\d{4}-\d{2}$/.test(cmd.month)) {
+        useFilters.getState().drillToMonth(cmd.month);
+      } else if (cmd.startDate || cmd.endDate) {
+        useFilters.getState().setCustomRange(
+          cmd.startDate || undefined,
+          cmd.endDate || undefined
+        );
+      } else if (cmd.preset) {
+        useFilters.getState().setPreset(cmd.preset);
+      } else if (cmd.page === '/timeline') {
+        // Timeline view requires a single-month range; default to thisMonth if current range spans multiple months
+        const f = useFilters.getState();
+        const r = resolveDateRange(f);
+        if (monthsBetween(r.start, r.end).length !== 1) {
+          f.setPreset('thisMonth');
+        }
+      }
+
+      if (Array.isArray(cmd.disabledCategories)) {
+        useFilters.getState().setDisabledCategories(cmd.disabledCategories);
+      }
+      if (typeof cmd.searchQuery === 'string') {
+        useFilters.getState().setSearchQuery(cmd.searchQuery);
+      }
+      if (cmd.transactionType) {
+        useFilters.getState().setTransactionType(cmd.transactionType);
+      }
+      if (cmd.recurrenceFilter) {
+        useFilters.getState().setRecurrenceFilter(cmd.recurrenceFilter);
+      }
+      if (cmd.groupBy) {
+        useFilters.getState().setGroupBy(cmd.groupBy);
+      }
+      if (cmd.profile) {
+        useFilters.getState().setProfile(cmd.profile, accountsRef.current);
+      }
+      if (cmd.minAmount !== undefined && cmd.minAmount !== null) {
+        useFilters.getState().setMinPrice(cmd.minAmount);
+      } else if (cmd.resetFilters) {
+        useFilters.getState().setMinPrice(undefined);
+      }
+      if (cmd.maxAmount !== undefined && cmd.maxAmount !== null) {
+        useFilters.getState().setMaxPrice(cmd.maxAmount);
+      } else if (cmd.resetFilters) {
+        useFilters.getState().setMaxPrice(undefined);
+      }
+
+      // Apply optional Forecast store adjustments
+      const forecast = useForecastStore.getState();
+      if (typeof cmd.forecastMonths === 'number' && cmd.forecastMonths > 0) {
+        forecast.setMonths(cmd.forecastMonths);
+      }
+      if (typeof cmd.forecastExtraLoanPayment === 'number' && cmd.forecastExtraLoanPayment >= 0) {
+        forecast.setExtraLoanPayment(cmd.forecastExtraLoanPayment);
+      }
+      if (cmd.forecastLoanStrategy) {
+        forecast.setLoanStrategy(cmd.forecastLoanStrategy);
+      }
+      if (typeof cmd.forecastSavingsBudget === 'number' && cmd.forecastSavingsBudget >= 0) {
+        forecast.setSavingsBudget(cmd.forecastSavingsBudget);
+      }
+
+      if (cmd.page) {
+        const target = cmd.page === '/dashboard' ? '/' : cmd.page;
+        navigate(target);
+      }
+
+      const defaultMsg = cmd.page
+        ? `AI opened ${cmd.page}`
+        : 'AI updated view filters';
+      setAiToastMessage(cmd.message || defaultMsg);
+    },
+    [navigate]
+  );
+
+  const handleUndoAiUiCommand = useCallback(() => {
+    const snap = undoSnapshotRef.current;
+    if (!snap) {
+      setAiToastMessage(null);
+      return;
+    }
+    useFilters.setState({
+      preset: snap.preset,
+      customStart: snap.customStart,
+      customEnd: snap.customEnd,
+      disabledCategories: snap.disabledCategories,
+      searchQuery: snap.searchQuery,
+      transactionType: snap.transactionType,
+      spendOnly: snap.spendOnly,
+      recurrenceFilter: snap.recurrenceFilter,
+      groupBy: snap.groupBy,
+      profile: snap.profile,
+      enabledAccountIds: snap.enabledAccountIds,
+      minPrice: snap.minPrice,
+      maxPrice: snap.maxPrice,
+      drill: snap.drill,
+    });
+    if (snap.pathname && snap.pathname !== locationRef.current) {
+      navigate(snap.pathname);
+    }
+    undoSnapshotRef.current = null;
+    setAiToastMessage(null);
+  }, [navigate]);
+
+  // Also observe settings for mcp_ui_command changes (ignores pre-existing command on initial mount)
+  useEffect(() => {
+    const rawSetting = settings.find((s) => s.key === 'mcp_ui_command')?.value;
+    if (!rawSetting) {
+      if (settings.length > 0) initializedSettingsCmdRef.current = true;
+      return;
+    }
+    let parsed: McpUiCommand | null = null;
+    if (typeof rawSetting === 'string') {
+      try {
+        parsed = JSON.parse(rawSetting) as McpUiCommand;
+      } catch {
+        parsed = null;
+      }
+    } else if (typeof rawSetting === 'object') {
+      parsed = rawSetting as McpUiCommand;
+    }
+    if (!parsed) return;
+
+    if (!initializedSettingsCmdRef.current) {
+      initializedSettingsCmdRef.current = true;
+      if (typeof parsed.id === 'number') {
+        lastProcessedCmdIdRef.current = parsed.id;
+      }
+      return;
+    }
+    applyMcpUiCommand(parsed);
+  }, [settings, applyMcpUiCommand]);
+
   const themeSetting = settings.find(s => s.key === 'themeConfig');
   const themeConfig = themeSetting?.value as { mode: 'light' | 'dark'; primaryColor: string; secondaryColor: string; backgroundColor?: string; paperColor?: string; textColor?: string; borderRadius?: number; fontFamily?: string; fontSize?: number } | undefined;
 
@@ -30,8 +273,74 @@ export default function App() {
     const handleDbUpdate = () => {
       queryClient.invalidateQueries();
     };
+    const handleWindowUiCmd = (e: Event) => {
+      const detail = (e as CustomEvent<McpUiCommand>).detail;
+      if (detail) applyMcpUiCommand(detail);
+    };
     window.addEventListener('db-update', handleDbUpdate);
-    return () => window.removeEventListener('db-update', handleDbUpdate);
+    window.addEventListener('mcp-ui-command', handleWindowUiCmd);
+
+    let unlistenTauriDb: (() => void) | undefined;
+    let unlistenTauriUi: (() => void) | undefined;
+    const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (isTauri) {
+      import('@tauri-apps/api/event')
+        .then(async ({ listen }) => {
+          unlistenTauriDb = await listen('db-update', handleDbUpdate);
+          unlistenTauriUi = await listen<McpUiCommand>('mcp-ui-command', (event) => {
+            if (event.payload) {
+              applyMcpUiCommand(event.payload);
+            }
+          });
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      window.removeEventListener('db-update', handleDbUpdate);
+      window.removeEventListener('mcp-ui-command', handleWindowUiCmd);
+      if (unlistenTauriDb) unlistenTauriDb();
+      if (unlistenTauriUi) unlistenTauriUi();
+    };
+  }, [applyMcpUiCommand]);
+
+  useEffect(() => {
+    if (LANDING_ONLY_BUILD || autoSyncAttemptedRef.current) return;
+    autoSyncAttemptedRef.current = true;
+
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+    const timer = setTimeout(async () => {
+      try {
+        const config = await simplefinGetConfig();
+        if (!config?.access_url || !config.access_url.trim()) return;
+
+        if (config.last_synced_at) {
+          const lastSyncMs = new Date(config.last_synced_at).getTime();
+          if (!Number.isNaN(lastSyncMs) && Date.now() - lastSyncMs < SIX_HOURS_MS) {
+            return;
+          }
+        }
+
+        const sfAccounts = await simplefinGetAccounts();
+        const hasMapped = sfAccounts.some((a) => a.strictly_account_id !== null && a.strictly_account_id !== undefined);
+        if (!hasMapped) return;
+
+        const resp = await useSimpleFinStore.getState().syncTransactions();
+        if (resp.accounts_synced > 0) {
+          await queryClient.invalidateQueries();
+          window.dispatchEvent(new Event('db-update'));
+        }
+        if (resp.added > 0) {
+          setSyncToastMessage(
+            `Synced ${resp.added} new bank transaction${resp.added === 1 ? '' : 's'} via SimpleFIN`
+          );
+        }
+      } catch {
+        // Silent background check: ignore network/bridge errors on startup
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const dynamicTheme = useMemo(() => {
@@ -61,12 +370,20 @@ export default function App() {
     fontSize,
   ]);
 
-  if (LANDING_ONLY_BUILD) {
+  if (LANDING_ONLY_BUILD && !inBrowserDemo) {
     return (
       <ThemeProvider theme={dynamicTheme}>
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <CssBaseline />
-          <Landing />
+          <Suspense fallback={null}>
+            <Landing
+              onLaunchDemo={() => {
+                useFilters.getState().setDemoMode(true);
+                setInBrowserDemo(true);
+                queryClient.invalidateQueries();
+              }}
+            />
+          </Suspense>
         </LocalizationProvider>
       </ThemeProvider>
     );
@@ -77,9 +394,81 @@ export default function App() {
       <LocalizationProvider dateAdapter={AdapterDateFns}>
         <CssBaseline />
         <DynamicAnimationStyles />
+        {LANDING_ONLY_BUILD && inBrowserDemo && (
+          <Box
+            sx={{
+              bgcolor: '#1E40AF',
+              color: '#FFFFFF',
+              px: 2,
+              py: 0.75,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1.5,
+              fontSize: '0.8rem',
+              zIndex: 1300,
+            }}
+          >
+            <Typography variant="caption" sx={{ fontWeight: 700, color: '#FFFFFF' }}>
+              Interactive Browser Demo — Exploring Sample Financial Data
+            </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setInBrowserDemo(false)}
+              sx={{
+                color: '#FFFFFF',
+                borderColor: 'rgba(255,255,255,0.45)',
+                py: 0.25,
+                px: 1.25,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                textTransform: 'none',
+                '&:hover': { borderColor: '#FFFFFF', bgcolor: 'rgba(255,255,255,0.1)' },
+              }}
+            >
+              ← Back to Download Page
+            </Button>
+          </Box>
+        )}
         <Layout>
           <AppRoutes />
         </Layout>
+        <Snackbar
+          open={Boolean(aiToastMessage)}
+          autoHideDuration={8000}
+          onClose={() => setAiToastMessage(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert
+            severity="info"
+            variant="filled"
+            onClose={() => setAiToastMessage(null)}
+            action={
+              <Button color="inherit" size="small" onClick={handleUndoAiUiCommand} sx={{ fontWeight: 700 }}>
+                Undo
+              </Button>
+            }
+            sx={{ alignItems: 'center', boxShadow: 4 }}
+          >
+            {aiToastMessage}
+          </Alert>
+        </Snackbar>
+        <Snackbar
+          open={Boolean(syncToastMessage)}
+          autoHideDuration={5000}
+          onClose={() => setSyncToastMessage(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert
+            severity="success"
+            variant="filled"
+            onClose={() => setSyncToastMessage(null)}
+            sx={{ alignItems: 'center', boxShadow: 4 }}
+          >
+            {syncToastMessage}
+          </Alert>
+        </Snackbar>
       </LocalizationProvider>
     </ThemeProvider>
   );

@@ -1,6 +1,8 @@
 import { api } from '../api';
 import { useState, useMemo } from 'react';
-import { useCategories, useMerchantOverrides, useTransactions } from '../hooks/queries';
+import { useCategories, useMerchantOverrides, useMerchantTransactions, useAccounts } from '../hooks/queries';
+import { queryClient } from '../queryClient';
+import { useFilters } from '../stores/store';
 import {
   Dialog,
   DialogTitle,
@@ -18,15 +20,18 @@ import {
   Chip,
   Divider,
   Table,
+  TableHead,
   TableBody,
   TableRow,
   TableCell,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 
 import type { RecurrenceKind } from '../types';
 import { usdCents } from '../lib';
-import { recategorizeAll } from '../domain/categorize';
+import { recategorizeAll, deriveRulePattern } from '../domain/categorize';
 import {
   detectRecurrence,
   isRecurring,
@@ -45,9 +50,32 @@ const AUTO = '__auto__';
 type RecurrenceChoice = RecurrenceKind | typeof AUTO;
 
 export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { data: categories = [] } = useCategories();
   const { data: overrides = [] } = useMerchantOverrides();
-  const { data: matchingTxns = [] } = useTransactions({ merchantKey });
+  const { data: accounts = [] } = useAccounts();
+  const demoMode = useFilters((s) => s.demoMode);
+  const { data: allMerchantTxns = [] } = useMerchantTransactions(merchantKey);
+
+  const accountMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const a of accounts) {
+      if (a.id != null) {
+        map.set(a.id, a.name);
+      }
+    }
+    return map;
+  }, [accounts]);
+  const matchingTxns = useMemo(
+    () =>
+      allMerchantTxns.filter(
+        (t) =>
+          t.merchantKey === merchantKey &&
+          (demoMode ? t.source === 'demo' : t.source !== 'demo')
+      ),
+    [allMerchantTxns, merchantKey, demoMode]
+  );
   const existingOverride = useMemo(
     () => overrides?.find((o) => o.merchantKey === merchantKey),
     [overrides, merchantKey]
@@ -61,7 +89,7 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#7e57c2');
   const [saveRule, setSaveRule] = useState(true);
-  const [rulePattern, setRulePattern] = useState(merchantKey);
+  const [rulePattern, setRulePattern] = useState(() => deriveRulePattern(merchantKey) || merchantKey);
   // null = user hasn't picked, fall back to the persisted override (or AUTO).
   const [recurrencePick, setRecurrencePick] =
     useState<RecurrenceChoice | null>(null);
@@ -134,16 +162,17 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
           }
         }
 
-        // Apply override to all matching transactions
         const finalCat = categoryName;
-        await (async () => {
-          const toUpdateTxns = matchingTxns.map(t => ({
+        const toUpdateTxns = matchingTxns
+          .filter((t) => t.merchantKey === merchantKey)
+          .map((t) => ({
             ...t,
             category: finalCat,
             userOverridden: true,
           }));
+        if (toUpdateTxns.length > 0) {
           await api.bulkUpdateTransactions(toUpdateTxns);
-        })();
+        }
       }
 
       // Persist recurrence override choice. "Auto" deletes any existing
@@ -169,19 +198,15 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
           priority: 1000,
           createdAt: new Date().toISOString(),
         } as any);
-        // Re-run categorization for any other non-overridden transactions the
-        // new rule might match.
+        // Re-run categorization (and recurrence refresh) for any other transactions the new rule matches.
         await recategorizeAll();
+      } else {
+        // Re-evaluate recurrence status database-wide since overrides or categories changed
+        await refreshRecurrenceAll();
       }
 
-      // Re-evaluate recurrence status database-wide since overrides changed
-      await refreshRecurrenceAll();
-
-      import('../queryClient').then(({ queryClient }) => {
-        queryClient.invalidateQueries({ queryKey: ['sortQueue'] });
-        queryClient.invalidateQueries({ queryKey: ['transactions'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
-      });
+      await queryClient.invalidateQueries();
+      window.dispatchEvent(new Event('db-update'));
 
       onClose();
     } catch (e: any) {
@@ -196,7 +221,7 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
   };
 
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle>Recategorize merchant</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
@@ -222,11 +247,17 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
                 <Chip
                   key={c}
                   size="small"
-                  label={`now: ${c}`}
-                  color="default"
+                  label={summary.currentCats.length > 1 ? `current: ${c}` : c}
+                  color={summary.currentCats.length > 1 ? 'warning' : 'default'}
+                  variant={summary.currentCats.length > 1 ? 'filled' : 'outlined'}
                 />
               ))}
             </Stack>
+            {summary.currentCats.length > 1 && (
+              <Alert severity="info" sx={{ mt: 1.5, py: 0.5 }}>
+                This merchant currently has charges under multiple categories ({summary.currentCats.join(', ')}). Recategorizing here will unify all transactions under your selected category.
+              </Alert>
+            )}
           </Box>
 
           <Box>
@@ -243,37 +274,71 @@ export default function BulkRecategorizeDialog({ merchantKey, onClose }: Props) 
               }}
             >
               <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ py: 0.5, width: 95, whiteSpace: 'nowrap', fontWeight: 600, fontSize: '0.75rem', bgcolor: 'background.paper' }}>
+                      Date
+                    </TableCell>
+                    <TableCell sx={{ py: 0.5, fontWeight: 600, fontSize: '0.75rem', bgcolor: 'background.paper' }}>
+                      Description
+                    </TableCell>
+                    <TableCell sx={{ py: 0.5, fontWeight: 600, fontSize: '0.75rem', bgcolor: 'background.paper' }}>
+                      Account
+                    </TableCell>
+                    <TableCell sx={{ py: 0.5, width: 100, whiteSpace: 'nowrap', fontWeight: 600, fontSize: '0.75rem', bgcolor: 'background.paper' }} align="right">
+                      Amount
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
                 <TableBody>
-                  {sortedTxns.map((t) => (
-                    <TableRow key={t.id} hover>
-                      <TableCell
-                        sx={{ borderBottom: 'none', py: 0.5, whiteSpace: 'nowrap' }}
-                      >
-                        <Typography variant="caption">{t.date}</Typography>
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          borderBottom: 'none',
-                          py: 0.5,
-                          maxWidth: 300,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                        title={t.description}
-                      >
-                        <Typography variant="caption">{t.description}</Typography>
-                      </TableCell>
-                      <TableCell
-                        sx={{ borderBottom: 'none', py: 0.5, whiteSpace: 'nowrap' }}
-                        align="right"
-                      >
-                        <Typography variant="caption">
-                          {usdCents.format(t.amount)}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {sortedTxns.map((t) => {
+                    const accName = accountMap.get(t.accountId) || '–';
+                    return (
+                      <TableRow key={t.id} hover>
+                        <TableCell
+                          sx={{ borderBottom: 'none', py: 0.5, whiteSpace: 'nowrap' }}
+                        >
+                          <Typography variant="caption">{t.date}</Typography>
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            borderBottom: 'none',
+                            py: 0.5,
+                            maxWidth: { xs: 140, sm: 200, md: 260 },
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={t.description}
+                        >
+                          <Typography variant="caption">{t.description}</Typography>
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            borderBottom: 'none',
+                            py: 0.5,
+                            maxWidth: { xs: 140, sm: 220, md: 280 },
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={accName}
+                        >
+                          <Typography variant="caption" color="text.secondary">
+                            {accName}
+                          </Typography>
+                        </TableCell>
+                        <TableCell
+                          sx={{ borderBottom: 'none', py: 0.5, whiteSpace: 'nowrap' }}
+                          align="right"
+                        >
+                          <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {usdCents.format(t.amount)}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Box>

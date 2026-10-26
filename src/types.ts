@@ -1,6 +1,6 @@
-export type Source = 'chase' | 'boa-credit' | 'boa-checking' | 'truist-checking' | 'demo' | 'custom';
+export type Source = 'chase' | 'boa-credit' | 'boa-checking' | 'truist-checking' | 'demo' | 'custom' | 'plaid' | 'simplefin';
 
-export type AccountType = 'checking' | 'credit' | 'savings';
+export type AccountType = 'checking' | 'credit' | 'savings' | 'investment' | 'loan' | 'mortgage';
 
 export type CategoryType = 'spend' | 'income' | 'transfer';
 
@@ -16,13 +16,17 @@ export interface Account {
 }
 
 export interface RecurrenceInfo {
-  kind: string;
+  kind: RecurrenceKind;
   count: number;
   meanIntervalDays: number;
   meanAmount: number;
   estMonthlyCost: number;
-  lastDate?: string;
-  source: string;
+  lastDate?: string | null;
+  source: 'auto' | 'override' | string;
+  lastAmount?: number;
+  priorAmount?: number;
+  priceHikeDelta?: number;
+  priceHikePct?: number;
 }
 
 export interface SortCard {
@@ -53,6 +57,7 @@ export interface Transaction {
   isBusiness?: boolean;
   taxCategory?: string;
   deductionStatus?: 'pending' | 'confirmed' | 'rejected';
+  isPending?: boolean;
 }
 
 export interface CategoryRule {
@@ -256,6 +261,7 @@ export interface ParsedTransaction {
   institution: string;
   last4?: string;
   balance?: number;
+  fileAccountName?: string;
 }
 
 export interface WorkspaceBlock {
@@ -365,6 +371,13 @@ export interface DbChatMessage {
   purpose?: 'tool_select' | 'explanation';
 }
 
+export interface CsvAccountTarget {
+  accountId?: number;
+  accountName: string;
+  institution: string;
+  accountType: AccountType;
+}
+
 export interface CsvMapping {
   id?: number;
   name: string;
@@ -379,6 +392,8 @@ export interface CsvMapping {
   accountName: string;
   accountType: AccountType;
   institution: string;
+  accountColumn?: string;
+  accountMappings?: Record<string, CsvAccountTarget>;
 }
 
 export interface ProposedCategorizationItem {

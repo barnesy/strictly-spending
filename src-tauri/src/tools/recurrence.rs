@@ -18,6 +18,14 @@ pub struct RecurrenceInfo {
     #[serde(rename = "lastDate")]
     pub last_date: Option<String>,
     pub source: String,
+    #[serde(rename = "lastAmount", skip_serializing_if = "Option::is_none")]
+    pub last_amount: Option<f64>,
+    #[serde(rename = "priorAmount", skip_serializing_if = "Option::is_none")]
+    pub prior_amount: Option<f64>,
+    #[serde(rename = "priceHikeDelta", skip_serializing_if = "Option::is_none")]
+    pub price_hike_delta: Option<f64>,
+    #[serde(rename = "priceHikePct", skip_serializing_if = "Option::is_none")]
+    pub price_hike_pct: Option<f64>,
 }
 
 impl Default for RecurrenceInfo {
@@ -30,6 +38,10 @@ impl Default for RecurrenceInfo {
             est_monthly_cost: 0.0,
             last_date: None,
             source: "auto".to_string(),
+            last_amount: None,
+            prior_amount: None,
+            price_hike_delta: None,
+            price_hike_pct: None,
         }
     }
 }
@@ -40,14 +52,43 @@ fn days_between(a: &str, b: &str) -> i64 {
     (date_b - date_a).num_days()
 }
 
+fn compute_price_hike(spend: &[&Transaction]) -> (Option<f64>, Option<f64>, Option<f64>, Option<f64>) {
+    if spend.is_empty() {
+        return (None, None, None, None);
+    }
+    let last_amt = spend.last().map(|t| t.amount.abs()).unwrap_or(0.0);
+    if spend.len() < 2 {
+        return (Some(last_amt), None, None, None);
+    }
+    let prior_start = spend.len().saturating_sub(4);
+    let prior_slice = &spend[prior_start..spend.len() - 1];
+    if prior_slice.is_empty() {
+        return (Some(last_amt), None, None, None);
+    }
+    let prior_avg = prior_slice.iter().map(|t| t.amount.abs()).sum::<f64>() / prior_slice.len() as f64;
+    let delta = last_amt - prior_avg;
+    if prior_avg > 1.0 && delta >= 1.0 && (delta / prior_avg) >= 0.03 && (delta / prior_avg) <= 1.5 {
+        let pct = (delta / prior_avg) * 100.0;
+        (Some(last_amt), Some(prior_avg), Some(delta), Some(pct))
+    } else {
+        (Some(last_amt), Some(prior_avg), None, None)
+    }
+}
+
 pub fn detect_recurrence(txns: &[&Transaction]) -> RecurrenceInfo {
     let mut spend: Vec<&Transaction> = txns.iter().filter(|t| t.amount < 0.0).copied().collect();
     spend.sort_by(|a, b| a.date.cmp(&b.date));
+
+    let (last_amount, prior_amount, price_hike_delta, price_hike_pct) = compute_price_hike(&spend);
 
     if spend.len() < 3 {
         return RecurrenceInfo {
             count: spend.len(),
             last_date: spend.last().map(|t| t.date.clone()),
+            last_amount,
+            prior_amount,
+            price_hike_delta,
+            price_hike_pct,
             ..Default::default()
         };
     }
@@ -93,6 +134,10 @@ pub fn detect_recurrence(txns: &[&Transaction]) -> RecurrenceInfo {
         est_monthly_cost,
         last_date: Some(spend.last().unwrap().date.clone()),
         source: "auto".to_string(),
+        last_amount,
+        prior_amount,
+        price_hike_delta,
+        price_hike_pct,
     }
 }
 
@@ -135,22 +180,31 @@ pub fn build_recurrence_map_internal(txns: &[Transaction], overrides: &[Merchant
 
     let mut result = HashMap::new();
     for (merchant_key, m_txns) in by_merchant {
-        let recurring_txns: Vec<&Transaction> = m_txns.iter().filter(|t| t.recurrence == "recurring").copied().collect();
+        let mut recurring_txns: Vec<&Transaction> = m_txns.iter().filter(|t| t.recurrence == "recurring").copied().collect();
         if recurring_txns.is_empty() { continue; }
+        recurring_txns.sort_by(|a, b| a.date.cmp(&b.date));
 
-        let spend_txns: Vec<&Transaction> = m_txns.iter().filter(|t| t.amount < 0.0).copied().collect();
+        let mut spend_txns: Vec<&Transaction> = m_txns.iter().filter(|t| t.amount < 0.0).copied().collect();
+        spend_txns.sort_by(|a, b| a.date.cmp(&b.date));
         let auto = detect_recurrence(&spend_txns);
         let mut final_info = apply_override(auto, override_map.get(&merchant_key).copied());
 
         if final_info.kind == "none" {
+            if spend_txns.is_empty() {
+                continue;
+            }
             final_info.kind = "monthly".to_string();
-            let mean_amount = recurring_txns.iter().map(|t| t.amount.abs()).sum::<f64>() / recurring_txns.len() as f64;
+            let recent_spend = if spend_txns.len() >= 3 { &spend_txns[spend_txns.len()-3..] } else { &spend_txns[..] };
+            let mean_amount = recent_spend.iter().map(|t| t.amount.abs()).sum::<f64>() / recent_spend.len() as f64;
             final_info.mean_amount = mean_amount;
             final_info.est_monthly_cost = mean_amount;
         }
 
         final_info.count = recurring_txns.len();
-        final_info.last_date = recurring_txns.last().map(|t| t.date.clone());
+        final_info.last_date = spend_txns
+            .last()
+            .or_else(|| recurring_txns.last())
+            .map(|t| t.date.clone());
 
         result.insert(merchant_key, final_info);
     }
@@ -159,15 +213,19 @@ pub fn build_recurrence_map_internal(txns: &[Transaction], overrides: &[Merchant
 }
 
 #[tauri::command]
-pub fn build_recurrence_map(state: State<DbState>, is_demo: bool) -> Result<HashMap<String, RecurrenceInfo>, String> {
-    if !is_demo {
-        let cache = state.recurrence_cache.lock().unwrap();
+pub fn build_recurrence_map(
+    state: State<DbState>,
+    is_demo: bool,
+    account_id: Option<i64>,
+) -> Result<HashMap<String, RecurrenceInfo>, String> {
+    if !is_demo && account_id.is_none() {
+        let cache = state.recurrence_cache.lock().map_err(|e| e.to_string())?;
         if let Some(cached_map) = cache.as_ref() {
             return Ok(cached_map.clone());
         }
     }
 
-    let txns = crate::db::get_transactions(state.clone(), "1970-01-01".into(), "2099-12-31".into(), None, None, None, None).map_err(|e| e.to_string())?;
+    let txns = crate::db::get_transactions(state.clone(), "1970-01-01".into(), "2099-12-31".into(), None, None, account_id, None).map_err(|e| e.to_string())?;
     let overrides = crate::db::get_merchant_overrides(state.clone()).map_err(|e| e.to_string())?;
 
     let filtered_txns: Vec<Transaction> = txns.into_iter()
@@ -176,8 +234,8 @@ pub fn build_recurrence_map(state: State<DbState>, is_demo: bool) -> Result<Hash
 
     let map = build_recurrence_map_internal(&filtered_txns, &overrides);
 
-    if !is_demo {
-        let mut cache = state.recurrence_cache.lock().unwrap();
+    if !is_demo && account_id.is_none() {
+        let mut cache = state.recurrence_cache.lock().map_err(|e| e.to_string())?;
         *cache = Some(map.clone());
     }
 
@@ -234,18 +292,29 @@ pub fn refresh_recurrence_all(state: State<DbState>) -> Result<RefreshResult, St
     let category_map: HashMap<String, &Category> = categories.iter().map(|c| (c.name.clone(), c)).collect();
     let merchant_override_map: HashMap<String, &MerchantOverride> = overrides.iter().map(|o| (o.merchant_key.clone(), o)).collect();
 
-    let mut by_merchant: HashMap<String, Vec<&Transaction>> = HashMap::new();
+    let mut by_merchant_real: HashMap<String, Vec<&Transaction>> = HashMap::new();
+    let mut by_merchant_demo: HashMap<String, Vec<&Transaction>> = HashMap::new();
     for t in &txns {
         if !t.merchant_key.is_empty() {
-            by_merchant.entry(t.merchant_key.clone()).or_default().push(t);
+            if t.source == "demo" {
+                by_merchant_demo.entry(t.merchant_key.clone()).or_default().push(t);
+            } else {
+                by_merchant_real.entry(t.merchant_key.clone()).or_default().push(t);
+            }
         }
     }
 
-    let mut auto_recurring_merchant_keys = HashSet::new();
-    for (mkey, m_txns) in by_merchant {
-        let auto = detect_recurrence(&m_txns);
-        if auto.kind != "none" {
-            auto_recurring_merchant_keys.insert(mkey);
+    let mut auto_recurring_real = HashSet::new();
+    for (mkey, m_txns) in by_merchant_real {
+        if detect_recurrence(&m_txns).kind != "none" {
+            auto_recurring_real.insert(mkey);
+        }
+    }
+
+    let mut auto_recurring_demo = HashSet::new();
+    for (mkey, m_txns) in by_merchant_demo {
+        if detect_recurrence(&m_txns).kind != "none" {
+            auto_recurring_demo.insert(mkey);
         }
     }
 
@@ -253,11 +322,12 @@ pub fn refresh_recurrence_all(state: State<DbState>) -> Result<RefreshResult, St
     let mut txs_to_update = Vec::new();
 
     for t in &mut txns {
+        let auto_keys = if t.source == "demo" { &auto_recurring_demo } else { &auto_recurring_real };
         let resolved = resolve_recurrence_for_transaction(
             t,
             &category_map,
             &merchant_override_map,
-            &auto_recurring_merchant_keys,
+            auto_keys,
         );
         if t.recurrence != resolved {
             t.recurrence = resolved;
@@ -272,3 +342,4 @@ pub fn refresh_recurrence_all(state: State<DbState>) -> Result<RefreshResult, St
 
     Ok(RefreshResult { updated })
 }
+

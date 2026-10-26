@@ -58,7 +58,7 @@ export function getAppTheme(config: ThemeConfig) {
     paperColor,
     textColor,
     borderRadius = CONTROL_BORDER_RADIUS,
-    fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
+    fontFamily = '"Atkinson Hyperlegible", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
     fontSize = 14,
   } = config;
 
@@ -151,6 +151,12 @@ export function getAppTheme(config: ThemeConfig) {
             transition: flex-grow var(--transition-duration) var(--transition-easing),
                         flex-basis var(--transition-duration) var(--transition-easing),
                         width var(--transition-duration) var(--transition-easing) !important;
+            will-change: flex-grow, flex-basis, width;
+          }
+          .transitioning-panels [data-panel-resize-handle] {
+            transition: width var(--transition-duration) var(--transition-easing),
+                        opacity var(--transition-duration) var(--transition-easing) !important;
+            will-change: width, opacity;
           }
         `,
       },
@@ -200,6 +206,14 @@ export function getAppTheme(config: ThemeConfig) {
           root: {
             height: CONTROL_HEIGHT,
             textTransform: 'none',
+            borderRadius,
+          },
+          sizeSmall: {
+            height: 28,
+            fontSize: '0.75rem',
+            paddingLeft: 10,
+            paddingRight: 10,
+            borderRadius,
           },
         },
       },
@@ -210,15 +224,49 @@ export function getAppTheme(config: ThemeConfig) {
           },
         },
       },
+      MuiToggleButtonGroup: {
+        styleOverrides: {
+          root: {
+            borderRadius,
+          },
+          grouped: {
+            borderRadius,
+            '&:not(:first-of-type)': {
+              borderTopLeftRadius: 0,
+              borderBottomLeftRadius: 0,
+            },
+            '&:not(:last-of-type)': {
+              borderTopRightRadius: 0,
+              borderBottomRightRadius: 0,
+            },
+          },
+        },
+      },
       MuiToggleButton: {
         styleOverrides: {
           root: {
             textTransform: 'none',
-            paddingLeft: 14,
-            paddingRight: 14,
+            paddingLeft: 12,
+            paddingRight: 12,
             fontWeight: 500,
             height: CONTROL_HEIGHT,
+            borderRadius,
+            '&.Mui-selected': {
+              fontWeight: 600,
+            },
           },
+          sizeSmall: {
+            height: 30,
+            fontSize: '0.75rem',
+            paddingLeft: 10,
+            paddingRight: 10,
+          },
+        },
+      },
+      MuiTooltip: {
+        defaultProps: {
+          enterTouchDelay: 700,
+          leaveTouchDelay: 1500,
         },
       },
       MuiTextField: {
@@ -267,14 +315,20 @@ export function getAppTheme(config: ThemeConfig) {
       MuiTableCell: {
         styleOverrides: {
           root: {
-            paddingTop: '16px !important',
-            paddingBottom: '16px !important',
-            paddingLeft: '24px !important',
-            paddingRight: '24px !important',
+            paddingTop: 12,
+            paddingBottom: 12,
+            paddingLeft: 16,
+            paddingRight: 16,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             maxWidth: 250,
+          },
+          sizeSmall: {
+            paddingTop: 8,
+            paddingBottom: 8,
+            paddingLeft: 10,
+            paddingRight: 10,
           },
           head: {
             position: 'sticky',
@@ -306,3 +360,5 @@ export function getAppTheme(config: ThemeConfig) {
     },
   });
 }
+
+export { subtleScrollSx } from './styles';

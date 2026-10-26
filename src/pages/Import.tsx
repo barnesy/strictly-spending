@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { api } from '../api';
 import { Link as RouterLink } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
@@ -32,8 +32,17 @@ import Papa from 'papaparse';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import RestoreIcon from '@mui/icons-material/Restore';
-import { buildPreview, commitPreview, type ImportPreview } from '../domain/import';
+import {
+  buildPreview,
+  commitPreview,
+  updatePreviewAccount,
+  updatePreviewAccountMapping,
+  findBestMatchingAccount,
+  type ImportPreview,
+} from '../domain/import';
 import { usdCents } from '../lib';
+import { useAccounts } from '../hooks/queries';
+import { queryClient } from '../queryClient';
 
 import { sha256 } from '../hash';
 import {
@@ -45,7 +54,9 @@ import {
   BackupValidationError,
 } from '../backup';
 import { SEED_VERSION } from '../seed';
-import type { CsvMapping } from '../types';
+import type { Account, CsvMapping, CsvAccountTarget, ParsedTransaction } from '../types';
+import { SimpleFinBankSyncCard } from '../components/SimpleFinBankSyncCard';
+import { UNIFORM_TOOLBAR_BUTTON_SX } from '../components/AccountFilterDropdown';
 
 const SOURCE_LABELS: Record<string, string> = {
   chase: 'Chase',
@@ -55,6 +66,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 export default function Import() {
+  const { data: accounts = [] } = useAccounts();
   const [previews, setPreviews] = useState<ImportPreview[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [committedSummary, setCommittedSummary] = useState<string | null>(null);
@@ -72,7 +84,7 @@ export default function Import() {
   const onExport = async () => {
     setExportSummary(null);
     const { json, suggestedFilename, counts } = await exportToJson(SEED_VERSION);
-    triggerDownload(suggestedFilename, json);
+    await triggerDownload(suggestedFilename, json);
     const total =
       counts.accounts +
       counts.transactions +
@@ -82,7 +94,7 @@ export default function Import() {
       counts.budgets +
       counts.imports;
     setExportSummary(
-      `Downloaded ${suggestedFilename} (${counts.transactions} transactions, ${counts.rules} rules, ${total} rows total).`
+      `Saved ${suggestedFilename} (${counts.transactions} transactions, ${counts.rules} rules, ${total} rows total).`
     );
   };
 
@@ -176,8 +188,8 @@ export default function Import() {
       }).then(u => {
         if (active) {
           unlistenDrop = u;
-        } else {
-          u();
+        } else if (typeof u === 'function') {
+          try { u(); } catch {}
         }
       }).catch(console.error);
 
@@ -188,16 +200,20 @@ export default function Import() {
       }).then(u => {
         if (active) {
           unlistenDragDrop = u;
-        } else {
-          u();
+        } else if (typeof u === 'function') {
+          try { u(); } catch {}
         }
       }).catch(console.error);
     }
     
     return () => {
       active = false;
-      if (unlistenDrop) unlistenDrop();
-      if (unlistenDragDrop) unlistenDragDrop();
+      if (unlistenDrop) {
+        try { unlistenDrop(); } catch {}
+      }
+      if (unlistenDragDrop) {
+        try { unlistenDragDrop(); } catch {}
+      }
     };
   }, [handleTauriFiles]);
 
@@ -210,7 +226,7 @@ export default function Import() {
     [handleFiles]
   );
 
-  const onCommit = async () => {
+  const onCommit = async (forceDuplicates = false) => {
     setIsProcessing(true);
     try {
       let imported = 0;
@@ -218,21 +234,24 @@ export default function Import() {
       let newUncategorized = 0;
       for (const p of previews) {
         if (p.error) continue;
-        const res = await commitPreview(p);
+        const res = await commitPreview(p, forceDuplicates);
         imported += res.imported;
         dups += res.skippedDuplicates;
         // Count how many freshly-imported (non-duplicate) rows landed in
         // Uncategorized — drives the "Sort them now →" prompt below.
         newUncategorized += p.rows.filter(
-          (r) => !r.duplicate && r.category === 'Uncategorized'
+          (r) => (forceDuplicates || !r.duplicate) && r.category === 'Uncategorized'
         ).length;
       }
       setCommittedSummary(
-        `Imported ${imported} new transaction${imported === 1 ? '' : 's'}, skipped ${dups} duplicate${dups === 1 ? '' : 's'}.`
+        forceDuplicates
+          ? `Force imported ${imported} transaction${imported === 1 ? '' : 's'}.`
+          : `Imported ${imported} new transaction${imported === 1 ? '' : 's'}, skipped ${dups} duplicate${dups === 1 ? '' : 's'}.`
       );
       setNewUncategorizedCount(newUncategorized);
       setPreviews([]);
       window.dispatchEvent(new Event('db-update'));
+      await queryClient.invalidateQueries();
     } catch (e: any) {
       console.error("Failed to commit import previews:", e);
       window.alert("Import Failed: " + (e.message || String(e)));
@@ -262,6 +281,45 @@ export default function Import() {
     });
   };
 
+  const handleUpdateAccount = async (
+    previewIdx: number,
+    target: { id?: number; name: string; institution?: string; type?: string }
+  ) => {
+    setIsProcessing(true);
+    try {
+      const updated = await updatePreviewAccount(previews[previewIdx], target);
+      setPreviews((prev) => {
+        const copy = [...prev];
+        copy[previewIdx] = updated;
+        return copy;
+      });
+    } catch (err) {
+      console.error('Failed to update preview account:', err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleUpdateAccountMapping = async (
+    previewIdx: number,
+    fileAccountName: string,
+    target: { id?: number; name: string; institution?: string; type?: string }
+  ) => {
+    setIsProcessing(true);
+    try {
+      const updated = await updatePreviewAccountMapping(previews[previewIdx], fileAccountName, target);
+      setPreviews((prev) => {
+        const copy = [...prev];
+        copy[previewIdx] = updated;
+        return copy;
+      });
+    } catch (err) {
+      console.error('Failed to update preview account mapping:', err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleSaveMapping = async (
     index: number,
     mappingData: Omit<CsvMapping, 'headerHash' | 'headers'>,
@@ -281,6 +339,16 @@ export default function Import() {
       await api.putCsvMapping(fullMapping);
       
       const p = await buildPreview(previews[index].filename, rawText, contentHash);
+      if (mappingData.accountMappings) {
+        const targetMap: Record<string, number> = {};
+        for (const [k, v] of Object.entries(mappingData.accountMappings)) {
+          if (v.accountId) {
+            targetMap[v.accountName] = v.accountId;
+            targetMap[k] = v.accountId;
+          }
+        }
+        p.targetAccountMap = targetMap;
+      }
       setPreviews((prev) => {
         const copy = [...prev];
         copy[index] = p;
@@ -294,13 +362,15 @@ export default function Import() {
   };
 
   return (
-    <Stack spacing={3}>
-      <Typography variant="h5">Import</Typography>
+    <Stack spacing={{ xs: 2, sm: 3 }}>
+      <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700 }}>Import</Typography>
 
+      <SimpleFinBankSyncCard />
 
+      <Divider />
 
       {/* Backup & Restore */}
-      <Paper sx={{ p: 3 }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2}>
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
@@ -313,11 +383,12 @@ export default function Import() {
               from it if your browser data gets wiped or you switch machines.
             </Typography>
           </Box>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <Button
               variant="contained"
               startIcon={<DownloadIcon />}
               onClick={onExport}
+              sx={UNIFORM_TOOLBAR_BUTTON_SX}
             >
               Export backup
             </Button>
@@ -326,6 +397,7 @@ export default function Import() {
               startIcon={<RestoreIcon />}
               onClick={() => restoreInputRef.current?.click()}
               disabled={isRestoring}
+              sx={UNIFORM_TOOLBAR_BUTTON_SX}
             >
               Restore from backup…
             </Button>
@@ -351,10 +423,12 @@ export default function Import() {
             <Alert
               severity="warning"
               action={
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   <Button
                     size="small"
+                    variant="outlined"
                     onClick={() => setRestorePreview(null)}
+                    sx={UNIFORM_TOOLBAR_BUTTON_SX}
                   >
                     Cancel
                   </Button>
@@ -363,6 +437,7 @@ export default function Import() {
                     color="error"
                     variant="contained"
                     onClick={onConfirmRestore}
+                    sx={UNIFORM_TOOLBAR_BUTTON_SX}
                   >
                     Replace all current data
                   </Button>
@@ -395,7 +470,7 @@ export default function Import() {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         sx={{
-          p: 6,
+          p: { xs: 3, sm: 6 },
           border: '2px dashed',
           borderColor: dragOver ? 'primary.main' : 'divider',
           bgcolor: dragOver ? 'rgba(25,118,210,0.04)' : 'background.paper',
@@ -406,14 +481,16 @@ export default function Import() {
         component="label"
       >
         <input
+          id="csv-file-input"
+          data-testid="csv-file-input"
           type="file"
           accept=".csv,.CSV"
           multiple
           hidden
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />
-        <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-        <Typography variant="h6">Drop CSV files here or click to choose</Typography>
+        <CloudUploadIcon sx={{ fontSize: { xs: 36, sm: 48 }, color: 'text.secondary', mb: 1 }} />
+        <Typography variant="h6" sx={{ fontSize: { xs: '1.05rem', sm: '1.25rem' } }}>Drop CSV files here or click to choose</Typography>
         <Typography variant="body2" color="text.secondary">
           Supports Chase, Bank of America credit, and BOA checking exports
         </Typography>
@@ -430,7 +507,7 @@ export default function Import() {
               to="/sort"
               size="small"
               variant="contained"
-              sx={{ textTransform: 'none' }}
+              sx={UNIFORM_TOOLBAR_BUTTON_SX}
             >
               Sort now →
             </Button>
@@ -452,6 +529,7 @@ export default function Import() {
                 <ColumnMapperCard
                   key={i}
                   preview={p}
+                  accounts={accounts}
                   onSave={(mappingData) =>
                     handleSaveMapping(i, mappingData, p.headers || [], p.rawText || '', p.contentHash)
                   }
@@ -465,40 +543,113 @@ export default function Import() {
               <PreviewCard
                 key={i}
                 preview={p}
+                accounts={accounts}
                 onUpdateRow={(rIdx, cat) => handleUpdateRow(i, rIdx, cat)}
+                onUpdateAccount={(target) => handleUpdateAccount(i, target)}
+                onUpdateAccountMapping={(fileAcc, target) => handleUpdateAccountMapping(i, fileAcc, target)}
               />
             );
           })}
-          <Box>
+          {previews.every((p) => !p.error && p.newCount === 0 && p.duplicateCount > 0) && (
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                All transactions in this file are already in Strictly Spending
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Strictly Spending detected that all {previews.reduce((a, b) => a + b.duplicateCount, 0)} transactions already exist in your database (matching records with the same date, amount, account, and merchant). They were skipped to protect against duplicate entries.
+              </Typography>
+            </Alert>
+          )}
+
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+            {previews.some((p) => p.newCount > 0) ? (
+              <Button
+                variant="contained"
+                size="large"
+                onClick={() => onCommit(false)}
+                disabled={
+                  isProcessing ||
+                  previews.some((p) => p.requiresMapping) ||
+                  previews.every((p) => p.error || p.newCount === 0)
+                }
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
+              >
+                Import {previews.reduce((a, b) => a + b.newCount, 0)} new transactions
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                size="large"
+                component={RouterLink}
+                to="/transactions"
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
+              >
+                View in Transactions
+              </Button>
+            )}
             <Button
-              variant="contained"
-              size="large"
-              onClick={onCommit}
-              disabled={
-                isProcessing ||
-                previews.some((p) => p.requiresMapping) ||
-                previews.every((p) => p.error || p.newCount === 0)
-              }
-            >
-              Import {previews.reduce((a, b) => a + b.newCount, 0)} new transactions
-            </Button>
-            <Button
-              sx={{ ml: 1 }}
+              variant="outlined"
               onClick={() => {
                 setPreviews([]);
                 setCommittedSummary(null);
               }}
+              sx={UNIFORM_TOOLBAR_BUTTON_SX}
             >
-              Cancel
+              {previews.every((p) => p.newCount === 0) ? 'Done' : 'Cancel'}
             </Button>
-          </Box>
+            {previews.every((p) => !p.error && p.newCount === 0 && p.duplicateCount > 0) && (
+              <Button
+                size="small"
+                color="warning"
+                variant="outlined"
+                onClick={() => onCommit(true)}
+                disabled={isProcessing}
+                sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, ml: { xs: 0, sm: 'auto' } }}
+              >
+                Force import duplicates anyway
+              </Button>
+            )}
+          </Stack>
         </Stack>
       )}
     </Stack>
   );
 }
 
-function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdateRow: (idx: number, newCategory: string) => void }) {
+function PreviewCard({
+  preview,
+  accounts = [],
+  onUpdateRow,
+  onUpdateAccount,
+  onUpdateAccountMapping,
+}: {
+  preview: ImportPreview;
+  accounts?: Account[];
+  onUpdateRow: (idx: number, newCategory: string) => void;
+  onUpdateAccount: (target: { id?: number; name: string; institution?: string; type?: string }) => void;
+  onUpdateAccountMapping: (
+    fileAccountName: string,
+    target: { id?: number; name: string; institution?: string; type?: string }
+  ) => void;
+}) {
+  const fileAccountGroups = useMemo(() => {
+    const map = new Map<string, { count: number; sample: ParsedTransaction }>();
+    for (const r of preview.rows) {
+      const key = r.parsed.fileAccountName || r.parsed.accountName || 'Default';
+      const existing = map.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        map.set(key, { count: 1, sample: r.parsed });
+      }
+    }
+    return Array.from(map.entries()).map(([name, data]) => ({
+      name,
+      count: data.count,
+      sample: data.sample,
+    }));
+  }, [preview.rows]);
+
   if (preview.error) {
     return (
       <Alert severity="error">
@@ -509,22 +660,39 @@ function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdat
   const sortedCats = Object.entries(preview.byCategory).sort(
     (a, b) => b[1] - a[1]
   );
+
+  const isMultiAccount = fileAccountGroups.length > 1;
+
+  const currentAccountName = preview.targetAccountName || preview.rows[0]?.parsed.accountName || '';
+  const currentAccountId = preview.targetAccountId;
+  const matchedAccount = currentAccountId
+    ? accounts.find((a) => a.id === currentAccountId)
+    : accounts.find((a) => a.name.toLowerCase() === currentAccountName.toLowerCase());
+
+  const selectValue = preview.targetAccountId
+    ? String(preview.targetAccountId)
+    : matchedAccount?.id
+    ? String(matchedAccount.id)
+    : '__file_default__';
+
   return (
-    <Paper sx={{ p: 2 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+    <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1}>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
             {preview.filename}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {preview.source === 'custom' && preview.rows.length > 0
-              ? `${preview.rows[0].parsed.institution} (${preview.rows[0].parsed.accountName})`
+            {isMultiAccount
+              ? `${preview.rows[0]?.parsed.institution || 'Bank of America'} · ${fileAccountGroups.length} accounts in file`
+              : preview.source === 'custom' && preview.rows.length > 0
+              ? `${preview.rows[0].parsed.institution} (${currentAccountName})`
               : SOURCE_LABELS[preview.source!] || preview.source}{' '}
             · {preview.totalCount} transactions ({preview.newCount} new,{' '}
             {preview.duplicateCount} duplicates)
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
           <Chip label={`${preview.newCount} new`} color="primary" size="small" />
           {preview.duplicateCount > 0 && (
             <Chip
@@ -535,6 +703,178 @@ function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdat
           )}
         </Stack>
       </Stack>
+
+      {preview.newCount === 0 && preview.duplicateCount > 0 && (
+        <Alert severity="info" sx={{ mt: 1.5 }}>
+          All {preview.duplicateCount} transactions in this file already exist in your database. Strictly Spending skipped them to protect against duplicate entries.
+        </Alert>
+      )}
+
+      {/* Account Selector Section */}
+      {isMultiAccount ? (
+        <Box sx={{ mt: 1.5, p: 2, bgcolor: 'action.hover', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+          <Stack spacing={1.5}>
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                Map Accounts in File ({fileAccountGroups.length} accounts detected)
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                This file contains transactions across multiple accounts. Confirm or customize which account each group routes to:
+              </Typography>
+            </Box>
+            {fileAccountGroups.map((group) => {
+              const mappedId =
+                preview.targetAccountMap?.[group.name] ||
+                preview.targetAccountMap?.[group.sample.accountName];
+              const matchedAcc = mappedId
+                ? accounts.find((a) => a.id === mappedId)
+                : accounts.find(
+                    (a) =>
+                      a.name.toLowerCase() === group.sample.accountName.toLowerCase() ||
+                      a.name.toLowerCase() === group.name.toLowerCase()
+                  );
+              const groupSelectVal = mappedId
+                ? String(mappedId)
+                : matchedAcc?.id
+                ? String(matchedAcc.id)
+                : '__file_default__';
+
+              return (
+                <Stack
+                  key={group.name}
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={2}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  justifyContent="space-between"
+                  sx={{
+                    p: 1.5,
+                    bgcolor: 'background.paper',
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Box sx={{ minWidth: { xs: 0, sm: 220 } }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {group.name}
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ mt: 0.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
+                      <Chip size="small" label={`${group.count} transactions`} />
+                      <Chip
+                        size="small"
+                        label={
+                          matchedAcc
+                            ? `${matchedAcc.institution} • ${matchedAcc.name}`
+                            : `${group.sample.accountName} (New)`
+                        }
+                        color={matchedAcc ? 'primary' : 'default'}
+                        variant="outlined"
+                      />
+                    </Stack>
+                  </Box>
+                  <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 320 } }}>
+                    <InputLabel id={`map-account-label-${group.name}`}>Choose Account</InputLabel>
+                    <Select
+                      labelId={`map-account-label-${group.name}`}
+                      label="Choose Account"
+                      value={groupSelectVal}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '__file_default__') {
+                          onUpdateAccountMapping(group.name, {
+                            name: group.name,
+                            institution: group.sample.institution || 'Bank of America',
+                            type: group.sample.accountType || 'checking',
+                          });
+                        } else {
+                          const selected = accounts.find((a) => String(a.id) === val);
+                          if (selected) {
+                            onUpdateAccountMapping(group.name, {
+                              id: selected.id,
+                              name: selected.name,
+                              institution: selected.institution,
+                              type: selected.type,
+                            });
+                          }
+                        }
+                      }}
+                    >
+                      {!matchedAcc && (
+                        <MenuItem value="__file_default__">
+                          <em>Default (New): {group.sample.institution || 'Unknown'} - {group.name}</em>
+                        </MenuItem>
+                      )}
+                      {accounts.map((acc) => (
+                        <MenuItem key={acc.id} value={String(acc.id)}>
+                          {acc.institution} &bull; {acc.name} ({acc.type}{acc.last4 ? ` &bull; ...${acc.last4}` : ''})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </Box>
+      ) : (
+        /* Target Account Selector */
+        <Box sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between">
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                Map to Account:
+              </Typography>
+              <Chip
+                size="small"
+                label={matchedAccount ? `${matchedAccount.institution} • ${matchedAccount.name}` : `${currentAccountName} (New)`}
+                color={matchedAccount ? 'primary' : 'default'}
+                variant="outlined"
+              />
+            </Stack>
+            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 280 } }}>
+              <InputLabel id={`target-account-label-${preview.filename}`}>Choose Account</InputLabel>
+              <Select
+                labelId={`target-account-label-${preview.filename}`}
+                label="Choose Account"
+                value={selectValue}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__file_default__') {
+                    const sample = preview.rows[0]?.parsed;
+                    onUpdateAccount({
+                      name: sample?.accountName || 'Unknown',
+                      institution: sample?.institution || '',
+                      type: sample?.accountType || 'checking',
+                    });
+                  } else {
+                    const selected = accounts.find((a) => String(a.id) === val);
+                    if (selected) {
+                      onUpdateAccount({
+                        id: selected.id,
+                        name: selected.name,
+                        institution: selected.institution,
+                        type: selected.type,
+                      });
+                    }
+                  }
+                }}
+              >
+                {!matchedAccount && (
+                  <MenuItem value="__file_default__">
+                    <em>Default (New): {preview.rows[0]?.parsed.institution || 'Unknown'} - {currentAccountName}</em>
+                  </MenuItem>
+                )}
+                {accounts.map((acc) => (
+                  <MenuItem key={acc.id} value={String(acc.id)}>
+                    {acc.institution} &bull; {acc.name} ({acc.type}{acc.last4 ? ` &bull; ...${acc.last4}` : ''})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        </Box>
+      )}
+
       <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', gap: 1 }}>
         {sortedCats.map(([cat, n]) => (
           <Chip
@@ -546,47 +886,62 @@ function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdat
           />
         ))}
       </Stack>
-      <Table size="small" sx={{ mt: 2 }}>
-        <TableHead>
-          <TableRow>
-            <TableCell>Date</TableCell>
-            <TableCell>Description</TableCell>
-            <TableCell>Category</TableCell>
-            <TableCell align="right">Amount</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {preview.rows.slice(0, 5).map((r, i) => (
-            <TableRow key={i} sx={{ opacity: r.duplicate ? 0.4 : 1 }}>
-              <TableCell>{r.parsed.date}</TableCell>
-              <TableCell sx={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {r.parsed.description}
-              </TableCell>
-              <TableCell>
-                {r.category}
-                {r.aiCategory && r.aiCategory !== r.category && (
-                  <Chip 
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Box component="span" sx={{ fontWeight: 900, fontSize: 10, textShadow: '0 0 0.5px currentColor' }}>AI</Box>
-                        {r.aiCategory}
-                      </Box>
-                    }
-                    size="small" 
-                    color="secondary" 
-                    onClick={() => onUpdateRow(i, r.aiCategory!)} 
-                    sx={{ ml: 1, cursor: 'pointer' }}
-                    title="Accept AI Suggestion"
-                  />
-                )}
-              </TableCell>
-              <TableCell align="right">
-                {usdCents.format(r.parsed.amount)}
-              </TableCell>
+      <Box sx={{ overflowX: 'auto', mt: 2 }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Date</TableCell>
+              {isMultiAccount && <TableCell>Account</TableCell>}
+              <TableCell>Description</TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell align="right">Amount</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {preview.rows.slice(0, 5).map((r, i) => (
+              <TableRow key={i} sx={{ opacity: r.duplicate ? 0.6 : 1 }}>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <span>{r.parsed.date}</span>
+                    {r.duplicate && (
+                      <Chip size="small" label="Duplicate" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
+                    )}
+                  </Stack>
+                </TableCell>
+                {isMultiAccount && (
+                  <TableCell>
+                    <Chip size="small" variant="outlined" label={r.parsed.accountName} />
+                  </TableCell>
+                )}
+                <TableCell sx={{ maxWidth: { xs: 180, sm: 320 }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.parsed.description}
+                </TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                  {r.category}
+                  {r.aiCategory && r.aiCategory !== r.category && (
+                    <Chip 
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Box component="span" sx={{ fontWeight: 900, fontSize: 10, textShadow: '0 0 0.5px currentColor' }}>AI</Box>
+                          {r.aiCategory}
+                        </Box>
+                      }
+                      size="small" 
+                      color="secondary" 
+                      onClick={() => onUpdateRow(i, r.aiCategory!)} 
+                      sx={{ ml: 1, cursor: 'pointer' }}
+                      title="Accept AI Suggestion"
+                    />
+                  )}
+                </TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                  {usdCents.format(r.parsed.amount)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Box>
       {preview.rows.length > 5 && (
         <Typography variant="caption" color="text.secondary">
           + {preview.rows.length - 5} more rows
@@ -598,10 +953,12 @@ function PreviewCard({ preview, onUpdateRow }: { preview: ImportPreview, onUpdat
 
 function ColumnMapperCard({
   preview,
+  accounts = [],
   onSave,
   onCancel,
 }: {
   preview: ImportPreview;
+  accounts?: Account[];
   onSave: (mapping: Omit<CsvMapping, 'headerHash' | 'headers'>) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -621,6 +978,7 @@ function ColumnMapperCard({
   // Pre-detect columns
   const initialDate = guessColumn(/date/i) || headers[0] || '';
   const initialDesc = guessColumn(/desc|payee|merchant|memo/i) || headers[1] || '';
+  const initialAccountCol = guessColumn(/account.*name|account/i);
 
   const initialAmount = guessColumn(/amount|value|total/i);
   const initialDebit = guessColumn(/debit|withdrawal|charge/i);
@@ -633,20 +991,86 @@ function ColumnMapperCard({
   const [name, setName] = useState(
     preview.filename.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')
   );
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [institution, setInstitution] = useState('');
   const [accountName, setAccountName] = useState('');
   const [accountType, setAccountType] = useState<'checking' | 'credit' | 'savings'>('checking');
 
   const [dateColumn, setDateColumn] = useState(initialDate);
   const [descriptionColumn, setDescriptionColumn] = useState(initialDesc);
-  const [amountMode, setAmountMode] = useState<'single' | 'split'>(initialMode);
+  const [accountColumn, setAccountColumn] = useState(initialAccountCol || '');
+  const [accountMappings, setAccountMappings] = useState<Record<string, CsvAccountTarget>>({});
 
+  const [amountMode, setAmountMode] = useState<'single' | 'split'>(initialMode);
   const [amountColumn, setAmountColumn] = useState(initialAmount || headers[2] || '');
   const [debitColumn, setDebitColumn] = useState(initialDebit || '');
   const [creditColumn, setCreditColumn] = useState(initialCredit || '');
   const [balanceColumn, setBalanceColumn] = useState(initialBalance || '');
 
   const [error, setError] = useState<string | null>(null);
+
+  // Detect unique accounts in CSV when accountColumn is set
+  const detectedFileAccounts = useMemo(() => {
+    if (!accountColumn || !preview.rawText) return [];
+    try {
+      const parsed = Papa.parse<Record<string, string>>(preview.rawText, {
+        header: true,
+        skipEmptyLines: true,
+      });
+      const counts: Record<string, number> = {};
+      for (const r of parsed.data) {
+        const rawVal = r[accountColumn]?.trim();
+        if (rawVal) {
+          counts[rawVal] = (counts[rawVal] || 0) + 1;
+        }
+      }
+      return Object.entries(counts).map(([accName, count]) => ({ name: accName, count }));
+    } catch {
+      return [];
+    }
+  }, [accountColumn, preview.rawText]);
+
+  // Auto-initialize accountMappings and default institution when detected accounts are found
+  useEffect(() => {
+    if (detectedFileAccounts.length === 0) return;
+    setAccountMappings((prev) => {
+      const updated = { ...prev };
+      for (const item of detectedFileAccounts) {
+        if (!updated[item.name]) {
+          const best = findBestMatchingAccount(item.name, accounts);
+          if (best) {
+            updated[item.name] = {
+              accountId: best.id,
+              accountName: best.name,
+              institution: best.institution,
+              accountType: best.type as any,
+            };
+          } else {
+            updated[item.name] = {
+              accountName: item.name,
+              institution: institution || 'Bank',
+              accountType: 'checking',
+            };
+          }
+        }
+      }
+      return updated;
+    });
+
+    if (!institution) {
+      const firstMatched = detectedFileAccounts
+        .map((a) => findBestMatchingAccount(a.name, accounts))
+        .find(Boolean);
+      if (firstMatched) {
+        setInstitution(firstMatched.institution);
+      } else if (detectedFileAccounts.some((a) => /bank of america|boa/i.test(a.name))) {
+        setInstitution('Bank of America');
+      }
+    }
+    if (!accountName) {
+      setAccountName(detectedFileAccounts.length > 1 ? 'Multiple Accounts' : detectedFileAccounts[0]?.name || '');
+    }
+  }, [detectedFileAccounts, accounts, institution, accountName]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -656,11 +1080,14 @@ function ColumnMapperCard({
       setError('Configuration Name is required');
       return;
     }
-    if (!institution.trim()) {
+    const finalInst = institution.trim() || (detectedFileAccounts.length > 0 ? 'Bank' : '');
+    const finalAccName = accountName.trim() || (detectedFileAccounts.length > 1 ? 'Multiple Accounts' : detectedFileAccounts[0]?.name || '');
+
+    if (!finalInst) {
       setError('Institution Name is required');
       return;
     }
-    if (!accountName.trim()) {
+    if (!finalAccName) {
       setError('Account Name is required');
       return;
     }
@@ -683,8 +1110,8 @@ function ColumnMapperCard({
 
     onSave({
       name: name.trim(),
-      institution: institution.trim(),
-      accountName: accountName.trim(),
+      institution: finalInst,
+      accountName: finalAccName,
       accountType,
       dateColumn,
       descriptionColumn,
@@ -692,6 +1119,8 @@ function ColumnMapperCard({
       debitColumn: amountMode === 'split' ? debitColumn : undefined,
       creditColumn: amountMode === 'split' ? creditColumn : undefined,
       balanceColumn: balanceColumn || undefined,
+      accountColumn: accountColumn || undefined,
+      accountMappings: accountColumn && Object.keys(accountMappings).length > 0 ? accountMappings : undefined,
     });
   };
 
@@ -756,65 +1185,9 @@ function ColumnMapperCard({
 
       <form onSubmit={handleSubmit}>
         <Grid container spacing={3}>
-          {/* Account Metadata Details */}
-          <Grid size={12}>
-            <Divider sx={{ mb: 2 }}><Chip label="Account Info" size="small" /></Divider>
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <TextField
-              label="Mapping Config Name"
-              placeholder="e.g. My Credit Union Checking"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              fullWidth
-              size="small"
-              required
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <TextField
-              label="Institution / Bank"
-              placeholder="e.g. Chase, Credit Union, etc."
-              value={institution}
-              onChange={(e) => setInstitution(e.target.value)}
-              fullWidth
-              size="small"
-              required
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <TextField
-              label="Account Name"
-              placeholder="e.g. Checking 1234"
-              value={accountName}
-              onChange={(e) => setAccountName(e.target.value)}
-              fullWidth
-              size="small"
-              required
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Account Type</InputLabel>
-              <Select
-                value={accountType}
-                label="Account Type"
-                onChange={(e) => setAccountType(e.target.value as 'checking' | 'credit' | 'savings')}
-              >
-                <MenuItem value="checking">Checking</MenuItem>
-                <MenuItem value="credit">Credit Card</MenuItem>
-                <MenuItem value="savings">Savings</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-
           {/* Column Mapping Configuration */}
           <Grid size={12}>
-            <Divider sx={{ my: 1 }}><Chip label="Column Mapping" size="small" /></Divider>
+            <Divider sx={{ mb: 1 }}><Chip label="Column Mapping" size="small" /></Divider>
           </Grid>
 
           <Grid size={{ xs: 12, sm: 6 }}>
@@ -842,6 +1215,46 @@ function ColumnMapperCard({
                 label="Description Column"
                 onChange={(e) => setDescriptionColumn(e.target.value)}
               >
+                {headers.map((h, idx) => (
+                  <MenuItem key={idx} value={h}>
+                    {h}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Account Name Column (Optional)</InputLabel>
+              <Select
+                value={accountColumn}
+                label="Account Name Column (Optional)"
+                onChange={(e) => setAccountColumn(e.target.value)}
+              >
+                <MenuItem value="">
+                  <em>None (Single Account File)</em>
+                </MenuItem>
+                {headers.map((h, idx) => (
+                  <MenuItem key={idx} value={h}>
+                    {h}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Balance Column (Optional)</InputLabel>
+              <Select
+                value={balanceColumn}
+                label="Balance Column (Optional)"
+                onChange={(e) => setBalanceColumn(e.target.value)}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
                 {headers.map((h, idx) => (
                   <MenuItem key={idx} value={h}>
                     {h}
@@ -927,32 +1340,212 @@ function ColumnMapperCard({
             </>
           )}
 
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Balance Column (Optional)</InputLabel>
-              <Select
-                value={balanceColumn}
-                label="Balance Column (Optional)"
-                onChange={(e) => setBalanceColumn(e.target.value)}
-              >
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                {headers.map((h, idx) => (
-                  <MenuItem key={idx} value={h}>
-                    {h}
+          {/* Multi-Account Mapping Section */}
+          {accountColumn && detectedFileAccounts.length > 0 && (
+            <Grid size={12}>
+              <Divider sx={{ my: 1 }}>
+                <Chip label={`Detected Accounts (${detectedFileAccounts.length})`} size="small" color="primary" />
+              </Divider>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Multiple accounts were detected in the "{accountColumn}" column. We automatically matched them with existing accounts in Strictly Spending. You can review or adjust them below:
+              </Typography>
+              <Stack spacing={1.5}>
+                {detectedFileAccounts.map((item) => {
+                  const currentMapping = accountMappings[item.name];
+                  const selectVal = currentMapping?.accountId ? String(currentMapping.accountId) : '__new__';
+
+                  return (
+                    <Stack
+                      key={item.name}
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={2}
+                      alignItems={{ xs: 'flex-start', sm: 'center' }}
+                      justifyContent="space-between"
+                      sx={{
+                        p: 1.5,
+                        bgcolor: 'action.hover',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Box sx={{ minWidth: 240 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {item.name}
+                        </Typography>
+                        <Chip size="small" label={`${item.count} transactions in file`} sx={{ mt: 0.5 }} />
+                      </Box>
+                      <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 340 } }}>
+                        <InputLabel id={`mapping-target-${item.name}`}>Target Account</InputLabel>
+                        <Select
+                          labelId={`mapping-target-${item.name}`}
+                          label="Target Account"
+                          value={selectVal}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '__new__') {
+                              setAccountMappings((prev) => ({
+                                ...prev,
+                                [item.name]: {
+                                  accountName: item.name,
+                                  institution: institution || 'Bank of America',
+                                  accountType: 'checking',
+                                },
+                              }));
+                            } else {
+                              const found = accounts.find((a) => String(a.id) === val);
+                              if (found) {
+                                setAccountMappings((prev) => ({
+                                  ...prev,
+                                  [item.name]: {
+                                    accountId: found.id,
+                                    accountName: found.name,
+                                    institution: found.institution,
+                                    accountType: found.type as any,
+                                  },
+                                }));
+                              }
+                            }
+                          }}
+                        >
+                          <MenuItem value="__new__">
+                            <em>-- Create New Account ({item.name}) --</em>
+                          </MenuItem>
+                          {accounts.map((acc) => (
+                            <MenuItem key={acc.id} value={String(acc.id)}>
+                              {acc.institution} &bull; {acc.name} ({acc.type}{acc.last4 ? ` &bull; ...${acc.last4}` : ''})
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Stack>
+                  );
+                })}
+              </Stack>
+            </Grid>
+          )}
+
+          {/* Account Metadata Details */}
+          <Grid size={12}>
+            <Divider sx={{ mb: 1 }}>
+              <Chip label={accountColumn && detectedFileAccounts.length > 0 ? "Default / Fallback Account Info" : "Account Info"} size="small" />
+            </Divider>
+          </Grid>
+
+          {(!accountColumn || detectedFileAccounts.length === 0) && accounts.length > 0 && (
+            <Grid size={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="map-to-account-select-label">Map to Existing Account</InputLabel>
+                <Select
+                  labelId="map-to-account-select-label"
+                  label="Map to Existing Account"
+                  value={selectedAccountId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedAccountId(val);
+                    if (val) {
+                      const found = accounts.find((a) => String(a.id) === val);
+                      if (found) {
+                        setInstitution(found.institution);
+                        setAccountName(found.name);
+                        setAccountType(
+                          found.type === 'credit' || found.type === 'savings'
+                            ? found.type
+                            : 'checking'
+                        );
+                        setName(`${found.institution} - ${found.name}`);
+                      }
+                    }
+                  }}
+                >
+                  <MenuItem value="">
+                    <em>-- Enter New Account / Custom Details --</em>
                   </MenuItem>
-                ))}
+                  {accounts.map((acc) => (
+                    <MenuItem key={acc.id} value={String(acc.id)}>
+                      {acc.institution} &bull; {acc.name} ({acc.type}{acc.last4 ? ` &bull; ...${acc.last4}` : ''})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          )}
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              label="Mapping Config Name"
+              placeholder="e.g. My Credit Union Checking"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              fullWidth
+              size="small"
+              required
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              label="Institution / Bank"
+              placeholder="e.g. Chase, Credit Union, etc."
+              value={institution}
+              onChange={(e) => {
+                setInstitution(e.target.value);
+                const current = accounts.find((a) => String(a.id) === selectedAccountId);
+                if (current && current.institution !== e.target.value) {
+                  setSelectedAccountId('');
+                }
+              }}
+              fullWidth
+              size="small"
+              required
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <TextField
+              label="Account Name"
+              placeholder="e.g. Checking 1234"
+              value={accountName}
+              onChange={(e) => {
+                setAccountName(e.target.value);
+                const current = accounts.find((a) => String(a.id) === selectedAccountId);
+                if (current && current.name !== e.target.value) {
+                  setSelectedAccountId('');
+                }
+              }}
+              fullWidth
+              size="small"
+              required
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Account Type</InputLabel>
+              <Select
+                value={accountType}
+                label="Account Type"
+                onChange={(e) => {
+                  setAccountType(e.target.value as 'checking' | 'credit' | 'savings');
+                  const current = accounts.find((a) => String(a.id) === selectedAccountId);
+                  if (current && current.type !== e.target.value) {
+                    setSelectedAccountId('');
+                  }
+                }}
+              >
+                <MenuItem value="checking">Checking</MenuItem>
+                <MenuItem value="credit">Credit Card</MenuItem>
+                <MenuItem value="savings">Savings</MenuItem>
               </Select>
             </FormControl>
           </Grid>
 
           <Grid size={12}>
-            <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-              <Button type="submit" variant="contained" color="primary">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 1 }}>
+              <Button type="submit" variant="contained" color="primary" sx={UNIFORM_TOOLBAR_BUTTON_SX}>
                 Save Mapping and Preview
               </Button>
-              <Button variant="outlined" color="inherit" onClick={onCancel}>
+              <Button variant="outlined" color="inherit" onClick={onCancel} sx={UNIFORM_TOOLBAR_BUTTON_SX}>
                 Cancel / Skip File
               </Button>
             </Stack>

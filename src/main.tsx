@@ -5,15 +5,15 @@ import { createRoot } from 'react-dom/client';
 if (typeof window !== 'undefined') {
   const originalWarn = console.warn;
   const originalError = console.error;
-  console.warn = (...args: any[]) => {
-    const cleanArgs = args.map(arg => 
-      (arg && typeof arg === 'object' && (arg instanceof HTMLElement || arg.nodeType)) ? `[DOM Element]` : arg
+  console.warn = (...args: unknown[]) => {
+    const cleanArgs = args.map((arg) =>
+      arg && typeof arg === 'object' && (arg instanceof HTMLElement || 'nodeType' in arg) ? `[DOM Element]` : arg
     );
     originalWarn.apply(console, cleanArgs);
   };
-  console.error = (...args: any[]) => {
-    const cleanArgs = args.map(arg => 
-      (arg && typeof arg === 'object' && (arg instanceof HTMLElement || arg.nodeType)) ? `[DOM Element]` : arg
+  console.error = (...args: unknown[]) => {
+    const cleanArgs = args.map((arg) =>
+      arg && typeof arg === 'object' && (arg instanceof HTMLElement || 'nodeType' in arg) ? `[DOM Element]` : arg
     );
     originalError.apply(console, cleanArgs);
   };
@@ -22,11 +22,15 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ErrorBoundary } from './ErrorBoundary';
 import { seedAndMigrate } from './seed';
-import { hasDemoData, seedDemoData } from './demoData';
+import { hasDemoData } from './demoData';
 import { useFilters } from './stores/store';
 import './testBridge';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
+import { initPwaServiceWorker } from './utils/pwaInstall';
+
+initPwaServiceWorker();
+
 /**
  * In demo-only builds (see env.ts for the flag), the app:
  *   - is mounted with HashRouter so the bundle works under any static host

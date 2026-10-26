@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "strictly-spending",
-  "version": "0.1.10",
-  "identifier": "com.strictlyspending.app",
+  "productName": "Strictly Spending",
+  "version": "0.2.0",
+  "identifier": "com.strictlyspending.finance",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -11,15 +11,7 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [
-      {
-        "title": "Strictly Spending",
-        "width": 800,
-        "height": 600,
-        "resizable": true,
-        "fullscreen": false
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
@@ -27,6 +19,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "Finance",
+    "shortDescription": "Local-first personal finance, budgeting, and cashflow forecasting",
+    "longDescription": "Strictly Spending is a 100% private, local-first household budgeting, bank sync, and multi-account cashflow forecasting application.",
+    "copyright": "Copyright © 2026 Strictly Spending",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -38,6 +34,8 @@
       "debugApplicationIdSuffix": ".debug"
     },
     "macOS": {
+      "minimumSystemVersion": "11.0",
+      "entitlements": null,
       "dmg": {
         "background": null
       }

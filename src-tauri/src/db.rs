@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, Result};
+use rusqlite::{Connection, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::State;
@@ -48,6 +48,8 @@ pub struct Transaction {
     pub tax_category: Option<String>,
     #[serde(rename = "deductionStatus")]
     pub deduction_status: Option<String>,
+    #[serde(rename = "isPending", default)]
+    pub is_pending: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -122,10 +124,12 @@ pub fn init_tables(conn: &Connection) -> Result<()> {
             recurrence_override TEXT,
             is_business BOOLEAN,
             tax_category TEXT,
-            deduction_status TEXT
+            deduction_status TEXT,
+            is_pending BOOLEAN NOT NULL DEFAULT 0
         )",
         [],
     )?;
+    let _ = conn.execute("ALTER TABLE transactions ADD COLUMN is_pending BOOLEAN NOT NULL DEFAULT 0", []);
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);",
@@ -134,6 +138,46 @@ pub fn init_tables(conn: &Connection) -> Result<()> {
     
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_transactions_recurrence ON transactions(recurrence);",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_source_date ON transactions(source, date DESC);",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, date DESC);",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_source_category ON transactions(source, category);",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category, date DESC);",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_merchant_date ON transactions(merchant_key, date DESC);",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_source_recurrence ON transactions(source, recurrence);",
         [],
     )?;
 
@@ -195,24 +239,50 @@ pub fn init_tables(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub fn run_migrations(conn: &mut Connection) -> std::result::Result<(), rusqlite_migration::Error> {
-    use rusqlite_migration::{Migrations, M};
-    let migrations = Migrations::new(vec![
-        M::up("CREATE TABLE IF NOT EXISTS __migration_init_sentinel (id INTEGER PRIMARY KEY);"),
-        M::up("CREATE INDEX IF NOT EXISTS idx_transactions_merchant_key ON transactions(merchant_key);"),
-    ]);
-    migrations.to_latest(conn)?;
+pub fn run_migrations(conn: &Connection) -> Result<()> {
+    let version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0)).unwrap_or(0);
+    if version < 1 {
+        conn.execute_batch("CREATE TABLE IF NOT EXISTS __migration_init_sentinel (id INTEGER PRIMARY KEY); PRAGMA user_version = 1;")?;
+    }
+    if version < 2 {
+        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_transactions_merchant_key ON transactions(merchant_key); PRAGMA user_version = 2;")?;
+    }
+    if version < 3 {
+        conn.execute_batch("DELETE FROM transactions WHERE (date LIKE '1970%' OR date < '2000-01-01') AND source = 'simplefin'; PRAGMA user_version = 3;")?;
+    }
+    if version < 4 {
+        conn.execute_batch("UPDATE transactions SET recurrence = 'recurring' WHERE recurrence = 'onetime' AND recurrence_override IS NULL AND category IN (SELECT name FROM categories WHERE default_recurrence = 'recurring'); PRAGMA user_version = 4;")?;
+    }
+    if version < 5 {
+        let _ = conn.execute("ALTER TABLE transactions ADD COLUMN is_pending BOOLEAN NOT NULL DEFAULT 0", []);
+        conn.execute_batch("PRAGMA user_version = 5;")?;
+    }
+    if version < 6 {
+        conn.execute_batch("
+            CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category, date DESC);
+            CREATE INDEX IF NOT EXISTS idx_transactions_merchant_date ON transactions(merchant_key, date DESC);
+            CREATE INDEX IF NOT EXISTS idx_transactions_source_recurrence ON transactions(source, recurrence);
+            PRAGMA user_version = 6;
+        ")?;
+    }
     Ok(())
 }
 
 pub fn init_db(db_path: PathBuf) -> Result<Connection> {
-    let mut conn = Connection::open(db_path)?;
+    let conn = Connection::open(db_path)?;
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA foreign_keys = ON;
+         PRAGMA temp_store = MEMORY;
+         PRAGMA busy_timeout = 5000;"
+    )?;
     init_tables(&conn)?;
-    run_migrations(&mut conn).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    run_migrations(&conn)?;
     Ok(conn)
 }
 
-fn row_to_transaction(row: &rusqlite::Row) -> Result<Transaction> {
+pub(crate) fn row_to_transaction(row: &rusqlite::Row) -> Result<Transaction> {
     Ok(Transaction {
         id: row.get(0)?,
         account_id: row.get(1)?,
@@ -231,6 +301,7 @@ fn row_to_transaction(row: &rusqlite::Row) -> Result<Transaction> {
         is_business: row.get(14)?,
         tax_category: row.get(15)?,
         deduction_status: row.get(16)?,
+        is_pending: row.get::<_, Option<bool>>(17).ok().flatten(),
     })
 }
 
@@ -245,9 +316,9 @@ pub fn get_transactions(
     account_id: Option<i64>,
     deduction_status: Option<String>
 ) -> Result<Vec<Transaction>, String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     
-    let mut query = "SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status FROM transactions WHERE date BETWEEN ?1 AND ?2".to_string();
+    let mut query = "SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status, is_pending FROM transactions WHERE date BETWEEN ?1 AND ?2".to_string();
     
     let mut params: Vec<rusqlite::types::Value> = vec![
         rusqlite::types::Value::Text(start_date),
@@ -285,8 +356,8 @@ pub fn get_transactions(
 
 #[tauri::command]
 pub fn get_transaction(state: State<DbState>, id: i64) -> Result<Option<Transaction>, String> {
-    let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status FROM transactions WHERE id = ?1").map_err(|e| e.to_string())?;
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status, is_pending FROM transactions WHERE id = ?1").map_err(|e| e.to_string())?;
     
     let mut iter = stmt.query_map([id], row_to_transaction).map_err(|e| e.to_string())?;
 
@@ -297,39 +368,10 @@ pub fn get_transaction(state: State<DbState>, id: i64) -> Result<Option<Transact
     }
 }
 
-#[tauri::command]
-pub fn get_recurring_transactions(state: State<DbState>) -> Result<Vec<Transaction>, String> {
-    let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status FROM transactions WHERE recurrence = 'recurring'").map_err(|e| e.to_string())?;
-    
-    let tx_iter = stmt.query_map([], row_to_transaction).map_err(|e| e.to_string())?;
-
-    let mut transactions = Vec::new();
-    for tx in tx_iter {
-        transactions.push(tx.map_err(|e| e.to_string())?);
-    }
-    
-    Ok(transactions)
-}
-
-#[tauri::command]
-pub fn get_forecast_transactions(state: State<DbState>, cutoff_date: String) -> Result<Vec<Transaction>, String> {
-    let conn = state.conn.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status FROM transactions WHERE date >= ?1").map_err(|e| e.to_string())?;
-    
-    let tx_iter = stmt.query_map(params![cutoff_date], row_to_transaction).map_err(|e| e.to_string())?;
-
-    let mut transactions = Vec::new();
-    for tx in tx_iter {
-        transactions.push(tx.map_err(|e| e.to_string())?);
-    }
-    
-    Ok(transactions)
-}
 
 #[tauri::command]
 pub fn get_accounts(state: State<DbState>) -> Result<Vec<Account>, String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare("SELECT id, name, type, institution, last4, source, enabled, current_balance FROM accounts").map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(Account {
@@ -350,7 +392,7 @@ pub fn get_accounts(state: State<DbState>) -> Result<Vec<Account>, String> {
 
 #[tauri::command]
 pub fn get_categories(state: State<DbState>) -> Result<Vec<Category>, String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare("SELECT id, name, color, type, sort_order, default_recurrence FROM categories ORDER BY sort_order").map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(Category {
@@ -369,7 +411,7 @@ pub fn get_categories(state: State<DbState>) -> Result<Vec<Category>, String> {
 
 #[tauri::command]
 pub fn get_merchant_overrides(state: State<DbState>) -> Result<Vec<MerchantOverride>, String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare("SELECT merchant_key, recurrence FROM merchant_overrides").map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(MerchantOverride {
@@ -384,7 +426,7 @@ pub fn get_merchant_overrides(state: State<DbState>) -> Result<Vec<MerchantOverr
 
 #[tauri::command]
 pub fn get_budgets(state: State<DbState>) -> Result<Vec<Budget>, String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare("SELECT category, monthly_amount, user_set FROM budgets").map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(Budget {
@@ -400,7 +442,7 @@ pub fn get_budgets(state: State<DbState>) -> Result<Vec<Budget>, String> {
 
 #[tauri::command]
 pub fn get_rules(state: State<DbState>) -> Result<Vec<CategoryRule>, String> {
-    let conn = state.conn.lock().unwrap();
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare("SELECT id, pattern, category, priority, created_at FROM rules").map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(CategoryRule {

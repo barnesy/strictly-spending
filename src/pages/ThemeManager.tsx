@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSettings } from '../hooks/queries';
 import { usePutSetting } from '../hooks/mutations';
 import {
@@ -101,7 +101,7 @@ export default function ThemeManager() {
 
   const updateTheme = async (updates: Record<string, unknown>) => {
     const newMode = updates.mode || mode;
-    const nextConfig: any = { ...config, mode: newMode, ...updates };
+    const nextConfig: Record<string, unknown> = { ...config, mode: newMode, ...updates };
 
     // If we just toggled mode, and we are using a preset palette, we need to swap the bg/paper colors
     if (updates.mode && nextConfig.paletteName) {
@@ -142,7 +142,7 @@ export default function ThemeManager() {
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h5">Theme Manager</Typography>
+      <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700 }}>Theme Manager</Typography>
 
       <Paper sx={{ p: 3 }}>
         <Stack spacing={4}>

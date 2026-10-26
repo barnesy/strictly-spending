@@ -6,20 +6,41 @@ import type {
 } from '../types';
 import type { Scenario } from '../api/scenarios';
 
+import type { QueryClient } from '@tanstack/react-query';
+
+const TRANSACTION_DERIVED_QUERY_KEYS = [
+  'transactions',
+  'transactions_paginated',
+  'transaction_count',
+  'dashboard_aggregates',
+  'top_merchants',
+  'spend_chart_data',
+  'income_chart_data',
+  'uncategorized_count',
+  'category_transaction_counts',
+  'rule_match_counts',
+  'merchant_groups',
+  'sort_queue',
+  'consolidated_recurring_merchants',
+  'category_trailing_averages',
+  'unique_merchants',
+  'transaction_bounds',
+  'tax_transactions',
+] as const;
+
+export function invalidateTransactionDerivedQueries(queryClient: QueryClient) {
+  for (const key of TRANSACTION_DERIVED_QUERY_KEYS) {
+    queryClient.invalidateQueries({ queryKey: [key] });
+  }
+}
+
 // TRANSACTIONS
 export const useAddTransaction = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (item: Transaction) => api.addTransaction(item),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions_paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['transaction_count'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
-      queryClient.invalidateQueries({ queryKey: ['top_merchants'] });
-      queryClient.invalidateQueries({ queryKey: ['spend_chart_data'] });
-      queryClient.invalidateQueries({ queryKey: ['income_chart_data'] });
-      queryClient.invalidateQueries({ queryKey: ['uncategorized_count'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -29,11 +50,7 @@ export const useUpdateTransaction = () => {
   return useMutation({
     mutationFn: ({ id, updates }: { id: number, updates: Partial<Transaction> }) => api.updateTransaction(id, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions_paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
-      queryClient.invalidateQueries({ queryKey: ['uncategorized_count'] });
-      queryClient.invalidateQueries({ queryKey: ['top_merchants'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -43,11 +60,7 @@ export const useDeleteTransaction = () => {
   return useMutation({
     mutationFn: (id: number) => api.deleteTransaction(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions_paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['transaction_count'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
-      queryClient.invalidateQueries({ queryKey: ['uncategorized_count'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -58,11 +71,7 @@ export const useBulkAddTransactions = () => {
     mutationFn: ({ transactions, ignoreErrors }: { transactions: Transaction[], ignoreErrors?: boolean }) => 
       api.bulkAddTransactions(transactions, ignoreErrors),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions_paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['transaction_count'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
-      queryClient.invalidateQueries({ queryKey: ['uncategorized_count'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -72,10 +81,7 @@ export const useBulkUpdateTransactions = () => {
   return useMutation({
     mutationFn: (transactions: Transaction[]) => api.bulkUpdateTransactions(transactions),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions_paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
-      queryClient.invalidateQueries({ queryKey: ['uncategorized_count'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -107,8 +113,7 @@ export const useDeleteAccount = () => {
     mutationFn: (id: number) => api.deleteAccount(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions_paginated'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -118,7 +123,10 @@ export const useAddCategory = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (item: Category) => api.addCategory(item),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['category_transaction_counts'] });
+    },
   });
 };
 
@@ -126,7 +134,10 @@ export const useUpdateCategory = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, updates }: { id: number, updates: Partial<Category> }) => api.updateCategory(id, updates),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      invalidateTransactionDerivedQueries(queryClient);
+    },
   });
 };
 
@@ -136,7 +147,7 @@ export const useDeleteCategory = () => {
     mutationFn: (id: number) => api.deleteCategory(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] }); // Affected via CASCADE or SET NULL
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -146,7 +157,10 @@ export const useAddRule = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (item: CategoryRule) => api.addRule(item),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rules'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rules'] });
+      queryClient.invalidateQueries({ queryKey: ['rule_match_counts'] });
+    },
   });
 };
 
@@ -154,7 +168,10 @@ export const useUpdateRule = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, updates }: { id: number, updates: Partial<CategoryRule> }) => api.updateRule(id, updates),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rules'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rules'] });
+      queryClient.invalidateQueries({ queryKey: ['rule_match_counts'] });
+    },
   });
 };
 
@@ -162,7 +179,10 @@ export const useDeleteRule = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => api.deleteRule(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rules'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rules'] });
+      queryClient.invalidateQueries({ queryKey: ['rule_match_counts'] });
+    },
   });
 };
 
@@ -170,7 +190,10 @@ export const useClearRules = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.clearRules(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rules'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rules'] });
+      queryClient.invalidateQueries({ queryKey: ['rule_match_counts'] });
+    },
   });
 };
 
@@ -179,7 +202,10 @@ export const usePutMerchantOverride = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (item: MerchantOverride) => api.putMerchantOverride(item),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['merchant_overrides'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['merchant_overrides'] });
+      invalidateTransactionDerivedQueries(queryClient);
+    },
   });
 };
 
@@ -187,7 +213,10 @@ export const useDeleteMerchantOverride = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (key: string) => api.deleteMerchantOverride(key),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['merchant_overrides'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['merchant_overrides'] });
+      invalidateTransactionDerivedQueries(queryClient);
+    },
   });
 };
 
@@ -204,6 +233,14 @@ export const useBulkPutBudgets = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (budgets: Budget[]) => api.bulkPutBudgets(budgets),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] }),
+  });
+};
+
+export const useClearBudgets = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.clearBudgets(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] }),
   });
 };
@@ -273,14 +310,7 @@ export const useClearTransactions = () => {
   return useMutation({
     mutationFn: () => api.clearTransactions(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions_paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['transaction_count'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard_aggregates'] });
-      queryClient.invalidateQueries({ queryKey: ['top_merchants'] });
-      queryClient.invalidateQueries({ queryKey: ['spend_chart_data'] });
-      queryClient.invalidateQueries({ queryKey: ['income_chart_data'] });
-      queryClient.invalidateQueries({ queryKey: ['uncategorized_count'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };

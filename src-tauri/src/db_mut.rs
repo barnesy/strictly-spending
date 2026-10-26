@@ -2,10 +2,10 @@ use rusqlite::{params, Result};
 use tauri::State;
 use crate::db::{DbState, Transaction, Account, Category, MerchantOverride, Budget, CategoryRule};
 
-#[tauri::command]
 fn invalidate_recurrence_cache(state: &State<DbState>) {
-    let mut cache = state.recurrence_cache.lock().unwrap();
-    *cache = None;
+    if let Ok(mut cache) = state.recurrence_cache.lock() {
+        *cache = None;
+    }
 }
 
 #[tauri::command]
@@ -13,32 +13,58 @@ pub fn add_transaction(state: State<DbState>, item: Transaction) -> Result<i64, 
     if item.description.trim().is_empty() { return Err("Description cannot be empty".into()); }
     let conn = state.conn.lock().unwrap();
     conn.execute(
-        "INSERT INTO transactions (account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+        "INSERT INTO transactions (account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status, is_pending) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         params![
-            item.account_id, item.date, item.description, item.amount, item.raw_category, item.category, item.source, item.merchant_key, item.user_overridden, item.dedup_key, item.import_batch_id, item.recurrence, item.recurrence_override, item.is_business, item.tax_category, item.deduction_status
+            item.account_id, item.date, item.description, item.amount, item.raw_category, item.category, item.source, item.merchant_key, item.user_overridden, item.dedup_key, item.import_batch_id, item.recurrence, item.recurrence_override, item.is_business, item.tax_category, item.deduction_status, item.is_pending.unwrap_or(false)
         ],
     ).map_err(|e| e.to_string())?;
     invalidate_recurrence_cache(&state);
     Ok(conn.last_insert_rowid())
 }
 
-#[tauri::command]
-pub fn bulk_add_transactions(state: State<DbState>, transactions: Vec<Transaction>, ignore_errors: bool) -> Result<(), String> {
-    let mut conn = state.conn.lock().unwrap();
+pub fn bulk_add_transactions_inner(
+    db_state: &DbState,
+    transactions: Vec<Transaction>,
+    ignore_errors: bool,
+) -> Result<(), String> {
+    let mut conn = db_state.conn.lock().unwrap();
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     for item in transactions {
         let sql = if ignore_errors {
-            "INSERT OR IGNORE INTO transactions (account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)"
+            "INSERT INTO transactions (account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status, is_pending)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+             ON CONFLICT(dedup_key) DO UPDATE SET
+                date = CASE WHEN transactions.date LIKE '1970%' OR (transactions.date != excluded.date AND excluded.date >= '2000-01-01') THEN excluded.date ELSE transactions.date END,
+                amount = excluded.amount,
+                description = CASE WHEN transactions.user_overridden = 0 THEN excluded.description ELSE transactions.description END,
+                merchant_key = CASE WHEN transactions.user_overridden = 0 THEN excluded.merchant_key ELSE transactions.merchant_key END,
+                raw_category = excluded.raw_category,
+                category = CASE WHEN transactions.user_overridden = 0 AND (transactions.category = 'Uncategorized' OR transactions.category = '') THEN excluded.category ELSE transactions.category END,
+                is_pending = excluded.is_pending"
         } else {
-            "INSERT INTO transactions (account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)"
+            "INSERT INTO transactions (account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status, is_pending) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)"
         };
         tx.execute(sql, params![
-            item.account_id, item.date, item.description, item.amount, item.raw_category, item.category, item.source, item.merchant_key, item.user_overridden, item.dedup_key, item.import_batch_id, item.recurrence, item.recurrence_override, item.is_business, item.tax_category, item.deduction_status
+            item.account_id, item.date, item.description, item.amount, item.raw_category, item.category, item.source, item.merchant_key, item.user_overridden, item.dedup_key, item.import_batch_id, item.recurrence, item.recurrence_override, item.is_business, item.tax_category, item.deduction_status, item.is_pending.unwrap_or(false)
         ]).map_err(|e| e.to_string())?;
     }
+    let _ = tx.execute(
+        "UPDATE transactions
+         SET recurrence = 'recurring'
+         WHERE recurrence = 'onetime'
+           AND recurrence_override IS NULL
+           AND category IN (SELECT name FROM categories WHERE default_recurrence = 'recurring')",
+        [],
+    );
     tx.commit().map_err(|e| e.to_string())?;
-    invalidate_recurrence_cache(&state);
+    let mut c = db_state.recurrence_cache.lock().unwrap();
+    *c = None;
     Ok(())
+}
+
+#[tauri::command]
+pub fn bulk_add_transactions(state: State<DbState>, transactions: Vec<Transaction>, ignore_errors: bool) -> Result<(), String> {
+    bulk_add_transactions_inner(&state, transactions, ignore_errors)
 }
 
 #[tauri::command]
@@ -47,9 +73,9 @@ pub fn update_transaction(state: State<DbState>, id: i64, updates: Transaction) 
     let conn = state.conn.lock().unwrap();
     // In a real app we might want dynamic updates, but for now we just overwrite all fields
     conn.execute(
-        "UPDATE transactions SET account_id=?1, date=?2, description=?3, amount=?4, raw_category=?5, category=?6, source=?7, merchant_key=?8, user_overridden=?9, dedup_key=?10, import_batch_id=?11, recurrence=?12, recurrence_override=?13, is_business=?14, tax_category=?15, deduction_status=?16 WHERE id=?17",
+        "UPDATE transactions SET account_id=?1, date=?2, description=?3, amount=?4, raw_category=?5, category=?6, source=?7, merchant_key=?8, user_overridden=?9, dedup_key=?10, import_batch_id=?11, recurrence=?12, recurrence_override=?13, is_business=?14, tax_category=?15, deduction_status=?16, is_pending=COALESCE(?17, is_pending, 0) WHERE id=?18",
         params![
-            updates.account_id, updates.date, updates.description, updates.amount, updates.raw_category, updates.category, updates.source, updates.merchant_key, updates.user_overridden, updates.dedup_key, updates.import_batch_id, updates.recurrence, updates.recurrence_override, updates.is_business, updates.tax_category, updates.deduction_status, id
+            updates.account_id, updates.date, updates.description, updates.amount, updates.raw_category, updates.category, updates.source, updates.merchant_key, updates.user_overridden, updates.dedup_key, updates.import_batch_id, updates.recurrence, updates.recurrence_override, updates.is_business, updates.tax_category, updates.deduction_status, updates.is_pending, id
         ],
     ).map_err(|e| e.to_string())?;
     invalidate_recurrence_cache(&state);
@@ -63,9 +89,9 @@ pub fn bulk_update_transactions(state: State<DbState>, transactions: Vec<Transac
     for item in transactions {
         if let Some(id) = item.id {
             tx.execute(
-                "UPDATE transactions SET account_id=?1, date=?2, description=?3, amount=?4, raw_category=?5, category=?6, source=?7, merchant_key=?8, user_overridden=?9, dedup_key=?10, import_batch_id=?11, recurrence=?12, recurrence_override=?13, is_business=?14, tax_category=?15, deduction_status=?16 WHERE id=?17",
+                "UPDATE transactions SET account_id=?1, date=?2, description=?3, amount=?4, raw_category=?5, category=?6, source=?7, merchant_key=?8, user_overridden=?9, dedup_key=?10, import_batch_id=?11, recurrence=?12, recurrence_override=?13, is_business=?14, tax_category=?15, deduction_status=?16, is_pending=COALESCE(?17, is_pending, 0) WHERE id=?18",
                 params![
-                    item.account_id, item.date, item.description, item.amount, item.raw_category, item.category, item.source, item.merchant_key, item.user_overridden, item.dedup_key, item.import_batch_id, item.recurrence, item.recurrence_override, item.is_business, item.tax_category, item.deduction_status, id
+                    item.account_id, item.date, item.description, item.amount, item.raw_category, item.category, item.source, item.merchant_key, item.user_overridden, item.dedup_key, item.import_batch_id, item.recurrence, item.recurrence_override, item.is_business, item.tax_category, item.deduction_status, item.is_pending, id
                 ],
             ).map_err(|e| e.to_string())?;
         }
@@ -230,12 +256,47 @@ pub fn clear_budgets(state: State<DbState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn add_rule(state: State<DbState>, item: CategoryRule) -> Result<i64, String> {
-    let conn = state.conn.lock().unwrap();
-    conn.execute(
-        "INSERT INTO rules (pattern, category, priority, created_at) VALUES (?1, ?2, ?3, ?4)",
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let norm_new = crate::tools::normalize_for_match(&item.pattern);
+    if !norm_new.is_empty() {
+        let mut to_delete: Vec<i64> = Vec::new();
+        if let Ok(mut stmt) = conn.prepare("SELECT id, pattern, priority FROM rules") {
+            if let Ok(rows) = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            }) {
+                for row in rows.flatten() {
+                    let (existing_id, existing_pattern, existing_priority) = row;
+                    if existing_pattern == item.pattern {
+                        continue;
+                    }
+                    let norm_existing = crate::tools::normalize_for_match(&existing_pattern);
+                    let same_norm = norm_existing == norm_new;
+                    let superseded_user_rule = item.priority >= 1000
+                        && existing_priority >= 1000
+                        && existing_priority <= item.priority
+                        && crate::tools::matches_normalized_rule(&norm_existing, &norm_new);
+                    if same_norm || superseded_user_rule {
+                        to_delete.push(existing_id);
+                    }
+                }
+            }
+        }
+        for del_id in to_delete {
+            let _ = conn.execute("DELETE FROM rules WHERE id = ?1", params![del_id]);
+        }
+    }
+    let id: i64 = conn.query_row(
+        "INSERT INTO rules (pattern, category, priority, created_at) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(pattern) DO UPDATE SET category=excluded.category, priority=excluded.priority, created_at=excluded.created_at
+         RETURNING id",
         params![item.pattern, item.category, item.priority, item.created_at],
+        |row| row.get(0),
     ).map_err(|e| e.to_string())?;
-    Ok(conn.last_insert_rowid())
+    Ok(id)
 }
 
 #[tauri::command]
@@ -281,6 +342,7 @@ mod tests {
             raw_category: None, category: "Food".into(), source: "demo".into(), merchant_key: "merch".into(),
             user_overridden: false, dedup_key: "dedup1".into(), import_batch_id: None,
             recurrence: "onetime".into(), recurrence_override: None, is_business: None, tax_category: None, deduction_status: None,
+            is_pending: None,
         };
         let mut tx3_fail = tx1.clone();
         tx3_fail.dedup_key = "dedup1".into(); // Will cause UNIQUE constraint failure

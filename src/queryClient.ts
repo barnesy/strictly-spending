@@ -3,9 +3,9 @@ import { QueryClient } from '@tanstack/react-query';
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: Infinity, // Local desktop app, data only changes on mutations
+      staleTime: 5000, // 5 seconds so DB mutations immediately reflect across tabs & navigation
       gcTime: 1000 * 60 * 60 * 24, // 24 hours
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
       refetchOnMount: true,
       refetchOnReconnect: false,
       retry: false,
