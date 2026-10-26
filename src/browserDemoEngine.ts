@@ -98,6 +98,311 @@ function hasConnectedRealSources(s: BrowserDemoState): boolean {
   return false;
 }
 
+function inferOrgNameFromAccount(
+  sfAccountId?: string | null,
+  rawName?: string | null,
+  rawOrg?: string | null
+): string {
+  const trimmedOrg = (rawOrg || '').trim();
+  if (trimmedOrg && trimmedOrg !== 'Bank' && trimmedOrg !== 'Financial Institution') {
+    return trimmedOrg;
+  }
+  const id = (sfAccountId || '').trim();
+  if (id === 'ACT-d29e6950-a8db-42e5-91f2-a65291589e16') return 'Rocket Mortgage';
+  if (id === 'ACT-7fcf74b3-d66a-4abf-8e60-63b2ff4f8189') return 'Santander Consumer';
+
+  const n = (rawName || '').trim();
+  if (/\*{3,}7073|\(7073\)|rocket\s*mortgage/i.test(n)) return 'Rocket Mortgage';
+  if (/\b(19|20)\d{2}\s+tesla|model\s*[3ysx]|\(5192\)|santander/i.test(n)) return 'Santander Consumer';
+  if (/adv\s*plus\s*banking|customized\s*cash\s*rewards|bank\s*of\s*america/i.test(n)) return 'Bank of America';
+  if (/\b(checking\s*1770|checking\s*5463|sav\s*4322|savings\s*3234)\b|truist/i.test(n)) return 'Truist';
+  if (
+    /vertex.*401\(k\)|roth\s*ira|traditional\s*ira|restricted\s*stock\s*units|employee\s*stock\s*purchase|individual\s*-\s*tod|health\s*savings\s*account|cash\s*management|fidelity/i.test(
+      n
+    )
+  ) {
+    return 'Fidelity Investments';
+  }
+  if (/crypto\s*\(1773\)|robinhood/i.test(n)) return 'Robinhood';
+  return trimmedOrg || 'Bank';
+}
+
+function stripGenericInstitutionPrefix(name: string): string {
+  return name.replace(/^(financial\s+institution|bank)\s+/i, '').trim();
+}
+
+function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
+  let changed = false;
+
+  // 1a. Repair SimpleFIN account records and ensure each has a mapped Strictly account
+  if (s.simplefinAccounts.length > 0) {
+    s.simplefinAccounts = s.simplefinAccounts.map((sfAcc) => {
+      const cleanRawName = stripGenericInstitutionPrefix(sfAcc.name || 'Account');
+      const resolvedOrg = inferOrgNameFromAccount(sfAcc.account_id, cleanRawName, sfAcc.org_name);
+      let mappedId = sfAcc.strictly_account_id;
+      if (mappedId !== null && !s.accounts.some((a) => a.id === mappedId)) {
+        mappedId = null;
+      }
+      if (mappedId === null) {
+        const inferred = inferStrictlyAccountDetails(resolvedOrg, cleanRawName, sfAcc.account_id);
+        const existingMatch = s.accounts.find(
+          (a) =>
+            a.source !== 'demo' &&
+            (a.name.toLowerCase() === inferred.name.toLowerCase() ||
+              stripGenericInstitutionPrefix(a.name).toLowerCase() === cleanRawName.toLowerCase())
+        );
+        if (existingMatch?.id) {
+          mappedId = existingMatch.id;
+        } else {
+          const nextId = Math.max(0, ...s.accounts.map((a) => a.id || 0)) + 1;
+          s.accounts = [
+            ...s.accounts,
+            {
+              id: nextId,
+              name: inferred.name,
+              type: inferred.type,
+              institution: inferred.institution,
+              last4: inferred.last4,
+              currentBalance: sfAcc.balance ?? undefined,
+              enabled: true,
+              source: 'simplefin',
+            },
+          ];
+          mappedId = nextId;
+          changed = true;
+        }
+      }
+      if (resolvedOrg !== sfAcc.org_name || cleanRawName !== sfAcc.name || mappedId !== sfAcc.strictly_account_id) {
+        changed = true;
+        return {
+          ...sfAcc,
+          org_name: resolvedOrg,
+          name: cleanRawName,
+          strictly_account_id: mappedId,
+        };
+      }
+      return sfAcc;
+    });
+  }
+
+  // 1b. Normalize account names, institutions, balances & types for connected non-demo accounts
+  const sfByStrictlyId = new Map<number, SimpleFinAccountRecord>();
+  for (const sfAcc of s.simplefinAccounts) {
+    if (sfAcc.strictly_account_id !== null) {
+      sfByStrictlyId.set(sfAcc.strictly_account_id, sfAcc);
+    }
+  }
+
+  s.accounts = s.accounts.map((acc) => {
+    if (acc.source === 'demo') return acc;
+    const linkedSf = acc.id !== undefined ? sfByStrictlyId.get(acc.id) : undefined;
+    const rawName = stripGenericInstitutionPrefix(linkedSf?.name || acc.name || 'Account');
+    const resolvedOrg = inferOrgNameFromAccount(
+      linkedSf?.account_id,
+      rawName,
+      linkedSf?.org_name && linkedSf.org_name !== 'Financial Institution' ? linkedSf.org_name : acc.institution
+    );
+    const inferred = inferStrictlyAccountDetails(resolvedOrg, rawName, linkedSf?.account_id);
+    const nextType =
+      acc.type === 'checking' && inferred.type !== 'checking' ? inferred.type : acc.type;
+    const nextInstitution =
+      !acc.institution || acc.institution === 'Financial Institution' || acc.institution === 'Bank'
+        ? inferred.institution
+        : acc.institution;
+    const nextName = inferred.name;
+    const nextLast4 = acc.last4 || inferred.last4;
+    const nextBalance =
+      acc.currentBalance !== undefined && acc.currentBalance !== null
+        ? acc.currentBalance
+        : linkedSf?.balance ?? undefined;
+
+    if (
+      nextName !== acc.name ||
+      nextType !== acc.type ||
+      nextInstitution !== acc.institution ||
+      nextLast4 !== acc.last4 ||
+      nextBalance !== acc.currentBalance
+    ) {
+      changed = true;
+      return {
+        ...acc,
+        name: nextName,
+        type: nextType,
+        institution: nextInstitution,
+        last4: nextLast4,
+        currentBalance: nextBalance,
+      };
+    }
+    return acc;
+  });
+
+  // 2. Ensure loan-related transactions (Rocket Mortgage, Santander, Dept of Ed, etc.) are categorized into Mortgage / Auto Loan / Student Loans
+  const validCats = new Set(s.categories.map((c) => c.name));
+  const ctx = { rules: s.rules };
+  s.transactions = s.transactions.map((t) => {
+    if (t.source === 'demo') return t;
+    const lowerDesc = `${t.merchantKey || ''} ${t.description || ''}`.toLowerCase();
+    const normLoanMerchant = lowerDesc.includes('rocket mortgage') || lowerDesc.includes('rocket mor')
+      ? 'rocket mortgage'
+      : lowerDesc.includes('santander')
+      ? 'santander'
+      : null;
+    const isMisbucketedLoan =
+      !t.userOverridden &&
+      (t.category === 'Uncategorized' ||
+        t.category === 'Housing' ||
+        t.category === 'Transfers') &&
+      /rocket\s*mortgage|rocket\s*mor|mortgage|santander|dept\s*of\s*ed|department\s*of\s*education|nelnet|aidvantage|mohela|navient/i.test(
+        lowerDesc
+      );
+    let nextTx = t;
+    if (normLoanMerchant && t.merchantKey !== normLoanMerchant) {
+      nextTx = { ...nextTx, merchantKey: normLoanMerchant };
+      changed = true;
+    }
+    if ((nextTx.category === 'Uncategorized' && !nextTx.userOverridden) || isMisbucketedLoan) {
+      const ruleCat = categorize(nextTx.description, nextTx.merchantKey, nextTx.rawCategory, ctx);
+      const heurCat = heuristicCategory(lowerDesc, nextTx.amount, validCats);
+      const nextCat =
+        isMisbucketedLoan && heurCat
+          ? heurCat
+          : ruleCat !== 'Uncategorized'
+          ? ruleCat
+          : inferTypeCategory(nextTx.amount, nextTx.source, nextTx.rawCategory, undefined, nextTx.description) || heurCat;
+      if (nextCat && nextCat !== 'Uncategorized' && nextCat !== nextTx.category) {
+        changed = true;
+        nextTx = {
+          ...nextTx,
+          category: nextCat,
+          recurrence: RECURRING_CATEGORIES.has(nextCat) ? 'recurring' : nextTx.recurrence || 'onetime',
+        };
+      }
+    }
+    return nextTx;
+  });
+
+  // 3. Auto-create Loan records in s.loans for any connected mortgage or loan account
+  const loanAccounts = s.accounts.filter(
+    (a) => a.source !== 'demo' && (a.type === 'mortgage' || a.type === 'loan')
+  );
+  let nextLoanId = Math.max(0, ...s.loans.map((l) => l.id || 0)) + 1;
+
+  for (const acc of loanAccounts) {
+    const combined = `${acc.institution || ''} ${acc.name || ''}`.toLowerCase();
+    const isMortgage =
+      acc.type === 'mortgage' ||
+      /mortgage|home\s*loan|rocket|cooper|pennymac|loancare|\*{3,}7073/i.test(combined);
+    const isStudent =
+      /student|nelnet|aidvantage|mohela|navient|sallie\s*mae|edfinancial|pheaa|fedloan|dept\s*of\s*ed|education/i.test(
+        combined
+      );
+    const loanType: 'house' | 'car' | 'student' = isMortgage
+      ? 'house'
+      : isStudent
+      ? 'student'
+      : 'car';
+    const category =
+      loanType === 'house'
+        ? 'Mortgage'
+        : loanType === 'student'
+        ? 'Student Loans'
+        : 'Auto Loan';
+    const merchant = combined.includes('rocket')
+      ? 'rocket mortgage'
+      : combined.includes('santander')
+      ? 'santander'
+      : (acc.institution || acc.name || '').toLowerCase().trim();
+
+    // Detect typical monthly payment from matching transactions
+    const matchingTxns = s.transactions.filter((t) => {
+      if (t.source === 'demo' || t.amount >= 0) return false;
+      const td = `${t.description} ${t.merchantKey || ''}`.toLowerCase();
+      return (
+        (merchant && td.includes(merchant)) ||
+        t.category === category
+      );
+    });
+    let detectedPayment: number | undefined;
+    if (matchingTxns.length > 0) {
+      const counts = new Map<number, number>();
+      let bestAmt = 0;
+      let maxCnt = 0;
+      for (const t of matchingTxns) {
+        const amt = Math.round(Math.abs(t.amount) * 100) / 100;
+        const c = (counts.get(amt) || 0) + 1;
+        counts.set(amt, c);
+        if (c > maxCnt) {
+          maxCnt = c;
+          bestAmt = amt;
+        }
+      }
+      if (bestAmt > 0) detectedPayment = bestAmt;
+    }
+
+    const rawBalance = Math.abs(acc.currentBalance || 0);
+    const existing = s.loans.find((l) => {
+      const ln = (l.name || '').toLowerCase();
+      const lm = (l.merchant || '').toLowerCase();
+      if (ln === acc.name.toLowerCase() || acc.name.toLowerCase().includes(ln) || ln.includes(acc.name.toLowerCase())) {
+        return true;
+      }
+      if (merchant && lm && (lm.includes(merchant) || merchant.includes(lm))) {
+        return true;
+      }
+      if (acc.last4 && ln.includes(acc.last4)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (!existing) {
+      const isRocket = combined.includes('rocket');
+      const isSantander = combined.includes('santander');
+      const defaultPayment = isRocket ? 2288.41 : isSantander ? 544.41 : undefined;
+      const newLoan: Loan = {
+        id: nextLoanId++,
+        name: acc.name,
+        type: loanType,
+        principal: rawBalance > 0 ? rawBalance : loanType === 'house' ? 326463.1 : 19486.85,
+        rate: loanType === 'house' ? 6.5 : 5.5,
+        termYears: loanType === 'house' ? 30 : loanType === 'student' ? 10 : 5,
+        startDate: isRocket ? '2023-05-01' : isSantander ? '2023-12-01' : '2024-01-01',
+        category,
+        merchant: merchant || undefined,
+        monthlyPayment: detectedPayment ?? defaultPayment,
+        propertyValue:
+          loanType === 'house'
+            ? 500000
+            : loanType === 'car'
+            ? 35000
+            : undefined,
+        extraMonthlyPayment: isRocket ? 3010 : isSantander ? 1000 : undefined,
+        createdAt: new Date().toISOString(),
+        enabled: true,
+      };
+      s.loans = [...s.loans, newLoan];
+      changed = true;
+    } else {
+      let updatedLoan = existing;
+      if (existing.name !== acc.name && (existing.name.startsWith('*') || existing.name.startsWith('Financial Institution') || !existing.name.toLowerCase().startsWith((acc.institution || '').toLowerCase()))) {
+        updatedLoan = { ...updatedLoan, name: acc.name };
+      }
+      if (detectedPayment && !existing.monthlyPayment) {
+        updatedLoan = { ...updatedLoan, monthlyPayment: detectedPayment };
+      }
+      if (rawBalance > 0 && (!existing.principal || existing.principal <= 0)) {
+        updatedLoan = { ...updatedLoan, principal: rawBalance };
+      }
+      if (updatedLoan !== existing) {
+        s.loans = s.loans.map((l) => (l.id === existing.id ? updatedLoan : l));
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
 function purgeDemoDataIfRealSourcesConnected(s: BrowserDemoState): boolean {
   if (!hasConnectedRealSources(s)) return false;
 
@@ -131,6 +436,10 @@ function purgeDemoDataIfRealSourcesConnected(s: BrowserDemoState): boolean {
   const demoSetting = s.settings.find((x) => x.key === 'demoMode');
   if (!demoSetting || demoSetting.value !== false) {
     s.settings = [...s.settings.filter((x) => x.key !== 'demoMode'), { key: 'demoMode', value: false }];
+    changed = true;
+  }
+
+  if (syncConnectedAccountsAndLoans(s)) {
     changed = true;
   }
 
@@ -419,23 +728,31 @@ function resolveSimpleFinDate(posted?: number | null, transactedAt?: number | nu
   return iso;
 }
 
-function inferStrictlyAccountDetails(orgName: string | null | undefined, accName: string): {
+function inferStrictlyAccountDetails(
+  orgName: string | null | undefined,
+  accName: string,
+  sfAccountId?: string | null
+): {
   type: Account['type'];
   institution: string;
   name: string;
   last4?: string;
 } {
-  const bankName = (orgName || 'Bank').trim();
-  const lower = `${bankName} ${accName}`.toLowerCase();
+  const cleanRawName = stripGenericInstitutionPrefix(accName || 'Account');
+  const bankName = inferOrgNameFromAccount(sfAccountId, cleanRawName, orgName);
+  const lower = `${bankName} ${cleanRawName}`.toLowerCase();
   const isMortgage =
+    sfAccountId === 'ACT-d29e6950-a8db-42e5-91f2-a65291589e16' ||
     lower.includes('mortgage') ||
     lower.includes('home loan') ||
     lower.includes('rocket') ||
     lower.includes('mr. cooper') ||
     lower.includes('pennymac') ||
-    lower.includes('loancare');
+    lower.includes('loancare') ||
+    /\*{3,}7073/.test(lower);
   const isLoan =
     isMortgage ||
+    sfAccountId === 'ACT-7fcf74b3-d66a-4abf-8e60-63b2ff4f8189' ||
     lower.includes('loan') ||
     lower.includes('auto finance') ||
     lower.includes('santander') ||
@@ -443,34 +760,46 @@ function inferStrictlyAccountDetails(orgName: string | null | undefined, accName
     lower.includes('aidvantage') ||
     lower.includes('mohela') ||
     lower.includes('navient') ||
-    lower.includes('sallie mae');
-  const isCredit =
-    !isLoan &&
-    (lower.includes('credit') ||
-      lower.includes('card') ||
-      lower.includes('sapphire') ||
-      lower.includes('freedom') ||
-      lower.includes('quicksilver') ||
-      lower.includes('venture') ||
-      lower.includes('savor') ||
-      lower.includes('cash') ||
-      lower.includes('platinum') ||
-      lower.includes('bilt'));
+    lower.includes('sallie mae') ||
+    /\b(19|20)\d{2}\s+(tesla|ford|toyota|honda|chevy|chevrolet|bmw|audi|mercedes|lexus|subaru|hyundai|kia|nissan|jeep|ram|gmc|mazda|volkswagen|vw|volvo|porsche|rivian|lucid)\b/i.test(
+      lower
+    );
   const isInvestment =
     !isLoan &&
-    !isCredit &&
     (lower.includes('ira') ||
       lower.includes('roth') ||
       lower.includes('401k') ||
       lower.includes('401(k)') ||
       lower.includes('hsa') ||
+      lower.includes('health savings') ||
       lower.includes('529') ||
       lower.includes('brokerage') ||
       lower.includes('investment') ||
+      lower.includes('restricted stock') ||
+      lower.includes('stock purchase') ||
+      lower.includes('individual - tod') ||
+      lower.includes('crypto') ||
       lower.includes('fidelity') ||
       lower.includes('vanguard') ||
       lower.includes('schwab') ||
       lower.includes('robinhood'));
+  const isCredit =
+    !isLoan &&
+    !isInvestment &&
+    (lower.includes('credit') ||
+      lower.includes('card') ||
+      lower.includes('visa') ||
+      lower.includes('mastercard') ||
+      lower.includes('sapphire') ||
+      lower.includes('freedom') ||
+      lower.includes('quicksilver') ||
+      lower.includes('venture') ||
+      lower.includes('savor') ||
+      lower.includes('cash rewards') ||
+      lower.includes('cash back') ||
+      lower.includes('custom cash') ||
+      lower.includes('platinum') ||
+      lower.includes('bilt'));
   const isSavings =
     !isLoan &&
     !isCredit &&
@@ -493,9 +822,15 @@ function inferStrictlyAccountDetails(orgName: string | null | undefined, accName
     ? 'savings'
     : 'checking';
 
-  const digitsMatch = accName.match(/(\d{4})\b/);
+  const digitsMatch = cleanRawName.match(/(\d{4})\b/);
   const last4 = digitsMatch ? digitsMatch[1] : undefined;
-  const cleanName = accName.trim() || `${bankName} Account`;
+  const rawTrimmed = cleanRawName.trim();
+  const hasRealBank = bankName && bankName !== 'Bank' && bankName !== 'Financial Institution';
+  const cleanName = !rawTrimmed
+    ? `${hasRealBank ? bankName : 'Bank'} Account`
+    : hasRealBank && !rawTrimmed.toLowerCase().startsWith(bankName.toLowerCase())
+    ? `${bankName} ${rawTrimmed}`
+    : rawTrimmed;
 
   return {
     type,
@@ -526,6 +861,7 @@ function saveSimpleFinConfigToState(s: BrowserDemoState, cfg: SimpleFinConfig): 
 }
 
 const KNOWN_BRANDS = [
+  'rocket mortgage', 'santander', 'department of education', 'dept of ed',
   'the home depot', 'home depot', 'the ups store', 'ups store',
   'racetrac', 'chevron', 'quiktrip', 'circle k', 'citgo', 'shell',
   'dunkin', 'xero', 'amc', 'starbucks', 'walmart', 'target',
@@ -580,6 +916,17 @@ function heuristicCategory(text: string, netSum: number, validCategories: Set<st
   const hasAny = (keywords: string[]) =>
     keywords.some((kw) => (kw.includes(' ') ? padded.includes(kw) : padded.includes(` ${kw} `) || padded.includes(kw)));
 
+  const loanRules: Array<[string, string[]]> = [
+    ['Mortgage', ['rocket mortgage', 'mortgage', 'mr cooper', 'pennymac', 'loancare', 'freedom mortgage', 'shellpoint', 'flagstar', 'caliber home', 'guild mortgage', 'united wholesale', 'uwm', 'loan depot', 'loandepot', 'cenlar', 'dovenmuehle', 'phh mortgage', 'carrington', 'newrez']],
+    ['Auto Loan', ['santander', 'ally auto', 'toyota financial', 'honda financial', 'ford motor credit', 'gm financial', 'hyundai motor', 'nissan motor', 'kia finance', 'vw credit', 'bmw financial', 'mercedes benz financial', 'subaru motors', 'mazda financial', 'carmax auto', 'capital one auto', 'bridgecrest', 'westlake financial', 'auto finance', 'auto loan']],
+    ['Student Loans', ['department of education', 'dept of ed', 'nelnet', 'aidvantage', 'mohela', 'navient', 'sallie mae', 'edfinancial', 'fedloan', 'great lakes', 'earnest', 'pheaa', 'student loan', 'studntloan']],
+  ];
+  for (const [cat, keywords] of loanRules) {
+    if (validCategories.has(cat) && hasAny(keywords)) {
+      return cat;
+    }
+  }
+
   if (
     validCategories.has('Transfers') &&
     hasAny([
@@ -614,7 +961,7 @@ function heuristicCategory(text: string, netSum: number, validCategories: Set<st
     ['Health', ['cvs', 'walgreens', 'rite aid', 'pharmacy', 'medical', 'dental', 'dentist', 'doctor', 'clinic', 'hospital', 'urgent care', 'quest diag', 'labcorp', 'optometry', 'vision', 'therapy', 'fitness', 'peloton', 'ymca']],
     ['Entertainment', ['amc', 'regal', 'cinemark', 'cinema', 'movie', 'ticketmaster', 'stubhub', 'seatgeek', 'steam', 'playstation', 'xbox', 'nintendo', 'golf', 'bowling', 'museum', 'zoo', 'aquarium']],
     ['Insurance', ['geico', 'state farm', 'progressive', 'allstate', 'usaa', 'liberty mutual', 'farmers', 'insurance']],
-    ['Housing', ['mortgage', 'rent', 'hoa', 'property mgmt', 'apartments']],
+    ['Housing', ['rent', 'hoa', 'property mgmt', 'apartments']],
     ['Taxes', ['internal revenue', 'dept of rev', 'property tax', 'county tax']],
     ['Fees & Interest', ['overdraft', 'late charge', 'interest charge', 'service charge', 'wire fee', 'atm fee', 'annual fee', 'maintenance fee']],
   ];
@@ -655,7 +1002,15 @@ function filterTransactions(txns: Transaction[], filters: Record<string, any> = 
     if (enabledAccSet && !enabledAccSet.has(t.accountId)) return false;
     if (disabledSet.has(t.category)) return false;
     if (filters.category && t.category !== filters.category) return false;
-    if (filters.merchantKey && t.merchantKey !== filters.merchantKey) return false;
+    if (filters.merchantKey) {
+      const target = String(filters.merchantKey).toLowerCase().trim();
+      const mk = (t.merchantKey || '').toLowerCase().trim();
+      const normMk = normalizeSortMerchantKey(mk, t.description);
+      const descLower = t.description.toLowerCase();
+      if (mk !== target && normMk !== target && !mk.includes(target) && !descLower.includes(target)) {
+        return false;
+      }
+    }
 
     if (filters.transactionType === 'income') {
       if (!(incomeCats.has(t.category) || (t.amount > 0 && !transferCats.has(t.category)))) return false;
@@ -797,8 +1152,12 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
   const s = ensureInitialized();
 
   switch (cmd) {
-    case 'get_accounts':
+    case 'get_accounts': {
+      if (hasConnectedRealSources(s) && syncConnectedAccountsAndLoans(s)) {
+        persistState();
+      }
       return s.accounts;
+    }
     case 'add_account': {
       const nextId = Math.max(0, ...s.accounts.map((a) => a.id || 0)) + 1;
       const item: Account = { ...args.item, id: nextId, source: args.item?.source || 'custom' };
@@ -883,8 +1242,12 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       persistState();
       return null;
     }
-    case 'get_loans':
+    case 'get_loans': {
+      if (hasConnectedRealSources(s) && syncConnectedAccountsAndLoans(s)) {
+        persistState();
+      }
       return s.loans;
+    }
     case 'add_loan':
     case 'put_loan': {
       const item = args.item as Loan;
@@ -1607,6 +1970,14 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       }
 
       const accountSet = await resp.json();
+      const orgMap = new Map<string, string>();
+      if (Array.isArray(accountSet?.connections)) {
+        for (const c of accountSet.connections) {
+          const cid = c?.conn_id || c?.id;
+          const cname = c?.org_name || c?.name;
+          if (cid && cname) orgMap.set(String(cid), String(cname));
+        }
+      }
       const rawAccounts: any[] = Array.isArray(accountSet?.accounts) ? accountSet.accounts : [];
       const existingById = new Map(s.simplefinAccounts.map((a) => [a.account_id, a]));
       const results: SimpleFinAccountRecord[] = [];
@@ -1614,11 +1985,15 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
 
       for (const acc of rawAccounts) {
         const sfAccId = String(acc.id);
-        const orgName =
+        const rawAccName = stripGenericInstitutionPrefix(String(acc.name || 'Account'));
+        const rawOrg =
+          acc?.org_name ||
+          (acc?.conn_id ? orgMap.get(String(acc.conn_id)) : undefined) ||
           acc?.org?.name ||
           acc?.org?.['sfin-url'] ||
           acc?.org?.domain ||
-          'Financial Institution';
+          undefined;
+        const orgName = inferOrgNameFromAccount(sfAccId, rawAccName, rawOrg);
         const balanceVal =
           typeof acc?.balance === 'string' || typeof acc?.balance === 'number'
             ? parseFloat(String(acc.balance))
@@ -1638,13 +2013,18 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
           mappedAccountId = null;
         }
 
+        const { name: accountName, type: accountType, institution, last4 } = inferStrictlyAccountDetails(
+          orgName,
+          rawAccName,
+          sfAccId
+        );
+
         if (mappedAccountId === null) {
-          const { name: accountName, type: accountType, institution, last4 } = inferStrictlyAccountDetails(
-            orgName,
-            String(acc.name || 'Account')
-          );
           const match = s.accounts.find(
-            (a) => a.name.toLowerCase() === accountName.toLowerCase() && a.source !== 'demo'
+            (a) =>
+              a.source !== 'demo' &&
+              (a.name.toLowerCase() === accountName.toLowerCase() ||
+                stripGenericInstitutionPrefix(a.name).toLowerCase() === rawAccName.toLowerCase())
           );
           if (match?.id) {
             mappedAccountId = match.id;
@@ -1663,9 +2043,22 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
             s.accounts = [...s.accounts, newAcc];
             mappedAccountId = nextId;
           }
-        } else if (balance !== null) {
+        }
+        if (mappedAccountId !== null) {
           s.accounts = s.accounts.map((a) =>
-            a.id === mappedAccountId ? { ...a, currentBalance: balance } : a
+            a.id === mappedAccountId
+              ? {
+                  ...a,
+                  name: accountName,
+                  type: a.type === 'checking' && accountType !== 'checking' ? accountType : a.type,
+                  institution:
+                    !a.institution || a.institution === 'Financial Institution' || a.institution === 'Bank'
+                      ? institution
+                      : a.institution,
+                  last4: a.last4 || last4,
+                  currentBalance: balance !== null ? balance : a.currentBalance,
+                }
+              : a
           );
         }
 
@@ -1673,7 +2066,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
           id: prev?.id || nextSfRowId++,
           account_id: sfAccId,
           org_name: String(orgName),
-          name: String(acc.name || 'Account'),
+          name: rawAccName,
           currency: String(acc.currency || 'USD'),
           balance,
           available_balance: availableBalance,
@@ -1723,6 +2116,14 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       }
 
       const accountSet = await resp.json();
+      const orgMap = new Map<string, string>();
+      if (Array.isArray(accountSet?.connections)) {
+        for (const c of accountSet.connections) {
+          const cid = c?.conn_id || c?.id;
+          const cname = c?.org_name || c?.name;
+          if (cid && cname) orgMap.set(String(cid), String(cname));
+        }
+      }
       const rawAccounts: any[] = Array.isArray(accountSet?.accounts) ? accountSet.accounts : [];
       const warnings: string[] = Array.isArray(accountSet?.errors) ? [...accountSet.errors] : [];
 
@@ -1739,11 +2140,15 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
 
       for (const acc of rawAccounts) {
         const sfAccId = String(acc.id);
-        const orgName =
+        const rawAccName = stripGenericInstitutionPrefix(String(acc.name || 'Account'));
+        const rawOrg =
+          acc?.org_name ||
+          (acc?.conn_id ? orgMap.get(String(acc.conn_id)) : undefined) ||
           acc?.org?.name ||
           acc?.org?.['sfin-url'] ||
           acc?.org?.domain ||
-          'Financial Institution';
+          undefined;
+        const orgName = inferOrgNameFromAccount(sfAccId, rawAccName, rawOrg);
         const balanceVal =
           typeof acc?.balance === 'string' || typeof acc?.balance === 'number'
             ? parseFloat(String(acc.balance))
@@ -1763,13 +2168,18 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
           mappedAccountId = null;
         }
 
+        const { name: accountName, type: accountType, institution, last4 } = inferStrictlyAccountDetails(
+          orgName,
+          rawAccName,
+          sfAccId
+        );
+
         if (mappedAccountId === null) {
-          const { name: accountName, type: accountType, institution, last4 } = inferStrictlyAccountDetails(
-            orgName,
-            String(acc.name || 'Account')
-          );
           const match = s.accounts.find(
-            (a) => a.name.toLowerCase() === accountName.toLowerCase() && a.source !== 'demo'
+            (a) =>
+              a.source !== 'demo' &&
+              (a.name.toLowerCase() === accountName.toLowerCase() ||
+                stripGenericInstitutionPrefix(a.name).toLowerCase() === rawAccName.toLowerCase())
           );
           if (match?.id) {
             mappedAccountId = match.id;
@@ -1790,9 +2200,22 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
             ];
             mappedAccountId = nextAccId;
           }
-        } else if (balance !== null) {
+        }
+        if (mappedAccountId !== null) {
           s.accounts = s.accounts.map((a) =>
-            a.id === mappedAccountId ? { ...a, currentBalance: balance } : a
+            a.id === mappedAccountId
+              ? {
+                  ...a,
+                  name: accountName,
+                  type: a.type === 'checking' && accountType !== 'checking' ? accountType : a.type,
+                  institution:
+                    !a.institution || a.institution === 'Financial Institution' || a.institution === 'Bank'
+                      ? institution
+                      : a.institution,
+                  last4: a.last4 || last4,
+                  currentBalance: balance !== null ? balance : a.currentBalance,
+                }
+              : a
           );
         }
 
@@ -1801,7 +2224,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         if (mappedAccountId !== null) {
           accountsSynced += 1;
           const strictAcc = s.accounts.find((a) => a.id === mappedAccountId);
-          const accountType = strictAcc?.type;
+          const resolvedAccType = strictAcc?.type || accountType;
           const txList: any[] = Array.isArray(acc?.transactions) ? acc.transactions : [];
 
           for (const tx of txList) {
@@ -1826,12 +2249,19 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
             }
             existingKeys.add(dedupKey);
 
-            const merchantKey = extractMerchantKey(description);
+            const rawMerchantKey = extractMerchantKey(description);
+            const lowerDesc = `${rawMerchantKey} ${description}`.toLowerCase();
+            const merchantKey =
+              lowerDesc.includes('rocket mortgage') || lowerDesc.includes('rocket mor')
+                ? 'rocket mortgage'
+                : lowerDesc.includes('santander')
+                ? 'santander'
+                : rawMerchantKey;
             const validCats = new Set(s.categories.map((c) => c.name));
             let category = categorize(description, merchantKey, undefined, ctx);
             if (category === 'Uncategorized') {
               const inferred =
-                inferTypeCategory(amountNum, 'simplefin', undefined, accountType, description) ||
+                inferTypeCategory(amountNum, 'simplefin', undefined, resolvedAccType, description) ||
                 heuristicCategory(`${merchantKey} ${description}`, amountNum, validCats);
               if (inferred) category = inferred;
             }
@@ -1859,7 +2289,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
           id: prev?.id || nextSfRowId++,
           account_id: sfAccId,
           org_name: String(orgName),
-          name: String(acc.name || 'Account'),
+          name: rawAccName,
           currency: String(acc.currency || 'USD'),
           balance,
           available_balance: availableBalance,
