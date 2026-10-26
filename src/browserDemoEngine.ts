@@ -1,11 +1,13 @@
-import type { Account, Budget, Category, CategoryRule, Loan, RecurrenceInfo, Transaction } from './types';
+import type { Account, Budget, Category, CategoryRule, CsvMapping, ImportBatch, Loan, MerchantOverride, RecurrenceInfo, Transaction } from './types';
 import type { Scenario } from './api/scenarios';
 import type { ProjectionParams } from './api/forecast';
+import type { SimpleFinAccountRecord, SimpleFinConfig, SimpleFinSyncResponse } from './api/simplefin';
 import type { ProjectionPoint } from './components/ForecastCharts';
 import { buildDemoTransactions } from './demoData';
-import { extractMerchantKey } from './domain/categorize';
+import { categorize, extractMerchantKey, inferTypeCategory } from './domain/categorize';
 
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const BROWSER_DB_STORAGE_KEY = 'strictly_browser_db_v1';
 
 const DEMO_CATEGORIES: Category[] = [
   { id: 1, name: 'Groceries', color: '#4caf50', type: 'spend', sortOrder: 10, defaultRecurrence: 'onetime' },
@@ -50,12 +52,53 @@ interface BrowserDemoState {
   loans: Loan[];
   scenarios: Scenario[];
   settings: Array<{ key: string; value: unknown }>;
+  simplefinAccounts: SimpleFinAccountRecord[];
+  merchantOverrides: MerchantOverride[];
+  csvMappings: CsvMapping[];
+  imports: ImportBatch[];
 }
 
 let state: BrowserDemoState | null = null;
 
+function persistState(): void {
+  if (!state || typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(BROWSER_DB_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 function ensureInitialized(): BrowserDemoState {
   if (state) return state;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(BROWSER_DB_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.accounts) && Array.isArray(parsed.transactions)) {
+          state = {
+            accounts: parsed.accounts,
+            categories: Array.isArray(parsed.categories) && parsed.categories.length > 0 ? parsed.categories : [...DEMO_CATEGORIES],
+            rules: Array.isArray(parsed.rules) ? parsed.rules : [],
+            transactions: parsed.transactions,
+            budgets: Array.isArray(parsed.budgets) ? parsed.budgets : [],
+            loans: Array.isArray(parsed.loans) ? parsed.loans : [],
+            scenarios: Array.isArray(parsed.scenarios) ? parsed.scenarios : [],
+            settings: Array.isArray(parsed.settings) ? parsed.settings : [],
+            simplefinAccounts: Array.isArray(parsed.simplefinAccounts) ? parsed.simplefinAccounts : [],
+            merchantOverrides: Array.isArray(parsed.merchantOverrides) ? parsed.merchantOverrides : [],
+            csvMappings: Array.isArray(parsed.csvMappings) ? parsed.csvMappings : [],
+            imports: Array.isArray(parsed.imports) ? parsed.imports : [],
+          };
+          return state;
+        }
+      }
+    } catch {
+      // Fallback to default seed below
+    }
+  }
 
   const now = new Date();
   const year = now.getFullYear();
@@ -235,9 +278,156 @@ function ensureInitialized(): BrowserDemoState {
     loans,
     scenarios: [],
     settings: [],
+    simplefinAccounts: [],
+    merchantOverrides: [],
+    csvMappings: [],
+    imports: [],
   };
 
   return state;
+}
+
+function parseSimpleFinUrl(rawUrl: string): { username: string; password: string; cleanUrl: string } {
+  const trimmed = (rawUrl || '').trim();
+  const schemeSplit = trimmed.split('://');
+  if (schemeSplit.length !== 2) {
+    throw new Error('Invalid SimpleFIN URL format: missing scheme');
+  }
+  const [scheme, rest] = schemeSplit;
+  const atIdx = rest.indexOf('@');
+  if (atIdx === -1) {
+    throw new Error('Invalid SimpleFIN URL format: missing credentials before @');
+  }
+  const authPart = rest.slice(0, atIdx);
+  const hostPart = rest.slice(atIdx + 1);
+  const colonIdx = authPart.indexOf(':');
+  if (colonIdx === -1) {
+    throw new Error('Invalid SimpleFIN URL credentials: expected username:password');
+  }
+  const username = authPart.slice(0, colonIdx);
+  const password = authPart.slice(colonIdx + 1);
+  const cleanUrl = `${scheme}://${hostPart.replace(/\/+$/, '')}`;
+  return { username, password, cleanUrl };
+}
+
+function resolveSimpleFinDate(posted?: number | null, transactedAt?: number | null): string {
+  const epoch =
+    typeof posted === 'number' && posted > 0
+      ? posted
+      : typeof transactedAt === 'number' && transactedAt > 0
+      ? transactedAt
+      : Math.floor(Date.now() / 1000);
+  const dt = new Date(epoch * 1000);
+  const iso = Number.isNaN(dt.getTime()) ? new Date().toISOString().slice(0, 10) : dt.toISOString().slice(0, 10);
+  if (iso < '2000-01-01') {
+    return new Date().toISOString().slice(0, 10);
+  }
+  return iso;
+}
+
+function inferStrictlyAccountDetails(orgName: string | null | undefined, accName: string): {
+  type: Account['type'];
+  institution: string;
+  name: string;
+  last4?: string;
+} {
+  const bankName = (orgName || 'Bank').trim();
+  const lower = `${bankName} ${accName}`.toLowerCase();
+  const isMortgage =
+    lower.includes('mortgage') ||
+    lower.includes('home loan') ||
+    lower.includes('rocket') ||
+    lower.includes('mr. cooper') ||
+    lower.includes('pennymac') ||
+    lower.includes('loancare');
+  const isLoan =
+    isMortgage ||
+    lower.includes('loan') ||
+    lower.includes('auto finance') ||
+    lower.includes('santander') ||
+    lower.includes('nelnet') ||
+    lower.includes('aidvantage') ||
+    lower.includes('mohela') ||
+    lower.includes('navient') ||
+    lower.includes('sallie mae');
+  const isCredit =
+    !isLoan &&
+    (lower.includes('credit') ||
+      lower.includes('card') ||
+      lower.includes('sapphire') ||
+      lower.includes('freedom') ||
+      lower.includes('quicksilver') ||
+      lower.includes('venture') ||
+      lower.includes('savor') ||
+      lower.includes('cash') ||
+      lower.includes('platinum') ||
+      lower.includes('bilt'));
+  const isInvestment =
+    !isLoan &&
+    !isCredit &&
+    (lower.includes('ira') ||
+      lower.includes('roth') ||
+      lower.includes('401k') ||
+      lower.includes('401(k)') ||
+      lower.includes('hsa') ||
+      lower.includes('529') ||
+      lower.includes('brokerage') ||
+      lower.includes('investment') ||
+      lower.includes('fidelity') ||
+      lower.includes('vanguard') ||
+      lower.includes('schwab') ||
+      lower.includes('robinhood'));
+  const isSavings =
+    !isLoan &&
+    !isCredit &&
+    !isInvestment &&
+    (lower.includes('saving') ||
+      lower.includes('hysa') ||
+      lower.includes('money market') ||
+      lower.includes('mma') ||
+      /\bsav\b/.test(lower));
+
+  const type: Account['type'] = isMortgage
+    ? 'mortgage'
+    : isLoan
+    ? 'loan'
+    : isCredit
+    ? 'credit'
+    : isInvestment
+    ? 'investment'
+    : isSavings
+    ? 'savings'
+    : 'checking';
+
+  const digitsMatch = accName.match(/(\d{4})\b/);
+  const last4 = digitsMatch ? digitsMatch[1] : undefined;
+  const cleanName = accName.trim() || `${bankName} Account`;
+
+  return {
+    type,
+    institution: bankName,
+    name: cleanName,
+    last4,
+  };
+}
+
+function getSavedSimpleFinConfig(s: BrowserDemoState): SimpleFinConfig {
+  const saved = s.settings.find((x) => x.key === 'simplefin_config')?.value;
+  if (saved && typeof saved === 'object' && 'access_url' in (saved as any)) {
+    return saved as SimpleFinConfig;
+  }
+  return {
+    access_url: '',
+    claimed_at: null,
+    last_synced_at: null,
+  };
+}
+
+function saveSimpleFinConfigToState(s: BrowserDemoState, cfg: SimpleFinConfig): void {
+  const existing = s.settings.find((x) => x.key === 'simplefin_config');
+  if (existing) existing.value = cfg;
+  else s.settings.push({ key: 'simplefin_config', value: cfg });
+  persistState();
 }
 
 function filterTransactions(txns: Transaction[], filters: Record<string, any> = {}): Transaction[] {
@@ -250,7 +440,16 @@ function filterTransactions(txns: Transaction[], filters: Record<string, any> = 
       ? new Set<number>(filters.enabledAccountIds)
       : null;
 
+  const hasNonDemoTxns = s.transactions.some((t) => t.source !== 'demo');
+  const explicitDemoMode = typeof filters.demoMode === 'boolean' ? filters.demoMode : undefined;
+
   return txns.filter((t) => {
+    if (explicitDemoMode === true) {
+      if (t.source !== 'demo') return false;
+    } else if (explicitDemoMode === false && hasNonDemoTxns) {
+      if (t.source === 'demo') return false;
+    }
+
     if (filters.startDate && t.date < filters.startDate) return false;
     if (filters.endDate && t.date > filters.endDate) return false;
     if (enabledAccSet && !enabledAccSet.has(t.accountId)) return false;
@@ -402,16 +601,19 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return s.accounts;
     case 'add_account': {
       const nextId = Math.max(0, ...s.accounts.map((a) => a.id || 0)) + 1;
-      const item: Account = { ...args.item, id: nextId, source: 'demo' };
+      const item: Account = { ...args.item, id: nextId, source: args.item?.source || 'custom' };
       s.accounts = [...s.accounts, item];
+      persistState();
       return nextId;
     }
     case 'update_account': {
       s.accounts = s.accounts.map((a) => (a.id === args.id ? { ...a, ...args.updates } : a));
+      persistState();
       return null;
     }
     case 'delete_account': {
       s.accounts = s.accounts.filter((a) => a.id !== args.id);
+      persistState();
       return null;
     }
     case 'get_categories':
@@ -419,10 +621,17 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'add_category': {
       const nextId = Math.max(0, ...s.categories.map((c) => c.id || 0)) + 1;
       s.categories = [...s.categories, { ...args.item, id: nextId }];
+      persistState();
       return nextId;
     }
     case 'update_category': {
       s.categories = s.categories.map((c) => (c.id === args.id ? { ...c, ...args.updates } : c));
+      persistState();
+      return null;
+    }
+    case 'delete_category': {
+      s.categories = s.categories.filter((c) => c.id !== args.id);
+      persistState();
       return null;
     }
     case 'get_rules':
@@ -430,14 +639,17 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'add_rule': {
       const nextId = Math.max(0, ...s.rules.map((r) => r.id || 0)) + 1;
       s.rules = [...s.rules, { ...args.item, id: nextId }];
+      persistState();
       return nextId;
     }
     case 'update_rule': {
       s.rules = s.rules.map((r) => (r.id === args.id ? { ...r, ...args.updates } : r));
+      persistState();
       return null;
     }
     case 'delete_rule': {
       s.rules = s.rules.filter((r) => r.id !== args.id);
+      persistState();
       return null;
     }
     case 'get_budgets':
@@ -449,15 +661,18 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         s.budgets = s.budgets.map((b) =>
           b.category === item.category ? { ...b, monthlyAmount: item.monthlyAmount, userSet: item.userSet ?? true } : b
         );
+        persistState();
         return null;
       }
       s.budgets = [...s.budgets, { category: item.category, monthlyAmount: item.monthlyAmount, userSet: item.userSet ?? true }];
+      persistState();
       return null;
     }
     case 'bulk_put_budgets': {
       for (const item of args.items || []) {
         await handleBrowserDemoIpc('put_budget', { item });
       }
+      persistState();
       return null;
     }
     case 'get_loans':
@@ -467,18 +682,22 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       const item = args.item as Loan;
       if (item.id) {
         s.loans = s.loans.map((l) => (l.id === item.id ? { ...l, ...item } : l));
+        persistState();
         return item.id;
       }
       const nextId = Math.max(0, ...s.loans.map((l) => l.id || 0)) + 1;
       s.loans = [...s.loans, { ...item, id: nextId }];
+      persistState();
       return nextId;
     }
     case 'update_loan': {
       s.loans = s.loans.map((l) => (l.id === args.id ? { ...l, ...args.updates } : l));
+      persistState();
       return null;
     }
     case 'delete_loan': {
       s.loans = s.loans.filter((l) => l.id !== args.id);
+      persistState();
       return null;
     }
     case 'get_scenarios':
@@ -487,14 +706,17 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       const nextId = Math.max(0, ...s.scenarios.map((sc) => sc.id || 0)) + 1;
       const created = { ...args.scenario, id: nextId };
       s.scenarios = [...s.scenarios, created];
+      persistState();
       return created;
     }
     case 'update_scenario': {
       s.scenarios = s.scenarios.map((sc) => (sc.id === args.id ? { ...sc, ...args.scenario } : sc));
+      persistState();
       return s.scenarios.find((sc) => sc.id === args.id) || null;
     }
     case 'delete_scenario': {
       s.scenarios = s.scenarios.filter((sc) => sc.id !== args.id);
+      persistState();
       return null;
     }
     case 'get_transaction': {
@@ -518,6 +740,86 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     }
     case 'get_transaction_count': {
       return filterTransactions(s.transactions, args.filters || {}).length;
+    }
+    case 'add_transaction': {
+      const nextId = Math.max(0, ...s.transactions.map((t) => t.id || 0)) + 1;
+      const item: Transaction = {
+        ...args.item,
+        id: nextId,
+        merchantKey: args.item?.merchantKey || extractMerchantKey(args.item?.description || ''),
+        source: args.item?.source || 'custom',
+        dedupKey: args.item?.dedupKey || `tx-${nextId}`,
+        userOverridden: Boolean(args.item?.userOverridden),
+      };
+      s.transactions = [item, ...s.transactions].sort((a, b) => b.date.localeCompare(a.date));
+      persistState();
+      return nextId;
+    }
+    case 'bulk_add_transactions': {
+      const items: Omit<Transaction, 'id'>[] = args.items || [];
+      let nextId = Math.max(0, ...s.transactions.map((t) => t.id || 0)) + 1;
+      const existingKeys = new Set(s.transactions.map((t) => t.dedupKey).filter(Boolean));
+      const added: Transaction[] = [];
+      for (const raw of items) {
+        if (raw.dedupKey && existingKeys.has(raw.dedupKey)) continue;
+        if (raw.dedupKey) existingKeys.add(raw.dedupKey);
+        added.push({
+          ...raw,
+          id: nextId++,
+          merchantKey: raw.merchantKey || extractMerchantKey(raw.description || ''),
+          source: raw.source || 'custom',
+          dedupKey: raw.dedupKey || `tx-${nextId}`,
+          userOverridden: Boolean(raw.userOverridden),
+        });
+      }
+      if (added.length > 0) {
+        s.settings = s.settings.filter((x) => x.key !== 'demoMode');
+        s.settings.push({ key: 'demoMode', value: false });
+        s.accounts = s.accounts.filter((a) => a.source !== 'demo');
+        s.transactions = [...added, ...s.transactions.filter((t) => t.source !== 'demo')].sort((a, b) =>
+          b.date.localeCompare(a.date)
+        );
+        persistState();
+      }
+      return null;
+    }
+    case 'update_transaction': {
+      s.transactions = s.transactions.map((t) => (t.id === args.id ? { ...t, ...args.updates } : t));
+      persistState();
+      return null;
+    }
+    case 'bulk_update_transactions': {
+      const updateMap = new Map<number, Partial<Transaction>>();
+      for (const u of args.updates || []) {
+        if (u && typeof u.id === 'number') {
+          updateMap.set(u.id, u.updates || {});
+        }
+      }
+      if (updateMap.size > 0) {
+        s.transactions = s.transactions.map((t) => (t.id && updateMap.has(t.id) ? { ...t, ...updateMap.get(t.id)! } : t));
+        persistState();
+      }
+      return null;
+    }
+    case 'delete_transaction': {
+      s.transactions = s.transactions.filter((t) => t.id !== args.id);
+      persistState();
+      return null;
+    }
+    case 'clear_transactions': {
+      if (args.accountId !== undefined && args.accountId !== null) {
+        s.transactions = s.transactions.filter((t) => t.accountId !== args.accountId);
+      } else {
+        s.transactions = [];
+      }
+      persistState();
+      return null;
+    }
+    case 'get_sort_queue': {
+      const limit = args.limit || 50;
+      return filterTransactions(s.transactions, {})
+        .filter((t) => !t.userOverridden && t.category === 'Uncategorized')
+        .slice(0, limit);
     }
     case 'get_dashboard_aggregates': {
       const filtered = filterTransactions(s.transactions, args.filters || {});
@@ -654,7 +956,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'build_recurrence_map': {
       const map: Record<string, RecurrenceInfo> = {};
       const byKey = new Map<string, Transaction[]>();
-      for (const t of s.transactions) {
+      for (const t of filterTransactions(s.transactions, {})) {
         if (args.accountId && t.accountId !== args.accountId) continue;
         const k = t.merchantKey || extractMerchantKey(t.description);
         const arr = byKey.get(k) || [];
@@ -682,25 +984,27 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return map;
     }
     case 'get_transaction_bounds': {
-      if (s.transactions.length === 0) return [null, null];
-      const dates = s.transactions.map((t) => t.date).sort();
+      const visible = filterTransactions(s.transactions, {});
+      if (visible.length === 0) return [null, null];
+      const dates = visible.map((t) => t.date).sort();
       return [dates[0], dates[dates.length - 1]];
     }
     case 'get_uncategorized_count':
-      return s.transactions.filter((t) => t.category === 'Uncategorized').length;
+      return filterTransactions(s.transactions, {}).filter((t) => t.category === 'Uncategorized').length;
     case 'get_category_transaction_counts': {
       const counts: Record<string, number> = {};
-      for (const t of s.transactions) {
+      for (const t of filterTransactions(s.transactions, {})) {
         counts[t.category] = (counts[t.category] || 0) + 1;
       }
       return counts;
     }
     case 'get_rule_match_counts': {
       const counts: Record<number, number> = {};
+      const visible = filterTransactions(s.transactions, {});
       for (const r of s.rules) {
         if (!r.id) continue;
         const pat = r.pattern.toLowerCase();
-        counts[r.id] = s.transactions.filter((t) => t.description.toLowerCase().includes(pat)).length;
+        counts[r.id] = visible.filter((t) => t.description.toLowerCase().includes(pat)).length;
       }
       return counts;
     }
@@ -716,7 +1020,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         recurrence: string;
         amounts: number[];
       }>();
-      for (const t of s.transactions) {
+      for (const t of filterTransactions(s.transactions, {})) {
         const key = t.merchantKey || extractMerchantKey(t.description);
         const g = groups.get(key) || {
           merchantKey: key,
@@ -761,7 +1065,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     }
     case 'get_unique_merchants': {
       const set = new Set<string>();
-      for (const t of s.transactions) {
+      for (const t of filterTransactions(s.transactions, {})) {
         set.add(t.merchantKey || extractMerchantKey(t.description));
       }
       return Array.from(set).sort();
@@ -769,13 +1073,62 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'preview_rule_matches': {
       const pat = String(args.pattern || '').toLowerCase();
       if (!pat) return { matchCount: 0, samples: [] };
-      const matches = s.transactions.filter((t) => t.description.toLowerCase().includes(pat));
+      const matches = filterTransactions(s.transactions, {}).filter((t) => t.description.toLowerCase().includes(pat));
       return { matchCount: matches.length, samples: matches.slice(0, 10) };
     }
-    case 'recategorize_all':
-      return 0;
-    case 'add_import':
+    case 'recategorize_all': {
+      let updatedCount = 0;
+      const ctx = { rules: s.rules };
+      s.transactions = s.transactions.map((t) => {
+        if (t.userOverridden && !args.forceUserRules) return t;
+        let nextCat = categorize(t.description, t.merchantKey, t.rawCategory, ctx);
+        if (nextCat === 'Uncategorized') {
+          const inferred = inferTypeCategory(t.amount, t.source, t.rawCategory, undefined, t.description);
+          if (inferred) nextCat = inferred;
+        }
+        if (nextCat !== t.category) {
+          updatedCount += 1;
+          return { ...t, category: nextCat };
+        }
+        return t;
+      });
+      if (updatedCount > 0) persistState();
+      return updatedCount;
+    }
+    case 'get_merchant_overrides':
+      return s.merchantOverrides;
+    case 'put_merchant_override': {
+      const item = args.item as MerchantOverride | undefined;
+      if (item?.merchantKey) {
+        s.merchantOverrides = [
+          ...s.merchantOverrides.filter((x) => x.merchantKey !== item.merchantKey),
+          item,
+        ];
+        persistState();
+      }
+      return null;
+    }
+    case 'get_csv_mappings':
+      return s.csvMappings;
+    case 'put_csv_mapping': {
+      const item = args.item as CsvMapping | undefined;
+      if (item) {
+        const nextId = Math.max(0, ...s.csvMappings.map((x) => x.id || 0)) + 1;
+        const saved = { ...item, id: item.id || nextId };
+        s.csvMappings = [...s.csvMappings.filter((x) => x.id !== saved.id), saved];
+        persistState();
+        return saved.id;
+      }
       return 1;
+    }
+    case 'get_imports':
+      return s.imports;
+    case 'add_import': {
+      const nextId = Math.max(0, ...s.imports.map((x) => x.id || 0)) + 1;
+      s.imports = [{ ...(args.item || {}), id: nextId }, ...s.imports];
+      persistState();
+      return nextId;
+    }
     case 'get_settings':
       return s.settings;
     case 'get_setting':
@@ -787,11 +1140,13 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         const existing = s.settings.find((x) => x.key === key);
         if (existing) existing.value = val;
         else s.settings.push({ key, value: val });
+        persistState();
       }
       return null;
     }
     case 'delete_setting': {
       s.settings = s.settings.filter((x) => x.key !== args.key);
+      persistState();
       return null;
     }
     case 'is_safe_mode':
@@ -799,41 +1154,375 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'get_mcp_server_info':
       return {
         executablePath: '',
-        dbPath: 'Browser Local Memory',
+        dbPath: 'Browser Local Storage',
         configJson: '{}',
         localUrls: [],
       };
     case 'simplefin_get_config': {
-      const saved = s.settings.find((x) => x.key === 'simplefin_config')?.value;
-      if (saved && typeof saved === 'object' && 'access_url' in saved) {
-        return saved;
-      }
-      return {
-        access_url: '',
-        claimed_at: null,
-        last_synced_at: null,
-      };
+      return getSavedSimpleFinConfig(s);
     }
     case 'simplefin_save_config': {
       const cfg = args.config || { access_url: '', claimed_at: null, last_synced_at: null };
-      const existing = s.settings.find((x) => x.key === 'simplefin_config');
-      if (existing) existing.value = cfg;
-      else s.settings.push({ key: 'simplefin_config', value: cfg });
+      saveSimpleFinConfigToState(s, cfg);
       return null;
     }
     case 'simplefin_remove_connection': {
       s.settings = s.settings.filter((x) => x.key !== 'simplefin_config');
+      s.simplefinAccounts = [];
+      persistState();
       return null;
     }
-    case 'simplefin_get_accounts':
-      return [];
-    case 'simplefin_map_account':
-      return null;
-    case 'simplefin_claim_setup_token':
-    case 'simplefin_sync_transactions':
-      throw new Error(
-        'Direct SimpleFIN Bridge sync requires the native desktop or Android APK app (browsers block cross-origin SimpleFIN API requests). You can import bank CSVs directly below!'
+    case 'simplefin_claim_setup_token': {
+      const trimmed = String(args.tokenInput || args.setupToken || '').trim();
+      if (!trimmed) {
+        throw new Error('Setup token cannot be empty.');
+      }
+
+      // Allow pasting an already-claimed SimpleFIN Access URL directly (https://user:pass@beta-bridge.simplefin.org/simplefin)
+      if ((trimmed.startsWith('https://') || trimmed.startsWith('http://')) && trimmed.includes('@')) {
+        const cfg: SimpleFinConfig = {
+          access_url: trimmed.replace(/\/+$/, ''),
+          claimed_at: new Date().toISOString(),
+          last_synced_at: null,
+        };
+        saveSimpleFinConfigToState(s, cfg);
+        return cfg;
+      }
+
+      let claimUrl = '';
+      try {
+        claimUrl = atob(trimmed).trim();
+      } catch {
+        throw new Error('Invalid SimpleFIN Setup Token (not valid Base64).');
+      }
+
+      if (!claimUrl.startsWith('https://') && !claimUrl.startsWith('http://')) {
+        throw new Error('Decoded SimpleFIN Setup Token is not a valid URL.');
+      }
+
+      // Simple POST with no custom headers avoids CORS preflight and works directly with beta-bridge.simplefin.org
+      const resp = await fetch(claimUrl, { method: 'POST' });
+      if (!resp.ok) {
+        throw new Error(
+          `SimpleFIN token claim failed (HTTP ${resp.status}). Note: Setup tokens are single-use and expire quickly.`
+        );
+      }
+      const accessUrl = (await resp.text()).trim();
+      if (!accessUrl.startsWith('https://') && !accessUrl.startsWith('http://')) {
+        throw new Error('SimpleFIN Bridge returned an invalid access URL.');
+      }
+
+      const cfg: SimpleFinConfig = {
+        access_url: accessUrl.replace(/\/+$/, ''),
+        claimed_at: new Date().toISOString(),
+        last_synced_at: null,
+      };
+      saveSimpleFinConfigToState(s, cfg);
+      return cfg;
+    }
+    case 'simplefin_get_accounts': {
+      const cfg = getSavedSimpleFinConfig(s);
+      if (!cfg.access_url) {
+        return s.simplefinAccounts;
+      }
+
+      const parsed = parseSimpleFinUrl(cfg.access_url);
+      const endpoint = `${parsed.cleanUrl}/accounts?version=2&balances-only=1`;
+      const headers: Record<string, string> = {
+        Authorization: 'Basic ' + btoa(`${parsed.username}:${parsed.password}`),
+      };
+
+      const resp = await fetch(endpoint, { method: 'GET', headers });
+      if (!resp.ok) {
+        throw new Error(`SimpleFIN accounts request failed (HTTP ${resp.status})`);
+      }
+
+      const accountSet = await resp.json();
+      const rawAccounts: any[] = Array.isArray(accountSet?.accounts) ? accountSet.accounts : [];
+      const existingById = new Map(s.simplefinAccounts.map((a) => [a.account_id, a]));
+      const results: SimpleFinAccountRecord[] = [];
+      let nextSfRowId = Math.max(0, ...s.simplefinAccounts.map((a) => a.id || 0)) + 1;
+
+      for (const acc of rawAccounts) {
+        const sfAccId = String(acc.id);
+        const orgName =
+          acc?.org?.name ||
+          acc?.org?.['sfin-url'] ||
+          acc?.org?.domain ||
+          'Financial Institution';
+        const balanceVal =
+          typeof acc?.balance === 'string' || typeof acc?.balance === 'number'
+            ? parseFloat(String(acc.balance))
+            : NaN;
+        const balance = Number.isFinite(balanceVal) ? balanceVal : null;
+        const availVal =
+          typeof acc?.['available-balance'] === 'string' || typeof acc?.['available-balance'] === 'number'
+            ? parseFloat(String(acc['available-balance']))
+            : NaN;
+        const availableBalance = Number.isFinite(availVal) ? availVal : null;
+        const balanceDateEpoch = typeof acc?.['balance-date'] === 'number' ? acc['balance-date'] : null;
+
+        const prev = existingById.get(sfAccId);
+        let mappedAccountId: number | null = prev?.strictly_account_id ?? null;
+
+        if (mappedAccountId !== null && !s.accounts.some((a) => a.id === mappedAccountId)) {
+          mappedAccountId = null;
+        }
+
+        if (mappedAccountId === null) {
+          const { name: accountName, type: accountType, institution, last4 } = inferStrictlyAccountDetails(
+            orgName,
+            String(acc.name || 'Account')
+          );
+          const match = s.accounts.find(
+            (a) => a.name.toLowerCase() === accountName.toLowerCase() && a.source !== 'demo'
+          );
+          if (match?.id) {
+            mappedAccountId = match.id;
+          } else {
+            const nextId = Math.max(0, ...s.accounts.map((a) => a.id || 0)) + 1;
+            const newAcc: Account = {
+              id: nextId,
+              name: accountName,
+              type: accountType,
+              institution,
+              last4,
+              currentBalance: balance ?? undefined,
+              enabled: true,
+              source: 'simplefin',
+            };
+            s.accounts = [...s.accounts, newAcc];
+            mappedAccountId = nextId;
+          }
+        } else if (balance !== null) {
+          s.accounts = s.accounts.map((a) =>
+            a.id === mappedAccountId ? { ...a, currentBalance: balance } : a
+          );
+        }
+
+        results.push({
+          id: prev?.id || nextSfRowId++,
+          account_id: sfAccId,
+          org_name: String(orgName),
+          name: String(acc.name || 'Account'),
+          currency: String(acc.currency || 'USD'),
+          balance,
+          available_balance: availableBalance,
+          balance_date: balanceDateEpoch,
+          strictly_account_id: mappedAccountId,
+          latest_transaction_date: prev?.latest_transaction_date ?? null,
+        });
+      }
+
+      s.simplefinAccounts = results;
+      persistState();
+      return results;
+    }
+    case 'simplefin_map_account': {
+      const sfId = String(args.accountId || args.simplefinAccountId || '');
+      const strictlyAccountId = args.strictlyAccountId ?? null;
+      s.simplefinAccounts = s.simplefinAccounts.map((a) =>
+        a.account_id === sfId ? { ...a, strictly_account_id: strictlyAccountId } : a
       );
+      persistState();
+      return null;
+    }
+    case 'simplefin_sync_transactions': {
+      const cfg = getSavedSimpleFinConfig(s);
+      if (!cfg.access_url) {
+        throw new Error('SimpleFIN is not configured. Claim a setup token first.');
+      }
+
+      const parsed = parseSimpleFinUrl(cfg.access_url);
+      let startEpoch = Math.floor(Date.now() / 1000) - 60 * 86400;
+      if (args.startDate) {
+        const parsedMs = new Date(String(args.startDate)).getTime();
+        if (!Number.isNaN(parsedMs) && parsedMs > 0) {
+          startEpoch = Math.floor(parsedMs / 1000);
+        }
+      }
+      const syncStartDateStr = new Date(startEpoch * 1000).toISOString().slice(0, 10);
+      const endpoint = `${parsed.cleanUrl}/accounts?version=2&pending=1&start-date=${startEpoch}`;
+      const headers: Record<string, string> = {
+        Authorization: 'Basic ' + btoa(`${parsed.username}:${parsed.password}`),
+      };
+
+      const resp = await fetch(endpoint, { method: 'GET', headers });
+      if (!resp.ok) {
+        throw new Error(`SimpleFIN sync failed (HTTP ${resp.status})`);
+      }
+
+      const accountSet = await resp.json();
+      const rawAccounts: any[] = Array.isArray(accountSet?.accounts) ? accountSet.accounts : [];
+      const warnings: string[] = Array.isArray(accountSet?.errors) ? [...accountSet.errors] : [];
+
+      const existingKeys = new Set(s.transactions.map((t) => t.dedupKey).filter(Boolean));
+      const existingById = new Map(s.simplefinAccounts.map((a) => [a.account_id, a]));
+      const updatedSfAccounts: SimpleFinAccountRecord[] = [];
+      let nextSfRowId = Math.max(0, ...s.simplefinAccounts.map((a) => a.id || 0)) + 1;
+
+      let accountsSynced = 0;
+      let transactionsInserted = 0;
+      let nextTxId = Math.max(0, ...s.transactions.map((t) => t.id || 0)) + 1;
+      const newTransactions: Transaction[] = [];
+      const ctx = { rules: s.rules };
+
+      for (const acc of rawAccounts) {
+        const sfAccId = String(acc.id);
+        const orgName =
+          acc?.org?.name ||
+          acc?.org?.['sfin-url'] ||
+          acc?.org?.domain ||
+          'Financial Institution';
+        const balanceVal =
+          typeof acc?.balance === 'string' || typeof acc?.balance === 'number'
+            ? parseFloat(String(acc.balance))
+            : NaN;
+        const balance = Number.isFinite(balanceVal) ? balanceVal : null;
+        const availVal =
+          typeof acc?.['available-balance'] === 'string' || typeof acc?.['available-balance'] === 'number'
+            ? parseFloat(String(acc['available-balance']))
+            : NaN;
+        const availableBalance = Number.isFinite(availVal) ? availVal : null;
+        const balanceDateEpoch = typeof acc?.['balance-date'] === 'number' ? acc['balance-date'] : null;
+
+        const prev = existingById.get(sfAccId);
+        let mappedAccountId: number | null = prev?.strictly_account_id ?? null;
+
+        if (mappedAccountId !== null && !s.accounts.some((a) => a.id === mappedAccountId)) {
+          mappedAccountId = null;
+        }
+
+        if (mappedAccountId === null) {
+          const { name: accountName, type: accountType, institution, last4 } = inferStrictlyAccountDetails(
+            orgName,
+            String(acc.name || 'Account')
+          );
+          const match = s.accounts.find(
+            (a) => a.name.toLowerCase() === accountName.toLowerCase() && a.source !== 'demo'
+          );
+          if (match?.id) {
+            mappedAccountId = match.id;
+          } else {
+            const nextAccId = Math.max(0, ...s.accounts.map((a) => a.id || 0)) + 1;
+            s.accounts = [
+              ...s.accounts,
+              {
+                id: nextAccId,
+                name: accountName,
+                type: accountType,
+                institution,
+                last4,
+                currentBalance: balance ?? undefined,
+                enabled: true,
+                source: 'simplefin',
+              },
+            ];
+            mappedAccountId = nextAccId;
+          }
+        } else if (balance !== null) {
+          s.accounts = s.accounts.map((a) =>
+            a.id === mappedAccountId ? { ...a, currentBalance: balance } : a
+          );
+        }
+
+        let latestTxDate: string | null = prev?.latest_transaction_date ?? null;
+
+        if (mappedAccountId !== null) {
+          accountsSynced += 1;
+          const strictAcc = s.accounts.find((a) => a.id === mappedAccountId);
+          const accountType = strictAcc?.type;
+          const txList: any[] = Array.isArray(acc?.transactions) ? acc.transactions : [];
+
+          for (const tx of txList) {
+            const amountNum = parseFloat(String(tx?.amount ?? '0'));
+            if (!Number.isFinite(amountNum)) continue;
+
+            const dateStr = resolveSimpleFinDate(tx?.posted, tx?.transacted_at);
+            if (!latestTxDate || dateStr > latestTxDate) {
+              latestTxDate = dateStr;
+            }
+
+            const rawDesc = String(tx?.description || tx?.payee || '').trim();
+            const rawMemo = String(tx?.memo || '').trim();
+            const description =
+              rawMemo && !rawDesc.toLowerCase().includes(rawMemo.toLowerCase())
+                ? `${rawDesc} ${rawMemo}`.trim()
+                : rawDesc || 'SimpleFIN Transaction';
+
+            const dedupKey = `simplefin_${sfAccId}_${tx.id}`;
+            if (existingKeys.has(dedupKey)) {
+              continue;
+            }
+            existingKeys.add(dedupKey);
+
+            const merchantKey = extractMerchantKey(description);
+            let category = categorize(description, merchantKey, undefined, ctx);
+            if (category === 'Uncategorized') {
+              const inferred = inferTypeCategory(amountNum, 'simplefin', undefined, accountType, description);
+              if (inferred) category = inferred;
+            }
+            const isRecurring = RECURRING_CATEGORIES.has(category);
+
+            newTransactions.push({
+              id: nextTxId++,
+              accountId: mappedAccountId,
+              date: dateStr,
+              description,
+              amount: Math.round(amountNum * 100) / 100,
+              category,
+              source: 'simplefin',
+              merchantKey,
+              userOverridden: false,
+              dedupKey,
+              recurrence: isRecurring ? 'recurring' : 'onetime',
+              isPending: Boolean(tx?.pending || !tx?.posted || tx?.posted === 0),
+            });
+            transactionsInserted += 1;
+          }
+        }
+
+        updatedSfAccounts.push({
+          id: prev?.id || nextSfRowId++,
+          account_id: sfAccId,
+          org_name: String(orgName),
+          name: String(acc.name || 'Account'),
+          currency: String(acc.currency || 'USD'),
+          balance,
+          available_balance: availableBalance,
+          balance_date: balanceDateEpoch,
+          strictly_account_id: mappedAccountId,
+          latest_transaction_date: latestTxDate,
+        });
+      }
+
+      if (newTransactions.length > 0 || updatedSfAccounts.length > 0) {
+        // Automatically disable demo mode once real SimpleFIN accounts/transactions are synced
+        s.settings = s.settings.filter((x) => x.key !== 'demoMode');
+        s.settings.push({ key: 'demoMode', value: false });
+        s.accounts = s.accounts.filter((a) => a.source !== 'demo');
+        s.transactions = [...newTransactions, ...s.transactions.filter((t) => t.source !== 'demo')].sort((a, b) =>
+          b.date.localeCompare(a.date)
+        );
+      }
+
+      s.simplefinAccounts = updatedSfAccounts;
+      const syncedAt = new Date().toISOString();
+      saveSimpleFinConfigToState(s, {
+        ...cfg,
+        last_synced_at: syncedAt,
+      });
+
+      const response: SimpleFinSyncResponse = {
+        added: transactionsInserted,
+        accounts_synced: accountsSynced,
+        last_synced_at: syncedAt,
+        sync_start_date: syncStartDateStr,
+        warnings,
+        accounts: updatedSfAccounts,
+      };
+      return response;
+    }
     case 'plugin:event|listen':
       return 1;
     case 'plugin:event|unlisten':

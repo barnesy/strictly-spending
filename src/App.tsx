@@ -339,7 +339,7 @@ export default function App() {
   }, [applyMcpUiCommand]);
 
   useEffect(() => {
-    if (LANDING_ONLY_BUILD || autoSyncAttemptedRef.current) return;
+    if ((LANDING_ONLY_BUILD && !isInstalledPwa) || autoSyncAttemptedRef.current) return;
     autoSyncAttemptedRef.current = true;
 
     const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
