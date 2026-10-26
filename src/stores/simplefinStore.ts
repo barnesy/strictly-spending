@@ -11,6 +11,7 @@ import {
   type SimpleFinAccountRecord,
   type SimpleFinSyncResponse,
 } from '../api/simplefin';
+import { useFilters } from './store';
 
 interface SimpleFinState {
   config: SimpleFinConfig;
@@ -52,8 +53,12 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
   fetchConfig: async () => {
     try {
       const config = await simplefinGetConfig();
+      const safeConfig = config ?? { access_url: '', claimed_at: null, last_synced_at: null };
+      if (safeConfig.access_url && safeConfig.access_url.trim().length > 0 && useFilters.getState().demoMode) {
+        useFilters.getState().setDemoMode(false);
+      }
       set({
-        config: config ?? { access_url: '', claimed_at: null, last_synced_at: null },
+        config: safeConfig,
         error: null,
       });
     } catch (err: unknown) {
@@ -65,6 +70,9 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
     set({ isLoading: true, error: null, successMessage: null });
     try {
       await simplefinSaveConfig(config);
+      if (config.access_url && config.access_url.trim().length > 0) {
+        useFilters.getState().setDemoMode(false);
+      }
       set({ config, isLoading: false, successMessage: 'SimpleFIN configuration saved.' });
     } catch (err: unknown) {
       set({ isLoading: false, error: err instanceof Error ? err.message : String(err) });
@@ -77,6 +85,7 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
     try {
       const config = await simplefinClaimSetupToken(tokenInput);
       const safeConfig = config ?? { access_url: '', claimed_at: null, last_synced_at: null };
+      useFilters.getState().setDemoMode(false);
       set({
         config: safeConfig,
         isLoading: false,
@@ -96,7 +105,11 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const accounts = await simplefinGetAccounts();
-      set({ accounts: Array.isArray(accounts) ? accounts : [], isLoading: false });
+      const list = Array.isArray(accounts) ? accounts : [];
+      if (list.length > 0 && useFilters.getState().demoMode) {
+        useFilters.getState().setDemoMode(false);
+      }
+      set({ accounts: list, isLoading: false });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       set({ isLoading: false, error: msg });
@@ -124,6 +137,7 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
     set({ isSyncing: true, error: null, successMessage: null });
     try {
       const resp = await simplefinSyncTransactions(startDate);
+      useFilters.getState().setDemoMode(false);
       set((state) => ({
         isSyncing: false,
         config: {

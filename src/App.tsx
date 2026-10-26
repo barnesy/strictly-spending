@@ -113,15 +113,25 @@ export default function App() {
       return false;
     }
   });
-  const [inBrowserDemo, setInBrowserDemo] = useState<boolean>(() => {
-    if (isInstalledPwa && LANDING_ONLY_BUILD) {
-      useFilters.getState().setDemoMode(true);
-    }
-    return isInstalledPwa;
-  });
+  const [inBrowserDemo, setInBrowserDemo] = useState<boolean>(() => isInstalledPwa);
 
   useEffect(() => {
-    if (LANDING_ONLY_BUILD && accounts.length > 0 && accounts.every((a) => a.source === 'demo')) {
+    const hasNonDemo = accounts.some((a) => a.source !== 'demo');
+    if (hasNonDemo) {
+      const state = useFilters.getState();
+      if (state.demoMode) {
+        state.setDemoMode(false);
+      }
+      const realIds = accounts.filter((a) => a.source !== 'demo' && a.id !== undefined).map((a) => a.id!);
+      const realIdSet = new Set(realIds);
+      const validEnabled = state.enabledAccountIds.filter((id) => realIdSet.has(id));
+      if (validEnabled.length === 0 && realIds.length > 0) {
+        state.setEnabledAccounts(realIds);
+        state.setSeenAccounts(realIds);
+      } else if (validEnabled.length !== state.enabledAccountIds.length) {
+        state.setEnabledAccounts(validEnabled);
+      }
+    } else if (LANDING_ONLY_BUILD && accounts.length > 0 && accounts.every((a) => a.source === 'demo')) {
       if (!useFilters.getState().demoMode) {
         useFilters.getState().setDemoMode(true);
       }

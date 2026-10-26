@@ -68,11 +68,28 @@ export const SimpleFinBankSyncCard: React.FC = () => {
   const mappedCount = (accounts || []).filter((a) => a.strictly_account_id !== null).length;
   const isPaymentRequired = error?.toLowerCase().includes('payment required');
 
+  const activateRealAccountsAndTurnOffDemo = async () => {
+    useFilters.getState().setDemoMode(false);
+    const allAccounts = await api.getAccounts();
+    const nonDemo = allAccounts.filter((a) => a.source !== 'demo' && a.id !== undefined);
+    if (nonDemo.length > 0) {
+      const ids = nonDemo.map((a) => a.id!);
+      const idSet = new Set(ids);
+      const currentEnabled = useFilters.getState().enabledAccountIds.filter((id) => idSet.has(id));
+      const newIds = currentEnabled.length > 0 ? Array.from(new Set([...currentEnabled, ...ids])) : ids;
+      useFilters.getState().setEnabledAccounts(newIds);
+      useFilters.getState().setSeenAccounts(ids);
+    }
+    await queryClient.invalidateQueries();
+    window.dispatchEvent(new Event('db-update'));
+  };
+
   const handleConnect = async () => {
     if (!tokenInput.trim()) return;
     try {
       await claimToken(tokenInput.trim());
       setTokenInput('');
+      await activateRealAccountsAndTurnOffDemo();
     } catch {
       // Error handled by store
     }
@@ -82,24 +99,7 @@ export const SimpleFinBankSyncCard: React.FC = () => {
     clearMessages();
     try {
       await syncTransactions(startDate);
-      
-      // 1. Ensure demo mode is off so live transactions are visible immediately
-      useFilters.getState().setDemoMode(false);
-
-      // 2. Refresh accounts in filter state so all active accounts are enabled
-      const allAccounts = await api.getAccounts();
-      const nonDemo = allAccounts.filter((a) => a.source !== 'demo' && a.id !== undefined);
-      if (nonDemo.length > 0) {
-        const ids = nonDemo.map((a) => a.id!);
-        const currentEnabled = useFilters.getState().enabledAccountIds;
-        const newIds = Array.from(new Set([...currentEnabled, ...ids]));
-        useFilters.getState().setEnabledAccounts(newIds);
-        useFilters.getState().setSeenAccounts(newIds);
-      }
-
-      // 3. Invalidate all React Query caches and notify database update listeners
-      await queryClient.invalidateQueries();
-      window.dispatchEvent(new Event('db-update'));
+      await activateRealAccountsAndTurnOffDemo();
     } catch {
       // Error handled by store
     }
@@ -108,8 +108,7 @@ export const SimpleFinBankSyncCard: React.FC = () => {
   const handleRefreshAccounts = async () => {
     clearMessages();
     await fetchAccounts();
-    await queryClient.invalidateQueries({ queryKey: ['accounts'] });
-    window.dispatchEvent(new Event('db-update'));
+    await activateRealAccountsAndTurnOffDemo();
   };
 
   const handleConfirmDisconnect = async () => {

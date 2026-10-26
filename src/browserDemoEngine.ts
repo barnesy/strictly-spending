@@ -69,6 +69,74 @@ function persistState(): void {
   }
 }
 
+const DEMO_SEED_BUDGET_AMOUNTS: Record<string, number> = {
+  Mortgage: 2150,
+  Housing: 1950,
+  'Auto Loan': 389,
+  'Student Loans': 450,
+  Insurance: 145,
+  Utilities: 225,
+  Subscriptions: 95,
+  Groceries: 550,
+  'Restaurants & Coffee': 280,
+  Transportation: 160,
+  Shopping: 300,
+  Health: 100,
+  Entertainment: 80,
+  'Personal Care': 75,
+};
+
+const DEMO_SEED_LOAN_MERCHANTS = new Set(['homemortgage', 'autofinance', 'studentloan']);
+
+function hasConnectedRealSources(s: BrowserDemoState): boolean {
+  const savedSf = s.settings.find((x) => x.key === 'simplefin_config')?.value as SimpleFinConfig | undefined;
+  if (savedSf && typeof savedSf.access_url === 'string' && savedSf.access_url.trim().length > 0) return true;
+  if (s.simplefinAccounts.length > 0) return true;
+  if (s.accounts.some((a) => a.source !== 'demo')) return true;
+  if (s.transactions.some((t) => t.source !== 'demo')) return true;
+  if (s.imports.length > 0) return true;
+  return false;
+}
+
+function purgeDemoDataIfRealSourcesConnected(s: BrowserDemoState): boolean {
+  if (!hasConnectedRealSources(s)) return false;
+
+  let changed = false;
+
+  const prevAccLen = s.accounts.length;
+  s.accounts = s.accounts.filter((a) => a.source !== 'demo');
+  if (s.accounts.length !== prevAccLen) changed = true;
+
+  const prevTxLen = s.transactions.length;
+  s.transactions = s.transactions.filter((t) => t.source !== 'demo');
+  if (s.transactions.length !== prevTxLen) changed = true;
+
+  const prevLoanLen = s.loans.length;
+  s.loans = s.loans.filter((l) => !DEMO_SEED_LOAN_MERCHANTS.has(l.merchant || ''));
+  if (s.loans.length !== prevLoanLen) changed = true;
+
+  const prevOverrideLen = s.merchantOverrides.length;
+  s.merchantOverrides = s.merchantOverrides.filter((o) => !DEMO_SEED_LOAN_MERCHANTS.has(o.merchantKey));
+  if (s.merchantOverrides.length !== prevOverrideLen) changed = true;
+
+  const alreadyPurgedBudgets = s.settings.some((x) => x.key === 'demoPurged' && x.value === true);
+  if (!alreadyPurgedBudgets) {
+    const prevBudgetLen = s.budgets.length;
+    s.budgets = s.budgets.filter((b) => DEMO_SEED_BUDGET_AMOUNTS[b.category] !== b.monthlyAmount);
+    if (s.budgets.length !== prevBudgetLen) changed = true;
+    s.settings = [...s.settings.filter((x) => x.key !== 'demoPurged'), { key: 'demoPurged', value: true }];
+    changed = true;
+  }
+
+  const demoSetting = s.settings.find((x) => x.key === 'demoMode');
+  if (!demoSetting || demoSetting.value !== false) {
+    s.settings = [...s.settings.filter((x) => x.key !== 'demoMode'), { key: 'demoMode', value: false }];
+    changed = true;
+  }
+
+  return changed;
+}
+
 function ensureInitialized(): BrowserDemoState {
   if (state) return state;
 
@@ -116,7 +184,8 @@ function ensureInitialized(): BrowserDemoState {
             csvMappings: Array.isArray(parsed.csvMappings) ? parsed.csvMappings : [],
             imports: Array.isArray(parsed.imports) ? parsed.imports : [],
           };
-          if (upgraded) persistState();
+          const purged = purgeDemoDataIfRealSourcesConnected(state);
+          if (upgraded || purged) persistState();
           return state;
         }
       }
@@ -452,6 +521,7 @@ function saveSimpleFinConfigToState(s: BrowserDemoState, cfg: SimpleFinConfig): 
   const existing = s.settings.find((x) => x.key === 'simplefin_config');
   if (existing) existing.value = cfg;
   else s.settings.push({ key: 'simplefin_config', value: cfg });
+  purgeDemoDataIfRealSourcesConnected(s);
   persistState();
 }
 
@@ -567,11 +637,14 @@ function filterTransactions(txns: Transaction[], filters: Record<string, any> = 
       ? new Set<number>(filters.enabledAccountIds)
       : null;
 
+  const realConnected = hasConnectedRealSources(s);
   const hasNonDemoTxns = s.transactions.some((t) => t.source !== 'demo');
   const explicitDemoMode = typeof filters.demoMode === 'boolean' ? filters.demoMode : undefined;
 
   return txns.filter((t) => {
-    if (explicitDemoMode === true) {
+    if (realConnected) {
+      if (t.source === 'demo') return false;
+    } else if (explicitDemoMode === true) {
       if (t.source !== 'demo') return false;
     } else if (explicitDemoMode === false && hasNonDemoTxns) {
       if (t.source === 'demo') return false;
@@ -730,6 +803,9 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       const nextId = Math.max(0, ...s.accounts.map((a) => a.id || 0)) + 1;
       const item: Account = { ...args.item, id: nextId, source: args.item?.source || 'custom' };
       s.accounts = [...s.accounts, item];
+      if (item.source !== 'demo') {
+        purgeDemoDataIfRealSourcesConnected(s);
+      }
       persistState();
       return nextId;
     }
@@ -884,6 +960,9 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         userOverridden: Boolean(args.item?.userOverridden),
       };
       s.transactions = [item, ...s.transactions].sort((a, b) => b.date.localeCompare(a.date));
+      if (item.source !== 'demo') {
+        purgeDemoDataIfRealSourcesConnected(s);
+      }
       persistState();
       return nextId;
     }
@@ -905,12 +984,12 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         });
       }
       if (added.length > 0) {
-        s.settings = s.settings.filter((x) => x.key !== 'demoMode');
-        s.settings.push({ key: 'demoMode', value: false });
-        s.accounts = s.accounts.filter((a) => a.source !== 'demo');
-        s.transactions = [...added, ...s.transactions.filter((t) => t.source !== 'demo')].sort((a, b) =>
+        s.transactions = [...added, ...s.transactions].sort((a, b) =>
           b.date.localeCompare(a.date)
         );
+        if (added.some((t) => t.source !== 'demo')) {
+          purgeDemoDataIfRealSourcesConnected(s);
+        }
         persistState();
       }
       return null;
@@ -1384,6 +1463,14 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       }
       return null;
     }
+    case 'delete_merchant_override': {
+      const key = String(args.merchantKey || '');
+      if (key) {
+        s.merchantOverrides = s.merchantOverrides.filter((x) => x.merchantKey !== key);
+        persistState();
+      }
+      return null;
+    }
     case 'get_csv_mappings':
       return s.csvMappings;
     case 'put_csv_mapping': {
@@ -1402,8 +1489,14 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'add_import': {
       const nextId = Math.max(0, ...s.imports.map((x) => x.id || 0)) + 1;
       s.imports = [{ ...(args.item || {}), id: nextId }, ...s.imports];
+      purgeDemoDataIfRealSourcesConnected(s);
       persistState();
       return nextId;
+    }
+    case 'clear_imports': {
+      s.imports = [];
+      persistState();
+      return null;
     }
     case 'get_settings':
       return s.settings;
@@ -1591,6 +1684,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       }
 
       s.simplefinAccounts = results;
+      purgeDemoDataIfRealSourcesConnected(s);
       persistState();
       return results;
     }
@@ -1775,18 +1869,17 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         });
       }
 
-      if (newTransactions.length > 0 || updatedSfAccounts.length > 0) {
-        // Automatically disable demo mode once real SimpleFIN accounts/transactions are synced
-        s.settings = s.settings.filter((x) => x.key !== 'demoMode');
-        s.settings.push({ key: 'demoMode', value: false });
-        s.accounts = s.accounts.filter((a) => a.source !== 'demo');
-        s.transactions = [...newTransactions, ...s.transactions.filter((t) => t.source !== 'demo')].sort((a, b) =>
+      s.simplefinAccounts = updatedSfAccounts;
+      if (newTransactions.length > 0) {
+        s.transactions = [...newTransactions, ...s.transactions].sort((a, b) =>
           b.date.localeCompare(a.date)
         );
+      }
+      purgeDemoDataIfRealSourcesConnected(s);
+      if (newTransactions.length > 0 || updatedSfAccounts.length > 0) {
         await handleBrowserDemoIpc('refresh_recurrence_all');
       }
 
-      s.simplefinAccounts = updatedSfAccounts;
       const syncedAt = new Date().toISOString();
       saveSimpleFinConfigToState(s, {
         ...cfg,

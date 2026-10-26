@@ -57,6 +57,7 @@ import { SEED_VERSION } from '../seed';
 import type { Account, CsvMapping, CsvAccountTarget, ParsedTransaction } from '../types';
 import { SimpleFinBankSyncCard } from '../components/SimpleFinBankSyncCard';
 import { UNIFORM_TOOLBAR_BUTTON_SX } from '../components/AccountFilterDropdown';
+import { useFilters } from '../stores/store';
 
 const SOURCE_LABELS: Record<string, string> = {
   chase: 'Chase',
@@ -250,6 +251,17 @@ export default function Import() {
       );
       setNewUncategorizedCount(newUncategorized);
       setPreviews([]);
+      useFilters.getState().setDemoMode(false);
+      const allAccounts = await api.getAccounts();
+      const nonDemo = allAccounts.filter((a) => a.source !== 'demo' && a.id !== undefined);
+      if (nonDemo.length > 0) {
+        const ids = nonDemo.map((a) => a.id!);
+        const idSet = new Set(ids);
+        const currentEnabled = useFilters.getState().enabledAccountIds.filter((id) => idSet.has(id));
+        const newIds = currentEnabled.length > 0 ? Array.from(new Set([...currentEnabled, ...ids])) : ids;
+        useFilters.getState().setEnabledAccounts(newIds);
+        useFilters.getState().setSeenAccounts(ids);
+      }
       window.dispatchEvent(new Event('db-update'));
       await queryClient.invalidateQueries();
     } catch (e: any) {
