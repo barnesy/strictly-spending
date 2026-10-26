@@ -35,6 +35,8 @@ export function isBusinessAccount(a: { name: string; type?: string }): boolean {
 
 export type TransactionType = 'all' | 'spend' | 'income';
 
+export type DashboardViewMode = 'chart' | 'timeline' | 'table';
+
 export interface FiltersState {
   preset: DateRangePreset;
   customStart?: string;
@@ -54,6 +56,7 @@ export interface FiltersState {
   demoMode: boolean;
   showRunway: boolean;
   forecastHorizon: number;
+  dashboardViewMode: DashboardViewMode;
   earliestTransactionDate?: string;
   latestTransactionDate?: string;
   minPrice?: number;
@@ -79,6 +82,7 @@ const initialState: FiltersState = {
   demoMode: false,
   showRunway: false,
   forecastHorizon: 0,
+  dashboardViewMode: 'chart',
   earliestTransactionDate: undefined,
   latestTransactionDate: undefined,
   minPrice: undefined,
@@ -110,6 +114,7 @@ export interface FiltersActions {
   setDemoMode: (v: boolean) => void;
   setShowRunway: (v: boolean) => void;
   setForecastHorizon: (months: number) => void;
+  setDashboardViewMode: (v: DashboardViewMode) => void;
   setTransactionDataBounds: (earliest?: string, latest?: string) => void;
   setMinPrice: (price?: number) => void;
   setMaxPrice: (price?: number) => void;
@@ -223,6 +228,7 @@ export const useFilters = create<FiltersStore>()(
       setDemoMode: (v) => set({ demoMode: v }),
       setShowRunway: (v) => set({ showRunway: v }),
       setForecastHorizon: (months) => set({ forecastHorizon: months }),
+      setDashboardViewMode: (dashboardViewMode) => set({ dashboardViewMode }),
       setTransactionDataBounds: (earliest, latest) =>
         set({ earliestTransactionDate: earliest, latestTransactionDate: latest }),
       setMinPrice: (price) => set({ minPrice: price }),
@@ -232,6 +238,7 @@ export const useFilters = create<FiltersStore>()(
         set((s) => ({
           ...initialState,
           demoMode: s.demoMode,
+          dashboardViewMode: s.dashboardViewMode,
           version: s.version,
           earliestTransactionDate: s.earliestTransactionDate,
           latestTransactionDate: s.latestTransactionDate,

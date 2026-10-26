@@ -252,26 +252,40 @@ export default function Dashboard() {
     recentAvgIncome,
   });
 
-  const viewMode: 'chart' | 'table' | 'timeline' = 
-    location.pathname === '/transactions' ? 'table' :
-    (location.pathname === '/timeline' && isSingleMonth) ? 'timeline' : 
-    'chart';
+  const persistedViewMode = useFilters((s) => s.dashboardViewMode);
+  const setPersistedViewMode = useFilters((s) => s.setDashboardViewMode);
+
+  const activeTimelineMonth =
+    currentSingleMonth || monthList[monthList.length - 1] || currentCalMonth;
+
+  const viewMode: 'chart' | 'table' | 'timeline' =
+    location.pathname === '/transactions'
+      ? 'table'
+      : location.pathname === '/timeline'
+      ? 'timeline'
+      : persistedViewMode || 'chart';
+
+  useEffect(() => {
+    if (location.pathname === '/transactions' && persistedViewMode !== 'table') {
+      setPersistedViewMode('table');
+    } else if (location.pathname === '/timeline' && persistedViewMode !== 'timeline') {
+      setPersistedViewMode('timeline');
+    }
+  }, [location.pathname, persistedViewMode, setPersistedViewMode]);
 
   const setViewMode = (mode: 'chart' | 'table' | 'timeline') => {
+    setPersistedViewMode(mode);
     if (mode === 'table') {
       navigate('/transactions', { replace: true });
     } else if (mode === 'timeline') {
+      if (!isSingleMonth && activeTimelineMonth) {
+        drillToMonth(activeTimelineMonth);
+      }
       navigate('/timeline', { replace: true });
     } else {
       navigate('/', { replace: true });
     }
   };
-
-  useEffect(() => {
-    if (location.pathname === '/timeline' && !isSingleMonth) {
-      navigate('/', { replace: true });
-    }
-  }, [location.pathname, isSingleMonth, navigate]);
 
   const availableDashboardMonths = useMemo(() => {
     const set = new Set<string>(forecastAvailableMonths);
@@ -972,25 +986,23 @@ export default function Dashboard() {
         sx={{ mb: 1.5, flexShrink: 0 }}
       >
         {/* Group 1: View Switcher (uses Select on xs when 3 options are present) */}
-        {isSingleMonth && (
-          <FormControl size="small" sx={{ display: { xs: 'inline-flex', sm: 'none' }, minWidth: 118 }}>
-            <Select
-              variant="outlined"
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as 'chart' | 'timeline' | 'table')}
-              sx={{
-                height: 40,
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
-              }}
-            >
-              <MenuItem value="chart">View: Chart</MenuItem>
-              <MenuItem value="timeline">View: Timeline</MenuItem>
-              <MenuItem value="table">View: Table</MenuItem>
-            </Select>
-          </FormControl>
-        )}
+        <FormControl size="small" sx={{ display: { xs: 'inline-flex', sm: 'none' }, minWidth: 118 }}>
+          <Select
+            variant="outlined"
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value as 'chart' | 'timeline' | 'table')}
+            sx={{
+              height: 40,
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+            }}
+          >
+            <MenuItem value="chart">View: Chart</MenuItem>
+            <MenuItem value="timeline">View: Timeline</MenuItem>
+            <MenuItem value="table">View: Table</MenuItem>
+          </Select>
+        </FormControl>
         <ToggleButtonGroup
           value={viewMode}
           exclusive
@@ -998,11 +1010,11 @@ export default function Dashboard() {
           size="small"
           sx={{
             ...toolbarToggleGroupSx,
-            ...(isSingleMonth ? { display: { xs: 'none', sm: 'inline-flex' } } : {}),
+            display: { xs: 'none', sm: 'inline-flex' },
           }}
         >
           <ToggleButton value="chart">Chart</ToggleButton>
-          {isSingleMonth && <ToggleButton value="timeline">Timeline</ToggleButton>}
+          <ToggleButton value="timeline">Timeline</ToggleButton>
           <ToggleButton value="table">Table</ToggleButton>
         </ToggleButtonGroup>
 
@@ -1518,7 +1530,7 @@ export default function Dashboard() {
               onFutureMonthClick={(monthKey) => setSelectedFutureMonth(monthKey)}
             />
           </Box>
-        ) : viewMode === 'timeline' && currentSingleMonth ? (
+        ) : viewMode === 'timeline' && activeTimelineMonth ? (
           <Box
             key="dashboard-timeline-view"
             sx={{
@@ -1528,7 +1540,7 @@ export default function Dashboard() {
             }}
           >
             <MonthTimelineView
-              currentMonth={currentSingleMonth}
+              currentMonth={activeTimelineMonth}
               availableMonths={availableDashboardMonths}
               accounts={accounts || []}
               categories={categories || []}

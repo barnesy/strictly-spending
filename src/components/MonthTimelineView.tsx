@@ -85,9 +85,31 @@ export default function MonthTimelineView({
   const todayDay = useMemo(() => (isCurrentCalMonth ? new Date().getDate() : null), [isCurrentCalMonth]);
 
   // Chart Mode: Daily Bars vs Cumulative Line
-  const [chartMode, setChartMode] = useState<'daily' | 'cumulative'>('daily');
+  const [chartMode, setChartMode] = useState<'daily' | 'cumulative'>(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('dashboard:timelineChartMode') === 'cumulative') {
+      return 'cumulative';
+    }
+    return 'daily';
+  });
   const [selectedDay, setSelectedDay] = useState<number>(() => todayDay || 1);
-  const [mobileListTab, setMobileListTab] = useState<'upcoming' | 'day'>('upcoming');
+  const [mobileListTab, setMobileListTab] = useState<'upcoming' | 'day'>(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('dashboard:timelineMobileTab') === 'day') {
+      return 'day';
+    }
+    return 'upcoming';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboard:timelineChartMode', chartMode);
+    }
+  }, [chartMode]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboard:timelineMobileTab', mobileListTab);
+    }
+  }, [mobileListTab]);
 
   useEffect(() => {
     setSelectedDay(todayDay || 1);
