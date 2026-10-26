@@ -92,7 +92,28 @@ export default function App() {
   const undoSnapshotRef = useRef<UiUndoSnapshot | null>(null);
   const [aiToastMessage, setAiToastMessage] = useState<string | null>(null);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
-  const [inBrowserDemo, setInBrowserDemo] = useState(false);
+  const [isInstalledPwa] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('pwa') === '1') {
+      try {
+        localStorage.setItem('strictly_installed_pwa', '1');
+      } catch {
+        // ignore storage errors
+      }
+      return true;
+    }
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    if (standalone) return true;
+    try {
+      return localStorage.getItem('strictly_installed_pwa') === '1' && standalone;
+    } catch {
+      return false;
+    }
+  });
+  const [inBrowserDemo, setInBrowserDemo] = useState<boolean>(() => isInstalledPwa);
 
   const applyMcpUiCommand = useCallback(
     (cmd: McpUiCommand) => {
@@ -394,7 +415,7 @@ export default function App() {
       <LocalizationProvider dateAdapter={AdapterDateFns}>
         <CssBaseline />
         <DynamicAnimationStyles />
-        {LANDING_ONLY_BUILD && inBrowserDemo && (
+        {LANDING_ONLY_BUILD && inBrowserDemo && !isInstalledPwa && (
           <Box
             sx={{
               bgcolor: '#1E40AF',

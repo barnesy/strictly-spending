@@ -31,11 +31,17 @@ export function initPwaServiceWorker(): void {
   });
 
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {
+    const registerSw = () => {
+      const swUrl = `${import.meta.env.BASE_URL || '/'}sw.js`;
+      navigator.serviceWorker.register(swUrl).catch(() => {
         // Ignore service worker registration errors in restricted contexts
       });
-    });
+    };
+    if (document.readyState === 'complete') {
+      registerSw();
+    } else {
+      window.addEventListener('load', registerSw);
+    }
   }
 }
 

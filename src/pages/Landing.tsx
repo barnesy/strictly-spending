@@ -1,4 +1,4 @@
-import { Box, Button, Container, Typography, Grid, Paper, Chip, IconButton, Tooltip, Accordion, AccordionSummary, AccordionDetails, Alert } from '@mui/material';
+import { Box, Button, Container, Typography, Grid, Paper, Chip, IconButton, Tooltip, Accordion, AccordionSummary, AccordionDetails, Alert, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useState, useEffect } from 'react';
 import AppleIcon from '@mui/icons-material/Apple';
 import WindowIcon from '@mui/icons-material/Window';
@@ -16,10 +16,12 @@ import CheckIcon from '@mui/icons-material/Check';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import AnimatedLogo from '../components/AnimatedLogo';
+import { usePwaInstall } from '../utils/pwaInstall';
 import packageJson from '../../package.json';
 
-function InstallationNotes() {
+function InstallationNotes({ onOpenAndroidHelp }: { onOpenAndroidHelp?: () => void }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyCommand = () => {
@@ -34,11 +36,26 @@ function InstallationNotes() {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20 }} />
           <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151' }}>
-            Installation Notes & Troubleshooting
+            Installation Notes & Troubleshooting (Mac, Windows & Android Play Protect)
           </Typography>
         </Box>
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0, pb: 2.5, px: 2.5, textAlign: 'left' }}>
+        <Alert severity="info" sx={{ mb: 2, borderRadius: '8px', '& .MuiAlert-message': { width: '100%' } }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            Android Users — Blocked by Play Protect or Advanced Protection?
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            1. <b>No-APK Install (Play Protect Safe):</b> Tap <b>"Install Android WebApp (Play Protect Safe)"</b> above, or tap Chrome's <b>⋮</b> menu → <b>Add to Home screen</b> → <b>Install</b>. Google Play Services mints and signs a native WebAPK automatically without triggering Play Protect.<br />
+            2. <b>For the .apk installer:</b> If <b>Advanced Protection</b> blocks the APK, open <b>Settings → Security & privacy → Advanced Protection</b> (or <b>Play Store → Profile → Play Protect → ⚙️</b>) and temporarily pause protection while installing <code>Strictly-Spending-Android-arm64.apk</code>, or tap <b>"More details" → "Install anyway"</b>.
+          </Typography>
+          {onOpenAndroidHelp && (
+            <Button size="small" variant="outlined" onClick={onOpenAndroidHelp} sx={{ textTransform: 'none', fontWeight: 600 }}>
+              View Step-by-Step Android Guide
+            </Button>
+          )}
+        </Alert>
+
         <Alert severity="warning" sx={{ mb: 2, borderRadius: '8px', '& .MuiAlert-message': { width: '100%' } }}>
           <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Mac Users</Typography>
           <Typography variant="body2" sx={{ mb: 1 }}>
@@ -59,9 +76,6 @@ function InstallationNotes() {
         <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5, mt: 2 }}>
           <b>Windows:</b> You may need to allow the app to run on your PC. If Windows SmartScreen prevents the app from starting, click <b>"More info"</b> and then <b>"Run anyway"</b>.
         </Typography>
-        <Typography variant="body2" sx={{ color: '#6B7280', lineHeight: 1.5, mt: 1 }}>
-          <b>Android:</b> Open the downloaded <code>.apk</code> file on your phone or foldable and allow installation from your browser if prompted.
-        </Typography>
       </AccordionDetails>
     </Accordion>
   );
@@ -79,6 +93,16 @@ const DEFAULT_DOWNLOAD_URLS = {
 
 export default function Landing({ onLaunchDemo }: LandingProps) {
   const [downloadUrls, setDownloadUrls] = useState(DEFAULT_DOWNLOAD_URLS);
+  const [androidModalOpen, setAndroidModalOpen] = useState(false);
+  const { canInstall, promptInstall } = usePwaInstall();
+
+  const handlePlayProtectSafeInstall = async () => {
+    if (canInstall) {
+      const accepted = await promptInstall();
+      if (accepted) return;
+    }
+    setAndroidModalOpen(true);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -315,12 +339,39 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 boxShadow: 'none',
               }}
             >
-              Download for Android
+              Download for Android (APK)
             </Button>
           </Box>
 
+          <Button
+            variant="outlined"
+            size="medium"
+            startIcon={<VerifiedUserIcon sx={{ color: '#059669' }} />}
+            onClick={handlePlayProtectSafeInstall}
+            sx={{
+              width: '100%',
+              borderRadius: '8px',
+              py: 1.25,
+              px: 2,
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: { xs: '0.875rem', sm: '0.9375rem' },
+              bgcolor: 'rgba(16,185,129,0.06)',
+              color: '#065F46',
+              borderColor: 'rgba(16,185,129,0.35)',
+              '&:hover': {
+                bgcolor: 'rgba(16,185,129,0.12)',
+                borderColor: '#059669',
+              },
+            }}
+          >
+            {canInstall
+              ? 'Install Android App Directly (Play Protect Safe · No APK)'
+              : 'Blocked by Android Play Protect / Advanced Protection? Tap Here'}
+          </Button>
+
           <Box sx={{ width: '100%' }}>
-            <InstallationNotes />
+            <InstallationNotes onOpenAndroidHelp={() => setAndroidModalOpen(true)} />
           </Box>
         </Box>
 
@@ -529,12 +580,39 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                   boxShadow: 'none',
                 }}
               >
-                Download for Android
+                Download for Android (APK)
               </Button>
             </Box>
 
+            <Button
+              variant="outlined"
+              size="medium"
+              startIcon={<VerifiedUserIcon sx={{ color: '#059669' }} />}
+              onClick={handlePlayProtectSafeInstall}
+              sx={{
+                width: '100%',
+                borderRadius: '8px',
+                py: 1.25,
+                px: 2,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: { xs: '0.875rem', sm: '0.9375rem' },
+                bgcolor: 'rgba(16,185,129,0.06)',
+                color: '#065F46',
+                borderColor: 'rgba(16,185,129,0.35)',
+                '&:hover': {
+                  bgcolor: 'rgba(16,185,129,0.12)',
+                  borderColor: '#059669',
+                },
+              }}
+            >
+              {canInstall
+                ? 'Install Android App Directly (Play Protect Safe · No APK)'
+                : 'Blocked by Android Play Protect / Advanced Protection? Tap Here'}
+            </Button>
+
             <Box sx={{ width: '100%' }}>
-              <InstallationNotes />
+              <InstallationNotes onOpenAndroidHelp={() => setAndroidModalOpen(true)} />
             </Box>
 
             <Paper elevation={0} sx={{ p: 3, width: '100%', bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px dashed rgba(0,0,0,0.15)', textAlign: 'left' }}>
@@ -576,6 +654,95 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
         </Box>
 
       </Container>
+
+      <Dialog
+        open={androidModalOpen}
+        onClose={() => setAndroidModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '14px', p: 0.5 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#111827', pb: 1 }}>
+          Installing on Android (Bypassing Play Protect)
+        </DialogTitle>
+        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              borderRadius: '10px',
+              bgcolor: 'rgba(16,185,129,0.07)',
+              border: '1px solid rgba(16,185,129,0.3)',
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#065F46', mb: 0.75 }}>
+              Option 1 (Recommended): Install as Google-Signed WebAPK (Zero Warnings)
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#1F2937', lineHeight: 1.55, mb: 1.25 }}>
+              When Android <b>Advanced Protection</b> is enabled, Google blocks sideloading raw <code>.apk</code> files from Chrome. Instead, let Chrome & Google Play Services mint a trusted WebAPK directly:
+            </Typography>
+            <Typography variant="body2" component="div" sx={{ color: '#111827', pl: 1, lineHeight: 1.7 }}>
+              1. Tap the <b>⋮ (three-dot menu)</b> at the top-right of Chrome.<br />
+              2. Tap <b>"Add to Home screen"</b> → choose <b>"Install"</b>.<br />
+              3. Strictly Spending installs into your Android app drawer and launches full-screen without any Play Protect block.
+            </Typography>
+            {canInstall && (
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={async () => {
+                  const ok = await promptInstall();
+                  if (ok) setAndroidModalOpen(false);
+                }}
+                sx={{ mt: 1.5, bgcolor: '#059669', '&:hover': { bgcolor: '#047857' }, textTransform: 'none', fontWeight: 700 }}
+              >
+                Install Android WebAPK Now
+              </Button>
+            )}
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              borderRadius: '10px',
+              bgcolor: '#F9FAFB',
+              border: '1px solid #E5E7EB',
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#111827', mb: 0.75 }}>
+              Option 2: Allow the Native <code>Strictly-Spending-Android-arm64.apk</code>
+            </Typography>
+            <Typography variant="body2" component="div" sx={{ color: '#374151', lineHeight: 1.65 }}>
+              • <b>If Android 15/16 Advanced Protection blocks the install:</b> Open <b>Settings → Security & privacy → Advanced Protection</b> and temporarily toggle off <b>Device protection</b> (or open <b>Google Play Store → Profile icon → Play Protect → ⚙️ Settings → Pause "Scan apps with Play Protect"</b>). Install the APK from your <b>Files / Downloads</b> app, then turn protection right back on.<br />
+              • <b>If you see "Unsafe app blocked":</b> Tap <b>"More details"</b> (small link below the text) → tap <b>"Install anyway"</b>.<br />
+              • <b>If on Samsung Galaxy (Fold / S-series):</b> Temporarily toggle off <b>Settings → Security and privacy → Auto Blocker</b> during installation.
+            </Typography>
+          </Paper>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5, justifyContent: 'space-between' }}>
+          {onLaunchDemo && (
+            <Button
+              variant="contained"
+              onClick={() => {
+                try {
+                  localStorage.setItem('strictly_installed_pwa', '1');
+                } catch {
+                  // ignore
+                }
+                setAndroidModalOpen(false);
+                onLaunchDemo();
+              }}
+              sx={{ bgcolor: '#2563EB', '&:hover': { bgcolor: '#1D4ED8' }, textTransform: 'none', fontWeight: 700 }}
+            >
+              Open Full App Right Now
+            </Button>
+          )}
+          <Button onClick={() => setAndroidModalOpen(false)} sx={{ textTransform: 'none', fontWeight: 600, color: '#4B5563' }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
