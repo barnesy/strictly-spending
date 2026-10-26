@@ -697,7 +697,8 @@ export const useForecastStore = create<ForecastState>()(
 
           if (existing) {
             const shouldAdoptSourceSplit =
-              incoming.sourceAllocations !== undefined && existing.sourceAllocations === undefined;
+              incoming.sourceAllocations !== undefined &&
+              (existing.sourceAllocations === undefined || !existing.isOverridden);
             merged.push({
               ...existing,
               name: incoming.name || existing.name,

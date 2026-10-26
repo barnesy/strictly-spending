@@ -444,9 +444,9 @@ export async function loadForecastBaselineData(): Promise<{
           accountType: 'savings',
           currentBalance: effectiveBal,
           realBalance: effectiveBal,
-          monthlyAllocation: isLegacyTruistSavings ? 5000 : 0,
+          monthlyAllocation: isLegacyTruistSavings ? 8000 : 0,
           sourceAllocations: isLegacyTruistSavings
-            ? { [truistPrimaryKey]: 2000, [boaPrimaryKey]: 3000 }
+            ? { [truistPrimaryKey]: 2000, [boaPrimaryKey]: 6000 }
             : {},
           annualGrowthRate: 4.0,
           enabled: true,
@@ -481,8 +481,8 @@ export async function loadForecastBaselineData(): Promise<{
       accountType: 'savings',
       currentBalance: 30000,
       realBalance: 30000,
-      monthlyAllocation: 5000,
-      sourceAllocations: { [truistPrimaryKey]: 2000, [boaPrimaryKey]: 3000 },
+      monthlyAllocation: 8000,
+      sourceAllocations: { [truistPrimaryKey]: 2000, [boaPrimaryKey]: 6000 },
       annualGrowthRate: 4.0,
       enabled: true,
     });

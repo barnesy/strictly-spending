@@ -181,7 +181,17 @@ export function useSpendingForecast(options?: {
     return { historicalMonthlyIncome: monthlyIncome, historicalAnnualAvgIncome: annualAvg };
   }, [historicalIncomeData]);
 
-  const currentCalMonth = useMemo(() => getMonthKey(new Date()), []);
+  const currentCalMonth = useMemo(() => {
+    const sysMonth = getMonthKey(new Date());
+    let latestMonth = sysMonth;
+    for (const m of historicalMonthlySpend.keys()) {
+      if (m > latestMonth) latestMonth = m;
+    }
+    for (const m of historicalMonthlyIncome.keys()) {
+      if (m > latestMonth) latestMonth = m;
+    }
+    return latestMonth;
+  }, [historicalMonthlySpend, historicalMonthlyIncome]);
 
   const incomeCategoryColor = useMemo(() => {
     const incCat = (categories || []).find((c) => c.type === 'income' || c.name === 'Income');

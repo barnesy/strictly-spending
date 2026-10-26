@@ -538,19 +538,29 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'get_spend_chart_data': {
       const filtered = filterTransactions(s.transactions, { ...(args.filters || {}), spendOnly: true });
       const groupBy = args.groupBy || 'category';
-      const accMap = new Map(s.accounts.map((a) => [a.id!, a.name]));
-      const byMonth = new Map<string, Record<string, number>>();
+      const byMonthKey = new Map<string, number>();
       for (const t of filtered) {
         if (t.amount >= 0) continue;
         const month = t.date.slice(0, 7);
-        const key = groupBy === 'account' ? accMap.get(t.accountId) || 'Checking' : t.category;
-        const mObj = byMonth.get(month) || {};
-        mObj[key] = Math.round(((mObj[key] || 0) + Math.abs(t.amount)) * 100) / 100;
-        byMonth.set(month, mObj);
+        const key =
+          groupBy === 'account'
+            ? String(t.accountId)
+            : groupBy === 'merchant'
+            ? t.merchantKey || t.description
+            : groupBy === 'recurrence'
+            ? t.recurrence || 'onetime'
+            : groupBy === 'all'
+            ? 'all'
+            : t.category;
+        const composite = `${month}:::${key}`;
+        byMonthKey.set(composite, Math.round(((byMonthKey.get(composite) || 0) + t.amount) * 100) / 100);
       }
-      return Array.from(byMonth.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, values]) => ({ month, values }));
+      return Array.from(byMonthKey.entries())
+        .map(([composite, total]) => {
+          const [month, key] = composite.split(':::');
+          return { month, key, total };
+        })
+        .sort((a, b) => a.month.localeCompare(b.month));
     }
     case 'get_income_chart_data': {
       const filtered = filterTransactions(s.transactions, { ...(args.filters || {}), transactionType: 'income' });
@@ -562,7 +572,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       }
       return Array.from(byMonth.entries())
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, income]) => ({ month, income }));
+        .map(([month, total]) => ({ month, key: 'income', total }));
     }
     case 'get_top_merchants': {
       const filtered = filterTransactions(s.transactions, { ...(args.filters || {}), spendOnly: true });
@@ -587,7 +597,8 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         .slice(0, limit);
     }
     case 'get_consolidated_recurring_merchants': {
-      const filtered = filterTransactions(s.transactions, { ...(args.filters || {}), spendOnly: true });
+      const accountFilter = args.accountId ? { enabledAccountIds: [args.accountId] } : {};
+      const filtered = filterTransactions(s.transactions, { ...(args.filters || {}), ...accountFilter, spendOnly: true });
       const recurring = filtered.filter((t) => t.recurrence === 'recurring' && t.amount < 0);
       const byMerchant = new Map<string, { category: string; amounts: number[]; dates: string[] }>();
       for (const t of recurring) {
@@ -609,7 +620,13 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       const months = Math.max(1, args.months || 3);
       const now = new Date();
       const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString().slice(0, 10);
-      const recent = filterTransactions(s.transactions, { ...(args.filters || {}), startDate: cutoff, spendOnly: true });
+      const accountFilter = args.accountId ? { enabledAccountIds: [args.accountId] } : {};
+      const recent = filterTransactions(s.transactions, {
+        ...(args.filters || {}),
+        ...accountFilter,
+        startDate: cutoff,
+        spendOnly: true,
+      });
       const byCat = new Map<string, { total: number; recurring: number; variable: number }>();
       for (const t of recent) {
         if (t.amount >= 0) continue;
@@ -622,6 +639,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       }
       return Array.from(byCat.entries()).map(([category, v]) => ({
         category,
+        average: Math.round((v.total / months) * 100) / 100,
         trailingMonthlyAvg: Math.round(v.total / months),
         recurringMonthlyAvg: Math.round(v.recurring / months),
         variableMonthlyAvg: Math.round(v.variable / months),

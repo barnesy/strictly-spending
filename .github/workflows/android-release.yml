@@ -1,0 +1,112 @@
+name: 'Build & Publish Android APK to Latest Release'
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/android-release.yml'
+      - 'src-tauri/**'
+      - 'src/**'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag name (defaults to latest release)'
+        required: false
+        default: 'v0.2.0'
+
+jobs:
+  build-and-upload-android:
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configure Android SDK & NDK
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          SDKMANAGER=$(find "$ANDROID_HOME" -name sdkmanager -type f | head -n 1)
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" --install "ndk;27.0.12077973" "platforms;android-35" "build-tools;35.0.0"
+          export NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+          echo "NDK_HOME=$NDK_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$NDK_HOME" >> $GITHUB_ENV
+
+      - name: install Rust stable (Android arm64)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Rust cache (Android)
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          key: android-aarch64
+
+      - name: install frontend dependencies
+        run: npm ci
+
+      - name: Initialize Android project, build, and sign APK
+        run: |
+          TOOLCHAIN_BIN="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export PATH="$TOOLCHAIN_BIN:$PATH"
+          export CC_aarch64_linux_android="$TOOLCHAIN_BIN/aarch64-linux-android24-clang"
+          export CXX_aarch64_linux_android="$TOOLCHAIN_BIN/aarch64-linux-android24-clang++"
+          export AR_aarch64_linux_android="$TOOLCHAIN_BIN/llvm-ar"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN_BIN/aarch64-linux-android24-clang"
+
+          if [ ! -d "src-tauri/gen/android" ]; then
+            npx tauri android init --ci
+          fi
+          npx tauri android build --apk --target aarch64 --ci
+
+          RAW_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          if [ -z "$RAW_APK" ]; then
+            echo "ERROR: No APK found after tauri android build!"
+            exit 1
+          fi
+          echo "Signing APK: $RAW_APK"
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias strictlyspending \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass strictlyspending123 \
+            -keypass strictlyspending123 \
+            -dname "CN=Strictly Spending, OU=Mobile, O=Strictly Spending, L=US, S=US, C=US"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -v -p 4 "$RAW_APK" aligned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks release.keystore \
+            --ks-key-alias strictlyspending \
+            --ks-pass pass:strictlyspending123 \
+            --key-pass pass:strictlyspending123 \
+            --out "Strictly-Spending-Android-arm64.apk" \
+            aligned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify -v "Strictly-Spending-Android-arm64.apk"
+
+      - name: Upload Signed Android APK to Latest GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --json tagName -q .tagName || echo "v0.2.0")
+          fi
+          gh release upload "$TAG" "Strictly-Spending-Android-arm64.apk" --clobber

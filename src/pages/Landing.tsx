@@ -1,5 +1,5 @@
 import { Box, Button, Container, Typography, Grid, Paper, Chip, IconButton, Tooltip, Accordion, AccordionSummary, AccordionDetails, Alert } from '@mui/material';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppleIcon from '@mui/icons-material/Apple';
 import WindowIcon from '@mui/icons-material/Window';
 import AndroidIcon from '@mui/icons-material/Android';
@@ -71,32 +71,40 @@ interface LandingProps {
   onLaunchDemo?: () => void;
 }
 
+const DEFAULT_DOWNLOAD_URLS = {
+  mac: 'https://github.com/barnesy/strictly-spending/releases/latest/download/Strictly.Spending_0.2.0_aarch64.dmg',
+  windows: 'https://github.com/barnesy/strictly-spending/releases/latest/download/Strictly.Spending_0.2.0_x64-setup.exe',
+  android: 'https://github.com/barnesy/strictly-spending/releases/latest/download/Strictly-Spending-Android-arm64.apk',
+};
+
 export default function Landing({ onLaunchDemo }: LandingProps) {
-  const handleDownload = async (platform: 'mac' | 'windows' | 'android') => {
-    try {
-      const response = await fetch('https://api.github.com/repos/barnesy/strictly-spending/releases/latest');
-      if (!response.ok) throw new Error('Failed to fetch release');
-      const data = await response.json();
+  const [downloadUrls, setDownloadUrls] = useState(DEFAULT_DOWNLOAD_URLS);
 
-      let asset;
-      if (platform === 'mac') {
-        asset = data.assets.find((a: any) => a.name.endsWith('.dmg') || a.name.endsWith('.app.tar.gz'));
-      } else if (platform === 'windows') {
-        asset = data.assets.find((a: any) => a.name.endsWith('.exe') || a.name.endsWith('.msi'));
-      } else if (platform === 'android') {
-        asset = data.assets.find((a: any) => a.name.endsWith('.apk'));
-      }
+  useEffect(() => {
+    let cancelled = false;
+    fetch('https://api.github.com/repos/barnesy/strictly-spending/releases/latest')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data || !Array.isArray(data.assets)) return;
+        const macAsset =
+          data.assets.find((a: any) => a.name.endsWith('aarch64.dmg')) ||
+          data.assets.find((a: any) => a.name.endsWith('.dmg') || a.name.endsWith('.app.tar.gz'));
+        const winAsset =
+          data.assets.find((a: any) => a.name.endsWith('.exe')) ||
+          data.assets.find((a: any) => a.name.endsWith('.msi'));
+        const androidAsset = data.assets.find((a: any) => a.name.endsWith('.apk'));
 
-      if (asset && asset.browser_download_url) {
-        window.location.href = asset.browser_download_url;
-      } else {
-        window.open('https://github.com/barnesy/strictly-spending/releases/latest', '_blank');
-      }
-    } catch (error) {
-      console.error('Failed to fetch release info:', error);
-      window.open('https://github.com/barnesy/strictly-spending/releases/latest', '_blank');
-    }
-  };
+        setDownloadUrls((prev) => ({
+          mac: macAsset?.browser_download_url || prev.mac,
+          windows: winAsset?.browser_download_url || prev.windows,
+          android: androidAsset?.browser_download_url || prev.android,
+        }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <Box sx={{
@@ -234,10 +242,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
 
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center' }}>
             <Button
+              component="a"
+              href={downloadUrls.mac}
               variant="contained"
               size="large"
               startIcon={<AppleIcon />}
-              onClick={() => handleDownload('mac')}
               sx={{
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
@@ -258,10 +267,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
               Download for Mac
             </Button>
             <Button
+              component="a"
+              href={downloadUrls.windows}
               variant="contained"
               size="large"
               startIcon={<WindowIcon />}
-              onClick={() => handleDownload('windows')}
               sx={{
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
@@ -283,10 +293,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
               Download for Windows
             </Button>
             <Button
+              component="a"
+              href={downloadUrls.android}
               variant="contained"
               size="large"
               startIcon={<AndroidIcon />}
-              onClick={() => handleDownload('android')}
               sx={{
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
@@ -445,19 +456,20 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '700px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: 4 }}>
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center' }}>
               <Button
+                component="a"
+                href={downloadUrls.mac}
                 variant="contained"
                 size="large"
                 startIcon={<AppleIcon />}
-                onClick={() => handleDownload('mac')}
                 sx={{
                   flex: 1,
                   width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
-                  py: { xs: 1.75, md: 3 },
-                  px: 3,
+                  py: { xs: 1.75, md: 2.5 },
+                  px: 2.5,
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1.1rem' },
+                  fontSize: { xs: '1rem', md: '1.05rem' },
                   whiteSpace: 'nowrap',
                   bgcolor: '#000000',
                   color: '#FFFFFF',
@@ -469,19 +481,20 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 Download for Mac
               </Button>
               <Button
+                component="a"
+                href={downloadUrls.windows}
                 variant="contained"
                 size="large"
                 startIcon={<WindowIcon />}
-                onClick={() => handleDownload('windows')}
                 sx={{
                   flex: 1,
                   width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
-                  py: { xs: 1.75, md: 3 },
-                  px: 3,
+                  py: { xs: 1.75, md: 2.5 },
+                  px: 2.5,
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1.1rem' },
+                  fontSize: { xs: '1rem', md: '1.05rem' },
                   whiteSpace: 'nowrap',
                   bgcolor: '#FFFFFF',
                   color: '#111827',
@@ -492,6 +505,31 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 }}
               >
                 Download for Windows
+              </Button>
+              <Button
+                component="a"
+                href={downloadUrls.android}
+                variant="contained"
+                size="large"
+                startIcon={<AndroidIcon />}
+                sx={{
+                  flex: 1,
+                  width: { xs: '100%', md: 'auto' },
+                  borderRadius: '8px',
+                  py: { xs: 1.75, md: 2.5 },
+                  px: 2.5,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: { xs: '1rem', md: '1.05rem' },
+                  whiteSpace: 'nowrap',
+                  bgcolor: '#059669',
+                  color: '#FFFFFF',
+                  '&:hover': { bgcolor: '#047857', transform: 'translateY(-2px)', boxShadow: 'none' },
+                  transition: 'all 0.2s',
+                  boxShadow: 'none',
+                }}
+              >
+                Download for Android
               </Button>
             </Box>
 
