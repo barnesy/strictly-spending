@@ -809,6 +809,16 @@ export default function SpendChart({
     const chart = chartInstanceRef.current;
     if (!chart || chart.isDisposed()) return;
 
+    const isDark = theme.palette.mode === 'dark';
+    const textPrimary = theme.palette.text.primary;
+    const textSecondary = theme.palette.text.secondary;
+    const paperBg = theme.palette.background.paper;
+    const dividerColor = isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.1)';
+    const greenColor = isDark ? '#4ade80' : '#2e7d32';
+    const blueColor = isDark ? '#60a5fa' : '#1565c0';
+    const redColor = isDark ? '#f87171' : '#d32f2f';
+    const orangeColor = isDark ? '#fbbf24' : '#ed6c02';
+
     const markLineData: any[] = [];
 
     if (showBudgetLine) {
@@ -819,15 +829,15 @@ export default function SpendChart({
           show: true, 
           position: 'middle', 
           formatter: `Recurring + Budget (${usd.format(totalBudget)})`,
-          backgroundColor: '#ffffff',
-          color: '#000000',
-          borderColor: '#000000',
+          backgroundColor: paperBg,
+          color: textPrimary,
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.45)' : '#000000',
           borderWidth: 1,
           borderRadius: 10,
           padding: [4, 10],
           fontWeight: 600,
         },
-        lineStyle: { color: '#000000', type: 'solid', width: 1 },
+        lineStyle: { color: isDark ? 'rgba(255, 255, 255, 0.7)' : '#000000', type: 'solid', width: 1 },
       });
     } else if (showIncomeBaselineLine) {
       markLineData.push({
@@ -837,21 +847,23 @@ export default function SpendChart({
           show: true,
           position: 'middle',
           formatter: `Expected Income (${usd.format(baselineProjectedMonthlyIncome)}/mo)`,
-          backgroundColor: '#e8f5e9',
-          color: '#2e7d32',
-          borderColor: '#2e7d32',
+          backgroundColor: isDark ? 'rgba(22, 101, 52, 0.85)' : '#e8f5e9',
+          color: greenColor,
+          borderColor: greenColor,
           borderWidth: 1,
           borderRadius: 10,
           padding: [4, 10],
           fontWeight: 600,
         },
-        lineStyle: { color: '#2e7d32', type: 'dashed', width: 1.5 },
+        lineStyle: { color: greenColor, type: 'dashed', width: 1.5 },
       });
     }
 
     const currentMonthIdx = fullMonthList.indexOf(currentCalMonth);
-    const forecastColor = transactionType === 'income' ? '#2e7d32' : '#1565c0';
-    const forecastBg = transactionType === 'income' ? '#e8f5e9' : '#e3f2fd';
+    const forecastColor = transactionType === 'income' ? greenColor : blueColor;
+    const forecastBg = transactionType === 'income'
+      ? (isDark ? 'rgba(22, 101, 52, 0.85)' : '#e8f5e9')
+      : (isDark ? 'rgba(30, 58, 138, 0.85)' : '#e3f2fd');
 
     if (futureMonths.length > 0 && monthList.length > 0) {
       markLineData.push({
@@ -905,12 +917,15 @@ export default function SpendChart({
         trigger: 'axis',
         confine: true, // Crucial: Keeps tooltip inside chart bounds, eliminating overflow scrollbar flicker
         axisPointer: { type: 'shadow' },
+        backgroundColor: paperBg,
+        borderColor: isDark ? 'rgba(255, 255, 255, 0.16)' : theme.palette.divider,
+        borderWidth: 1,
         textStyle: {
           fontFamily: theme.typography.fontFamily,
           fontSize: 13,
-          color: theme.palette.text.primary,
+          color: textPrimary,
         },
-        extraCssText: `box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: ${theme.shape.borderRadius}px; border: 1px solid ${theme.palette.divider}; font-family: ${theme.typography.fontFamily};`,
+        extraCssText: `background-color: ${paperBg}; color: ${textPrimary}; box-shadow: ${isDark ? '0 12px 28px rgba(0,0,0,0.55)' : '0 4px 20px rgba(0,0,0,0.15)'}; border-radius: ${theme.shape.borderRadius}px; border: 1px solid ${isDark ? 'rgba(255,255,255,0.16)' : theme.palette.divider}; font-family: ${theme.typography.fontFamily};`,
         formatter: (params: any) => {
           if (!Array.isArray(params)) return '';
           
@@ -967,44 +982,48 @@ export default function SpendChart({
             ? (incomeProjectionsByMonth.get(hoveredMonth) || [])
             : [];
 
-          let html = `<div style="min-width: 260px; max-width: 360px; padding: 4px; font-family: inherit;">`;
+          let html = `<div style="min-width: 260px; max-width: 360px; padding: 4px; font-family: inherit; color: ${textPrimary};">`;
 
           if (isForecastMonth) {
-            const badgeBg = transactionType === 'income' ? 'rgba(46, 125, 50, 0.12)' : 'rgba(25, 118, 210, 0.1)';
-            const badgeColor = transactionType === 'income' ? '#2e7d32' : '#1565c0';
+            const badgeBg = transactionType === 'income'
+              ? (isDark ? 'rgba(74, 222, 128, 0.16)' : 'rgba(46, 125, 50, 0.12)')
+              : (isDark ? 'rgba(96, 165, 250, 0.16)' : 'rgba(25, 118, 210, 0.1)');
+            const badgeColor = transactionType === 'income' ? greenColor : blueColor;
             const subtitle = transactionType === 'income'
               ? 'Projected from recurring payroll streams & historical income'
               : "Projected from budgets, bills & last year's trends";
             html += `
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; font-family: inherit;">
-                <span style="font-weight: 700; font-size: 13px;">${params[0].axisValueLabel}</span>
+                <span style="font-weight: 700; font-size: 13px; color: ${textPrimary};">${params[0].axisValueLabel}</span>
                 <span style="font-size: 11px; font-weight: 600; background: ${badgeBg}; color: ${badgeColor}; padding: 2px 8px; border-radius: 4px;">Forecasted</span>
               </div>
-              <div style="font-size: 11px; color: #666; margin-bottom: 8px;">${subtitle}</div>
+              <div style="font-size: 11px; color: ${textSecondary}; margin-bottom: 8px;">${subtitle}</div>
             `;
           } else if (isHoveredCurrentForecast) {
-            const badgeBg = transactionType === 'income' ? 'rgba(46, 125, 50, 0.12)' : 'rgba(25, 118, 210, 0.12)';
-            const badgeColor = transactionType === 'income' ? '#2e7d32' : '#1565c0';
+            const badgeBg = transactionType === 'income'
+              ? (isDark ? 'rgba(74, 222, 128, 0.16)' : 'rgba(46, 125, 50, 0.12)')
+              : (isDark ? 'rgba(96, 165, 250, 0.16)' : 'rgba(25, 118, 210, 0.12)');
+            const badgeColor = transactionType === 'income' ? greenColor : blueColor;
             const subtitle = transactionType === 'income'
               ? 'Actual income received to date + projected remaining'
               : 'Actual spend to date + projected remaining';
             html += `
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; font-family: inherit;">
-                <span style="font-weight: 700; font-size: 13px;">${params[0].axisValueLabel}</span>
+                <span style="font-weight: 700; font-size: 13px; color: ${textPrimary};">${params[0].axisValueLabel}</span>
                 <span style="font-size: 11px; font-weight: 600; background: ${badgeBg}; color: ${badgeColor}; padding: 2px 8px; border-radius: 4px;">Current Mo Forecast</span>
               </div>
-              <div style="font-size: 11px; color: #666; margin-bottom: 8px;">${subtitle}</div>
+              <div style="font-size: 11px; color: ${textSecondary}; margin-bottom: 8px;">${subtitle}</div>
             `;
           } else {
-            html += `<div style="font-weight: 600; margin-bottom: 8px; font-family: inherit;">${params[0].axisValueLabel}</div>`;
+            html += `<div style="font-weight: 600; margin-bottom: 8px; font-family: inherit; color: ${textPrimary};">${params[0].axisValueLabel}</div>`;
           }
           
           if (sorted.length === 0 && incomeValue === 0 && runwayValue === 0) {
-            html += `<div style="color: #666; font-size: 12px; font-family: inherit;">No activity</div></div>`;
+            html += `<div style="color: ${textSecondary}; font-size: 12px; font-family: inherit;">No activity</div></div>`;
             return html;
           }
 
-          html += `<table style="width: 100%; border-collapse: collapse; font-family: inherit;"><tbody>`;
+          html += `<table style="width: 100%; border-collapse: collapse; font-family: inherit; color: ${textPrimary};"><tbody>`;
           
           sorted.forEach(s => {
             const mProjections = (isForecastMonth || isHoveredCurrentForecast) ? categoryProjectionsByMonth.get(hoveredMonth) : undefined;
@@ -1028,9 +1047,9 @@ export default function SpendChart({
 
             let rightValueHtml = usd.format(s.value);
             if (isHoveredCurrentForecast && s.remaining > 0 && s.actual > 0) {
-              rightValueHtml = `<span style="font-size: 10.5px; color: #777; font-weight: 400; margin-right: 4px;">${usd.format(s.actual)} + ${usd.format(s.remaining)}</span><span style="font-weight: 600;">${usd.format(s.value)}</span>`;
+              rightValueHtml = `<span style="font-size: 10.5px; color: ${textSecondary}; font-weight: 400; margin-right: 4px;">${usd.format(s.actual)} + ${usd.format(s.remaining)}</span><span style="font-weight: 600;">${usd.format(s.value)}</span>`;
             } else if (isHoveredCurrentForecast && s.remaining > 0 && s.actual === 0) {
-              const estColor = transactionType === 'income' ? '#2e7d32' : '#1565c0';
+              const estColor = transactionType === 'income' ? greenColor : blueColor;
               rightValueHtml = `<span style="font-size: 10px; color: ${estColor}; font-weight: 500; margin-right: 4px;">est.</span><span style="font-weight: 600;">${usd.format(s.value)}</span>`;
             }
 
@@ -1039,10 +1058,10 @@ export default function SpendChart({
                 <td style="width: 12px; padding-right: 8px; vertical-align: middle;">
                   <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${s.color}; ${isForecastMonth ? 'opacity: 0.65;' : ''}"></div>
                 </td>
-                <td style="padding: 2px 8px 2px 0; max-width: 155px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px;">
-                  ${s.seriesName} ${basisLabel ? `<span style="font-size: 10px; color: #777; font-weight: 400;">(${basisLabel})</span>` : ''}
+                <td style="padding: 2px 8px 2px 0; max-width: 155px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: ${textPrimary};">
+                  ${s.seriesName} ${basisLabel ? `<span style="font-size: 10px; color: ${textSecondary}; font-weight: 400;">(${basisLabel})</span>` : ''}
                 </td>
-                <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap;">
+                <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; color: ${textPrimary};">
                   ${rightValueHtml}
                 </td>
               </tr>
@@ -1051,8 +1070,8 @@ export default function SpendChart({
 
           if (transactionType === 'income') {
             if ((isForecastMonth || isHoveredCurrentForecast) && mIncomeStreams.length > 0) {
-              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px dashed rgba(0,0,0,0.12);"/></td></tr>`;
-              html += `<tr><td colspan="3" style="padding: 1px 0 3px 0; font-size: 10.5px; font-weight: 700; color: #666; text-transform: uppercase;">Expected Income Sources</td></tr>`;
+              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px dashed ${dividerColor};"/></td></tr>`;
+              html += `<tr><td colspan="3" style="padding: 1px 0 3px 0; font-size: 10.5px; font-weight: 700; color: ${textSecondary}; text-transform: uppercase;">Expected Income Sources</td></tr>`;
               mIncomeStreams.forEach((stream) => {
                 const freqBadge =
                   stream.frequency === 'biweekly'
@@ -1064,19 +1083,19 @@ export default function SpendChart({
                     : 'Monthly';
                 const statusBadge = isHoveredCurrentForecast
                   ? (stream.remaining || 0) === 0
-                    ? '<span style="color: #2e7d32; font-size: 10px; font-weight: 600;">✓ Received</span>'
+                    ? `<span style="color: ${greenColor}; font-size: 10px; font-weight: 600;">✓ Received</span>`
                     : stream.nextExpectedDay
-                    ? `<span style="color: #ed6c02; font-size: 10px; font-weight: 600;">⏳ ~Day ${stream.nextExpectedDay}</span>`
-                    : '<span style="color: #ed6c02; font-size: 10px; font-weight: 600;">⏳ Upcoming</span>'
-                  : `<span style="color: #777; font-size: 10px;">${freqBadge}</span>`;
+                    ? `<span style="color: ${orangeColor}; font-size: 10px; font-weight: 600;">⏳ ~Day ${stream.nextExpectedDay}</span>`
+                    : `<span style="color: ${orangeColor}; font-size: 10px; font-weight: 600;">⏳ Upcoming</span>`
+                  : `<span style="color: ${textSecondary}; font-size: 10px;">${freqBadge}</span>`;
 
                 html += `
                   <tr>
                     <td></td>
-                    <td style="padding: 1.5px 8px 1.5px 0; font-size: 12px; color: #444; max-width: 175px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    <td style="padding: 1.5px 8px 1.5px 0; font-size: 12px; color: ${textPrimary}; max-width: 175px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                       ${stream.name} ${statusBadge}
                     </td>
-                    <td style="padding: 1.5px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; color: #2e7d32;">
+                    <td style="padding: 1.5px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; color: ${greenColor};">
                       +${usd.format(stream.total)}
                     </td>
                   </tr>
@@ -1085,20 +1104,20 @@ export default function SpendChart({
             }
 
             if (sorted.length > 0) {
-              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid ${dividerColor};"/></td></tr>`;
               if (isHoveredCurrentForecast) {
                 html += `
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 12px; color: #666;">Received to Date</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: #666;">
+                    <td style="padding: 2px 0; font-size: 12px; color: ${textSecondary};">Received to Date</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: ${textSecondary};">
                       +${usd.format(totalActualBar)}
                     </td>
                   </tr>
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 12px; color: #2e7d32;">Projected Remaining</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: #2e7d32;">
+                    <td style="padding: 2px 0; font-size: 12px; color: ${greenColor};">Projected Remaining</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: ${greenColor};">
                       +${usd.format(totalRemainingBar)}
                     </td>
                   </tr>
@@ -1107,8 +1126,8 @@ export default function SpendChart({
               html += `
                 <tr>
                   <td></td>
-                  <td style="padding: 2px 0; font-size: 13px; font-weight: 600; color: #2e7d32;">${isHoveredCurrentForecast ? 'Projected Month-End Income' : `Total ${isForecastMonth ? 'Projected ' : ''}Income`}</td>
-                  <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: #2e7d32;">
+                  <td style="padding: 2px 0; font-size: 13px; font-weight: 600; color: ${greenColor};">${isHoveredCurrentForecast ? 'Projected Month-End Income' : `Total ${isForecastMonth ? 'Projected ' : ''}Income`}</td>
+                  <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${greenColor};">
                     +${usd.format(totalBar)}
                   </td>
                 </tr>
@@ -1116,20 +1135,20 @@ export default function SpendChart({
             }
           } else if (spendOnly) {
             if (sorted.length > 0) {
-              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid ${dividerColor};"/></td></tr>`;
               if (isHoveredCurrentForecast) {
                 html += `
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 12px; color: #666;">Spent to Date</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: #666;">
+                    <td style="padding: 2px 0; font-size: 12px; color: ${textSecondary};">Spent to Date</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: ${textSecondary};">
                       ${usd.format(totalActualBar)}
                     </td>
                   </tr>
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 12px; color: #1565c0;">Projected Remaining</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: #1565c0;">
+                    <td style="padding: 2px 0; font-size: 12px; color: ${blueColor};">Projected Remaining</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: ${blueColor};">
                       +${usd.format(totalRemainingBar)}
                     </td>
                   </tr>
@@ -1138,8 +1157,8 @@ export default function SpendChart({
               html += `
                 <tr>
                   <td></td>
-                  <td style="padding: 2px 0; font-size: 13px; font-weight: 600;">${isHoveredCurrentForecast ? 'Projected Month-End' : `Total ${isForecastMonth ? 'Forecasted' : 'Spend'}`}</td>
-                  <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700;">
+                  <td style="padding: 2px 0; font-size: 13px; font-weight: 600; color: ${textPrimary};">${isHoveredCurrentForecast ? 'Projected Month-End' : `Total ${isForecastMonth ? 'Forecasted' : 'Spend'}`}</td>
+                  <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${textPrimary};">
                     ${usd.format(totalBar)}
                   </td>
                 </tr>
@@ -1152,15 +1171,15 @@ export default function SpendChart({
                 html += `
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 12px; color: #2e7d32;">${incLabel}</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; color: #2e7d32;">
+                    <td style="padding: 2px 0; font-size: 12px; color: ${greenColor};">${incLabel}</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; color: ${greenColor};">
                       +${usd.format(incomeValue)}
                     </td>
                   </tr>
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 12px; font-weight: 600;">Projected Net</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; color: ${remaining >= 0 ? '#2e7d32' : '#d32f2f'};">
+                    <td style="padding: 2px 0; font-size: 12px; font-weight: 600; color: ${textPrimary};">Projected Net</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; color: ${remaining >= 0 ? greenColor : redColor};">
                       ${remaining >= 0 ? '+' : ''}${usd.format(remaining)}
                     </td>
                   </tr>
@@ -1169,20 +1188,20 @@ export default function SpendChart({
             }
           } else {
             if (totalBar > 0 || incomeValue > 0) {
-              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid ${dividerColor};"/></td></tr>`;
               if (isHoveredCurrentForecast && totalBar > 0) {
                 html += `
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 12px; color: #666;">Spent to Date</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: #666;">
+                    <td style="padding: 2px 0; font-size: 12px; color: ${textSecondary};">Spent to Date</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: ${textSecondary};">
                       -${usd.format(totalActualBar)}
                     </td>
                   </tr>
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 12px; color: #1565c0;">Projected Remaining</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: #1565c0;">
+                    <td style="padding: 2px 0; font-size: 12px; color: ${blueColor};">Projected Remaining</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: ${blueColor};">
                       -${usd.format(totalRemainingBar)}
                     </td>
                   </tr>
@@ -1192,8 +1211,8 @@ export default function SpendChart({
                 html += `
                   <tr>
                     <td></td>
-                    <td style="padding: 2px 0; font-size: 13px; color: #666; font-weight: ${isHoveredCurrentForecast ? 600 : 400};">${isHoveredCurrentForecast ? 'Projected Month-End' : `Total ${isForecastMonth ? 'Forecasted' : 'Spend'}`}</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: #666; font-weight: ${isHoveredCurrentForecast ? 600 : 400};">
+                    <td style="padding: 2px 0; font-size: 13px; color: ${textSecondary}; font-weight: ${isHoveredCurrentForecast ? 600 : 400};">${isHoveredCurrentForecast ? 'Projected Month-End' : `Total ${isForecastMonth ? 'Forecasted' : 'Spend'}`}</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: ${textSecondary}; font-weight: ${isHoveredCurrentForecast ? 600 : 400};">
                       -${usd.format(totalBar)}
                     </td>
                   </tr>
@@ -1209,21 +1228,21 @@ export default function SpendChart({
                 html += `
                   <tr>
                     <td style="width: 12px; padding-right: 8px; vertical-align: middle;">
-                      <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${incomeItem?.color || '#2e7d32'};"></div>
+                      <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${incomeItem?.color || greenColor};"></div>
                     </td>
-                    <td style="padding: 2px 0; font-size: 13px; color: #2e7d32;">${incLabel}</td>
-                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: #2e7d32;">
+                    <td style="padding: 2px 0; font-size: 13px; color: ${greenColor};">${incLabel}</td>
+                    <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: ${greenColor};">
                       +${usd.format(incomeValue)}
                     </td>
                   </tr>
                 `;
               }
-              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+              html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid ${dividerColor};"/></td></tr>`;
               html += `
                 <tr>
                   <td></td>
-                  <td style="padding: 2px 0; font-size: 13px; font-weight: 600;">Net ${isForecastMonth || isHoveredCurrentForecast ? 'Forecast' : 'Remaining'}</td>
-                  <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${remaining >= 0 ? '#2e7d32' : '#d32f2f'};">
+                  <td style="padding: 2px 0; font-size: 13px; font-weight: 600; color: ${textPrimary};">Net ${isForecastMonth || isHoveredCurrentForecast ? 'Forecast' : 'Remaining'}</td>
+                  <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${remaining >= 0 ? greenColor : redColor};">
                     ${remaining >= 0 ? '+' : ''}${usd.format(remaining)}
                   </td>
                 </tr>
@@ -1233,15 +1252,15 @@ export default function SpendChart({
 
           if (runwayValue > 0) {
             if (sorted.length > 0 || incomeValue > 0) {
-               html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid rgba(0,0,0,0.1);"/></td></tr>`;
+               html += `<tr><td colspan="3" style="padding: 4px 0;"><hr style="margin: 0; border: 0; border-top: 1px solid ${dividerColor};"/></td></tr>`;
             }
             html += `
               <tr>
                 <td style="width: 12px; padding-right: 8px; vertical-align: middle;">
                   <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${runwayItem?.color || '#90caf9'};"></div>
                 </td>
-                <td style="padding: 2px 0; font-size: 13px; font-weight: 600; color: #1976d2;">Projected Cash</td>
-                <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: #1976d2;">
+                <td style="padding: 2px 0; font-size: 13px; font-weight: 600; color: ${blueColor};">Projected Cash</td>
+                <td style="padding: 2px 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: ${blueColor};">
                   ${usd.format(runwayValue)}
                 </td>
               </tr>
@@ -1249,8 +1268,10 @@ export default function SpendChart({
           }
 
           if (isForecastMonth || isHoveredCurrentForecast || isSingleMonth) {
-            const clickTipBg = transactionType === 'income' ? '#e8f5e9' : '#e3f2fd';
-            const clickTipColor = transactionType === 'income' ? '#2e7d32' : '#1565c0';
+            const clickTipBg = transactionType === 'income'
+              ? (isDark ? 'rgba(74, 222, 128, 0.14)' : '#e8f5e9')
+              : (isDark ? 'rgba(96, 165, 250, 0.14)' : '#e3f2fd');
+            const clickTipColor = transactionType === 'income' ? greenColor : blueColor;
             html += `
               <tr>
                 <td colspan="3" style="padding-top: 8px;">
@@ -1270,25 +1291,34 @@ export default function SpendChart({
         type: 'value',
         splitNumber: 4,
         axisLabel: {
+          color: textSecondary,
           formatter: (v: number) => {
             if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
             if (Math.abs(v) >= 1_000) return `$${Math.round(v / 1_000)}k`;
             return usd.format(v);
           },
         },
+        axisLine: { lineStyle: { color: theme.palette.divider } },
+        splitLine: { lineStyle: { color: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)' } },
       } : {
         type: 'category',
         data: finalLabels,
+        axisLabel: { color: textSecondary },
+        axisLine: { lineStyle: { color: theme.palette.divider } },
         axisTick: { alignWithLabel: true }
       },
       yAxis: isMobile ? {
         type: 'category',
         data: finalLabels,
+        axisLabel: { color: textSecondary },
+        axisLine: { lineStyle: { color: theme.palette.divider } },
         axisTick: { alignWithLabel: true },
         inverse: true // Flip so the earliest month is at the top on mobile
       } : {
         type: 'value',
-        axisLabel: { formatter: (v: number) => usd.format(v) }
+        axisLabel: { color: textSecondary, formatter: (v: number) => usd.format(v) },
+        axisLine: { lineStyle: { color: theme.palette.divider } },
+        splitLine: { lineStyle: { color: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)' } },
       },
       series: [
         ...finalSeries.map((s) => ({
@@ -1322,7 +1352,7 @@ export default function SpendChart({
     };
 
     chart.setOption(option, true);
-  }, [finalSeries, finalLabels, showBudgetLine, showIncomeBaselineLine, totalBudget, baselineProjectedMonthlyIncome, spendOnly, isMobile, fullMonthList, futureMonthSet, futureMonths.length, monthList.length, categoryProjections, categoryProjectionsByMonth, incomeProjectionsByMonth, incomePerMonth, currentCalMonth, isCurrentMonthForecasted, actualIncomeByMonth, transactionType, theme.typography.fontFamily, labels]);
+  }, [finalSeries, finalLabels, showBudgetLine, showIncomeBaselineLine, totalBudget, baselineProjectedMonthlyIncome, spendOnly, isMobile, fullMonthList, futureMonthSet, futureMonths.length, monthList.length, categoryProjections, categoryProjectionsByMonth, incomeProjectionsByMonth, incomePerMonth, currentCalMonth, isCurrentMonthForecasted, actualIncomeByMonth, transactionType, theme.typography.fontFamily, theme.palette.mode, theme.palette.background.paper, theme.palette.text.primary, theme.palette.text.secondary, theme.palette.divider, theme.shape.borderRadius, labels]);
 
   return (
     <Box sx={{ width: '100%', height: '100%', minHeight: 260, position: 'relative' }}>

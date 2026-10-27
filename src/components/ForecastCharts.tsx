@@ -200,21 +200,39 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef, 
       'Total Net Worth'
     ];
 
+    const isDark = theme.palette.mode === 'dark';
+    const paperBg = theme.palette.background.paper;
+    const textPrimary = theme.palette.text.primary;
+    const textSecondary = theme.palette.text.secondary;
+    const borderCol = isDark ? 'rgba(255, 255, 255, 0.16)' : theme.palette.divider;
+    const splitCol = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    const tooltipCss = `background-color: ${paperBg}; color: ${textPrimary}; box-shadow: ${isDark ? '0 12px 28px rgba(0,0,0,0.55)' : '0 4px 20px rgba(0,0,0,0.15)'}; border-radius: ${theme.shape.borderRadius}px; border: 1px solid ${borderCol}; font-family: ${theme.typography.fontFamily};`;
+
     const debtOption: any = {
       title: { 
         text: 'Net Worth & Destination Growth', 
         left: 'center', 
         top: isMobile ? 4 : 10,
-        textStyle: { color: theme.palette.text.primary, fontWeight: 700, fontSize: isMobile ? 14 : 16 } 
+        textStyle: { color: textPrimary, fontWeight: 700, fontSize: isMobile ? 14 : 16 } 
       },
       tooltip: { 
         trigger: 'axis',
         confine: true,
+        backgroundColor: paperBg,
+        borderColor: borderCol,
+        borderWidth: 1,
+        textStyle: {
+          color: textPrimary,
+          fontFamily: theme.typography.fontFamily,
+          fontSize: 13,
+        },
+        extraCssText: tooltipCss,
         formatter: (params: any[]) => {
-          let out = `<b>${params[0].axisValue}</b><br/>`;
+          let out = `<div style="color: ${textPrimary}; font-family: inherit;"><b>${params[0].axisValue}</b><br/>`;
           params.forEach(p => {
-            out += `${p.marker} ${p.seriesName}: ${usd.format(p.value)}<br/>`;
+            out += `${p.marker} ${p.seriesName}: <b>${usd.format(p.value)}</b><br/>`;
           });
+          out += `</div>`;
           return out;
         }
       },
@@ -226,20 +244,22 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef, 
         padding: [0, 16],
         itemGap: isMobile ? 10 : 14,
         formatter: (name: string) => (name.length > 22 ? `${name.substring(0, 20)}…` : name),
-        textStyle: { color: theme.palette.text.primary, fontSize: isMobile ? 11 : 12 },
+        textStyle: { color: textPrimary, fontSize: isMobile ? 11 : 12 },
         pageIconColor: theme.palette.primary.main,
         pageIconInactiveColor: theme.palette.text.disabled,
-        pageTextStyle: { color: theme.palette.text.secondary, fontSize: 11 },
+        pageTextStyle: { color: textSecondary, fontSize: 11 },
       },
       grid: { left: isMobile ? '2%' : '5%', right: isMobile ? '3%' : '4%', top: isMobile ? 42 : 55, bottom: isMobile ? 50 : 65, containLabel: true },
       xAxis: {
         type: 'category',
         data: points.map(p => p.month_label),
-        axisLabel: { fontSize: isMobile ? 10 : 12, hideOverlap: true },
+        axisLabel: { color: textSecondary, fontSize: isMobile ? 10 : 12, hideOverlap: true },
+        axisLine: { lineStyle: { color: theme.palette.divider } },
       },
       yAxis: { 
         type: 'value', 
         axisLabel: { 
+          color: textSecondary,
           fontSize: isMobile ? 10 : 12,
           formatter: (val: number) => {
             const abs = Math.abs(val);
@@ -248,7 +268,9 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef, 
             if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
             return `${sign}$${abs}`;
           } 
-        } 
+        },
+        axisLine: { lineStyle: { color: theme.palette.divider } },
+        splitLine: { lineStyle: { color: splitCol } },
       },
       series: debtSeries
     };
@@ -264,7 +286,6 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef, 
     debtChart.setOption(debtOption, true);
 
     // Curated, harmonious fintech palette designed to avoid garish, high-saturation RGB clashing
-    const isDark = theme.palette.mode === 'dark';
     const cashflowPalette = {
       recurring: isDark ? '#818cf8' : '#6366f1',    // Sophisticated indigo
       variable: isDark ? '#38bdf8' : '#0ea5e9',     // Soft sky blue
@@ -280,22 +301,32 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef, 
         text: 'Monthly Cashflow',
         left: 'center',
         top: isMobile ? 4 : 8,
-        textStyle: { color: theme.palette.text.primary, fontWeight: 600, fontSize: isMobile ? 14 : 16 }
+        textStyle: { color: textPrimary, fontWeight: 600, fontSize: isMobile ? 14 : 16 }
       },
       tooltip: { 
           trigger: 'axis', 
           confine: true,
           axisPointer: { type: 'shadow' },
+          backgroundColor: paperBg,
+          borderColor: borderCol,
+          borderWidth: 1,
+          textStyle: {
+            color: textPrimary,
+            fontFamily: theme.typography.fontFamily,
+            fontSize: 13,
+          },
+          extraCssText: tooltipCss,
           formatter: (params: any[]) => {
-            let out = `<b>${params[0].axisValue}</b><br/>`;
+            let out = `<div style="color: ${textPrimary}; font-family: inherit;"><b>${params[0].axisValue}</b><br/>`;
             params.forEach(p => {
-              out += `${p.marker} ${p.seriesName}: ${usd.format(p.value)}<br/>`;
+              out += `${p.marker} ${p.seriesName}: <b>${usd.format(p.value)}</b><br/>`;
             });
             const pt = points[params[0].dataIndex];
             out += `<br/><b>Total Income: ${usd.format(pt.income)}</b>`;
             if (onMonthClick) {
-              out += `<br/><span style="font-size: 11px; color: #1976d2; font-weight: 600; display: inline-block; margin-top: 4px;">👆 Tap bar to inspect month breakdown</span>`;
+              out += `<br/><span style="font-size: 11px; color: ${isDark ? '#60a5fa' : '#1976d2'}; font-weight: 600; display: inline-block; margin-top: 4px;">👆 Tap bar to inspect month breakdown</span>`;
             }
+            out += `</div>`;
             return out;
           }
       },
@@ -306,23 +337,25 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef, 
         left: 'center',
         padding: [0, 16],
         itemGap: isMobile ? 10 : 14,
-        textStyle: { color: theme.palette.text.primary, fontSize: isMobile ? 11 : 12 },
+        textStyle: { color: textPrimary, fontSize: isMobile ? 11 : 12 },
         itemWidth: 12,
         itemHeight: 12,
         itemStyle: { borderRadius: 3 },
         pageIconColor: theme.palette.primary.main,
         pageIconInactiveColor: theme.palette.text.disabled,
-        pageTextStyle: { color: theme.palette.text.secondary, fontSize: 11 },
+        pageTextStyle: { color: textSecondary, fontSize: 11 },
       },
       grid: { left: isMobile ? '2%' : '5%', right: isMobile ? '3%' : '4%', top: isMobile ? 42 : 60, bottom: 48, containLabel: true },
       xAxis: {
         type: 'category',
         data: points.map(p => p.month_label),
-        axisLabel: { fontSize: isMobile ? 10 : 12, hideOverlap: true },
+        axisLabel: { color: textSecondary, fontSize: isMobile ? 10 : 12, hideOverlap: true },
+        axisLine: { lineStyle: { color: theme.palette.divider } },
       },
       yAxis: { 
         type: 'value', 
         axisLabel: { 
+          color: textSecondary,
           fontSize: isMobile ? 10 : 12,
           formatter: (val: number) => {
             const abs = Math.abs(val);
@@ -331,7 +364,9 @@ export function ForecastCharts({ points, goals, debtChartRef, cashflowChartRef, 
             if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
             return `${sign}$${abs}`;
           } 
-        } 
+        },
+        axisLine: { lineStyle: { color: theme.palette.divider } },
+        splitLine: { lineStyle: { color: splitCol } },
       },
       series: [
         { 

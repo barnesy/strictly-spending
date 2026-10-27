@@ -103,15 +103,25 @@ export default function ThemeManager() {
     const newMode = updates.mode || mode;
     const nextConfig: Record<string, unknown> = { ...config, mode: newMode, ...updates };
 
-    // If we just toggled mode, and we are using a preset palette, we need to swap the bg/paper colors
-    if (updates.mode && nextConfig.paletteName) {
-      const preset = THEME_PALETTES.find(p => p.name === nextConfig.paletteName);
+    // If we just toggled mode, swap the bg/paper colors for the active or matched preset palette
+    if (updates.mode) {
+      const preset =
+        THEME_PALETTES.find(p => p.name === nextConfig.paletteName) ||
+        THEME_PALETTES.find(
+          p =>
+            p.light.background === config.backgroundColor ||
+            p.dark.background === config.backgroundColor
+        ) ||
+        THEME_PALETTES[0];
       if (preset) {
         const colors = preset[newMode as 'light' | 'dark'];
         nextConfig.primaryColor = colors.primary;
         nextConfig.secondaryColor = colors.secondary;
         nextConfig.backgroundColor = colors.background;
         nextConfig.paperColor = colors.paper;
+        if (!nextConfig.paletteName) {
+          nextConfig.paletteName = preset.name;
+        }
       }
     }
 
