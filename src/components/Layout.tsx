@@ -34,12 +34,14 @@ import PieChartOutlineOutlinedIcon from '@mui/icons-material/PieChartOutlineOutl
 import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
 import RealEstateAgentOutlinedIcon from '@mui/icons-material/RealEstateAgentOutlined';
 import StyleOutlinedIcon from '@mui/icons-material/StyleOutlined';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 import AnimatedLogo from './AnimatedLogo';
 import { useFilters } from '../stores/store';
 import { useAccounts, useTransactionBounds, useUncategorizedCount, useLoans } from '../hooks/queries';
 
 const BalanceSheetModal = lazy(() => import('./BalanceSheetModal'));
+const BuiltInAiDrawer = lazy(() => import('./BuiltInAiDrawer'));
 
 type NavItem = {
   to: string;
@@ -167,6 +169,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const profile = useFilters((s) => s.profile);
 
   const [isBalanceSheetOpen, setIsBalanceSheetOpen] = useState(false);
+  const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const { data: loans = [] } = useLoans();
 
   const activeAccounts = useMemo(() => {
@@ -367,8 +370,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             </Box>
 
-            {/* Net Worth */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: { xs: 0.5, sm: 1 } }}>
+            {/* Net Worth & Ask AI */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 1 }, mr: { xs: 0.5, sm: 1 } }}>
               <Tooltip title="View Balance Sheet & Net Worth details">
                 <Button
                   onClick={() => setIsBalanceSheetOpen(true)}
@@ -398,6 +401,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     Net Worth:
                   </Box>
                   {`${netWorthEstimate >= 0 ? '+' : ''}${formatCompactUsd(netWorthEstimate)}`}
+                </Button>
+              </Tooltip>
+
+              <Tooltip title="Ask Built-in On-Device AI about your finances">
+                <Button
+                  onClick={() => setIsAiDrawerOpen(true)}
+                  size="small"
+                  variant="outlined"
+                  startIcon={<AutoAwesomeIcon sx={{ fontSize: { xs: 15, sm: 16 }, color: 'primary.main' }} />}
+                  sx={{
+                    height: { xs: 36, sm: 34 },
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    fontSize: { xs: '0.78rem', sm: '0.8rem' },
+                    color: 'text.primary',
+                    borderColor: 'divider',
+                    borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+                    px: { xs: 1, sm: 1.25 },
+                    minWidth: 0,
+                    whiteSpace: 'nowrap',
+                    '& .MuiButton-startIcon': {
+                      mr: { xs: 0.4, sm: 0.6 },
+                    },
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: 'action.hover',
+                    },
+                  }}
+                >
+                  Ask AI
                 </Button>
               </Tooltip>
             </Box>
@@ -496,7 +529,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <CloseIcon />
             </IconButton>
           </Box>
-          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Button
               fullWidth
               variant="outlined"
@@ -520,6 +553,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {netWorthEstimate >= 0 ? '+' : ''}
                 {formatCompactUsd(netWorthEstimate)}
               </span>
+            </Button>
+            <Button
+              fullWidth
+              variant="outlined"
+              size="small"
+              startIcon={<AutoAwesomeIcon fontSize="small" color="primary" />}
+              onClick={() => {
+                setIsMobileNavOpen(false);
+                setIsAiDrawerOpen(true);
+              }}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                justifyContent: 'flex-start',
+                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+                borderColor: 'divider',
+                color: 'text.primary',
+              }}
+            >
+              Ask Strictly AI
             </Button>
           </Box>
           <List sx={{ pt: 1, px: 1 }}>
@@ -722,6 +775,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
             open={isBalanceSheetOpen}
             onClose={() => setIsBalanceSheetOpen(false)}
             defaultProfile={profile}
+          />
+        </Suspense>
+      )}
+
+      {/* Chrome / Edge Built-in AI Drawer */}
+      {isAiDrawerOpen && (
+        <Suspense fallback={null}>
+          <BuiltInAiDrawer
+            open={isAiDrawerOpen}
+            onClose={() => setIsAiDrawerOpen(false)}
           />
         </Suspense>
       )}
