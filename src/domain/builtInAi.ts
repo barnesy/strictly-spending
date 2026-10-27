@@ -3,7 +3,11 @@ import { usd, usdCents, monthLabel } from '../lib';
 import { resolveDateRange, formatLocalDate, useFilters } from '../stores/store';
 import { useForecastStore, computeTotalNetIncome } from '../stores/forecastStore';
 import { loadForecastBaselineData } from './incomeStreams';
-import { consolidateRecurringMerchants } from './forecastSpending';
+import {
+  consolidateRecurringMerchants,
+  getMerchantBillStatus,
+  getStreamPaycheckSchedule,
+} from './forecastSpending';
 import { buildRecurrenceMap } from './recurrence';
 import type { Account, Budget, Category, Loan, RecurrenceInfo, Transaction } from '../types';
 
@@ -244,6 +248,14 @@ const STOP_WORDS = new Set([
   'savings', 'more', 'less', 'extra', 'net', 'worth', 'cash', 'debt', 'debts', 'loan',
   'loans', 'payoff', 'charge', 'charges', 'expense', 'expenses', 'cost', 'costs',
   'purchase', 'buy', 'buying', 'bought', 'many', 'times', 'often', 'any', 'there',
+  'coming', 'upcoming', 'hurt', 'hurts', 'unpaid', 'due', 'cleared', 'clear', 'pending',
+  'hit', 'hits', 'hitting', 'left', 'remaining', 'remain', 'before', 'after', 'end',
+  'ending', 'still', 'already', 'yet', 'anything', 'something', 'nothing', 'everything',
+  'big', 'large', 'small', 'not', 'dont', 'doesnt', 'will', 'wont', 'track', 'tracking',
+  'lately', 'usual', 'unusual', 'anomaly', 'anomalies', 'spike', 'spikes', 'high', 'low',
+  'drop', 'dropped', 'change', 'changed', 'trend', 'trends', 'paycheck', 'paychecks',
+  'salary', 'inflow', 'inflows', 'outflow', 'outflows', 'buffer', 'cushion', 'splurge',
+  'room', 'safely', 'rest', 'need', 'needing', 'want', 'thinking', 'without', 'other',
 ]);
 
 interface TimePeriodResolution {
@@ -549,9 +561,9 @@ export async function analyzeQuestionAndFinances(
     }
 
     return {
-      spendDollars: spendCents / 100,
-      incomeDollars: incomeCents / 100,
-      netDollars: (incomeCents - spendCents) / 100,
+      spendDollars: spendCents,
+      incomeDollars: incomeCents,
+      netDollars: incomeCents - spendCents,
       byCat,
       byMerch,
       byAcct,
@@ -585,9 +597,38 @@ export async function analyzeQuestionAndFinances(
     if (b.monthlyAmount > 0) budgetByCat.set(b.category, b.monthlyAmount);
   }
 
-  // Recurring merchants
+  // Recurring merchants & End-of-Month Bill Status
   const recurrenceMap = new Map<string, RecurrenceInfo>(Object.entries(recurrenceMapObj));
   const consolidatedRecurring = consolidateRecurringMerchants(rawRecurringMerchants, recurrenceMap);
+  const curDayOfMonth = anchor.getDate();
+  const daysInCurMonth = new Date(curY, curM, 0).getDate();
+  const daysRemainingInMonth = Math.max(0, daysInCurMonth - curDayOfMonth);
+
+  const recurringWithStatus = consolidatedRecurring.map((m) => ({
+    ...m,
+    status: getMerchantBillStatus(m.merchantKey, curMonthKey, recurrenceMap, anchor),
+  }));
+  const unpaidBills = recurringWithStatus
+    .filter((b) => !b.status.isPaidThisMonth && b.status.isExpectedThisMonth)
+    .sort((a, b) => b.monthlyAverage - a.monthlyAverage);
+  const paidBills = recurringWithStatus
+    .filter((b) => b.status.isPaidThisMonth)
+    .sort((a, b) => b.monthlyAverage - a.monthlyAverage);
+  const unpaidBillsTotalDollars = unpaidBills.reduce((s, b) => s + b.monthlyAverage, 0);
+  const paidBillsTotalDollars = paidBills.reduce((s, b) => s + b.monthlyAverage, 0);
+
+  // Recent 7-day and pending transactions for "Has anything hit?" tracking
+  const sevenDaysAgo = new Date(anchor.getTime() - 7 * 86_400_000);
+  const sevenDaysAgoStr = `${sevenDaysAgo.getFullYear()}-${String(sevenDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(sevenDaysAgo.getDate()).padStart(2, '0')}`;
+  const pendingTxns = scopedAllTimeTxns
+    .filter((t) => t.isPending && !isTransfer(t))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const recent7DayTxns = curMonthTxns
+    .filter((t) => t.date >= sevenDaysAgoStr && !isTransfer(t))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.amount - b.amount);
+  const recent7DayBigCharges = recent7DayTxns
+    .filter((t) => t.amount < 0 && Math.abs(t.amount) >= 50)
+    .sort((a, b) => a.amount - b.amount);
 
   // Balance Sheet & Net Worth
   const liquidCashDollars = activeAccounts
@@ -632,7 +673,7 @@ export async function analyzeQuestionAndFinances(
   const monthlyNetIncomeBaseline =
     activeStreams.length > 0
       ? computeTotalNetIncome(activeStreams, fState.taxRate)
-      : forecastBaseline?.baseline.baseIncome || fState.baseIncome || curMonthStats.incomeDollars || prevMonthStats.incomeDollars;
+      : forecastBaseline?.baseline.income || fState.baseIncome || curMonthStats.incomeDollars || prevMonthStats.incomeDollars;
   const monthlyRecurringBaseline =
     fState.recurringBudget > 0
       ? fState.recurringBudget
@@ -654,6 +695,25 @@ export async function analyzeQuestionAndFinances(
     monthlyVariableBaseline -
     monthlySavingsOutBaseline -
     (fState.extraLoanPayment || 0);
+
+  // Compute current-month paycheck schedule across active income streams
+  const enabledStreams = activeStreams.filter((s) => s.enabled !== false);
+  const streamSchedules = enabledStreams.map((s) => ({
+    stream: s,
+    schedule: getStreamPaycheckSchedule(s, curMonthKey, fState.taxRate),
+  }));
+  const remainingPaychecksCount = streamSchedules.reduce(
+    (sum, item) => sum + item.schedule.unpaidPaychecks,
+    0
+  );
+  const remainingPaychecksDollars = streamSchedules.reduce(
+    (sum, item) => sum + item.schedule.unpaidPaychecks * item.schedule.netPerPaycheck,
+    0
+  );
+  const receivedPaychecksCount = streamSchedules.reduce(
+    (sum, item) => sum + item.schedule.receivedCount,
+    0
+  );
 
   // Semantic Category Matching
   const matchedCategories = new Set<string>();
@@ -682,11 +742,16 @@ export async function analyzeQuestionAndFinances(
   }
 
   // Keyword / Merchant Matching across transactions
+  const synonymWords = new Set(
+    Object.keys(CATEGORY_SYNONYMS)
+      .flatMap((k) => k.split(/\s+/))
+      .map((w) => w.toLowerCase())
+  );
   const queryKeywords = qLower
     .replace(/\$[0-9,.]+/g, ' ')
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w) && !(w in MONTH_NAMES));
+    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w) && !(w in MONTH_NAMES) && !synonymWords.has(w));
 
   // Filter out keywords that are just matched category names or account names
   const specificMerchantKeywords = queryKeywords.filter((kw) => {
@@ -707,7 +772,7 @@ export async function analyzeQuestionAndFinances(
     specificMerchantKeywords.length > 0
       ? searchPool.filter((t) => {
           const hay = `${t.merchantKey || ''} ${t.description || ''}`.toLowerCase();
-          return specificMerchantKeywords.some((kw) => hay.includes(kw));
+          return specificMerchantKeywords.some((kw) => new RegExp(`\\b${kw}`, 'i').test(hay));
         })
       : [];
 
@@ -724,13 +789,13 @@ export async function analyzeQuestionAndFinances(
   if (keywordMatchedTxns.length > 0) {
     const spendTxns = keywordMatchedTxns.filter((t) => t.amount < 0);
     const incomeTxns = keywordMatchedTxns.filter((t) => t.amount > 0);
-    const totalMatchSpend = spendTxns.reduce((s, t) => s + Math.abs(t.amount), 0) / 100;
-    const totalMatchIncome = incomeTxns.reduce((s, t) => s + t.amount, 0) / 100;
+    const totalMatchSpend = spendTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
+    const totalMatchIncome = incomeTxns.reduce((s, t) => s + t.amount, 0);
     const inPeriodMatches = keywordMatchedTxns.filter(
       (t) => t.date >= timePeriod.startDate && t.date <= timePeriod.endDate
     );
     const inPeriodSpend =
-      inPeriodMatches.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) / 100;
+      inPeriodMatches.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
 
     const avgCharge = spendTxns.length > 0 ? totalMatchSpend / spendTxns.length : 0;
     const sortedMatches = [...keywordMatchedTxns].sort((a, b) => b.date.localeCompare(a.date));
@@ -740,8 +805,8 @@ export async function analyzeQuestionAndFinances(
         `### Matching Transactions for "${specificMerchantKeywords.join(' ')}"`,
         `- **Selected Period (${timePeriod.label}):** **${usd.format(inPeriodSpend)}** across **${inPeriodMatches.length}** transaction${inPeriodMatches.length === 1 ? '' : 's'}`,
         !timePeriod.isExplicitInQuery && keywordMatchedTxns.length !== inPeriodMatches.length
-          ? `- **All-Time Total:** **${usd.format(totalMatchSpend)}** spent across **${spendTxns.length}** charges (avg **${usdCents.format(Math.round(avgCharge * 100))}** per charge)${totalMatchIncome > 0 ? ` · **+${usd.format(totalMatchIncome)}** inflows` : ''}`
-          : `- **Average Charge:** **${usdCents.format(Math.round(avgCharge * 100))}**`,
+          ? `- **All-Time Total:** **${usd.format(totalMatchSpend)}** spent across **${spendTxns.length}** charges (avg **${usdCents.format(avgCharge)}** per charge)${totalMatchIncome > 0 ? ` · **+${usd.format(totalMatchIncome)}** inflows` : ''}`
+          : `- **Average Charge:** **${usdCents.format(avgCharge)}**`,
         '',
         '**Recent Matching Transactions:**',
         ...sortedMatches.slice(0, 8).map((t) => {
@@ -767,9 +832,9 @@ export async function analyzeQuestionAndFinances(
       const pStat = periodStats.byCat.get(cName);
       const curStat = curMonthStats.byCat.get(cName);
       const prevStat = prevMonthStats.byCat.get(cName);
-      const pSpend = pStat ? pStat.spendCents / 100 : 0;
-      const curSpend = curStat ? curStat.spendCents / 100 : 0;
-      const prevSpend = prevStat ? prevStat.spendCents / 100 : 0;
+      const pSpend = pStat ? pStat.spendCents : 0;
+      const curSpend = curStat ? curStat.spendCents : 0;
+      const prevSpend = prevStat ? prevStat.spendCents : 0;
       const tAvg = trailingAvgByCat.get(cName) || 0;
       const bAmt = budgetByCat.get(cName);
 
@@ -813,7 +878,7 @@ export async function analyzeQuestionAndFinances(
               '',
               '**Top Merchants in This Group:**',
               ...topMerchInCats.map(
-                ([m, v]) => `- **${m}**: **${usd.format(v.spendCents / 100)}** (${v.count}x)`
+                ([m, v]) => `- **${m}**: **${usd.format(v.spendCents)}** (${v.count}x)`
               ),
             ]
           : []),
@@ -821,14 +886,104 @@ export async function analyzeQuestionAndFinances(
     );
   }
 
-  // 3. Affordability / "Can I afford $X" / "What-if" Simulator
+  // 2.5 End-of-Month Bill, Paycheck & Recent Transaction Tracker
+  if (
+    qLower.includes('coming up') ||
+    qLower.includes('upcoming') ||
+    qLower.includes('end of the month') ||
+    qLower.includes('end of month') ||
+    qLower.includes('rest of the month') ||
+    qLower.includes('left to pay') ||
+    qLower.includes('still due') ||
+    /\bdue\b/.test(qLower) ||
+    qLower.includes('unpaid') ||
+    qLower.includes('cleared') ||
+    /\bhit\b/.test(qLower) ||
+    qLower.includes('has anything') ||
+    /\bpending\b/.test(qLower) ||
+    qLower.includes('recent') ||
+    qLower.includes('lately') ||
+    qLower.includes('last few days') ||
+    qLower.includes('this week') ||
+    /\btrack\b/.test(qLower) ||
+    qLower.includes('big payment') ||
+    qLower.includes('large payment') ||
+    qLower.includes('autopay')
+  ) {
+    const topUnpaid = unpaidBills.slice(0, 10);
+    const topPaid = paidBills.slice(0, 8);
+    const topRecent = recent7DayTxns.slice(0, 8);
+    const topRecentBig = recent7DayBigCharges.slice(0, 5);
+
+    sections.push(
+      [
+        `### End-of-Month Bill & Transaction Tracker (${monthLabel(curMonthKey)} · Day ${curDayOfMonth} of ${daysInCurMonth}, ${daysRemainingInMonth}d left)`,
+        `- **Unpaid Recurring Bills Still Expected This Month:** **${unpaidBills.length} bill${unpaidBills.length === 1 ? '' : 's'}** totaling **~${usd.format(unpaidBillsTotalDollars)}**`,
+        `- **Recurring Bills Already Paid This Month:** **${paidBills.length} bill${paidBills.length === 1 ? '' : 's'}** totaling **~${usd.format(paidBillsTotalDollars)}**`,
+        `- **Remaining Paychecks Expected This Month:** **${remainingPaychecksCount} paycheck${remainingPaychecksCount === 1 ? '' : 's'}** (**+${usd.format(remainingPaychecksDollars)}** expected · **${receivedPaychecksCount}** already received for **${usd.format(curMonthStats.incomeDollars)}** total inflows so far)`,
+        pendingTxns.length > 0
+          ? `- **Pending Transactions:** **${pendingTxns.length}** pending charge${pendingTxns.length === 1 ? '' : 's'} totaling **${usdCents.format(pendingTxns.reduce((s, t) => s + Math.abs(t.amount), 0))}**`
+          : `- **Pending Transactions:** **0** pending charges right now`,
+        ...(topUnpaid.length > 0
+          ? [
+              '',
+              `**⏳ Still Unpaid / Coming Up in ${monthLabel(curMonthKey)} (~${usd.format(unpaidBillsTotalDollars)} total):**`,
+              ...topUnpaid.map(
+                (b) =>
+                  `- **${b.merchantKey}** (${b.category}): **~${usd.format(b.monthlyAverage)}** · Expected **${b.status.expectedShortLabel || 'this month'}** (${b.status.countdownText || 'upcoming'}, last paid ${b.status.lastPaidShortLabel || 'prior month'})`
+              ),
+            ]
+          : [
+              '',
+              `**✅ All ${paidBills.length} tracked recurring bills for ${monthLabel(curMonthKey)} have already cleared!**`,
+            ]),
+        ...(topPaid.length > 0
+          ? [
+              '',
+              `**✅ Major Bills Already Paid in ${monthLabel(curMonthKey)} (~${usd.format(paidBillsTotalDollars)} total):**`,
+              ...topPaid.map(
+                (b) =>
+                  `- **${b.merchantKey}** (${b.category}): **~${usd.format(b.monthlyAverage)}** · ${b.status.countdownText || `Paid ${b.status.lastPaidShortLabel || 'this month'}`}`
+              ),
+            ]
+          : []),
+        ...(topRecentBig.length > 0
+          ? [
+              '',
+              `**🚨 Largest Charges in the Last 7 Days (over $50):**`,
+              ...topRecentBig.map((t) => {
+                const accName = accountById.get(t.accountId)?.name || 'Account';
+                return `- **${t.date}** · **${(t.merchantKey || t.description).slice(0, 34)}** (${t.category || 'Uncategorized'} · ${accName}): **${usdCents.format(t.amount)}**${t.isPending ? ' **(Pending)**' : ''}`;
+              }),
+            ]
+          : []),
+        ...(topRecent.length > 0
+          ? [
+              '',
+              `**🕒 Latest Transactions (Last 7 Days since ${sevenDaysAgoStr}):**`,
+              ...topRecent.map((t) => {
+                const accName = accountById.get(t.accountId)?.name || 'Account';
+                return `- **${t.date}** · **${(t.merchantKey || t.description).slice(0, 34)}** (${t.category || 'Uncategorized'} · ${accName}): **${usdCents.format(t.amount)}**${t.isPending ? ' **(Pending)**' : ''}`;
+              }),
+            ]
+          : []),
+      ].join('\n')
+    );
+  }
+
+  // 3. Affordability / "Can I spend $X right now and it not hurt?" / "What-if" Simulator
   if (
     parsedDollarAmount !== null ||
     qLower.includes('afford') ||
     qLower.includes('what if') ||
     qLower.includes('can i buy') ||
+    qLower.includes('can i spend') ||
     qLower.includes('safe to spend') ||
-    qLower.includes('safely spend')
+    qLower.includes('safely spend') ||
+    qLower.includes('not hurt') ||
+    qLower.includes('hurt') ||
+    qLower.includes('splurge') ||
+    qLower.includes('room to spend')
   ) {
     const isRecurringAsk =
       qLower.includes('/mo') ||
@@ -836,43 +991,68 @@ export async function analyzeQuestionAndFinances(
       qLower.includes('a month') ||
       qLower.includes('monthly');
     const amountToTest = parsedDollarAmount ?? 500;
-    const curVariableSpent = Array.from(curMonthStats.byCat.entries())
-      .filter(([cat]) => {
-        const cObj = data.categories.find((c) => c.name === cat);
-        return !cObj || cObj.defaultRecurrence !== 'recurring';
+    const recurringKeysLower = new Set(
+      consolidatedRecurring.map((m) => m.merchantKey.toLowerCase())
+    );
+    const curVariableSpent = curMonthTxns
+      .filter((t) => {
+        if (t.amount >= 0 || isTransfer(t)) return false;
+        if (t.recurrence === 'recurring') return false;
+        const mk = (t.merchantKey || '').trim().toLowerCase();
+        if (mk && recurringKeysLower.has(mk)) return false;
+        const cObj = data.categories.find((c) => c.name === t.category);
+        if (cObj?.defaultRecurrence === 'recurring') return false;
+        return true;
       })
-      .reduce((s, [, v]) => s + v.spendCents / 100, 0);
+      .reduce((s, t) => s + Math.abs(t.amount), 0);
     const remainingVariableThisMonth = monthlyVariableBaseline - curVariableSpent;
+    const variableAfterPurchase = remainingVariableThisMonth - amountToTest;
     const newMonthlySafeRemainder = isRecurringAsk
       ? monthlySafeRemainder - amountToTest
       : monthlySafeRemainder;
     const oneTimeNetAfter = monthlySafeRemainder + remainingVariableThisMonth - amountToTest;
+    const projectedMonthEndCheckingBefore =
+      checkingCashDollars +
+      remainingPaychecksDollars -
+      unpaidBillsTotalDollars -
+      Math.max(0, remainingVariableThisMonth);
+    const projectedMonthEndCheckingAfter = projectedMonthEndCheckingBefore - amountToTest;
 
-    let verdict = '✅ **Yes — Comfortably Affordable**';
+    let verdict = `✅ **Yes — Spending ${usd.format(amountToTest)} right now will NOT hurt**`;
     if (isRecurringAsk) {
       if (newMonthlySafeRemainder < 0) {
-        verdict = '⚠️ **Tight / Over Monthly Safe Remainder** — would require reducing variable spending or savings allocations';
+        verdict = `⚠️ **Tight / Over Monthly Safe Remainder** — adding ${usd.format(amountToTest)}/mo would push your monthly safe remainder to **${usd.format(newMonthlySafeRemainder)}/mo**`;
       } else if (newMonthlySafeRemainder < 300) {
-        verdict = '🟡 **Manageable, but leaves a thin monthly buffer**';
+        verdict = `🟡 **Manageable, but leaves a thin ${usd.format(newMonthlySafeRemainder)}/mo monthly buffer**`;
       }
     } else {
-      if (amountToTest > checkingCashDollars * 0.5) {
-        verdict = '⚠️ **Caution — Exceeds 50% of your liquid checking cash**';
+      if (amountToTest > checkingCashDollars * 0.5 || projectedMonthEndCheckingAfter < 500) {
+        verdict = `⚠️ **Caution — Spending ${usd.format(amountToTest)} right now would squeeze your checking buffer (leaving ${usd.format(projectedMonthEndCheckingAfter)} after unpaid bills)**`;
       } else if (oneTimeNetAfter < 0) {
-        verdict = '🟡 **Dip into Checking Buffer** — exceeds this month\'s remaining cashflow, but covered by your checking balance';
+        verdict = `🟡 **Manageable from Checking Cash, but exceeds this month's remaining cashflow by ${usd.format(Math.abs(oneTimeNetAfter))}**`;
+      } else if (variableAfterPurchase < 0) {
+        verdict = `✅ **Yes — Covered by your ${usd.format(monthlySafeRemainder)}/mo Safe Remainder & ${usd.format(checkingCashDollars)} Checking Balance (puts variable spending ${usd.format(Math.abs(variableAfterPurchase))} over target, but won't hurt cashflow)**`;
       }
     }
 
+    const top3UnpaidSummary =
+      unpaidBills.length > 0
+        ? unpaidBills
+            .slice(0, 3)
+            .map((b) => `${b.merchantKey} (~${usd.format(b.monthlyAverage)}, ${b.status.expectedShortLabel || 'upcoming'})`)
+            .join(', ')
+        : 'None — all recurring bills have cleared';
+
     sections.push(
       [
-        `### Affordability & Safe-to-Spend Analysis${parsedDollarAmount ? ` (${usd.format(amountToTest)}${isRecurringAsk ? '/mo' : ''})` : ''}`,
-        parsedDollarAmount ? `- **Verdict:** ${verdict}` : '',
-        `- **Monthly Net Take-Home Income:** **${usd.format(monthlyNetIncomeBaseline)}/mo**`,
-        `- **Monthly Fixed Recurring Bills:** **-${usd.format(monthlyRecurringBaseline)}/mo**`,
-        `- **Monthly Variable Living Budget:** **-${usd.format(monthlyVariableBaseline)}/mo** (**${usd.format(curVariableSpent)}** spent so far in ${monthLabel(curMonthKey)} → **${usd.format(remainingVariableThisMonth)}** variable budget remaining)`,
-        `- **Monthly Savings/Investment Transfers:** **-${usd.format(monthlySavingsOutBaseline)}/mo**`,
-        `- **Unallocated Safe Remainder:** **${usd.format(monthlySafeRemainder)}/mo**${parsedDollarAmount && isRecurringAsk ? ` → **${usd.format(newMonthlySafeRemainder)}/mo** after adding ${usd.format(amountToTest)}/mo` : ''}`,
-        `- **Liquid Checking Cash Available:** **${usd.format(checkingCashDollars)}** (plus **${usd.format(savingsCashDollars)}** in savings)`,
+        `### Affordability & End-of-Month Cushion Analysis (${usd.format(amountToTest)}${isRecurringAsk ? '/mo' : ' right now'})`,
+        `- **Verdict:** ${verdict}`,
+        `- **Month Progress:** Day ${curDayOfMonth} of ${daysInCurMonth} (**${daysRemainingInMonth} days left** in ${monthLabel(curMonthKey)})`,
+        `- **Variable Budget Status:** **${usd.format(curVariableSpent)}** spent of **${usd.format(monthlyVariableBaseline)}/mo** budget → **${usd.format(remainingVariableThisMonth)}** remaining before purchase (**${usd.format(variableAfterPurchase)}** after spending ${usd.format(amountToTest)})`,
+        `- **Unpaid Bills Still Due Before Month-End:** **-${usd.format(unpaidBillsTotalDollars)}** across **${unpaidBills.length} bill${unpaidBills.length === 1 ? '' : 's'}** (Top upcoming: ${top3UnpaidSummary})`,
+        `- **Remaining Paychecks This Month:** **+${usd.format(remainingPaychecksDollars)}** (${remainingPaychecksCount} paycheck${remainingPaychecksCount === 1 ? '' : 's'} left in ${monthLabel(curMonthKey)})`,
+        `- **Monthly Unallocated Safe Remainder:** **${usd.format(monthlySafeRemainder)}/mo** (after **${usd.format(monthlyRecurringBaseline)}** fixed bills, **${usd.format(monthlyVariableBaseline)}** variable budget, and **${usd.format(monthlySavingsOutBaseline)}** savings transfers)`,
+        `- **Checking Cushion Impact:** **${usd.format(checkingCashDollars)}** checking cash today → **${usd.format(projectedMonthEndCheckingAfter)}** projected month-end checking cushion after unpaid bills, remaining variable budget, and this **${usd.format(amountToTest)}** purchase (plus **${usd.format(savingsCashDollars)}** in savings)`,
       ]
         .filter(Boolean)
         .join('\n')
@@ -883,7 +1063,6 @@ export async function analyzeQuestionAndFinances(
   if (
     qLower.includes('compare') ||
     qLower.includes('last month') ||
-    qLower.includes('this month') ||
     qLower.includes('why') ||
     qLower.includes('high') ||
     qLower.includes('spike') ||
@@ -899,8 +1078,8 @@ export async function analyzeQuestionAndFinances(
     ]);
     const catDeltas = Array.from(allCompCats)
       .map((cat) => {
-        const cur = (curMonthStats.byCat.get(cat)?.spendCents || 0) / 100;
-        const prev = (prevMonthStats.byCat.get(cat)?.spendCents || 0) / 100;
+        const cur = curMonthStats.byCat.get(cat)?.spendCents || 0;
+        const prev = prevMonthStats.byCat.get(cat)?.spendCents || 0;
         const avg = trailingAvgByCat.get(cat) || prev;
         return {
           category: cat,
@@ -972,13 +1151,14 @@ export async function analyzeQuestionAndFinances(
     qLower.includes('fixed') ||
     qLower.includes('cancel')
   ) {
-    const topRec = consolidatedRecurring.slice(0, 12);
-    const totalRecMonthly = consolidatedRecurring.reduce((s, m) => s + m.monthlyAverage, 0);
+    const topRec = recurringWithStatus.slice(0, 12);
+    const totalRecMonthly = recurringWithStatus.reduce((s, m) => s + m.monthlyAverage, 0);
     sections.push(
       [
-        `### Recurring Bills & Subscriptions (${consolidatedRecurring.length} detected, ${usd.format(totalRecMonthly)}/mo total)`,
+        `### Recurring Bills & Subscriptions (${recurringWithStatus.length} detected, ${usd.format(totalRecMonthly)}/mo total · ${paidBills.length} paid, ${unpaidBills.length} still expected in ${monthLabel(curMonthKey)})`,
         ...topRec.map(
-          (m) => `- **${m.merchantKey}** (${m.category}): **~${usd.format(m.monthlyAverage)}/mo** (${usd.format(m.monthlyAverage * 12)}/yr)`
+          (m) =>
+            `- **${m.merchantKey}** (${m.category}): **~${usd.format(m.monthlyAverage)}/mo** (${usd.format(m.monthlyAverage * 12)}/yr) — ${m.status.isPaidThisMonth ? `✅ ${m.status.countdownText || 'Paid this month'}` : `⏳ Expected ${m.status.expectedShortLabel || 'this month'} (${m.status.countdownText || 'unpaid'})`}`
         ),
       ].join('\n')
     );
@@ -1001,9 +1181,9 @@ export async function analyzeQuestionAndFinances(
       })
       .map(([category, v]) => ({
         category,
-        spend: v.spendCents / 100,
+        spend: v.spendCents,
         count: v.count,
-        avg: trailingAvgByCat.get(category) || v.spendCents / 100,
+        avg: trailingAvgByCat.get(category) || v.spendCents,
       }))
       .sort((a, b) => b.spend - a.spend)
       .slice(0, 5);
@@ -1036,18 +1216,21 @@ export async function analyzeQuestionAndFinances(
   ) {
     sections.push(
       [
-        `### Income & Cashflow Breakdown`,
+        `### Income & Paycheck Schedule Breakdown`,
         `- **Projected Monthly Net Take-Home Income:** **${usd.format(monthlyNetIncomeBaseline)}/mo** (**${usd.format(monthlyNetIncomeBaseline * 12)}/yr**)`,
         `- **Actual Inflows in ${timePeriod.label}:** **${usd.format(periodStats.incomeDollars)}**`,
-        `- **${monthLabel(curMonthKey)} Inflows:** **${usd.format(curMonthStats.incomeDollars)}** · **${monthLabel(prevMonthKey)} Inflows:** **${usd.format(prevMonthStats.incomeDollars)}**`,
-        ...(activeStreams.length > 0
+        `- **${monthLabel(curMonthKey)} Inflows So Far:** **${usd.format(curMonthStats.incomeDollars)}** (${receivedPaychecksCount} paycheck${receivedPaychecksCount === 1 ? '' : 's'} received · **${remainingPaychecksCount}** remaining for **+${usd.format(remainingPaychecksDollars)}**) · **${monthLabel(prevMonthKey)} Inflows:** **${usd.format(prevMonthStats.incomeDollars)}**`,
+        ...(streamSchedules.length > 0
           ? [
               '',
-              '**Detected Income Streams:**',
-              ...activeStreams.map(
-                (s) =>
-                  `- **${s.name}** (${s.accountName || 'Checking'} · ${s.frequency || 'monthly'}): **${usd.format(s.monthlyAmount)}/mo** ${s.enabled ? '(Active)' : '(Excluded)'}`
-              ),
+              `**Detected Income Streams & ${monthLabel(curMonthKey)} Schedule:**`,
+              ...streamSchedules.map(({ stream: s, schedule: sch }) => {
+                const nextDays =
+                  sch.upcomingDays.length > 0
+                    ? `Next expected day(s): ${sch.upcomingDays.map((d) => `${curMonthKey}-${String(d).padStart(2, '0')}`).join(', ')}`
+                    : `All ${sch.receivedCount} expected paycheck(s) received this month (last: ${sch.lastDate || 'N/A'})`;
+                return `- **${s.name}** (${s.accountName || 'Checking'} · ${s.frequency || 'monthly'}): **${usd.format(s.monthlyAmount)}/mo** (~${usd.format(sch.netPerPaycheck)}/paycheck) — **${sch.receivedCount}/${sch.expectedCount}** received in ${monthLabel(curMonthKey)} · ${nextDays}`;
+              }),
             ]
           : []),
       ].join('\n')
@@ -1059,7 +1242,7 @@ export async function analyzeQuestionAndFinances(
     mentionedAccounts.length > 0 ||
     qLower.includes('net worth') ||
     qLower.includes('balance') ||
-    qLower.includes('account') ||
+    qLower.includes('liquid') ||
     qLower.includes('cash') ||
     qLower.includes('checking') ||
     qLower.includes('debt') ||
@@ -1070,7 +1253,7 @@ export async function analyzeQuestionAndFinances(
     const acctLines = activeAccounts.map((a) => {
       const st = periodStats.byAcct.get(a.id!);
       const activityNote = st
-        ? ` — Period Spend: **${usd.format(st.spendCents / 100)}**, Inflow: **${usd.format(st.incomeCents / 100)}** (${st.count} txns)`
+        ? ` — Period Spend: **${usd.format(st.spendCents)}**, Inflow: **${usd.format(st.incomeCents)}** (${st.count} txns)`
         : '';
       return `- **${a.name}** (${a.type}): Balance **${usd.format(a.currentBalance || 0)}**${activityNote}`;
     });
@@ -1134,7 +1317,7 @@ export async function analyzeQuestionAndFinances(
         ...(topMerchList.length > 0
           ? topMerchList.map(
               ([m, v], i) =>
-                `${i + 1}. **${m}** (${v.category}): **${usd.format(v.spendCents / 100)}** (${v.count} charge${v.count === 1 ? '' : 's'})`
+                `${i + 1}. **${m}** (${v.category}): **${usd.format(v.spendCents)}** (${v.count} charge${v.count === 1 ? '' : 's'})`
             )
           : ['- No merchant spending in this range.']),
         ...(largestSingle.length > 0
@@ -1169,7 +1352,7 @@ export async function analyzeQuestionAndFinances(
         '',
         '**Where Your Money Went (Top Categories):**',
         ...(sortedCats.slice(0, 8).map(([cat, v]) => {
-          const dollars = v.spendCents / 100;
+          const dollars = v.spendCents;
           const pct = periodStats.spendDollars > 0 ? Math.round((dollars / periodStats.spendDollars) * 100) : 0;
           const avg = trailingAvgByCat.get(cat);
           const avgNote = avg ? ` · 3-Mo Avg: ${usd.format(avg)}/mo` : '';
@@ -1178,7 +1361,7 @@ export async function analyzeQuestionAndFinances(
         '',
         '**Top Merchants:**',
         ...(sortedMerchs.slice(0, 6).map(([m, v]) => {
-          const dollars = v.spendCents / 100;
+          const dollars = v.spendCents;
           return `- **${m}** (${v.category}): **${usd.format(dollars)}** (${v.count}x)`;
         }) || ['- No merchants recorded.']),
       ]
@@ -1238,9 +1421,12 @@ export async function askBuiltInFinancialAi(params: {
   onDownloadProgress?: (percent: number) => void;
 }): Promise<{ text: string; usedBuiltInModel: boolean }> {
   const analysis = await analyzeQuestionAndFinances(params.question, params.data);
+  // Immediately render the verified analytical breakdown so the user gets an instant answer
+  params.onChunk(analysis.synthesizedMarkdownReport);
+
   const availability = await checkBuiltInAiAvailability();
 
-  if (availability !== 'unavailable') {
+  if (availability === 'available') {
     try {
       const systemPrompt = [
         'You are Strictly AI, an insightful personal financial advisor.',
@@ -1248,27 +1434,36 @@ export async function askBuiltInFinancialAi(params: {
         'Never invent numbers or contradict the pre-computed analysis.',
       ].join(' ');
 
-      const session = await createBuiltInAiSession(systemPrompt, params.onDownloadProgress);
-      try {
-        const promptText = [
-          analysis.compactLlmPromptContext,
-          '\nWrite a 2-3 sentence direct executive answer summarizing the key takeaway and numbers for the user:',
-        ].join('\n');
+      const runWithTimeout = async () => {
+        const session = await createBuiltInAiSession(systemPrompt, params.onDownloadProgress);
+        try {
+          const promptText = [
+            analysis.compactLlmPromptContext,
+            '\nWrite a 2-3 sentence direct executive answer summarizing the key takeaway and numbers for the user:',
+          ].join('\n');
 
-        let aiTakeaway = '';
-        await consumeStreamOrPrompt(session, promptText, (partial) => {
-          aiTakeaway = partial.trim();
-          params.onChunk(`${aiTakeaway}\n\n${analysis.synthesizedMarkdownReport}`);
-        });
+          let aiTakeaway = '';
+          await consumeStreamOrPrompt(session, promptText, (partial) => {
+            aiTakeaway = partial.trim();
+            if (aiTakeaway.length > 0) {
+              params.onChunk(`${aiTakeaway}\n\n${analysis.synthesizedMarkdownReport}`);
+            }
+          });
 
-        if (aiTakeaway.length > 0) {
-          const combined = `${aiTakeaway}\n\n${analysis.synthesizedMarkdownReport}`;
-          params.onChunk(combined);
-          return { text: combined, usedBuiltInModel: true };
+          if (aiTakeaway.length > 0) {
+            const combined = `${aiTakeaway}\n\n${analysis.synthesizedMarkdownReport}`;
+            params.onChunk(combined);
+            return { text: combined, usedBuiltInModel: true };
+          }
+        } finally {
+          session.destroy?.();
         }
-      } finally {
-        session.destroy?.();
-      }
+        return null;
+      };
+
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+      const llmRes = await Promise.race([runWithTimeout(), timeoutPromise]);
+      if (llmRes) return llmRes;
     } catch {
       // Fall through to rich analytical report below
     }
