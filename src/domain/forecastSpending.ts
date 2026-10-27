@@ -232,11 +232,11 @@ export function computeCategoryProjections({
   }
 
   // 2. Budget map
-  const budgetByCat = new Map<string, number>();
+  const budgetByCat = new Map<string, { amount: number; userSet: boolean }>();
   if (budgets) {
     for (const b of budgets) {
       if (!disabledSet.has(b.category) && !excludedBudgetCategories.has(b.category)) {
-        budgetByCat.set(b.category, b.monthlyAmount || 0);
+        budgetByCat.set(b.category, { amount: b.monthlyAmount || 0, userSet: Boolean(b.userSet) });
       }
     }
   }
@@ -261,8 +261,9 @@ export function computeCategoryProjections({
   for (const cat of spendCats) {
     const isRecurringCat = cat.defaultRecurrence === 'recurring';
     const recurring = Math.round(recurringByCat.get(cat.name) || 0);
-    const hasExplicitBudget = !isRecurringCat && budgetByCat.has(cat.name);
-    const budget = isRecurringCat ? 0 : Math.round(budgetByCat.get(cat.name) || 0);
+    const budgetEntry = !isRecurringCat ? budgetByCat.get(cat.name) : undefined;
+    const hasExplicitBudget = budgetEntry !== undefined;
+    const budget = isRecurringCat ? 0 : Math.round(budgetEntry?.amount || 0);
     const trailing = Math.round(trailingByCat.get(cat.name) || 0);
 
     const lastYearMonthSpend = lastYearMonthSpendMap ? lastYearMonthSpendMap.get(cat.name) : undefined;
@@ -282,6 +283,10 @@ export function computeCategoryProjections({
       // User has an active budget for this category: budget dictates variable capacity
       baselineTotal = Math.max(budget, recurring);
       basis = 'budget';
+    } else if (hasExplicitBudget && !budgetEntry?.userSet && trailing > 0) {
+      // Auto-seeded $0 budget row before trailing averages loaded: use trailing average
+      baselineTotal = Math.max(trailing, recurring);
+      basis = 'trailing';
     } else if (hasExplicitBudget) {
       // Explicit $0 budget (or $0 trailing average on an isolated bank account)
       baselineTotal = recurring;

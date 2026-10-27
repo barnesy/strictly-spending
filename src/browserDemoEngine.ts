@@ -236,17 +236,25 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
     return acc;
   });
 
-  // 2. Ensure loan-related transactions (Rocket Mortgage, Santander, Dept of Ed, etc.) are categorized into Mortgage / Auto Loan / Student Loans
+  // 2. Remove overly broad WITHDRWL/DEPOSIT transfer rules and ensure transactions are properly categorized & have accurate recurrence
+  const prevRuleLen = s.rules.length;
+  s.rules = s.rules.filter(
+    (r) => !(r.category === 'Transfers' && (r.pattern === 'WITHDRWL' || r.pattern === 'DEPOSIT'))
+  );
+  if (s.rules.length !== prevRuleLen) changed = true;
+
   const validCats = new Set(s.categories.map((c) => c.name));
+  const overrideMap = new Map(s.merchantOverrides.map((o) => [o.merchantKey, o.recurrence]));
   const ctx = { rules: s.rules };
   s.transactions = s.transactions.map((t) => {
     if (t.source === 'demo') return t;
     const lowerDesc = `${t.merchantKey || ''} ${t.description || ''}`.toLowerCase();
-    const normLoanMerchant = lowerDesc.includes('rocket mortgage') || lowerDesc.includes('rocket mor')
-      ? 'rocket mortgage'
-      : lowerDesc.includes('santander')
-      ? 'santander'
-      : null;
+    const normLoanMerchant =
+      lowerDesc.includes('rocket mortgage') || lowerDesc.includes('rocket mor')
+        ? 'rocket mortgage'
+        : lowerDesc.includes('santander')
+        ? 'santander'
+        : null;
     const isMisbucketedLoan =
       !t.userOverridden &&
       (t.category === 'Uncategorized' ||
@@ -255,12 +263,23 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
       /rocket\s*mortgage|rocket\s*mor|mortgage|santander|dept\s*of\s*ed|department\s*of\s*education|nelnet|aidvantage|mohela|navient/i.test(
         lowerDesc
       );
+    const isFalseWithdrwlTransfer =
+      !t.userOverridden &&
+      t.category === 'Transfers' &&
+      /\b(withdrwl|deposit)\b/i.test(lowerDesc) &&
+      !/\b(atm\s+cash\s+withdrawal|atm\s+withdrawal|online\s+transfer|transfer|xfer|wire|zelle|venmo|cash\s+app|autopay|payment\s+thank\s+you|crcardpmt|credit\s+card|mobile\s+pymt|online\s+pmt|bill\s+pay|fidelity|vanguard|schwab|robinhood|coinbase)\b/i.test(
+        lowerDesc
+      );
     let nextTx = t;
     if (normLoanMerchant && t.merchantKey !== normLoanMerchant) {
       nextTx = { ...nextTx, merchantKey: normLoanMerchant };
       changed = true;
     }
-    if ((nextTx.category === 'Uncategorized' && !nextTx.userOverridden) || isMisbucketedLoan) {
+    if (
+      (nextTx.category === 'Uncategorized' && !nextTx.userOverridden) ||
+      isMisbucketedLoan ||
+      isFalseWithdrwlTransfer
+    ) {
       const ruleCat = categorize(nextTx.description, nextTx.merchantKey, nextTx.rawCategory, ctx);
       const heurCat = heuristicCategory(lowerDesc, nextTx.amount, validCats);
       const nextCat =
@@ -268,15 +287,29 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
           ? heurCat
           : ruleCat !== 'Uncategorized'
           ? ruleCat
-          : inferTypeCategory(nextTx.amount, nextTx.source, nextTx.rawCategory, undefined, nextTx.description) || heurCat;
-      if (nextCat && nextCat !== 'Uncategorized' && nextCat !== nextTx.category) {
+          : inferTypeCategory(nextTx.amount, nextTx.source, nextTx.rawCategory, undefined, nextTx.description) ||
+            heurCat ||
+            (isFalseWithdrwlTransfer ? 'Uncategorized' : nextTx.category);
+      if (nextCat && nextCat !== nextTx.category) {
         changed = true;
         nextTx = {
           ...nextTx,
           category: nextCat,
-          recurrence: RECURRING_CATEGORIES.has(nextCat) ? 'recurring' : nextTx.recurrence || 'onetime',
         };
       }
+    }
+    const mKey = nextTx.merchantKey || extractMerchantKey(nextTx.description);
+    const override = overrideMap.get(mKey);
+    const hasRecurringOverride =
+      override !== undefined &&
+      String(override) !== 'none' &&
+      String(override) !== 'onetime' &&
+      String(override) !== 'irregular';
+    const expectedRecurrence: 'recurring' | 'onetime' =
+      RECURRING_CATEGORIES.has(nextTx.category) || hasRecurringOverride ? 'recurring' : 'onetime';
+    if (nextTx.recurrence !== expectedRecurrence) {
+      nextTx = { ...nextTx, recurrence: expectedRecurrence };
+      changed = true;
     }
     return nextTx;
   });
@@ -397,6 +430,36 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
         s.loans = s.loans.map((l) => (l.id === existing.id ? updatedLoan : l));
         changed = true;
       }
+    }
+  }
+
+  // 4. Ensure s.budgets has entries for all spend categories, seeding missing or non-userSet $0 rows from trailing actuals
+  const nonDemoSpendTxns = s.transactions.filter((t) => t.source !== 'demo' && t.amount < 0);
+  const now = new Date();
+  const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().slice(0, 10);
+  const recentTxns = nonDemoSpendTxns.filter((t) => t.date >= cutoff);
+  const activeTxns = recentTxns.length > 0 ? recentTxns : nonDemoSpendTxns;
+  const distinctMonths = new Set(activeTxns.map((t) => t.date.slice(0, 7)));
+  const divisorMonths = Math.max(1, Math.min(3, distinctMonths.size || 3));
+  const spendTotalsByCat = new Map<string, number>();
+  for (const t of activeTxns) {
+    spendTotalsByCat.set(t.category, (spendTotalsByCat.get(t.category) || 0) + Math.abs(t.amount));
+  }
+  const existingBudgetsByCat = new Map(s.budgets.map((b) => [b.category, b]));
+  for (const cat of s.categories) {
+    if (cat.type !== 'spend') continue;
+    const avg = Math.round(((spendTotalsByCat.get(cat.name) || 0) / divisorMonths) * 100) / 100;
+    const prev = existingBudgetsByCat.get(cat.name);
+    if (!prev) {
+      s.budgets.push({
+        category: cat.name,
+        monthlyAmount: avg,
+        userSet: false,
+      });
+      changed = true;
+    } else if (!prev.userSet && prev.monthlyAmount === 0 && avg > 0) {
+      prev.monthlyAmount = avg;
+      changed = true;
     }
   }
 
@@ -979,10 +1042,13 @@ function filterTransactions(txns: Transaction[], filters: Record<string, any> = 
   const incomeCats = new Set(s.categories.filter((c) => c.type === 'income').map((c) => c.name));
   const transferCats = new Set(s.categories.filter((c) => c.type === 'transfer').map((c) => c.name));
   const disabledSet = new Set<string>(filters.disabledCategories || []);
-  const enabledAccSet =
-    Array.isArray(filters.enabledAccountIds) && filters.enabledAccountIds.length > 0
-      ? new Set<number>(filters.enabledAccountIds)
-      : null;
+  const validAccountIds = new Set(
+    s.accounts.map((a) => a.id).filter((id): id is number => id !== undefined)
+  );
+  const validEnabledIds = Array.isArray(filters.enabledAccountIds)
+    ? filters.enabledAccountIds.filter((id: number) => validAccountIds.has(id))
+    : [];
+  const enabledAccSet = validEnabledIds.length > 0 ? new Set<number>(validEnabledIds) : null;
 
   const realConnected = hasConnectedRealSources(s);
   const hasNonDemoTxns = s.transactions.some((t) => t.source !== 'demo');
@@ -1215,6 +1281,9 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return null;
     }
     case 'get_budgets':
+      if (hasConnectedRealSources(s) && syncConnectedAccountsAndLoans(s)) {
+        persistState();
+      }
       return s.budgets;
     case 'put_budget': {
       const item = args.item as Budget;
@@ -1494,30 +1563,20 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     }
     case 'refresh_recurrence_all': {
       const overrideMap = new Map(s.merchantOverrides.map((o) => [o.merchantKey, o.recurrence]));
-      const byMerchant = new Map<string, Transaction[]>();
-      for (const t of s.transactions) {
-        const k = t.merchantKey || extractMerchantKey(t.description);
-        const arr = byMerchant.get(k) || [];
-        arr.push(t);
-        byMerchant.set(k, arr);
-      }
       const recurringMerchants = new Set<string>();
-      for (const [k, txns] of byMerchant.entries()) {
-        const override = overrideMap.get(k);
+      for (const [k, override] of overrideMap.entries()) {
         if (override && String(override) !== 'none' && String(override) !== 'onetime' && String(override) !== 'irregular') {
-          recurringMerchants.add(k);
-          continue;
-        }
-        const distinctMonths = new Set(txns.map((t) => t.date.slice(0, 7)));
-        if (distinctMonths.size >= 2) {
           recurringMerchants.add(k);
         }
       }
       let updated = 0;
       s.transactions = s.transactions.map((t) => {
         const k = t.merchantKey || extractMerchantKey(t.description);
+        const isRecCat = RECURRING_CATEGORIES.has(t.category);
         const nextRec: 'recurring' | 'onetime' =
-          RECURRING_CATEGORIES.has(t.category) || recurringMerchants.has(k) ? 'recurring' : 'onetime';
+          isRecCat || recurringMerchants.has(k) || (!hasConnectedRealSources(s) && /fitness|gym/i.test(t.description))
+            ? 'recurring'
+            : 'onetime';
         if (t.recurrence !== nextRec) {
           updated += 1;
           return { ...t, recurrence: nextRec };
@@ -1613,7 +1672,12 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'get_consolidated_recurring_merchants': {
       const accountFilter = args.accountId ? { enabledAccountIds: [args.accountId] } : {};
       const filtered = filterTransactions(s.transactions, { ...(args.filters || {}), ...accountFilter, spendOnly: true });
-      const recurring = filtered.filter((t) => t.recurrence === 'recurring' && t.amount < 0);
+      const recurring = filtered.filter(
+        (t) =>
+          t.recurrence === 'recurring' &&
+          t.amount < 0 &&
+          RECURRING_CATEGORIES.has(t.category)
+      );
       const byMerchant = new Map<string, { category: string; amounts: number[]; dates: string[] }>();
       for (const t of recurring) {
         const key = t.merchantKey || t.description;
@@ -1641,6 +1705,8 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         startDate: cutoff,
         spendOnly: true,
       });
+      const distinctMonths = new Set(recent.filter((t) => t.amount < 0).map((t) => t.date.slice(0, 7)));
+      const divisor = Math.max(1, Math.min(months, distinctMonths.size || months));
       const byCat = new Map<string, { total: number; recurring: number; variable: number }>();
       for (const t of recent) {
         if (t.amount >= 0) continue;
@@ -1653,10 +1719,10 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       }
       return Array.from(byCat.entries()).map(([category, v]) => ({
         category,
-        average: Math.round((v.total / months) * 100) / 100,
-        trailingMonthlyAvg: Math.round(v.total / months),
-        recurringMonthlyAvg: Math.round(v.recurring / months),
-        variableMonthlyAvg: Math.round(v.variable / months),
+        average: Math.round((v.total / divisor) * 100) / 100,
+        trailingMonthlyAvg: Math.round(v.total / divisor),
+        recurringMonthlyAvg: Math.round(v.recurring / divisor),
+        variableMonthlyAvg: Math.round(v.variable / divisor),
       }));
     }
     case 'build_recurrence_map': {
@@ -2269,10 +2335,10 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
                 ? 'santander'
                 : rawMerchantKey;
             const validCats = new Set(s.categories.map((c) => c.name));
-            let category = categorize(description, merchantKey, undefined, ctx);
+            let category = categorize(description, merchantKey, rawMemo || undefined, ctx);
             if (category === 'Uncategorized') {
               const inferred =
-                inferTypeCategory(amountNum, 'simplefin', undefined, resolvedAccType, description) ||
+                inferTypeCategory(amountNum, 'simplefin', rawMemo || undefined, resolvedAccType, description) ||
                 heuristicCategory(`${merchantKey} ${description}`, amountNum, validCats);
               if (inferred) category = inferred;
             }

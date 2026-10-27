@@ -142,16 +142,24 @@ export default function Budget() {
   // Auto-seed budgets for any spend category with no budget row yet (only when viewing all accounts).
   useEffect(() => {
     if (!budgets || !categories || isDataLoading || !isAllSelected) return;
-    const existing = new Set(budgets.map((b) => b.category));
+    const existingByCat = new Map(budgets.map((b) => [b.category, b]));
     const toAdd: BudgetType[] = [];
     for (const cat of spendCategories) {
-      if (existing.has(cat.name)) continue;
-      const avg = trailingAvgByCategory.get(cat.name) || 0;
-      toAdd.push({
-        category: cat.name,
-        monthlyAmount: Math.round(avg * 100) / 100,
-        userSet: false,
-      });
+      const prev = existingByCat.get(cat.name);
+      const avg = Math.round((trailingAvgByCategory.get(cat.name) || 0) * 100) / 100;
+      if (!prev) {
+        toAdd.push({
+          category: cat.name,
+          monthlyAmount: avg,
+          userSet: false,
+        });
+      } else if (!prev.userSet && prev.monthlyAmount === 0 && avg > 0) {
+        toAdd.push({
+          category: cat.name,
+          monthlyAmount: avg,
+          userSet: false,
+        });
+      }
     }
     if (toAdd.length > 0) {
       bulkPutBudgets.mutate(toAdd);
@@ -183,14 +191,37 @@ export default function Budget() {
     return map;
   }, [merchantsByCategory, excludedMerchants]);
 
-  // When a subset of bank accounts is selected, scope variable budgets to those accounts' trailing 3-month actuals
+  // Ensure every spend category has an effective budget entry, and scope to selected accounts when filtered
   const effectiveBudgets = useMemo(() => {
-    if (isAllSelected) return budgets || [];
-    return (budgets || []).map((b) => ({
-      ...b,
-      monthlyAmount: Math.round((trailingAvgByCategory.get(b.category) || 0) * 100) / 100,
-    }));
-  }, [budgets, isAllSelected, trailingAvgByCategory]);
+    const budgetMap = new Map((budgets || []).map((b) => [b.category, b]));
+    const result: BudgetType[] = [];
+    for (const cat of spendCategories) {
+      const existing = budgetMap.get(cat.name);
+      const trailingAvg = Math.round((trailingAvgByCategory.get(cat.name) || 0) * 100) / 100;
+      if (!isAllSelected) {
+        result.push({
+          category: cat.name,
+          monthlyAmount: trailingAvg,
+          userSet: existing?.userSet ?? false,
+        });
+      } else if (existing) {
+        result.push({
+          ...existing,
+          monthlyAmount:
+            !existing.userSet && existing.monthlyAmount === 0 && trailingAvg > 0
+              ? trailingAvg
+              : existing.monthlyAmount,
+        });
+      } else {
+        result.push({
+          category: cat.name,
+          monthlyAmount: trailingAvg,
+          userSet: false,
+        });
+      }
+    }
+    return result;
+  }, [budgets, spendCategories, isAllSelected, trailingAvgByCategory]);
 
   const shouldRender = useDeferredRender();
 
@@ -1004,8 +1035,19 @@ function BudgetCard({
     categories.find((c) => c.name === name)?.color || '#bdbdbd';
 
   const sorted = useMemo(
-    () => budgets.slice().sort((a, b) => b.monthlyAmount - a.monthlyAmount),
-    [budgets]
+    () =>
+      budgets.slice().sort((a, b) => {
+        if (b.monthlyAmount !== a.monthlyAmount) return b.monthlyAmount - a.monthlyAmount;
+        const actualDiff =
+          (currentMonthProjections.get(b.category)?.actualToDate ?? 0) -
+          (currentMonthProjections.get(a.category)?.actualToDate ?? 0);
+        if (actualDiff !== 0) return actualDiff;
+        const avgDiff =
+          (trailingAvgByCategory.get(b.category) ?? 0) -
+          (trailingAvgByCategory.get(a.category) ?? 0);
+        return avgDiff;
+      }),
+    [budgets, currentMonthProjections, trailingAvgByCategory]
   );
 
   const handleSaveBudget = async (category: string, amount: number) => {

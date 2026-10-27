@@ -16,7 +16,7 @@ import { recategorizeAll } from './domain/categorize';
 import { refreshRecurrenceAll } from './domain/recurrence';
 import type { Category, CategoryRule } from './types';
 
-export const SEED_VERSION = 8;
+export const SEED_VERSION = 9;
 
 const DEFAULT_CATEGORIES: Omit<Category, 'id'>[] = [
   { name: 'Groceries', color: '#4caf50', type: 'spend', sortOrder: 10, defaultRecurrence: 'onetime' },
@@ -638,8 +638,6 @@ const STARTER_RULES: StarterRule[] = [
   { pattern: 'ONLINE TRANSFER', category: 'Transfers', priority: 100 },
   { pattern: 'ATM CASH WITHDRAWAL', category: 'Transfers', priority: 90 },
   { pattern: 'ATM WITHDRAWAL', category: 'Transfers', priority: 90 },
-  { pattern: 'WITHDRWL', category: 'Transfers', priority: 80 },
-  { pattern: 'DEPOSIT', category: 'Transfers', priority: 80 },
   { pattern: 'ZELLE', category: 'Transfers', priority: 90 },
   { pattern: 'VENMO', category: 'Transfers', priority: 90 },
   { pattern: 'CASH APP', category: 'Transfers', priority: 90 },
