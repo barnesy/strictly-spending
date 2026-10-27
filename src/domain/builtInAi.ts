@@ -361,7 +361,7 @@ export async function buildQueryAwareFinancialContext(
     name: l.name,
     type: l.type,
     principal: l.principal || 0,
-    rate: l.interestRate || 0,
+    rate: l.rate || 0,
     monthlyPayment: l.monthlyPayment || 0,
   }));
 
