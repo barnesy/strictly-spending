@@ -500,11 +500,10 @@ export default function Dashboard() {
             borderColor: 'divider',
             borderRadius: (theme) => `${theme.shape.borderRadius}px`,
             bgcolor: 'background.paper',
-            overflow: 'hidden',
           }}
         >
           <Stack divider={<Divider />}>
-            {pageRows.map((t) => {
+            {pageRows.map((t, idx) => {
               const info = t.recurrence === 'recurring' ? recurrenceMap.get(t.merchantKey) : undefined;
               const recLabel = info ? recurrenceLabel(info.kind) : 'Recurring';
               return (
@@ -516,6 +515,12 @@ export default function Dashboard() {
                     px: 1.5,
                     cursor: 'pointer',
                     transition: 'background-color 120ms ease',
+                    ...(idx === 0
+                      ? {
+                          borderTopLeftRadius: (theme) => `${theme.shape.borderRadius}px`,
+                          borderTopRightRadius: (theme) => `${theme.shape.borderRadius}px`,
+                        }
+                      : {}),
                     '&:hover': { bgcolor: 'action.hover' },
                     '&:active': { bgcolor: 'action.selected' },
                   }}
@@ -639,70 +644,88 @@ export default function Dashboard() {
             )}
           </Stack>
 
-          {/* Mobile Table Summary & Pagination Footer */}
+          {/* Sticky Mobile Table Summary & Pagination Footer */}
           <Box
             sx={{
-              px: 1.5,
-              py: 1.25,
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 10,
+              bgcolor: 'background.paper',
               borderTop: '2px solid',
               borderColor: 'divider',
-              bgcolor: (theme) =>
-                theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+              borderBottomLeftRadius: (theme) => `${theme.shape.borderRadius}px`,
+              borderBottomRightRadius: (theme) => `${theme.shape.borderRadius}px`,
+              boxShadow: (theme) =>
+                theme.palette.mode === 'dark'
+                  ? '0 -4px 12px rgba(0, 0, 0, 0.5)'
+                  : '0 -4px 12px rgba(15, 23, 42, 0.08)',
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.82rem' }}>
-                Total ({dbTxnCount.toLocaleString()} {dbTxnCount === 1 ? 'txn' : 'txns'})
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  fontWeight: 800,
-                  fontSize: '0.9rem',
-                  fontVariantNumeric: 'tabular-nums',
-                  color: displayTotal > 0 ? 'success.main' : displayTotal < 0 ? 'inherit' : 'text.secondary',
-                }}
-              >
-                {formattedDisplayTotal}
-              </Typography>
-            </Stack>
-            {transactionType === 'all' && (
-              <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 0.25 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                  Spend: <Box component="span" sx={{ color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>{usdCents.format(-viewTotalSpend)}</Box>
+            <Box
+              sx={{
+                px: 1.5,
+                py: 1,
+                bgcolor: (theme) =>
+                  theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+              }}
+            >
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.82rem' }}>
+                  Total ({dbTxnCount.toLocaleString()} {dbTxnCount === 1 ? 'txn' : 'txns'})
                 </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>•</Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                  Income: <Box component="span" sx={{ color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>+{usdCents.format(viewTotalIncome)}</Box>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: '0.9rem',
+                    fontVariantNumeric: 'tabular-nums',
+                    color: displayTotal > 0 ? 'success.main' : displayTotal < 0 ? 'inherit' : 'text.secondary',
+                  }}
+                >
+                  {formattedDisplayTotal}
                 </Typography>
               </Stack>
-            )}
+              {transactionType === 'all' && (
+                <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 0.25 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                    Spend: <Box component="span" sx={{ color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>{usdCents.format(-viewTotalSpend)}</Box>
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>•</Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                    Income: <Box component="span" sx={{ color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>+{usdCents.format(viewTotalIncome)}</Box>
+                  </Typography>
+                </Stack>
+              )}
+            </Box>
+            <TablePagination
+              component="div"
+              count={dbTxnCount}
+              page={page}
+              onPageChange={(_, p) => setPage(p)}
+              rowsPerPage={pageSize}
+              onRowsPerPageChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[25, 50, 100]}
+              labelRowsPerPage="Rows:"
+              sx={{
+                borderTop: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+                borderBottomLeftRadius: (theme) => `${theme.shape.borderRadius}px`,
+                borderBottomRightRadius: (theme) => `${theme.shape.borderRadius}px`,
+                '& .MuiTablePagination-toolbar': {
+                  px: 1,
+                  minHeight: 40,
+                },
+                '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                  fontSize: '0.75rem',
+                  m: 0,
+                },
+              }}
+            />
           </Box>
-          <TablePagination
-            component="div"
-            count={dbTxnCount}
-            page={page}
-            onPageChange={(_, p) => setPage(p)}
-            rowsPerPage={pageSize}
-            onRowsPerPageChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setPage(0);
-            }}
-            rowsPerPageOptions={[25, 50, 100]}
-            labelRowsPerPage="Rows:"
-            sx={{
-              borderTop: '1px solid',
-              borderColor: 'divider',
-              '& .MuiTablePagination-toolbar': {
-                px: 1,
-                minHeight: 42,
-              },
-              '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                fontSize: '0.75rem',
-                m: 0,
-              },
-            }}
-          />
         </Box>
       ) : (
         <DataTable
