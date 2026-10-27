@@ -12,8 +12,10 @@ import {
 } from '@mui/material';
 import RepeatIcon from '@mui/icons-material/Repeat';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import { usdCents } from '../lib';
 import { recurrenceLabel, isRecurring } from '../domain/recurrence';
+import { useAccounts } from '../hooks/queries';
 import type { SortCard as SortCardData } from '../types';
 import AnimatedCard from './AnimatedCard';
 
@@ -51,6 +53,24 @@ export default function SortCard({
   zipDirection = 'right',
 }: Props) {
   const { merchantKey, txns, totalAbs, recurrence, suggestedCategory } = card;
+  const { data: accounts } = useAccounts();
+
+  const accountNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const acc of accounts ?? []) {
+      map.set(acc.id, acc.name);
+    }
+    return map;
+  }, [accounts]);
+
+  const cardAccountNames = useMemo(() => {
+    const seen = new Set<string>();
+    for (const t of txns) {
+      const name = accountNameById.get(t.accountId);
+      if (name) seen.add(name);
+    }
+    return Array.from(seen);
+  }, [txns, accountNameById]);
 
   const [expanded, setExpanded] = useState(false);
   const [prevMerchantKey, setPrevMerchantKey] = useState(merchantKey);
@@ -96,7 +116,7 @@ export default function SortCard({
           >
             {merchantKey || '(no merchant key)'}
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }} flexWrap="wrap">
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
             <Typography variant="body2" color="text.secondary">
               {txns.length} occurrence{txns.length === 1 ? '' : 's'}
             </Typography>
@@ -104,6 +124,16 @@ export default function SortCard({
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {usdCents.format(totalAbs)} total
             </Typography>
+            {cardAccountNames.map((accName) => (
+              <Chip
+                key={accName}
+                size="small"
+                icon={<AccountBalanceWalletOutlinedIcon sx={{ fontSize: 13 }} />}
+                label={accName}
+                variant="outlined"
+                sx={{ height: 22, fontWeight: 600 }}
+              />
+            ))}
             {cadence && (
               <>
                 <Typography variant="body2" color="text.secondary">·</Typography>
@@ -254,28 +284,48 @@ export default function SortCard({
         <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5 }}>
           <Table size="small">
             <TableBody>
-              {displayedTxns.map((t) => (
-                <TableRow key={t.id} sx={{ '& td': { borderBottom: 'none', py: 0.5 } }}>
-                  <TableCell sx={{ width: 140, whiteSpace: 'nowrap', color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
-                    {t.date}
-                  </TableCell>
-                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
-                    {t.description.slice(0, 60)}
-                    {t.isPending && (
-                      <Chip
-                        size="small"
-                        label="⏳ Pending"
-                        color="warning"
-                        variant="outlined"
-                        sx={{ ml: 0.75, height: 18, fontSize: '0.65rem', fontWeight: 700 }}
-                      />
+              {displayedTxns.map((t) => {
+                const accName = accountNameById.get(t.accountId);
+                return (
+                  <TableRow key={t.id} sx={{ '& td': { borderBottom: 'none', py: 0.5 } }}>
+                    <TableCell sx={{ width: 96, whiteSpace: 'nowrap', color: 'text.secondary', fontVariantNumeric: 'tabular-nums', pr: 1 }}>
+                      {t.date}
+                    </TableCell>
+                    {accName && (
+                      <TableCell
+                        sx={{
+                          width: { xs: 'auto', sm: 150 },
+                          maxWidth: { xs: 130, sm: 170 },
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          color: 'text.secondary',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          px: 1,
+                        }}
+                      >
+                        {accName}
+                      </TableCell>
                     )}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                    {usdCents.format(t.amount)}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
+                      {t.description.slice(0, 60)}
+                      {t.isPending && (
+                        <Chip
+                          size="small"
+                          label="⏳ Pending"
+                          color="warning"
+                          variant="outlined"
+                          sx={{ ml: 0.75, height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                      {usdCents.format(t.amount)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Box>
