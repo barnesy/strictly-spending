@@ -4,6 +4,7 @@ import { resolveDateRange, formatLocalDate, useFilters } from '../stores/store';
 import { useForecastStore, computeTotalNetIncome } from '../stores/forecastStore';
 import { loadForecastBaselineData } from './incomeStreams';
 import { consolidateRecurringMerchants } from './forecastSpending';
+import { buildRecurrenceMap } from './recurrence';
 import type { Account, Budget, Category, Loan, RecurrenceInfo, Transaction } from '../types';
 
 export type BuiltInAiAvailability =
@@ -440,7 +441,7 @@ export async function analyzeQuestionAndFinances(
     api.getTransactions('1970-01-01', '2100-01-01'),
     api.getConsolidatedRecurringMerchants(demoMode).catch(() => []),
     api.getCategoryTrailingAverages(demoMode).catch(() => []),
-    api.getRecurrenceMap(demoMode).catch(() => ({})),
+    buildRecurrenceMap(demoMode, undefined).catch(() => ({})),
     api.getUncategorizedCount(demoMode).catch(() => 0),
     loadForecastBaselineData().catch(() => null),
   ]);
