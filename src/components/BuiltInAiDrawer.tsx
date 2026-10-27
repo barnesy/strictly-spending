@@ -32,13 +32,74 @@ interface ChatMessage {
   usedBuiltInModel?: boolean;
 }
 
-const STARTER_PROMPTS = [
-  'Are there any big payments coming up this month?',
-  'Can I spend $500 right now and it not hurt?',
-  'Has anything big hit my accounts recently?',
-  'How does this month compare to last month?',
-  'How much did I spend on food & eating out?',
-  'Where can I cut back to save more each month?',
+interface StarterPromptOption {
+  icon: string;
+  title: string;
+  subtitle: string;
+  prompt: string;
+}
+
+const STARTER_PROMPTS: StarterPromptOption[] = [
+  {
+    icon: '🛑',
+    title: 'Talk me out of $500',
+    subtitle: 'Impulse check vs. unpaid bills & 10-yr growth',
+    prompt: 'Can I spend $500 right now and it not hurt?',
+  },
+  {
+    icon: '🔥',
+    title: 'Roast my spending habits',
+    subtitle: 'Expose my worst leaks & instant savings',
+    prompt: 'Where can I cut back to save more each month?',
+  },
+  {
+    icon: '⏳',
+    title: 'Big bills still coming up?',
+    subtitle: 'Unpaid month-end bills vs. checking cash',
+    prompt: 'Are there any big payments coming up this month?',
+  },
+  {
+    icon: '🚨',
+    title: 'What hit my accounts?',
+    subtitle: '7-day damage report & biggest charges',
+    prompt: 'Has anything big hit my accounts recently?',
+  },
+  {
+    icon: '🍔',
+    title: 'Roast my food & dining',
+    subtitle: 'Restaurants, groceries & takeout burn rate',
+    prompt: 'How much did I spend on food & eating out?',
+  },
+  {
+    icon: '🛍️',
+    title: 'Stop a $150 impulse buy',
+    subtitle: 'Show what $150 really costs my future self',
+    prompt: 'Talk me out of a $150 impulse buy today',
+  },
+  {
+    icon: '🧛',
+    title: 'Audit subscription drains',
+    subtitle: 'Autopays quietly bleeding me every month',
+    prompt: 'Which subscriptions and recurring bills are draining me?',
+  },
+  {
+    icon: '📊',
+    title: 'This month vs. last month',
+    subtitle: 'Did I actually save or just spend more?',
+    prompt: 'How does this month compare to last month?',
+  },
+  {
+    icon: '📦',
+    title: 'Roast my shopping spend',
+    subtitle: 'Amazon, retail & impulse merchandise check',
+    prompt: 'How much did I spend on shopping this month?',
+  },
+  {
+    icon: '🏦',
+    title: 'Debt vs. cash reality check',
+    subtitle: 'Loans & interest drag vs. liquid cash',
+    prompt: 'Reality check my debt vs liquid cash and net worth',
+  },
 ];
 
 interface BuiltInAiDrawerProps {
@@ -61,6 +122,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
   const [scanStage, setScanStage] = useState(0);
   const [activePromptText, setActivePromptText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const latestExchangeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -85,16 +147,12 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
   }, [isGenerating]);
 
   useEffect(() => {
-    if (!scrollRef.current) return;
-    const el = scrollRef.current;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    const followTimer = window.setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-      }
-    }, 380);
-    return () => window.clearTimeout(followTimer);
-  }, [messages, isGenerating, scanStage]);
+    if (latestExchangeRef.current) {
+      latestExchangeRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages.length, isGenerating]);
 
   const handleSend = async (questionText?: string) => {
     const q = (questionText ?? input).trim();
@@ -171,6 +229,10 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
     }
   };
 
+  const askedSet = new Set(
+    messages.filter((m) => m.role === 'user').map((m) => m.content.trim().toLowerCase())
+  );
+
   return (
     <Drawer
       anchor="right"
@@ -178,7 +240,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
       onClose={onClose}
       PaperProps={{
         sx: {
-          width: { xs: '100%', sm: 500 },
+          width: { xs: '100%', sm: 520 },
           display: 'flex',
           flexDirection: 'column',
           bgcolor: 'background.paper',
@@ -310,7 +372,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
               />
             </Stack>
             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-              100% private & on-device · Zero API keys
+              100% private & on-device · Tough-love savings coach
             </Typography>
           </Box>
         </Stack>
@@ -324,7 +386,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
             </Tooltip>
           )}
           {messages.length > 0 && (
-            <Tooltip title="Clear conversation">
+            <Tooltip title="Reset & show full prompt board">
               <IconButton size="small" onClick={() => setMessages([])} disabled={isGenerating}>
                 <DeleteOutlineIcon fontSize="small" />
               </IconButton>
@@ -366,7 +428,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
         </Box>
       </Collapse>
 
-      {/* Messages Area */}
+      {/* Messages & Prominent Prompt Board Area */}
       <Box
         ref={scrollRef}
         sx={{
@@ -379,85 +441,129 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
         }}
       >
         {messages.length === 0 ? (
-          <Box sx={{ my: 'auto', textAlign: 'center', px: 1 }}>
-            <AutoAwesomeIcon sx={{ fontSize: 36, color: 'primary.main', opacity: 0.85, mb: 1 }} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
-              Ask anything about your finances
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, fontSize: '0.82rem' }}>
-              Powered by your browser&apos;s built-in on-device AI and live transaction engine. Your financial data never leaves your device.
-            </Typography>
-            <Stack spacing={1}>
-              {STARTER_PROMPTS.map((prompt) => (
-                <Button
-                  key={prompt}
-                  variant="outlined"
-                  size="small"
-                  onClick={() => handleSend(prompt)}
-                  sx={{
-                    textTransform: 'none',
-                    justifyContent: 'flex-start',
-                    textAlign: 'left',
-                    fontWeight: 600,
-                    py: 1,
-                    px: 1.5,
-                    borderColor: 'divider',
-                    color: 'text.primary',
-                    transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                      bgcolor: 'action.hover',
-                      transform: 'translateX(3px)',
-                    },
-                  }}
-                >
-                  {prompt}
-                </Button>
-              ))}
-            </Stack>
-          </Box>
-        ) : (
-          messages.map((m) => {
-            const isLoadingBubble = m.role === 'assistant' && !m.content && isGenerating;
-            return (
+          <Box sx={{ my: 'auto', py: 1 }}>
+            <Box sx={{ textAlign: 'center', mb: 2.25, px: 1 }}>
               <Box
-                key={m.id}
                 sx={{
-                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: m.role === 'user' ? '85%' : '100%',
-                  width: m.role === 'assistant' ? '100%' : 'auto',
-                  animation:
-                    m.role === 'user'
-                      ? 'aiUserBubblePop 0.22s cubic-bezier(0.16, 1, 0.3, 1) both'
-                      : 'none',
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                   mx: 'auto',
+                  mb: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: 'action.hover',
+                  border: '1px solid',
+                  borderColor: 'divider',
                 }}
               >
-                <Paper
-                  elevation={0}
+                <AutoAwesomeIcon sx={{ fontSize: 26, color: 'primary.main' }} />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, fontSize: '1.08rem', mb: 0.4 }}>
+                Get Roasted Into Saving More
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.82rem', maxWidth: 400, mx: 'auto' }}>
+                Pick a reality check below. Instant math from your real accounts to talk you out of spending.
+              </Typography>
+            </Box>
+
+            <PromptCardGrid
+              prompts={STARTER_PROMPTS}
+              askedSet={askedSet}
+              disabled={isGenerating}
+              onSelect={(p) => handleSend(p)}
+            />
+          </Box>
+        ) : (
+          <>
+            {messages.map((m, idx) => {
+              const isLoadingBubble = m.role === 'assistant' && !m.content && isGenerating;
+              const isLatestUserMsg = m.role === 'user' && idx >= messages.length - 2;
+              return (
+                <Box
+                  key={m.id}
+                  ref={isLatestUserMsg ? latestExchangeRef : undefined}
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    bgcolor: m.role === 'user' ? 'primary.main' : 'action.hover',
-                    color: m.role === 'user' ? 'primary.contrastText' : 'text.primary',
-                    border: m.role === 'assistant' ? '1px solid' : 'none',
-                    borderColor: isLoadingBubble ? 'primary.main' : 'divider',
+                    alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                    maxWidth: m.role === 'user' ? '85%' : '100%',
+                    width: m.role === 'assistant' ? '100%' : 'auto',
                     animation:
-                      m.role === 'assistant' && m.content
-                        ? 'aiCardReveal 0.65s cubic-bezier(0.16, 1, 0.3, 1) both'
+                      m.role === 'user'
+                        ? 'aiUserBubblePop 0.22s cubic-bezier(0.16, 1, 0.3, 1) both'
                         : 'none',
                   }}
                 >
-                  {isLoadingBubble ? (
-                    <AiLedgerScanner prompt={activePromptText} stage={scanStage} />
-                  ) : (
-                    <FormattedAiMessage key={m.content ? 'ready' : 'empty'} content={m.content} isUser={m.role === 'user'} />
-                  )}
-                </Paper>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      bgcolor: m.role === 'user' ? 'primary.main' : 'action.hover',
+                      color: m.role === 'user' ? 'primary.contrastText' : 'text.primary',
+                      border: m.role === 'assistant' ? '1px solid' : 'none',
+                      borderColor: isLoadingBubble ? 'primary.main' : 'divider',
+                      animation:
+                        m.role === 'assistant' && m.content
+                          ? 'aiCardReveal 0.65s cubic-bezier(0.16, 1, 0.3, 1) both'
+                          : 'none',
+                    }}
+                  >
+                    {isLoadingBubble ? (
+                      <AiLedgerScanner prompt={activePromptText} stage={scanStage} />
+                    ) : (
+                      <FormattedAiMessage key={m.content ? 'ready' : 'empty'} content={m.content} isUser={m.role === 'user'} />
+                    )}
+                  </Paper>
+                </Box>
+              );
+            })}
+
+            {/* Persistent Prompt Picker right below the answer so you can keep tapping */}
+            {!isGenerating && (
+              <Box
+                sx={{
+                  mt: 1,
+                  pt: 1.5,
+                  borderTop: '1px dashed',
+                  borderColor: 'divider',
+                  animation: 'aiBlockSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+                  animationDelay: '220ms',
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1, px: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      color: 'text.secondary',
+                      fontSize: '0.7rem',
+                    }}
+                  >
+                    🔥 Pick Another Reality Check
+                  </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => setMessages([])}
+                    sx={{ textTransform: 'none', fontSize: '0.72rem', py: 0, minHeight: 22 }}
+                  >
+                    Clear chat
+                  </Button>
+                </Stack>
+                <PromptCardGrid
+                  prompts={STARTER_PROMPTS}
+                  askedSet={askedSet}
+                  disabled={isGenerating}
+                  onSelect={(p) => handleSend(p)}
+                  compact={false}
+                />
               </Box>
-            );
-          })
+            )}
+          </>
         )}
       </Box>
 
@@ -481,11 +587,10 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
         <TextField
           size="small"
           fullWidth
-          placeholder="Ask about spending, budgets, merchants, or debt..."
+          placeholder="Or type your own question (e.g. 'Talk me out of $300')..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={isGenerating}
-          autoFocus
         />
         <IconButton
           type="submit"
@@ -502,6 +607,128 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
         </IconButton>
       </Box>
     </Drawer>
+  );
+}
+
+function PromptCardGrid({
+  prompts,
+  askedSet,
+  disabled,
+  onSelect,
+  compact = false,
+}: {
+  prompts: StarterPromptOption[];
+  askedSet: Set<string>;
+  disabled: boolean;
+  onSelect: (promptText: string) => void;
+  compact?: boolean;
+}) {
+  // Put unasked prompts first so fresh options are always top-of-list after a response
+  const ordered = [...prompts].sort((a, b) => {
+    const aAsked = askedSet.has(a.prompt.toLowerCase()) ? 1 : 0;
+    const bAsked = askedSet.has(b.prompt.toLowerCase()) ? 1 : 0;
+    return aAsked - bAsked;
+  });
+
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+        gap: 1.1,
+      }}
+    >
+      {ordered.map((opt) => {
+        const alreadyAsked = askedSet.has(opt.prompt.toLowerCase());
+        return (
+          <Button
+            key={opt.prompt}
+            variant="outlined"
+            disabled={disabled}
+            onClick={() => onSelect(opt.prompt)}
+            sx={{
+              textTransform: 'none',
+              justifyContent: 'flex-start',
+              alignItems: 'flex-start',
+              textAlign: 'left',
+              p: compact ? 1.1 : 1.35,
+              borderRadius: 2,
+              borderWidth: '1.5px',
+              borderColor: alreadyAsked ? 'divider' : 'rgba(59, 130, 246, 0.28)',
+              bgcolor: alreadyAsked ? 'transparent' : 'action.hover',
+              opacity: alreadyAsked ? 0.72 : 1,
+              color: 'text.primary',
+              transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+              '&:hover': {
+                borderWidth: '1.5px',
+                borderColor: 'primary.main',
+                bgcolor: 'action.selected',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 6px 16px -6px rgba(59, 130, 246, 0.28)',
+                opacity: 1,
+              },
+            }}
+          >
+            <Stack direction="row" spacing={1.1} alignItems="flex-start" sx={{ width: '100%' }}>
+              <Box
+                sx={{
+                  fontSize: '1.25rem',
+                  lineHeight: 1.1,
+                  mt: 0.15,
+                  flexShrink: 0,
+                }}
+              >
+                {opt.icon}
+              </Box>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={0.5}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 800,
+                      fontSize: '0.84rem',
+                      lineHeight: 1.25,
+                      color: 'text.primary',
+                    }}
+                  >
+                    {opt.title}
+                  </Typography>
+                  {alreadyAsked && (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: '0.62rem',
+                        fontWeight: 700,
+                        px: 0.6,
+                        py: 0.1,
+                        borderRadius: 0.75,
+                        bgcolor: 'action.selected',
+                        color: 'text.secondary',
+                        flexShrink: 0,
+                      }}
+                    >
+                      Asked
+                    </Typography>
+                  )}
+                </Stack>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    display: 'block',
+                    fontSize: '0.72rem',
+                    lineHeight: 1.3,
+                    mt: 0.3,
+                  }}
+                >
+                  {opt.subtitle}
+                </Typography>
+              </Box>
+            </Stack>
+          </Button>
+        );
+      })}
+    </Box>
   );
 }
 
