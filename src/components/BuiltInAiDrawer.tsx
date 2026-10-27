@@ -44,6 +44,13 @@ interface StarterPromptOption {
 
 const STARTER_PROMPTS: StarterPromptOption[] = [
   {
+    icon: '😈',
+    title: 'Dare Me: My Most Embarrassing Roast',
+    subtitle: 'Cook up my most humiliating spending receipt & dare me to post it',
+    prompt: '😈 Cook up the most embarrassing, brutal roast of my spending and dare me to post it',
+    group: 'roast',
+  },
+  {
     icon: '📈',
     title: 'Invest it vs. pay off car & loans early',
     subtitle: 'Roth IRA / S&P 500 growth vs. killing my car loan & mortgage early',
@@ -573,8 +580,8 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 1.5,
-                      borderRadius: 2,
+                      p: m.role === 'assistant' ? { xs: 2, sm: 2.5 } : 1.5,
+                      borderRadius: 2.25,
                       position: 'relative',
                       overflow: 'hidden',
                       bgcolor: m.role === 'user' ? 'primary.main' : 'action.hover',
@@ -590,7 +597,12 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                     {isLoadingBubble ? (
                       <AiLedgerScanner prompt={activePromptText} stage={scanStage} />
                     ) : (
-                      <FormattedAiMessage key={m.content ? 'ready' : 'empty'} content={m.content} isUser={m.role === 'user'} />
+                      <>
+                        <FormattedAiMessage key={m.content ? 'ready' : 'empty'} content={m.content} isUser={m.role === 'user'} />
+                        {m.role === 'assistant' && m.content && (
+                          <RoastShareBar content={m.content} />
+                        )}
+                      </>
                     )}
                   </Paper>
                 </Box>
@@ -752,6 +764,7 @@ function PromptCardGrid({
       <Stack spacing={1.25}>
         {ordered.map((opt) => {
           const alreadyAsked = askedSet.has(opt.prompt.toLowerCase());
+          const isDevilDare = opt.icon === '😈';
           return (
             <Button
               key={opt.prompt}
@@ -772,17 +785,27 @@ function PromptCardGrid({
                 px: 1.75,
                 borderRadius: 2.25,
                 borderWidth: '1.5px',
-                borderColor: alreadyAsked ? 'divider' : 'rgba(59, 130, 246, 0.32)',
-                bgcolor: alreadyAsked ? 'transparent' : 'action.hover',
+                borderColor: alreadyAsked
+                  ? 'divider'
+                  : isDevilDare
+                    ? 'rgba(239, 68, 68, 0.55)'
+                    : 'rgba(59, 130, 246, 0.32)',
+                bgcolor: alreadyAsked
+                  ? 'transparent'
+                  : isDevilDare
+                    ? 'rgba(239, 68, 68, 0.08)'
+                    : 'action.hover',
                 opacity: alreadyAsked ? 0.75 : 1,
                 color: 'text.primary',
                 transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
                 '&:hover': {
                   borderWidth: '1.5px',
-                  borderColor: 'primary.main',
-                  bgcolor: 'action.selected',
+                  borderColor: isDevilDare ? 'error.main' : 'primary.main',
+                  bgcolor: isDevilDare ? 'rgba(239, 68, 68, 0.14)' : 'action.selected',
                   transform: 'translateY(-2px)',
-                  boxShadow: '0 8px 20px -6px rgba(59, 130, 246, 0.28)',
+                  boxShadow: isDevilDare
+                    ? '0 8px 22px -6px rgba(239, 68, 68, 0.35)'
+                    : '0 8px 20px -6px rgba(59, 130, 246, 0.28)',
                   opacity: 1,
                 },
               }}
@@ -796,9 +819,9 @@ function PromptCardGrid({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    bgcolor: 'background.paper',
+                    bgcolor: isDevilDare ? 'rgba(239, 68, 68, 0.15)' : 'background.paper',
                     border: '1px solid',
-                    borderColor: 'divider',
+                    borderColor: isDevilDare ? 'rgba(239, 68, 68, 0.45)' : 'divider',
                     fontSize: '1.3rem',
                     lineHeight: 1,
                     flexShrink: 0,
@@ -820,7 +843,7 @@ function PromptCardGrid({
                     >
                       {opt.title}
                     </Typography>
-                    {alreadyAsked && (
+                    {alreadyAsked ? (
                       <Typography
                         variant="caption"
                         sx={{
@@ -836,7 +859,24 @@ function PromptCardGrid({
                       >
                         Asked
                       </Typography>
-                    )}
+                    ) : isDevilDare ? (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: '0.65rem',
+                          fontWeight: 800,
+                          px: 0.8,
+                          py: 0.2,
+                          borderRadius: 1,
+                          bgcolor: 'error.main',
+                          color: '#fff',
+                          letterSpacing: '0.04em',
+                          flexShrink: 0,
+                        }}
+                      >
+                        😈 DARE
+                      </Typography>
+                    ) : null}
                   </Stack>
                   <Typography
                     variant="body2"
@@ -861,13 +901,105 @@ function PromptCardGrid({
   );
 }
 
+function RoastShareBar({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const buildRedditText = () => {
+    const clean = content
+      .replace(/^###\s+/gm, '### ')
+      .trim();
+    return `${clean}\n\n---\n*Generated locally on my device by Strictly Spending (100% offline roast).*`;
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(buildRedditText());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Fallback
+    }
+  };
+
+  const handleOpenReddit = async () => {
+    try {
+      await navigator.clipboard.writeText(buildRedditText());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      // ignore clipboard failure
+    }
+    const title = encodeURIComponent('Asked my offline finance app for its most embarrassing roast of my spending 😈');
+    window.open(`https://www.reddit.com/submit?title=${title}`, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+       alignItems="center"
+      justifyContent="space-between"
+      sx={{
+        mt: 2.25,
+        pt: 1.5,
+        borderTop: '1px dashed',
+        borderColor: 'divider',
+        flexWrap: 'wrap',
+        rowGap: 1,
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, fontSize: '0.73rem' }}>
+        😈 Brave enough to share this receipt?
+      </Typography>
+      <Stack direction="row" spacing={1}>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={handleCopy}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            fontSize: '0.74rem',
+            py: 0.4,
+            px: 1.25,
+            borderRadius: 1.5,
+          }}
+        >
+          {copied ? '✅ Copied Roast!' : '📋 Copy Roast for Reddit'}
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          color="error"
+          onClick={handleOpenReddit}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 800,
+            fontSize: '0.74rem',
+            py: 0.4,
+            px: 1.25,
+            borderRadius: 1.5,
+          }}
+        >
+          🔥 Post to Reddit
+        </Button>
+      </Stack>
+    </Stack>
+  );
+}
+
 function AiLedgerScanner({ prompt, stage }: { prompt: string; stage: number }) {
   const lower = prompt.toLowerCase();
   let steps: [string, string] = [
     'Scanning accounts & posted transactions...',
     'Reconciling recurring bills & math ledger...',
   ];
-  if (lower.includes('mortgage') || lower.includes('threw half')) {
+  if (lower.includes('embarrassing') || lower.includes('dare me') || lower.includes('😈')) {
+    steps = [
+      'Digging up your most embarrassing merchant swipes & binges...',
+      'Preparing your Hall of Shame receipt & Reddit dare...',
+    ];
+  } else if (lower.includes('mortgage') || lower.includes('threw half')) {
     steps = [
       'Pulling loan principal, APR & amortization schedule...',
       'Calculating years shaved & bank interest erased...',
@@ -1017,7 +1149,6 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
     const trimmed = lines[i].trim();
 
     if (!trimmed) {
-      elements.push(<Box key={`sp-${i}`} sx={{ height: 4 }} />);
       i++;
       continue;
     }
@@ -1041,11 +1172,12 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
       elements.push(
         <Typography
           key={`h3-${i}`}
-          variant="subtitle2"
+          variant="subtitle1"
           sx={{
-            fontWeight: 700,
-            pt: elements.length > 0 ? 0.75 : 0,
-            pb: 0.25,
+            fontWeight: 800,
+            fontSize: '0.98rem',
+            lineHeight: 1.35,
+            pt: elements.length > 0 ? 0.5 : 0,
             animation: 'aiBlockSlideUp 0.34s cubic-bezier(0.16, 1, 0.3, 1) both',
             animationDelay: `${delay}ms`,
           }}
@@ -1063,11 +1195,12 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
       elements.push(
         <Typography
           key={`h2-${i}`}
-          variant="subtitle2"
+          variant="subtitle1"
           sx={{
-            fontWeight: 700,
-            pt: elements.length > 0 ? 0.75 : 0,
-            pb: 0.25,
+            fontWeight: 800,
+            fontSize: '0.98rem',
+            lineHeight: 1.35,
+            pt: elements.length > 0 ? 0.5 : 0,
             animation: 'aiBlockSlideUp 0.34s cubic-bezier(0.16, 1, 0.3, 1) both',
             animationDelay: `${delay}ms`,
           }}
@@ -1090,12 +1223,11 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
         <Box
           key={`q-${i}`}
           sx={{
-            px: 1.25,
-            py: 0.85,
-            my: 0.35,
-            borderRadius: 1.25,
+            px: 1.6,
+            py: 1.3,
+            borderRadius: 1.5,
             bgcolor: 'background.paper',
-            borderLeft: '3.5px solid',
+            borderLeft: '4px solid',
             borderColor: isPositiveVerdict
               ? 'success.main'
               : isCautionVerdict
@@ -1106,7 +1238,7 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
             animationDelay: `${delay}ms`,
           }}
         >
-          <Typography variant="body2" sx={{ lineHeight: 1.45, fontSize: '0.84rem' }}>
+          <Typography variant="body2" sx={{ lineHeight: 1.6, fontSize: '0.86rem' }}>
             {renderInlineBold(quoteBody)}
           </Typography>
         </Box>
@@ -1119,19 +1251,29 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
       const delay = Math.min(animIndex * 45, 420);
       animIndex++;
       elements.push(
-        <Typography
+        <Box
           key={`li-${i}`}
-          variant="body2"
           sx={{
-            pl: 1,
-            lineHeight: 1.45,
-            fontSize: '0.83rem',
+            px: 1.35,
+            py: 1.05,
+            borderRadius: 1.5,
+            bgcolor: 'background.paper',
+            border: '1px solid',
+            borderColor: 'divider',
             animation: 'aiBlockSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
             animationDelay: `${delay}ms`,
           }}
         >
-          • {renderInlineBold(trimmed.slice(2))}
-        </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              lineHeight: 1.6,
+              fontSize: '0.84rem',
+            }}
+          >
+            {renderInlineBold(trimmed.slice(2))}
+          </Typography>
+        </Box>
       );
       i++;
       continue;
@@ -1144,9 +1286,8 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
         key={`p-${i}`}
         variant="body2"
         sx={{
-          lineHeight: 1.45,
-          fontSize: '0.84rem',
-          pt: 0.25,
+          lineHeight: 1.6,
+          fontSize: '0.85rem',
           animation: 'aiBlockSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
           animationDelay: `${delay}ms`,
         }}
@@ -1157,7 +1298,7 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
     i++;
   }
 
-  return <Stack spacing={0.5}>{elements}</Stack>;
+  return <Stack spacing={1.75}>{elements}</Stack>;
 }
 
 function MathLedgerTable({ rawRows, baseDelayMs = 0 }: { rawRows: string[]; baseDelayMs?: number }) {
@@ -1189,8 +1330,8 @@ function MathLedgerTable({ rawRows, baseDelayMs = 0 }: { rawRows: string[]; base
   return (
     <Box
       sx={{
-        my: 0.5,
-        borderRadius: 1.5,
+        my: 0.25,
+        borderRadius: 1.75,
         border: '1px solid',
         borderColor: 'divider',
         bgcolor: 'background.paper',
@@ -1204,7 +1345,7 @@ function MathLedgerTable({ rawRows, baseDelayMs = 0 }: { rawRows: string[]; base
         sx={{
           width: '100%',
           borderCollapse: 'collapse',
-          fontSize: '0.79rem',
+          fontSize: '0.81rem',
           fontVariantNumeric: 'tabular-nums',
         }}
       >
@@ -1226,11 +1367,11 @@ function MathLedgerTable({ rawRows, baseDelayMs = 0 }: { rawRows: string[]; base
                   component="th"
                   key={cIdx}
                   sx={{
-                    py: 0.6,
-                    px: 1,
+                    py: 0.95,
+                    px: 1.25,
                     textAlign: colIsNumeric ? 'right' : 'left',
                     fontWeight: 700,
-                    fontSize: '0.72rem',
+                    fontSize: '0.73rem',
                     color: 'text.secondary',
                     textTransform: 'uppercase',
                     letterSpacing: '0.03em',
@@ -1277,8 +1418,9 @@ function MathLedgerTable({ rawRows, baseDelayMs = 0 }: { rawRows: string[]; base
                       component="td"
                       key={cIdx}
                       sx={{
-                        py: isTotalRow ? 0.8 : 0.55,
-                        px: 1,
+                        py: isTotalRow ? 1.15 : 0.85,
+                        px: 1.25,
+                        lineHeight: 1.45,
                         textAlign: numAlign ? 'right' : 'left',
                         fontWeight: isTotalRow || numAlign ? 700 : cIdx === 0 ? 600 : 400,
                         fontFamily: numAlign ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' : 'inherit',

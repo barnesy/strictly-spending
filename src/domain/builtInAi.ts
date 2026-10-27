@@ -911,19 +911,30 @@ export async function analyzeQuestionAndFinances(
   // Build ONE targeted, punchy roast + compact math table based on primary question intent
   let synthesizedMarkdownReport = '';
 
+  const isEmbarrassingDareAsk =
+    qLower.includes('embarrassing') ||
+    qLower.includes('dare me') ||
+    qLower.includes('dare you') ||
+    qLower.includes('😈') ||
+    qLower.includes('hall of shame') ||
+    qLower.includes('brutal roast') ||
+    (qLower.includes('dare') && qLower.includes('post'));
+
   const isInvestVsPayoffAsk =
-    qLower.includes('invest') ||
-    qLower.includes('roth') ||
-    qLower.includes('s&p') ||
-    qLower.includes('401k') ||
-    qLower.includes('brokerage') ||
-    qLower.includes('index fund') ||
-    qLower.includes('car loan') ||
-    qLower.includes('auto loan') ||
-    qLower.includes('pay off my car') ||
-    (qLower.includes('car') && (qLower.includes('early') || qLower.includes('pay off') || qLower.includes('loan')));
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('invest') ||
+      qLower.includes('roth') ||
+      qLower.includes('s&p') ||
+      qLower.includes('401k') ||
+      qLower.includes('brokerage') ||
+      qLower.includes('index fund') ||
+      qLower.includes('car loan') ||
+      qLower.includes('auto loan') ||
+      qLower.includes('pay off my car') ||
+      (qLower.includes('car') && (qLower.includes('early') || qLower.includes('pay off') || qLower.includes('loan'))));
 
   const isMortgageTradeoffAsk =
+    !isEmbarrassingDareAsk &&
     !isInvestVsPayoffAsk &&
     (qLower.includes('threw half') ||
       qLower.includes('throw half') ||
@@ -934,55 +945,63 @@ export async function analyzeQuestionAndFinances(
       (qLower.includes('mortgage') && (qLower.includes('instead') || qLower.includes('half') || qLower.includes('pay off'))));
 
   const isWorkHoursAsk =
-    qLower.includes('hours of my life') ||
-    qLower.includes('hours at work') ||
-    qLower.includes('workdays') ||
-    (qLower.includes('convert') && qLower.includes('hours')) ||
-    qLower.includes('hourly');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('hours of my life') ||
+      qLower.includes('hours at work') ||
+      qLower.includes('workdays') ||
+      (qLower.includes('convert') && qLower.includes('hours')) ||
+      qLower.includes('hourly'));
 
   const isMicroSwipesAsk =
-    qLower.includes('under $25') ||
-    qLower.includes('under 25') ||
-    qLower.includes('harmless') ||
-    qLower.includes('little swipes') ||
-    qLower.includes('tiny swipes') ||
-    qLower.includes('thousand swipes') ||
-    qLower.includes('small purchases');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('under $25') ||
+      qLower.includes('under 25') ||
+      qLower.includes('harmless') ||
+      qLower.includes('little swipes') ||
+      qLower.includes('tiny swipes') ||
+      qLower.includes('thousand swipes') ||
+      qLower.includes('small purchases'));
 
   const isWeekendVsWeekdayAsk =
-    qLower.includes('weekend') ||
-    qLower.includes('weekday') ||
-    qLower.includes('friday') ||
-    qLower.includes('monday');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('weekend') ||
+      qLower.includes('weekday') ||
+      qLower.includes('friday') ||
+      qLower.includes('monday'));
 
   const isWorstDayAsk =
-    qLower.includes('worst spending day') ||
-    qLower.includes('most expensive day') ||
-    qLower.includes('worst day') ||
-    qLower.includes('crime scene') ||
-    qLower.includes('48 hours');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('worst spending day') ||
+      qLower.includes('most expensive day') ||
+      qLower.includes('worst day') ||
+      qLower.includes('crime scene') ||
+      qLower.includes('48 hours'));
 
   const isMerchantOwnerAsk =
-    qLower.includes('which merchant') ||
-    qLower.includes('piece of my paycheck') ||
-    qLower.includes('owns me') ||
-    qLower.includes('top merchant') ||
-    qLower.includes('biggest merchant');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('which merchant') ||
+      qLower.includes('piece of my paycheck') ||
+      qLower.includes('owns me') ||
+      qLower.includes('top merchant') ||
+      qLower.includes('biggest merchant'));
 
   const isRunwayAsk =
-    qLower.includes('days would my cash last') ||
-    qLower.includes('cash last') ||
-    qLower.includes('runway') ||
-    qLower.includes('paycheck stopped') ||
-    qLower.includes('lost my income') ||
-    qLower.includes('emergency fund');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('days would my cash last') ||
+      qLower.includes('cash last') ||
+      qLower.includes('runway') ||
+      qLower.includes('paycheck stopped') ||
+      qLower.includes('lost my income') ||
+      qLower.includes('emergency fund'));
 
   const isLastMonthReceiptAsk =
-    qLower.includes('every category last month') ||
-    qLower.includes('categories last month') ||
-    qLower.includes('spent last month by category');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('every category last month') ||
+      qLower.includes('categories last month') ||
+      qLower.includes('spent last month by category'));
 
   const isAffordOrImpulseAsk =
+    !isEmbarrassingDareAsk &&
     !isMicroSwipesAsk &&
     !isMortgageTradeoffAsk &&
     !isInvestVsPayoffAsk &&
@@ -997,32 +1016,36 @@ export async function analyzeQuestionAndFinances(
       qLower.includes('splurge'));
 
   const isUpcomingBillsAsk =
-    qLower.includes('coming up') ||
-    qLower.includes('upcoming') ||
-    qLower.includes('still due') ||
-    qLower.includes('left to pay') ||
-    qLower.includes('unpaid') ||
-    qLower.includes('big payment') ||
-    qLower.includes('big bill') ||
-    qLower.includes('end of the month') ||
-    qLower.includes('end of month');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('coming up') ||
+      qLower.includes('upcoming') ||
+      qLower.includes('still due') ||
+      qLower.includes('left to pay') ||
+      qLower.includes('unpaid') ||
+      qLower.includes('big payment') ||
+      qLower.includes('big bill') ||
+      qLower.includes('end of the month') ||
+      qLower.includes('end of month'));
 
   const isRecentHitsAsk =
-    /\bhit\b/.test(qLower) ||
-    qLower.includes('has anything') ||
-    qLower.includes('recent') ||
-    qLower.includes('lately') ||
-    qLower.includes('last few days') ||
-    /\bpending\b/.test(qLower);
+    !isEmbarrassingDareAsk &&
+    (/\bhit\b/.test(qLower) ||
+      qLower.includes('has anything') ||
+      qLower.includes('recent') ||
+      qLower.includes('lately') ||
+      qLower.includes('last few days') ||
+      /\bpending\b/.test(qLower));
 
   const isSubscriptionAsk =
-    qLower.includes('subscription') ||
-    qLower.includes('recurring') ||
-    qLower.includes('autopay') ||
-    qLower.includes('draining') ||
-    qLower.includes('cancel');
+    !isEmbarrassingDareAsk &&
+    (qLower.includes('subscription') ||
+      qLower.includes('recurring') ||
+      qLower.includes('autopay') ||
+      qLower.includes('draining') ||
+      qLower.includes('cancel'));
 
   const isCompareAsk =
+    !isEmbarrassingDareAsk &&
     !isWeekendVsWeekdayAsk &&
     !isLastMonthReceiptAsk &&
     (qLower.includes('compare') ||
@@ -1031,6 +1054,7 @@ export async function analyzeQuestionAndFinances(
       qLower.includes('trend'));
 
   const isDebtOrNetWorthAsk =
+    !isEmbarrassingDareAsk &&
     !isMortgageTradeoffAsk &&
     !isInvestVsPayoffAsk &&
     (qLower.includes('net worth') ||
@@ -1040,8 +1064,91 @@ export async function analyzeQuestionAndFinances(
       qLower.includes('mortgage') ||
       qLower.includes('payoff'));
 
+  // 00. 😈 Hall of Shame Receipt (Most Embarrassing Roast & Public Dare)
+  if (isEmbarrassingDareAsk) {
+    const nonBillMerchants = Array.from(periodStats.byMerch.entries()).filter(([m, v]) => {
+      const lowerM = `${m} ${v.category}`.toLowerCase();
+      return !/mortgage|rent|loan|utilit|insurance|transfer|tax|payroll|income/i.test(lowerM);
+    });
+
+    // Find #1 most frequently swiped obsession merchant and #1 highest dollar merchant
+    const mostSwipedMerch =
+      [...nonBillMerchants].sort((a, b) => b[1].count - a[1].count || b[1].spendCents - a[1].spendCents)[0] ||
+      nonBillMerchants[0];
+    const biggestDollarMerch = [...nonBillMerchants].sort((a, b) => b[1].spendCents - a[1].spendCents)[0];
+
+    const obsessionName = mostSwipedMerch ? mostSwipedMerch[0] : 'Takeout & Impulse Swipes';
+    const obsessionSwipes = mostSwipedMerch ? mostSwipedMerch[1].count : 9;
+    const obsessionSpend = mostSwipedMerch ? mostSwipedMerch[1].spendCents : 240;
+
+    const topHabit = discretionaryCats[0] || { category: 'Dining & Shopping', spend: 540, count: 14, avg: 540 };
+    const secondHabit = discretionaryCats[1] || { category: 'Entertainment & Treats', spend: 280, count: 8, avg: 280 };
+
+    // Micro-swipes under $25
+    const pool = curMonthTxns.filter((t) => t.amount < 0 && !isTransfer(t)).length >= 5 ? curMonthTxns : periodTxns;
+    const microTxns = pool.filter((t) => t.amount < 0 && !isTransfer(t) && Math.abs(t.amount) <= 25);
+    const microTotal = microTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
+
+    // Worst single day binge
+    const varPool = pool.filter((t) => {
+      if (t.amount >= 0 || isTransfer(t)) return false;
+      if (t.recurrence === 'recurring') return false;
+      const mk = (t.merchantKey || '').trim().toLowerCase();
+      if (mk && recurringKeysLower.has(mk)) return false;
+      return true;
+    });
+    const byDate = new Map<string, { sum: number; count: number }>();
+    for (const t of varPool) {
+      const prev = byDate.get(t.date) || { sum: 0, count: 0 };
+      prev.sum += Math.abs(t.amount);
+      prev.count += 1;
+      byDate.set(t.date, prev);
+    }
+    const worstDayEntry = Array.from(byDate.entries()).sort((a, b) => b[1].sum - a[1].sum)[0];
+    const worstDayDate = worstDayEntry?.[0] || latestTxDate || curMonthKey;
+    const worstDaySpend = worstDayEntry?.[1].sum || 185;
+    const worstDaySwipes = worstDayEntry?.[1].count || 4;
+
+    // Hours of life at work
+    const netMonthly = Math.max(
+      2800,
+      monthlyNetIncomeBaseline || curMonthStats.incomeDollars || prevMonthStats.incomeDollars || 5200
+    );
+    const hourlyNet = netMonthly / 160;
+    const combinedShameSpend = Math.max(
+      320,
+      Math.round(topHabit.spend + secondHabit.spend + (mostSwipedMerch ? 0 : microTotal))
+    );
+    const shameWorkHours = (combinedShameSpend / hourlyNet).toFixed(1);
+
+    // Wealth & Car Loan cost of cutting 50% of this shame burn
+    const monthlyRedirect = Math.max(175, Math.round(combinedShameSpend * 0.5));
+    const rSp500 = 0.085 / 12;
+    const shame10YrWealth = Math.round(monthlyRedirect * ((Math.pow(1 + rSp500, 120) - 1) / rSp500));
+    const shame20YrWealth = Math.round(monthlyRedirect * ((Math.pow(1 + rSp500, 240) - 1) / rSp500));
+    const carAccel = calcLoanAccel(carLoan, monthlyRedirect, 'monthly');
+
+    synthesizedMarkdownReport = [
+      `### 😈 Financial Hall of Shame Receipt (${monthLabel(curMonthKey)})`,
+      `> 😈 **You swiped at ${obsessionName} ${obsessionSwipes} times (-${usd.format(obsessionSpend)}), made ${microTxns.length} "harmless" taps under $25 (-${usd.format(microTotal)}), and sat at work for ${shameWorkHours} hours just to fund ${topHabit.category} & ${secondHabit.category}.** You traded **+${usd.format(shame10YrWealth)}** in 10-yr S&P 500 wealth (or paying off **${carLoan.name}** **${carAccel.monthsShaved} mos early**) for convenience.`,
+      `| Hall of Shame Exhibit | The Embarrassing Receipt | Damage |`,
+      `| --- | --- | --- |`,
+      `| 🤡 **#1 Loyalty Obsession** | **${obsessionName}** (${obsessionSwipes}x swipes — practically on their payroll) | -${usd.format(obsessionSpend)} |`,
+      biggestDollarMerch && biggestDollarMerch[0] !== obsessionName
+        ? `| 💸 **Biggest Cash Drain** | **${biggestDollarMerch[0]}** (${biggestDollarMerch[1].count}x charges) | -${usd.format(biggestDollarMerch[1].spendCents)} |`
+        : '',
+      `| 🔥 **#1 Weakness (${topHabit.category})** | ${topHabit.count} swipes · **${(topHabit.spend / hourlyNet).toFixed(1)} hrs** of your life at work | -${usd.format(topHabit.spend)} |`,
+      `| ☕ **"It's Only $12" Delusion** | **${microTxns.length} tiny swipes ≤$25** (-${usd.format(microTotal * 12)}/yr pace) | -${usd.format(microTotal)} |`,
+      `| 🚨 **24-Hour Binge Record** | **${worstDayDate}** (${worstDaySwipes} swipes in a single day) | -${usd.format(worstDaySpend)} |`,
+      `| **= Total Hall of Shame Burn** | **Cost you ${shameWorkHours} hrs at work (${(Number(shameWorkHours) / 8).toFixed(1)} workdays)** | **-${usd.format(combinedShameSpend)}** |`,
+      ...buildWealthRedirectLines(monthlyRedirect, 'monthly'),
+      `- 😈 **DOUBLE-DOG DARE:** If you aren't scared of your own receipts, hit **Copy Roast for Reddit** below and post this to **r/MiddleClassFinance** or your group chat (**+${usd.format(shame20YrWealth)}** 20-yr Roth IRA opportunity cost on the line).`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
   // A0. 📈🚗 Invest in Accounts vs. Pay Off Car Loan & Mortgage Early
-  if (isInvestVsPayoffAsk) {
+  else if (isInvestVsPayoffAsk) {
     const top2Disc = discretionaryCats.slice(0, 2);
     const top2CombinedAvg = top2Disc.reduce((s, c) => s + Math.max(c.spend, c.avg), 0);
     const habitLabel = top2Disc.map((c) => c.category).join(' & ') || 'Dining & Shopping';
