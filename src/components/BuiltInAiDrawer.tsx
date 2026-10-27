@@ -1136,21 +1136,27 @@ function AiLedgerScanner({ prompt, stage }: { prompt: string; stage: number }) {
   );
 }
 
-function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
+function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
+  const [cardIdx, setCardIdx] = useState(0);
+  const payload = cards[cardIdx % cards.length] || cards[0];
+
   const [gifUrl, setGifUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [pngBlob, setPngBlob] = useState<Blob | null>(null);
+  const [copiedImg, setCopiedImg] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Live canvas animation while the GIF89a blob encodes, and fallback if needed
   useEffect(() => {
     let cancelled = false;
     let createdUrl: string | null = null;
+    setGifUrl(null);
+    setPngBlob(null);
 
     generateRoastAnimatedGif(payload)
-      .then(({ url }) => {
+      .then(({ gifUrl: url, pngBlob: pBlob }) => {
         if (!cancelled) {
           createdUrl = url;
           setGifUrl(url);
+          setPngBlob(pBlob);
         } else {
           URL.revokeObjectURL(url);
         }
@@ -1185,6 +1191,28 @@ function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
     return () => window.clearInterval(timer);
   }, [gifUrl, payload]);
 
+  const handleCopyImage = async () => {
+    try {
+      if (pngBlob && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+        setCopiedImg(true);
+        setTimeout(() => setCopiedImg(false), 2500);
+        return;
+      }
+    } catch {
+      // Fallback to text copy if image clipboard permission denied
+    }
+    try {
+      await navigator.clipboard.writeText(
+        `😈 ${payload.crazyName} (${payload.totalAmountFormatted}) — "${payload.roastQuote}"`
+      );
+      setCopiedImg(true);
+      setTimeout(() => setCopiedImg(false), 2500);
+    } catch {
+      // ignore
+    }
+  };
+
   const handleDownloadGif = () => {
     if (!gifUrl) return;
     const a = document.createElement('a');
@@ -1194,47 +1222,10 @@ function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 40);
-    a.download = `roast-${slug || 'hall-of-shame'}.gif`;
+    a.download = `roast-${slug || 'habit'}.gif`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };
-
-  const buildRedditShareText = () => {
-    return [
-      `### 😈 My Offline Finance App Diagnosed Me As: "${payload.crazyName}" (${payload.totalAmountFormatted})`,
-      '',
-      `**${payload.subtitleLine}**`,
-      '',
-      '**🕵️ Embarrassing Assumptions It Made From My Swipes:**',
-      ...payload.assumptions,
-      '',
-      `**📈 Opportunity Cost:** ${payload.opportunityCostLine}`,
-      '',
-      '---',
-      '*Generated 100% offline on my device by Strictly Spending.*',
-    ].join('\n');
-  };
-
-  const handleCopyText = async () => {
-    try {
-      await navigator.clipboard.writeText(buildRedditShareText());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // ignore
-    }
-  };
-
-  const handlePostReddit = async () => {
-    await handleCopyText();
-    if (gifUrl) {
-      handleDownloadGif();
-    }
-    const title = encodeURIComponent(
-      `My finance app diagnosed me as "${payload.crazyName}" (${payload.totalAmountFormatted}) and made these assumptions about me 😈`
-    );
-    window.open(`https://www.reddit.com/submit?title=${title}`, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -1244,7 +1235,6 @@ function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
         flexDirection: 'column',
         alignItems: 'center',
         gap: 1.5,
-        my: 0.5,
         animation: 'aiBlockSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
       }}
     >
@@ -1257,7 +1247,7 @@ function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
           border: '2px solid',
           borderColor: 'error.main',
           boxShadow: '0 14px 34px -8px rgba(239, 68, 68, 0.42)',
-          bgcolor: '#14080e',
+          bgcolor: '#13070c',
           lineHeight: 0,
         }}
       >
@@ -1277,7 +1267,7 @@ function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
             component="canvas"
             ref={canvasRef}
             width={520}
-            height={640}
+            height={540}
             sx={{
               width: '100%',
               height: 'auto',
@@ -1297,8 +1287,7 @@ function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
           size="small"
           variant="contained"
           color="error"
-          disabled={!gifUrl}
-          onClick={handleDownloadGif}
+          onClick={handleCopyImage}
           sx={{
             textTransform: 'none',
             fontWeight: 800,
@@ -1308,12 +1297,13 @@ function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
             borderRadius: 1.75,
           }}
         >
-          ⬇️ Download Animated .GIF
+          {copiedImg ? '✅ Copied Roast Image!' : '📋 Copy Roast Image'}
         </Button>
         <Button
           size="small"
           variant="outlined"
-          onClick={handleCopyText}
+          disabled={!gifUrl}
+          onClick={handleDownloadGif}
           sx={{
             textTransform: 'none',
             fontWeight: 700,
@@ -1323,24 +1313,26 @@ function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
             borderRadius: 1.75,
           }}
         >
-          {copied ? '✅ Copied Roast!' : '📋 Copy Roast Text'}
+          ⬇️ Download .GIF
         </Button>
-        <Button
-          size="small"
-          variant="outlined"
-          color="warning"
-          onClick={handlePostReddit}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 800,
-            fontSize: '0.76rem',
-            py: 0.65,
-            px: 1.35,
-            borderRadius: 1.75,
-          }}
-        >
-          🔥 Dare: Post to Reddit
-        </Button>
+        {cards.length > 1 && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            onClick={() => setCardIdx((prev) => (prev + 1) % cards.length)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 800,
+              fontSize: '0.76rem',
+              py: 0.65,
+              px: 1.35,
+              borderRadius: 1.75,
+            }}
+          >
+            🎲 Next Suspicious Habit ({(cardIdx % cards.length) + 1}/{cards.length})
+          </Button>
+        )}
       </Stack>
     </Box>
   );
@@ -1374,8 +1366,12 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
         .slice('[ROAST_GIF_CARD]'.length, -'[/ROAST_GIF_CARD]'.length)
         .trim();
       try {
-        const parsed = JSON.parse(jsonStr) as RoastGifPayload;
-        elements.push(<RoastAnimatedGifWidget key={`gif-${i}`} payload={parsed} />);
+        const parsed = JSON.parse(jsonStr) as { cards?: RoastGifPayload[] } | RoastGifPayload;
+        const cardList =
+          'cards' in parsed && Array.isArray(parsed.cards) && parsed.cards.length > 0
+            ? parsed.cards
+            : [parsed as RoastGifPayload];
+        elements.push(<RoastAnimatedGifWidget key={`gif-${i}`} cards={cardList} />);
       } catch {
         // Ignore malformed payload
       }

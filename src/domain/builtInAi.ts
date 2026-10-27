@@ -1064,147 +1064,101 @@ export async function analyzeQuestionAndFinances(
       qLower.includes('mortgage') ||
       qLower.includes('payoff'));
 
-  // 00. 😈 Hall of Shame Receipt (Crazy Persona Name + Embarrassing Assumptions + Animated GIF Takeaway)
+  // 00. 😈 Single Animated Roast GIF (Crazy Nickname + Suspicious Habit Assumption — No extra text/tables)
   if (isEmbarrassingDareAsk) {
     const nonBillMerchants = Array.from(periodStats.byMerch.entries()).filter(([m, v]) => {
       const lowerM = `${m} ${v.category}`.toLowerCase();
       return !/mortgage|rent|loan|utilit|insurance|transfer|tax|payroll|income/i.test(lowerM);
     });
 
-    // Find #1 most frequently swiped obsession merchant and #1 highest dollar merchant
     const mostSwipedMerch =
       [...nonBillMerchants].sort((a, b) => b[1].count - a[1].count || b[1].spendCents - a[1].spendCents)[0] ||
       nonBillMerchants[0];
 
-    const obsessionName = mostSwipedMerch ? mostSwipedMerch[0] : 'Takeout & Impulse Swipes';
-    const obsessionSwipes = mostSwipedMerch ? mostSwipedMerch[1].count : 9;
-    const obsessionSpend = mostSwipedMerch ? mostSwipedMerch[1].spendCents : 240;
+    const obsessionName = mostSwipedMerch ? mostSwipedMerch[0] : 'The Corner Store';
+    const obsessionSwipes = mostSwipedMerch ? mostSwipedMerch[1].count : 11;
+    const obsessionSpend = mostSwipedMerch ? mostSwipedMerch[1].spendCents : 186;
 
-    const topHabit = discretionaryCats[0] || { category: 'Dining & Shopping', spend: 540, count: 14, avg: 540 };
-    const secondHabit = discretionaryCats[1] || { category: 'Entertainment & Treats', spend: 280, count: 8, avg: 280 };
+    const topHabit = discretionaryCats[0] || { category: 'Dining & Fast Food', spend: 480, count: 14, avg: 480 };
 
-    // Micro-swipes under $25
     const pool = curMonthTxns.filter((t) => t.amount < 0 && !isTransfer(t)).length >= 5 ? curMonthTxns : periodTxns;
     const microTxns = pool.filter((t) => t.amount < 0 && !isTransfer(t) && Math.abs(t.amount) <= 25);
     const microTotal = microTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
 
-    // Worst single day binge
-    const varPool = pool.filter((t) => {
-      if (t.amount >= 0 || isTransfer(t)) return false;
-      if (t.recurrence === 'recurring') return false;
-      const mk = (t.merchantKey || '').trim().toLowerCase();
-      if (mk && recurringKeysLower.has(mk)) return false;
-      return true;
-    });
-    const byDate = new Map<string, { sum: number; count: number }>();
-    for (const t of varPool) {
-      const prev = byDate.get(t.date) || { sum: 0, count: 0 };
-      prev.sum += Math.abs(t.amount);
-      prev.count += 1;
-      byDate.set(t.date, prev);
-    }
-    const worstDayEntry = Array.from(byDate.entries()).sort((a, b) => b[1].sum - a[1].sum)[0];
-    const worstDayDate = worstDayEntry?.[0] || latestTxDate || curMonthKey;
-    const worstDaySpend = worstDayEntry?.[1].sum || 185;
-    const worstDaySwipes = worstDayEntry?.[1].count || 4;
-
-    // Hours of life at work
-    const netMonthly = Math.max(
-      2800,
-      monthlyNetIncomeBaseline || curMonthStats.incomeDollars || prevMonthStats.incomeDollars || 5200
+    // Look for gas station / convenience store / small suspicious habit swipes
+    const gasMerchants = nonBillMerchants.filter(([m, v]) =>
+      /gas|fuel|shell|exxon|chevron|bp|mobil|speedway|7-eleven|7 eleven|wawa|sheetz|circle k|quiktrip|casey|buc-ee|sunoco|marathon|valero|arco|citgo|krispy|mart|convenience|auto/i.test(
+        `${m} ${v.category}`
+      )
     );
-    const hourlyNet = netMonthly / 160;
-    const combinedShameSpend = Math.max(
-      320,
-      Math.round(topHabit.spend + secondHabit.spend + (mostSwipedMerch ? 0 : microTotal))
-    );
-    const shameWorkHours = (combinedShameSpend / hourlyNet).toFixed(1);
+    const topGasMerch = [...gasMerchants].sort((a, b) => b[1].count - a[1].count)[0];
+    const gasCount = topGasMerch ? topGasMerch[1].count : Math.max(9, microTxns.length);
+    const gasSpend = topGasMerch ? topGasMerch[1].spendCents : Math.max(142, Math.round(microTotal));
+    const gasName = topGasMerch ? topGasMerch[0] : 'the gas station & corner store';
 
-    // Wealth & Car Loan cost of cutting 50% of this shame burn
-    const monthlyRedirect = Math.max(175, Math.round(combinedShameSpend * 0.5));
-    const rSp500 = 0.085 / 12;
-    const shame10YrWealth = Math.round(monthlyRedirect * ((Math.pow(1 + rSp500, 120) - 1) / rSp500));
-    const carAccel = calcLoanAccel(carLoan, monthlyRedirect, 'monthly');
+    // Look for dining / drive-thru / delivery
+    const foodMerch = [...nonBillMerchants]
+      .filter(([m, v]) =>
+        /doordash|uber|grubhub|dining|restaurant|fast food|takeout|chipotle|taco|mcdonald|pizza|chick-fil-a|wendy|burger|kfc|popeyes|sonic|panera/i.test(
+          `${m} ${v.category}`
+        )
+      )
+      .sort((a, b) => b[1].count - a[1].count || b[1].spendCents - a[1].spendCents)[0];
 
-    // Deduce a ridiculous persona nickname + embarrassing assumptions from their actual habits
-    const habitSignal = `${obsessionName} ${topHabit.category} ${secondHabit.category}`.toLowerCase();
-    let crazyName = `Lord Lukewarm of the ${obsessionName} Drive-Thru`;
-    let avatarEmoji = '🤡';
-    const assumptions: string[] = [];
+    // Look for coffee / cafe
+    const coffeeMerch = [...nonBillMerchants]
+      .filter(([m, v]) => /coffee|starbucks|dunkin|cafe|espresso|dutch bros|boba|peet|bakery/i.test(`${m} ${v.category}`))
+      .sort((a, b) => b[1].count - a[1].count)[0];
 
-    if (/coffee|starbucks|dunkin|cafe|espresso|dutch bros|boba/i.test(habitSignal)) {
-      crazyName = `Supreme Chancellor of $9 Emotional-Support Iced Lattes`;
-      avatarEmoji = '🧋';
-      assumptions.push(
-        `• You swiped ${obsessionSwipes}x at ${obsessionName} (-${usd.format(obsessionSpend)}) — we assume you physically cannot answer a single Slack message before 10 AM without a plastic cup sweating on your desk.`
-      );
-      assumptions.push(
-        `• Your car cupholders currently contain at least 3 half-empty cups and a crumpled receipt you refuse to look at.`
-      );
-    } else if (/doordash|uber|grubhub|dining|restaurant|fast food|takeout|chipotle|taco|mcdonald|pizza|chick-fil-a/i.test(habitSignal)) {
-      crazyName = `Duke of $28 Cold Fries & The Unopened Oven`;
-      avatarEmoji = '🍔';
-      assumptions.push(
-        `• With ${usd.format(topHabit.spend)} blown on ${topHabit.category} (${topHabit.count} swipes), we assume your oven is strictly used as extra storage for baking sheets you haven't washed since 2023.`
-      );
-      assumptions.push(
-        `• There is 100% a bag of "aspirational salad mix" turning into brown liquid in your crisper drawer right now while you tap ${obsessionName} (${obsessionSwipes}x swipes).`
-      );
-    } else if (/amazon|target|walmart|shopping|clothing|costco|retail/i.test(habitSignal)) {
-      crazyName = `The 1:47 AM "Add-to-Cart" Dopamine Gremlin`;
-      avatarEmoji = '📦';
-      assumptions.push(
-        `• After ${obsessionSwipes} swipes at ${obsessionName} (-${usd.format(obsessionSpend)}), your front porch looks like a regional UPS hub and your delivery driver knows your government name.`
-      );
-      assumptions.push(
-        `• You have definitely buried an empty cardboard box at the bottom of the recycling bin so nobody in the house asks what you ordered.`
-      );
-    } else if (/grocer/i.test(habitSignal) && /dining|restaurant|food/i.test(habitSignal)) {
-      crazyName = `Head Caretaker of the Rotting Produce Graveyard`;
-      avatarEmoji = '🥬';
-      assumptions.push(
-        `• You buy groceries on Sunday pretending you're a meal-prep influencer, then panic-order ${obsessionName} by Tuesday because "dishes are too hard."`
-      );
-      assumptions.push(
-        `• Your fridge has 14 different specialty condiments, zero actual meals, and a tub of spinach that expired four days ago.`
-      );
-    } else {
-      crazyName = `Baron Von "It's Only Twenty Dollars" of ${obsessionName}`;
-      avatarEmoji = '😈';
-      assumptions.push(
-        `• You tapped your card ${obsessionSwipes}x at ${obsessionName} (-${usd.format(obsessionSpend)}) like you're trying to win a high-score trophy on their POS terminal.`
-      );
-      assumptions.push(
-        `• You check your bank balance with one eye squinted shut like you're defusing a bomb.`
-      );
-    }
+    // Look for shopping / Target / Amazon
+    const shopMerch = [...nonBillMerchants]
+      .filter(([m, v]) => /amazon|target|walmart|shopping|costco|retail|tj maxx|dollar/i.test(`${m} ${v.category}`))
+      .sort((a, b) => b[1].spendCents - a[1].spendCents)[0];
 
-    if (microTxns.length >= 6) {
-      assumptions.push(
-        `• You made ${microTxns.length} "harmless" taps under $25 (-${usd.format(microTotal)}) because your brain legally classifies anything under $20 as "basically free."`
-      );
-    } else {
-      assumptions.push(
-        `• On ${worstDayDate}, you blacked out and swiped ${worstDaySwipes} times for -${usd.format(worstDaySpend)} in a single 24-hour dopamine speedrun.`
-      );
-    }
+    const cards = [
+      {
+        crazyName: topGasMerch
+          ? `The ${topGasMerch[0]} Roller-Grill VIP`
+          : `The Gas Station Counter Regular`,
+        avatarEmoji: '⛽',
+        floatingEmojis: ['🍺', '☕', '🚬', '⛽', '💸', '😈'],
+        totalAmountFormatted: `-${usd.format(gasSpend)}`,
+        subtitleLine: `${gasCount} SMALL TRANSACTIONS AT ${topGasMerch ? topGasMerch[0].toUpperCase() : 'GAS STATIONS & UNDER-$25 STOPS'}`,
+        roastQuote: `${gasCount} small transactions at ${gasName}. Nobody buys $12 of unleaded fuel that many times. Someone is supporting a habit... but is it beer, caffeine, or nicotine!?`,
+        stampText: 'HABIT DETECTED 🤨',
+      },
+      {
+        crazyName: foodMerch
+          ? `Duke of $28 Cold Fries (${foodMerch[0]} Edition)`
+          : `Lord Lukewarm of the Unopened Oven`,
+        avatarEmoji: '🍔',
+        floatingEmojis: ['🍔', '🍟', '🍕', '🌮', '💸', '🤡'],
+        totalAmountFormatted: `-${usd.format(foodMerch ? foodMerch[1].spendCents : topHabit.spend)}`,
+        subtitleLine: `${foodMerch ? foodMerch[1].count : topHabit.count} SWIPES ON ${foodMerch ? foodMerch[0].toUpperCase() : topHabit.category.toUpperCase()}`,
+        roastQuote: `${foodMerch ? foodMerch[1].count : topHabit.count} charges at ${foodMerch ? foodMerch[0] : obsessionName}. Your oven hasn't been turned on since 2023 and just stores unwashed baking sheets. Are you feeding a secret second family or hiding wrappers under the passenger seat!?`,
+        stampText: 'OVEN UNUSED 💀',
+      },
+      {
+        crazyName: `The $8 Emotional-Support Beverage Hostage`,
+        avatarEmoji: '🧋',
+        floatingEmojis: ['☕', '🧋', '🧊', '💳', '💸', '😵‍💫'],
+        totalAmountFormatted: `-${usd.format(coffeeMerch ? coffeeMerch[1].spendCents : obsessionSpend)}`,
+        subtitleLine: `${coffeeMerch ? coffeeMerch[1].count : obsessionSwipes} SWIPES AT ${(coffeeMerch ? coffeeMerch[0] : obsessionName).toUpperCase()}`,
+        roastQuote: `${coffeeMerch ? coffeeMerch[1].count : obsessionSwipes} stops at ${coffeeMerch ? coffeeMerch[0] : obsessionName}. You physically cannot answer a single email before 10 AM without a plastic cup sweating on your desk. Is your blood type 100% cold brew at this point!?`,
+        stampText: 'CAFFEINE HOSTAGE ☕',
+      },
+      {
+        crazyName: `The 1:47 AM "Add-to-Cart" Dopamine Gremlin`,
+        avatarEmoji: '📦',
+        floatingEmojis: ['📦', '🛒', '🕯️', '💳', '💸', '😈'],
+        totalAmountFormatted: `-${usd.format(shopMerch ? shopMerch[1].spendCents : obsessionSpend)}`,
+        subtitleLine: `${shopMerch ? shopMerch[1].count : obsessionSwipes} MYSTERY ORDERS AT ${(shopMerch ? shopMerch[0] : obsessionName).toUpperCase()}`,
+        roastQuote: `${shopMerch ? shopMerch[1].count : obsessionSwipes} charges at ${shopMerch ? shopMerch[0] : obsessionName}. Nobody needs paper towels that badly. Are you stress-buying at 2 AM or burying empty cardboard boxes at the bottom of the recycling bin so nobody asks what you bought!?`,
+        stampText: 'CAUGHT IN 4K 📸',
+      },
+    ];
 
-    const gifPayload = {
-      crazyName,
-      avatarEmoji,
-      totalAmountFormatted: `-${usd.format(combinedShameSpend)}`,
-      subtitleLine: `TORCHED ON ${topHabit.category.toUpperCase()} & ${secondHabit.category.toUpperCase()} · ${shameWorkHours} HRS AT WORK`,
-      assumptions,
-      roastOneLiner: `Swiped ${obsessionSwipes}x at ${obsessionName} (-${usd.format(obsessionSpend)}) + ${microTxns.length} tiny taps under $25 (-${usd.format(microTotal)}).`,
-      opportunityCostLine: `Could've been +${usd.format(shame10YrWealth)} in a Roth IRA (or ${carLoan.name} paid off ${carAccel.monthsShaved} mos early) 🤡`,
-      topMerchantLabel: `${monthLabel(curMonthKey)} Hall of Shame · #1 Accomplice: ${obsessionName} (${obsessionSwipes}x)`,
-    };
-
-    synthesizedMarkdownReport = [
-      `### 😈 Official Diagnosis: **${crazyName}**`,
-      `> ${avatarEmoji} **You torched -${usd.format(combinedShameSpend)} (${shameWorkHours} hours of your life at work) on ${topHabit.category} & ${secondHabit.category}, led by ${obsessionSwipes} swipes at ${obsessionName}.** Here is your animated Hall of Shame GIF — download it or dare to post it on Reddit:`,
-      `[ROAST_GIF_CARD]${JSON.stringify(gifPayload)}[/ROAST_GIF_CARD]`,
-    ].join('\n');
+    synthesizedMarkdownReport = `[ROAST_GIF_CARD]${JSON.stringify({ cards })}[/ROAST_GIF_CARD]`;
   }
   // A0. 📈🚗 Invest in Accounts vs. Pay Off Car Loan & Mortgage Early
   else if (isInvestVsPayoffAsk) {
