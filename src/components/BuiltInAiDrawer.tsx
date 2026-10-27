@@ -149,7 +149,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
       onClose={onClose}
       PaperProps={{
         sx: {
-          width: { xs: '100%', sm: 430 },
+          width: { xs: '100%', sm: 500 },
           display: 'flex',
           flexDirection: 'column',
           bgcolor: 'background.paper',
@@ -304,7 +304,8 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
               key={m.id}
               sx={{
                 alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '90%',
+                maxWidth: m.role === 'user' ? '85%' : '100%',
+                width: m.role === 'assistant' ? '100%' : 'auto',
               }}
             >
               <Paper
@@ -388,39 +389,236 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
   }
 
   const lines = content.split('\n');
-  return (
-    <Stack spacing={0.5}>
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <Box key={idx} sx={{ height: 4 }} />;
-        if (trimmed.startsWith('### ')) {
-          return (
-            <Typography key={idx} variant="subtitle2" sx={{ fontWeight: 700, pt: idx > 0 ? 0.5 : 0 }}>
-              {renderInlineBold(trimmed.slice(4))}
-            </Typography>
-          );
-        }
-        if (trimmed.startsWith('## ')) {
-          return (
-            <Typography key={idx} variant="subtitle2" sx={{ fontWeight: 700, pt: idx > 0 ? 0.5 : 0 }}>
-              {renderInlineBold(trimmed.slice(3))}
-            </Typography>
-          );
-        }
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          return (
-            <Typography key={idx} variant="body2" sx={{ pl: 1, lineHeight: 1.45, fontSize: '0.84rem' }}>
-              • {renderInlineBold(trimmed.slice(2))}
-            </Typography>
-          );
-        }
-        return (
-          <Typography key={idx} variant="body2" sx={{ lineHeight: 1.45, fontSize: '0.84rem' }}>
-            {renderInlineBold(line)}
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+
+    if (!trimmed) {
+      elements.push(<Box key={`sp-${i}`} sx={{ height: 4 }} />);
+      i++;
+      continue;
+    }
+
+    // Group consecutive markdown table lines (`| ... |`)
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+      elements.push(<MathLedgerTable key={`tbl-${i}`} rawRows={tableLines} />);
+      continue;
+    }
+
+    if (trimmed.startsWith('### ')) {
+      elements.push(
+        <Typography
+          key={`h3-${i}`}
+          variant="subtitle2"
+          sx={{ fontWeight: 700, pt: elements.length > 0 ? 0.75 : 0, pb: 0.25 }}
+        >
+          {renderInlineBold(trimmed.slice(4))}
+        </Typography>
+      );
+      i++;
+      continue;
+    }
+
+    if (trimmed.startsWith('## ')) {
+      elements.push(
+        <Typography
+          key={`h2-${i}`}
+          variant="subtitle2"
+          sx={{ fontWeight: 700, pt: elements.length > 0 ? 0.75 : 0, pb: 0.25 }}
+        >
+          {renderInlineBold(trimmed.slice(3))}
+        </Typography>
+      );
+      i++;
+      continue;
+    }
+
+    if (trimmed.startsWith('> ')) {
+      elements.push(
+        <Box
+          key={`q-${i}`}
+          sx={{
+            px: 1.25,
+            py: 0.75,
+            my: 0.25,
+            borderRadius: 1,
+            bgcolor: 'background.paper',
+            borderLeft: '3px solid',
+            borderColor: 'primary.main',
+          }}
+        >
+          <Typography variant="body2" sx={{ lineHeight: 1.45, fontSize: '0.84rem' }}>
+            {renderInlineBold(trimmed.slice(2))}
           </Typography>
-        );
-      })}
-    </Stack>
+        </Box>
+      );
+      i++;
+      continue;
+    }
+
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      elements.push(
+        <Typography key={`li-${i}`} variant="body2" sx={{ pl: 1, lineHeight: 1.45, fontSize: '0.83rem' }}>
+          • {renderInlineBold(trimmed.slice(2))}
+        </Typography>
+      );
+      i++;
+      continue;
+    }
+
+    elements.push(
+      <Typography key={`p-${i}`} variant="body2" sx={{ lineHeight: 1.45, fontSize: '0.84rem', pt: 0.25 }}>
+        {renderInlineBold(lines[i])}
+      </Typography>
+    );
+    i++;
+  }
+
+  return <Stack spacing={0.5}>{elements}</Stack>;
+}
+
+function MathLedgerTable({ rawRows }: { rawRows: string[] }) {
+  const parsedRows = rawRows
+    .map((r) =>
+      r
+        .slice(1, -1)
+        .split('|')
+        .map((c) => c.trim())
+    )
+    .filter((cells) => !cells.every((c) => /^[:\-]+$/.test(c)));
+
+  if (parsedRows.length === 0) return null;
+
+  const header = parsedRows[0];
+  const body = parsedRows.slice(1);
+  const colCount = header.length;
+
+  const isNumericCell = (text: string, colIdx: number) => {
+    if (colIdx === 0) return false;
+    if (colIdx === colCount - 1) return true;
+    const clean = text.replace(/\*\*/g, '').trim();
+    return (
+      /^[+\-=~\s]*\$[0-9,]+(\.\d+)?(\/mo|\/yr|\s*\([^)]+\))?$/i.test(clean) ||
+      /^[+\-]?\d+(\.\d+)?%$/.test(clean)
+    );
+  };
+
+  return (
+    <Box
+      sx={{
+        my: 0.5,
+        borderRadius: 1.5,
+        border: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+        overflowX: 'auto',
+      }}
+    >
+      <Box
+        component="table"
+        sx={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: '0.79rem',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <Box component="thead">
+          <Box
+            component="tr"
+            sx={{
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'action.hover',
+            }}
+          >
+            {header.map((cell, cIdx) => {
+              const colIsNumeric =
+                cIdx === colCount - 1 ||
+                (body.length > 0 && cIdx > 0 && isNumericCell(body[0][cIdx] || '', cIdx));
+              return (
+                <Box
+                  component="th"
+                  key={cIdx}
+                  sx={{
+                    py: 0.6,
+                    px: 1,
+                    textAlign: colIsNumeric ? 'right' : 'left',
+                    fontWeight: 700,
+                    fontSize: '0.72rem',
+                    color: 'text.secondary',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {renderInlineBold(cell)}
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+        <Box component="tbody">
+          {body.map((row, rIdx) => {
+            const firstPlain = (row[0] || '').replace(/\*\*/g, '').trim();
+            const isTotalRow =
+              firstPlain.startsWith('=') ||
+              firstPlain.startsWith('Total') ||
+              firstPlain.startsWith('Subtotal');
+
+            return (
+              <Box
+                component="tr"
+                key={rIdx}
+                sx={{
+                  borderTop: isTotalRow ? '1.5px solid' : rIdx > 0 ? '1px solid' : 'none',
+                  borderColor: isTotalRow ? 'text.secondary' : 'divider',
+                  bgcolor: isTotalRow ? 'action.selected' : 'transparent',
+                }}
+              >
+                {row.map((cell, cIdx) => {
+                  const numAlign = isNumericCell(cell, cIdx);
+                  const plain = cell.replace(/\*\*/g, '').trim();
+                  const isPositiveAmt = numAlign && (plain.startsWith('+$') || plain.startsWith('= +$'));
+                  const isNegativeTotal = isTotalRow && numAlign && (plain.startsWith('-$') || plain.startsWith('= -$'));
+
+                  return (
+                    <Box
+                      component="td"
+                      key={cIdx}
+                      sx={{
+                        py: isTotalRow ? 0.75 : 0.55,
+                        px: 1,
+                        textAlign: numAlign ? 'right' : 'left',
+                        fontWeight: isTotalRow || numAlign ? 700 : cIdx === 0 ? 600 : 400,
+                        fontFamily: numAlign ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' : 'inherit',
+                        whiteSpace: numAlign ? 'nowrap' : 'normal',
+                        color: isNegativeTotal
+                          ? 'error.main'
+                          : isPositiveAmt
+                            ? 'success.main'
+                            : cIdx > 0 && !numAlign && !isTotalRow
+                              ? 'text.secondary'
+                              : 'text.primary',
+                      }}
+                    >
+                      {renderInlineBold(cell)}
+                    </Box>
+                  );
+                })}
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    </Box>
   );
 }
 

@@ -799,21 +799,28 @@ export async function analyzeQuestionAndFinances(
 
     const avgCharge = spendTxns.length > 0 ? totalMatchSpend / spendTxns.length : 0;
     const sortedMatches = [...keywordMatchedTxns].sort((a, b) => b.date.localeCompare(a.date));
+    const shownMatches = sortedMatches.slice(0, 8);
+    const shownTotal = shownMatches.reduce((s, t) => s + t.amount, 0);
 
     sections.push(
       [
-        `### Matching Transactions for "${specificMerchantKeywords.join(' ')}"`,
-        `- **Selected Period (${timePeriod.label}):** **${usd.format(inPeriodSpend)}** across **${inPeriodMatches.length}** transaction${inPeriodMatches.length === 1 ? '' : 's'}`,
-        !timePeriod.isExplicitInQuery && keywordMatchedTxns.length !== inPeriodMatches.length
-          ? `- **All-Time Total:** **${usd.format(totalMatchSpend)}** spent across **${spendTxns.length}** charges (avg **${usdCents.format(avgCharge)}** per charge)${totalMatchIncome > 0 ? ` · **+${usd.format(totalMatchIncome)}** inflows` : ''}`
-          : `- **Average Charge:** **${usdCents.format(avgCharge)}**`,
-        '',
-        '**Recent Matching Transactions:**',
-        ...sortedMatches.slice(0, 8).map((t) => {
+        `### Matching Transactions: "${specificMerchantKeywords.join(' ')}"`,
+        `| Date · Merchant | Category · Account | Amount |`,
+        `| --- | --- | --- |`,
+        ...shownMatches.map((t) => {
           const accName = accountById.get(t.accountId)?.name || 'Account';
-          return `- **${t.date}** · **${(t.merchantKey || t.description).slice(0, 35)}** (${t.category || 'Uncategorized'} · ${accName}): **${usdCents.format(t.amount)}**`;
+          return `| ${t.date} · **${(t.merchantKey || t.description).slice(0, 26)}** | ${t.category || 'Uncategorized'} · ${accName.slice(0, 18)} | ${usdCents.format(t.amount)} |`;
         }),
-      ].join('\n')
+        shownMatches.length < keywordMatchedTxns.length
+          ? `| + ${keywordMatchedTxns.length - shownMatches.length} older transactions | Avg ${usdCents.format(avgCharge)}/charge | ${usdCents.format(-totalMatchSpend - shownTotal)} |`
+          : '',
+        `| **= Period Total (${timePeriod.label})** | **${inPeriodMatches.length} txns (Avg ${usdCents.format(avgCharge)})** | **-${usdCents.format(inPeriodSpend)}** |`,
+        !timePeriod.isExplicitInQuery && keywordMatchedTxns.length !== inPeriodMatches.length
+          ? `| **= All-Time Total** | **${spendTxns.length} charges${totalMatchIncome > 0 ? ` (+${usd.format(totalMatchIncome)} inflows)` : ''}** | **-${usdCents.format(totalMatchSpend)}** |`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
     );
   }
 
@@ -824,10 +831,11 @@ export async function analyzeQuestionAndFinances(
     let combinedCurMonthSpend = 0;
     let combinedPrevMonthSpend = 0;
     let combinedTrailingAvg = 0;
+    let combinedBudget = 0;
     let combinedTxCount = 0;
     const combinedTxns: Transaction[] = [];
 
-    const catBreakdownLines: string[] = [];
+    const catTableRows: string[] = [];
     for (const cName of catList) {
       const pStat = periodStats.byCat.get(cName);
       const curStat = curMonthStats.byCat.get(cName);
@@ -836,18 +844,19 @@ export async function analyzeQuestionAndFinances(
       const curSpend = curStat ? curStat.spendCents : 0;
       const prevSpend = prevStat ? prevStat.spendCents : 0;
       const tAvg = trailingAvgByCat.get(cName) || 0;
-      const bAmt = budgetByCat.get(cName);
+      const bAmt = budgetByCat.get(cName) || 0;
 
       combinedPeriodSpend += pSpend;
       combinedCurMonthSpend += curSpend;
       combinedPrevMonthSpend += prevSpend;
       combinedTrailingAvg += tAvg;
+      combinedBudget += bAmt;
       combinedTxCount += pStat ? pStat.count : 0;
       if (pStat) combinedTxns.push(...pStat.txns);
 
       if (pSpend > 0 || curSpend > 0 || prevSpend > 0 || tAvg > 0) {
-        catBreakdownLines.push(
-          `- **${cName}**: **${usd.format(pSpend)}** in period (${pStat?.count || 0} txns) · ${monthLabel(curMonthKey)}: **${usd.format(curSpend)}** · ${monthLabel(prevMonthKey)}: **${usd.format(prevSpend)}** · 3-Mo Avg: **${usd.format(tAvg)}/mo**${bAmt ? ` · Budget: **${usd.format(bAmt)}/mo**` : ''}`
+        catTableRows.push(
+          `| **${cName}** (${pStat?.count || 0}x) | ${usd.format(curSpend)} | ${usd.format(prevSpend)} | ${usd.format(tAvg)}/mo | ${usd.format(pSpend)} |`
         );
       }
     }
@@ -864,25 +873,39 @@ export async function analyzeQuestionAndFinances(
     const topMerchInCats = Array.from(merchInCats.entries())
       .sort((a, b) => b[1].spendCents - a[1].spendCents)
       .slice(0, 6);
+    const topMerchSum = topMerchInCats.reduce((s, [, v]) => s + v.spendCents, 0);
+    const otherMerchSum = Math.max(0, combinedPeriodSpend - topMerchSum);
 
     sections.push(
       [
-        `### Category Deep-Dive: ${catList.join(', ')}`,
-        `- **Total in ${timePeriod.label}:** **${usd.format(combinedPeriodSpend)}** across **${combinedTxCount}** transactions (${periodStats.spendDollars > 0 ? Math.round((combinedPeriodSpend / periodStats.spendDollars) * 100) : 0}% of period spend)`,
-        `- **This Month (${monthLabel(curMonthKey)}) vs Last Month (${monthLabel(prevMonthKey)}):** **${usd.format(combinedCurMonthSpend)}** vs **${usd.format(combinedPrevMonthSpend)}** (3-Month Avg: **${usd.format(combinedTrailingAvg)}/mo**)`,
-        '',
-        '**By Category:**',
-        ...(catBreakdownLines.length > 0 ? catBreakdownLines : ['- No spending recorded in these categories for the selected range.']),
+        `### Category Math: ${catList.join(' + ')}`,
+        `| Category | ${monthLabel(curMonthKey)} | ${monthLabel(prevMonthKey)} | 3-Mo Avg | ${timePeriod.isExplicitInQuery ? timePeriod.label : 'Period'} |`,
+        `| --- | --- | --- | --- | --- |`,
+        ...(catTableRows.length > 0
+          ? catTableRows
+          : [`| No spending recorded | $0 | $0 | $0/mo | $0 |`]),
+        `| **= Total (${combinedTxCount} txns)** | **${usd.format(combinedCurMonthSpend)}** | **${usd.format(combinedPrevMonthSpend)}** | **${usd.format(combinedTrailingAvg)}/mo** | **${usd.format(combinedPeriodSpend)}** |`,
+        combinedBudget > 0
+          ? `> **Budget Check:** Combined monthly budget is **${usd.format(combinedBudget)}/mo** (${monthLabel(curMonthKey)} is **${combinedCurMonthSpend > combinedBudget ? `+${usd.format(combinedCurMonthSpend - combinedBudget)} over` : `${usd.format(combinedBudget - combinedCurMonthSpend)} under`}** budget).`
+          : '',
         ...(topMerchInCats.length > 0
           ? [
               '',
-              '**Top Merchants in This Group:**',
+              `**Merchant Breakdown (${timePeriod.label}):**`,
+              `| Merchant | Charges | Total |`,
+              `| --- | --- | --- |`,
               ...topMerchInCats.map(
-                ([m, v]) => `- **${m}**: **${usd.format(v.spendCents)}** (${v.count}x)`
+                ([m, v]) => `| **${m}** | ${v.count} charge${v.count === 1 ? '' : 's'} (avg ${usd.format(v.spendCents / v.count)}) | -${usd.format(v.spendCents)} |`
               ),
+              otherMerchSum > 1
+                ? `| + Other merchants in group | ${Math.max(0, combinedTxCount - topMerchInCats.reduce((s, [, v]) => s + v.count, 0))} charges | -${usd.format(otherMerchSum)} |`
+                : '',
+              `| **= Category Total** | **${combinedTxCount} charges** | **-${usd.format(combinedPeriodSpend)}** |`,
             ]
           : []),
-      ].join('\n')
+      ]
+        .filter(Boolean)
+        .join('\n')
     );
   }
 
@@ -912,62 +935,71 @@ export async function analyzeQuestionAndFinances(
   ) {
     const topUnpaid = unpaidBills.slice(0, 10);
     const topPaid = paidBills.slice(0, 8);
+    const topPaidSum = topPaid.reduce((s, b) => s + b.monthlyAverage, 0);
+    const otherPaidSum = Math.max(0, paidBillsTotalDollars - topPaidSum);
     const topRecent = recent7DayTxns.slice(0, 8);
-    const topRecentBig = recent7DayBigCharges.slice(0, 5);
+    const topRecentSum = topRecent.reduce((s, t) => s + Math.abs(t.amount), 0);
+    const pendingSum = pendingTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
 
     sections.push(
       [
-        `### End-of-Month Bill & Transaction Tracker (${monthLabel(curMonthKey)} · Day ${curDayOfMonth} of ${daysInCurMonth}, ${daysRemainingInMonth}d left)`,
-        `- **Unpaid Recurring Bills Still Expected This Month:** **${unpaidBills.length} bill${unpaidBills.length === 1 ? '' : 's'}** totaling **~${usd.format(unpaidBillsTotalDollars)}**`,
-        `- **Recurring Bills Already Paid This Month:** **${paidBills.length} bill${paidBills.length === 1 ? '' : 's'}** totaling **~${usd.format(paidBillsTotalDollars)}**`,
-        `- **Remaining Paychecks Expected This Month:** **${remainingPaychecksCount} paycheck${remainingPaychecksCount === 1 ? '' : 's'}** (**+${usd.format(remainingPaychecksDollars)}** expected · **${receivedPaychecksCount}** already received for **${usd.format(curMonthStats.incomeDollars)}** total inflows so far)`,
-        pendingTxns.length > 0
-          ? `- **Pending Transactions:** **${pendingTxns.length}** pending charge${pendingTxns.length === 1 ? '' : 's'} totaling **${usdCents.format(pendingTxns.reduce((s, t) => s + Math.abs(t.amount), 0))}**`
-          : `- **Pending Transactions:** **0** pending charges right now`,
+        `### End-of-Month Bill & Cashflow Math (${monthLabel(curMonthKey)} · Day ${curDayOfMonth}/${daysInCurMonth}, ${daysRemainingInMonth}d left)`,
+        `| Monthly Bill & Paycheck Math | Status | Amount |`,
+        `| --- | --- | --- |`,
+        `| Recurring Bills Already Paid | ${paidBills.length} bills cleared | -${usd.format(paidBillsTotalDollars)} |`,
+        `| + Unpaid Bills Still Coming | ${unpaidBills.length} bills left this month | -${usd.format(unpaidBillsTotalDollars)} |`,
+        `| **= Total Monthly Recurring Bills** | **${paidBills.length + unpaidBills.length} tracked bills** | **-${usd.format(paidBillsTotalDollars + unpaidBillsTotalDollars)}** |`,
+        `| Paychecks Received So Far | ${receivedPaychecksCount} deposits landed | +${usd.format(curMonthStats.incomeDollars)} |`,
+        `| + Paychecks Still Coming | ${remainingPaychecksCount} deposits left in ${monthLabel(curMonthKey)} | +${usd.format(remainingPaychecksDollars)} |`,
+        `| **= Total Expected Month Inflows** | **${receivedPaychecksCount + remainingPaychecksCount} paychecks** | **+${usd.format(curMonthStats.incomeDollars + remainingPaychecksDollars)}** |`,
         ...(topUnpaid.length > 0
           ? [
               '',
-              `**⏳ Still Unpaid / Coming Up in ${monthLabel(curMonthKey)} (~${usd.format(unpaidBillsTotalDollars)} total):**`,
+              `**⏳ Unpaid Bills Still Coming Up in ${monthLabel(curMonthKey)}:**`,
+              `| Unpaid Bill | Category · Expected Date | Est. Amount |`,
+              `| --- | --- | --- |`,
               ...topUnpaid.map(
                 (b) =>
-                  `- **${b.merchantKey}** (${b.category}): **~${usd.format(b.monthlyAverage)}** · Expected **${b.status.expectedShortLabel || 'this month'}** (${b.status.countdownText || 'upcoming'}, last paid ${b.status.lastPaidShortLabel || 'prior month'})`
+                  `| **${b.merchantKey}** | ${b.category} · **${b.status.expectedShortLabel || 'This mo'}** (${b.status.countdownText || 'upcoming'}) | -${usd.format(b.monthlyAverage)} |`
               ),
+              `| **= Total Unpaid Bills Left** | **${unpaidBills.length} bills remaining** | **-${usd.format(unpaidBillsTotalDollars)}** |`,
             ]
           : [
               '',
-              `**✅ All ${paidBills.length} tracked recurring bills for ${monthLabel(curMonthKey)} have already cleared!**`,
+              `> ✅ **All ${paidBills.length} tracked recurring bills for ${monthLabel(curMonthKey)} have already cleared!**`,
             ]),
         ...(topPaid.length > 0
           ? [
               '',
-              `**✅ Major Bills Already Paid in ${monthLabel(curMonthKey)} (~${usd.format(paidBillsTotalDollars)} total):**`,
+              `**✅ Recurring Bills Already Paid in ${monthLabel(curMonthKey)}:**`,
+              `| Cleared Bill | Category · Paid Date | Amount |`,
+              `| --- | --- | --- |`,
               ...topPaid.map(
                 (b) =>
-                  `- **${b.merchantKey}** (${b.category}): **~${usd.format(b.monthlyAverage)}** · ${b.status.countdownText || `Paid ${b.status.lastPaidShortLabel || 'this month'}`}`
+                  `| **${b.merchantKey}** | ${b.category} · ${b.status.countdownText || `Paid ${b.status.lastPaidShortLabel || 'this mo'}`} | -${usd.format(b.monthlyAverage)} |`
               ),
-            ]
-          : []),
-        ...(topRecentBig.length > 0
-          ? [
-              '',
-              `**🚨 Largest Charges in the Last 7 Days (over $50):**`,
-              ...topRecentBig.map((t) => {
-                const accName = accountById.get(t.accountId)?.name || 'Account';
-                return `- **${t.date}** · **${(t.merchantKey || t.description).slice(0, 34)}** (${t.category || 'Uncategorized'} · ${accName}): **${usdCents.format(t.amount)}**${t.isPending ? ' **(Pending)**' : ''}`;
-              }),
+              paidBills.length > topPaid.length
+                ? `| + ${paidBills.length - topPaid.length} smaller paid bills | Cleared earlier in ${monthLabel(curMonthKey)} | -${usd.format(otherPaidSum)} |`
+                : '',
+              `| **= Total Bills Paid So Far** | **${paidBills.length} bills cleared** | **-${usd.format(paidBillsTotalDollars)}** |`,
             ]
           : []),
         ...(topRecent.length > 0
           ? [
               '',
-              `**🕒 Latest Transactions (Last 7 Days since ${sevenDaysAgoStr}):**`,
+              `**🕒 Recent & Pending Activity (Last 7 Days since ${sevenDaysAgoStr}):**`,
+              `| Date · Merchant | Account · Status | Amount |`,
+              `| --- | --- | --- |`,
               ...topRecent.map((t) => {
-                const accName = accountById.get(t.accountId)?.name || 'Account';
-                return `- **${t.date}** · **${(t.merchantKey || t.description).slice(0, 34)}** (${t.category || 'Uncategorized'} · ${accName}): **${usdCents.format(t.amount)}**${t.isPending ? ' **(Pending)**' : ''}`;
+                const accName = (accountById.get(t.accountId)?.name || 'Account').slice(0, 22);
+                return `| ${t.date} · **${(t.merchantKey || t.description).slice(0, 22)}** | ${accName}${t.isPending ? ' · **Pending**' : ''} | ${usdCents.format(t.amount)} |`;
               }),
+              `| **= Subtotal Shown (Last 7d)** | **${topRecent.length} recent (${pendingTxns.length} pending = ${usdCents.format(pendingSum)})** | **-${usdCents.format(topRecentSum)}** |`,
             ]
           : []),
-      ].join('\n')
+      ]
+        .filter(Boolean)
+        .join('\n')
     );
   }
 
@@ -1011,11 +1043,12 @@ export async function analyzeQuestionAndFinances(
       ? monthlySafeRemainder - amountToTest
       : monthlySafeRemainder;
     const oneTimeNetAfter = monthlySafeRemainder + remainingVariableThisMonth - amountToTest;
+    const remainingVarAllowance = Math.max(0, remainingVariableThisMonth);
     const projectedMonthEndCheckingBefore =
       checkingCashDollars +
       remainingPaychecksDollars -
       unpaidBillsTotalDollars -
-      Math.max(0, remainingVariableThisMonth);
+      remainingVarAllowance;
     const projectedMonthEndCheckingAfter = projectedMonthEndCheckingBefore - amountToTest;
 
     let verdict = `✅ **Yes — Spending ${usd.format(amountToTest)} right now will NOT hurt**`;
@@ -1031,7 +1064,7 @@ export async function analyzeQuestionAndFinances(
       } else if (oneTimeNetAfter < 0) {
         verdict = `🟡 **Manageable from Checking Cash, but exceeds this month's remaining cashflow by ${usd.format(Math.abs(oneTimeNetAfter))}**`;
       } else if (variableAfterPurchase < 0) {
-        verdict = `✅ **Yes — Covered by your ${usd.format(monthlySafeRemainder)}/mo Safe Remainder & ${usd.format(checkingCashDollars)} Checking Balance (puts variable spending ${usd.format(Math.abs(variableAfterPurchase))} over target, but won't hurt cashflow)**`;
+        verdict = `✅ **Yes — Covered by your ${usd.format(monthlySafeRemainder)}/mo Safe Remainder & ${usd.format(projectedMonthEndCheckingAfter)} Month-End Checking Cushion**`;
       }
     }
 
@@ -1039,20 +1072,36 @@ export async function analyzeQuestionAndFinances(
       unpaidBills.length > 0
         ? unpaidBills
             .slice(0, 3)
-            .map((b) => `${b.merchantKey} (~${usd.format(b.monthlyAverage)}, ${b.status.expectedShortLabel || 'upcoming'})`)
+            .map((b) => `${b.merchantKey} (${usd.format(b.monthlyAverage)})`)
             .join(', ')
-        : 'None — all recurring bills have cleared';
+        : 'All bills paid';
 
     sections.push(
       [
-        `### Affordability & End-of-Month Cushion Analysis (${usd.format(amountToTest)}${isRecurringAsk ? '/mo' : ' right now'})`,
-        `- **Verdict:** ${verdict}`,
-        `- **Month Progress:** Day ${curDayOfMonth} of ${daysInCurMonth} (**${daysRemainingInMonth} days left** in ${monthLabel(curMonthKey)})`,
-        `- **Variable Budget Status:** **${usd.format(curVariableSpent)}** spent of **${usd.format(monthlyVariableBaseline)}/mo** budget → **${usd.format(remainingVariableThisMonth)}** remaining before purchase (**${usd.format(variableAfterPurchase)}** after spending ${usd.format(amountToTest)})`,
-        `- **Unpaid Bills Still Due Before Month-End:** **-${usd.format(unpaidBillsTotalDollars)}** across **${unpaidBills.length} bill${unpaidBills.length === 1 ? '' : 's'}** (Top upcoming: ${top3UnpaidSummary})`,
-        `- **Remaining Paychecks This Month:** **+${usd.format(remainingPaychecksDollars)}** (${remainingPaychecksCount} paycheck${remainingPaychecksCount === 1 ? '' : 's'} left in ${monthLabel(curMonthKey)})`,
-        `- **Monthly Unallocated Safe Remainder:** **${usd.format(monthlySafeRemainder)}/mo** (after **${usd.format(monthlyRecurringBaseline)}** fixed bills, **${usd.format(monthlyVariableBaseline)}** variable budget, and **${usd.format(monthlySavingsOutBaseline)}** savings transfers)`,
-        `- **Checking Cushion Impact:** **${usd.format(checkingCashDollars)}** checking cash today → **${usd.format(projectedMonthEndCheckingAfter)}** projected month-end checking cushion after unpaid bills, remaining variable budget, and this **${usd.format(amountToTest)}** purchase (plus **${usd.format(savingsCashDollars)}** in savings)`,
+        `### Affordability & Month-End Cushion Math (${usd.format(amountToTest)}${isRecurringAsk ? '/mo' : ' right now'})`,
+        `> ${verdict}`,
+        '',
+        `**1. End-of-Month Checking Cash Equation (${daysRemainingInMonth}d left in ${monthLabel(curMonthKey)}):**`,
+        `| Cashflow Step | Details | Math |`,
+        `| --- | --- | --- |`,
+        `| Starting Checking Cash | Available today (+${usd.format(savingsCashDollars)} in savings) | +${usd.format(checkingCashDollars)} |`,
+        `| + Remaining Paychecks | ${remainingPaychecksCount} paycheck${remainingPaychecksCount === 1 ? '' : 's'} left in ${monthLabel(curMonthKey)} | +${usd.format(remainingPaychecksDollars)} |`,
+        `| - Unpaid Recurring Bills | ${unpaidBills.length} bills left (${top3UnpaidSummary}) | -${usd.format(unpaidBillsTotalDollars)} |`,
+        `| - Remaining Variable Budget | ${usd.format(curVariableSpent)} spent of ${usd.format(monthlyVariableBaseline)} budget | -${usd.format(remainingVarAllowance)} |`,
+        `| **= Projected Month-End Cash (Before)** | **Est. balance on ${curMonthKey}-${String(daysInCurMonth).padStart(2, '0')}** | **+${usd.format(projectedMonthEndCheckingBefore)}** |`,
+        `| - Proposed Purchase | ${isRecurringAsk ? 'New monthly expense' : 'One-time spend right now'} | -${usd.format(amountToTest)} |`,
+        `| **= Projected Month-End Cash (After)** | **Net checking cushion after ${usd.format(amountToTest)}** | **${projectedMonthEndCheckingAfter >= 0 ? '+' : ''}${usd.format(projectedMonthEndCheckingAfter)}** |`,
+        '',
+        `**2. Monthly Budget & Safe Remainder Waterfall:**`,
+        `| Monthly Baseline | Details | Monthly Math |`,
+        `| --- | --- | --- |`,
+        `| Net Take-Home Income | ${enabledStreams.length} active income stream${enabledStreams.length === 1 ? '' : 's'} | +${usd.format(monthlyNetIncomeBaseline)}/mo |`,
+        `| - Fixed Recurring Bills | Mortgage, loans, utilities, insurance | -${usd.format(monthlyRecurringBaseline)}/mo |`,
+        `| - Variable Living Budget | ${usd.format(curVariableSpent)} spent so far in ${monthLabel(curMonthKey)} | -${usd.format(monthlyVariableBaseline)}/mo |`,
+        `| - Savings & Investments | Automated monthly allocations | -${usd.format(monthlySavingsOutBaseline)}/mo |`,
+        `| **= Monthly Safe Remainder** | **Unallocated monthly surplus** | **+${usd.format(monthlySafeRemainder)}/mo** |`,
+        `| - Proposed ${usd.format(amountToTest)} Impact | ${isRecurringAsk ? 'Recurring monthly deduction' : 'Absorbed from this month surplus'} | -${usd.format(amountToTest)} |`,
+        `| **= Safe Remainder After ${usd.format(amountToTest)}** | **Surplus left this month** | **${monthlySafeRemainder - amountToTest >= 0 ? '+' : ''}${usd.format(monthlySafeRemainder - amountToTest)}** |`,
       ]
         .filter(Boolean)
         .join('\n')
@@ -1072,6 +1121,8 @@ export async function analyzeQuestionAndFinances(
     qLower.includes('anomal')
   ) {
     const spendDelta = curMonthStats.spendDollars - prevMonthStats.spendDollars;
+    const incomeDelta = curMonthStats.incomeDollars - prevMonthStats.incomeDollars;
+    const netDelta = curMonthStats.netDollars - prevMonthStats.netDollars;
     const allCompCats = new Set([
       ...Array.from(curMonthStats.byCat.keys()),
       ...Array.from(prevMonthStats.byCat.keys()),
@@ -1102,30 +1153,29 @@ export async function analyzeQuestionAndFinances(
       .filter((t) => t.amount < 0 && !isTransfer(t))
       .sort((a, b) => a.amount - b.amount)
       .slice(0, 6);
+    const largestCurSum = largestCurTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
 
     sections.push(
       [
-        `### Month-over-Month & Spike Analysis (${monthLabel(curMonthKey)} vs ${monthLabel(prevMonthKey)})`,
-        `- **${monthLabel(curMonthKey)} Spend:** **${usd.format(curMonthStats.spendDollars)}** (Income: **${usd.format(curMonthStats.incomeDollars)}**)`,
-        `- **${monthLabel(prevMonthKey)} Spend:** **${usd.format(prevMonthStats.spendDollars)}** (Income: **${usd.format(prevMonthStats.incomeDollars)}**)`,
-        `- **Spend Change:** **${spendDelta >= 0 ? '+' : ''}${usd.format(spendDelta)}** (${prevMonthStats.spendDollars > 0 ? `${Math.round((spendDelta / prevMonthStats.spendDollars) * 100)}%` : 'N/A'} vs prior month)`,
-        ...(biggestSpikes.length > 0
+        `### Month-over-Month Cashflow Math (${monthLabel(curMonthKey)} vs ${monthLabel(prevMonthKey)})`,
+        `| Cashflow Metric | ${monthLabel(curMonthKey)} | ${monthLabel(prevMonthKey)} | Difference |`,
+        `| --- | --- | --- | --- |`,
+        `| + Total Inflows | +${usd.format(curMonthStats.incomeDollars)} | +${usd.format(prevMonthStats.incomeDollars)} | ${incomeDelta >= 0 ? '+' : ''}${usd.format(incomeDelta)} |`,
+        `| - Total Spending | -${usd.format(curMonthStats.spendDollars)} | -${usd.format(prevMonthStats.spendDollars)} | ${spendDelta >= 0 ? '+' : ''}${usd.format(spendDelta)} (${prevMonthStats.spendDollars > 0 ? `${Math.round((spendDelta / prevMonthStats.spendDollars) * 100)}%` : '0%'}) |`,
+        `| **= Net Cashflow** | **${curMonthStats.netDollars >= 0 ? '+' : ''}${usd.format(curMonthStats.netDollars)}** | **${prevMonthStats.netDollars >= 0 ? '+' : ''}${usd.format(prevMonthStats.netDollars)}** | **${netDelta >= 0 ? '+' : ''}${usd.format(netDelta)}** |`,
+        ...(biggestSpikes.length > 0 || biggestDrops.length > 0
           ? [
               '',
-              '**Categories Running Above 3-Month Average:**',
+              `**Category Movers (${monthLabel(curMonthKey)} vs ${monthLabel(prevMonthKey)} & 3-Mo Avg):**`,
+              `| Category | ${monthLabel(curMonthKey)} | ${monthLabel(prevMonthKey)} | 3-Mo Avg | vs Avg |`,
+              `| --- | --- | --- | --- | --- |`,
               ...biggestSpikes.map(
                 (d) =>
-                  `- 📈 **${d.category}**: **${usd.format(d.cur)}** this month vs **${usd.format(d.avg)}/mo** avg (**+${usd.format(d.deltaAvg)}** higher)`
+                  `| 📈 **${d.category}** | ${usd.format(d.cur)} | ${usd.format(d.prev)} | ${usd.format(d.avg)} | +${usd.format(d.deltaAvg)} |`
               ),
-            ]
-          : []),
-        ...(biggestDrops.length > 0
-          ? [
-              '',
-              '**Categories Down vs Last Month:**',
               ...biggestDrops.map(
                 (d) =>
-                  `- 📉 **${d.category}**: **${usd.format(d.cur)}** vs **${usd.format(d.prev)}** last month (**${usd.format(d.deltaPrev)}**)`
+                  `| 📉 **${d.category}** | ${usd.format(d.cur)} | ${usd.format(d.prev)} | ${usd.format(d.avg)} | ${d.deltaPrev >= 0 ? '+' : ''}${usd.format(d.deltaPrev)} vs Sep |`
               ),
             ]
           : []),
@@ -1133,10 +1183,13 @@ export async function analyzeQuestionAndFinances(
           ? [
               '',
               `**Largest Individual Expenses in ${monthLabel(curMonthKey)}:**`,
+              `| Date · Merchant | Category | Amount |`,
+              `| --- | --- | --- |`,
               ...largestCurTxns.map(
                 (t) =>
-                  `- **${t.date}** · **${(t.merchantKey || t.description).slice(0, 32)}** (${t.category || 'Uncategorized'}): **${usdCents.format(Math.abs(t.amount))}**`
+                  `| ${t.date} · **${(t.merchantKey || t.description).slice(0, 26)}** | ${t.category || 'Uncategorized'} | -${usdCents.format(Math.abs(t.amount))} |`
               ),
+              `| **= Top ${largestCurTxns.length} Expenses Subtotal** | **${Math.round((largestCurSum / Math.max(1, curMonthStats.spendDollars)) * 100)}% of ${monthLabel(curMonthKey)} spend** | **-${usdCents.format(largestCurSum)}** |`,
             ]
           : []),
       ].join('\n')
@@ -1152,15 +1205,26 @@ export async function analyzeQuestionAndFinances(
     qLower.includes('cancel')
   ) {
     const topRec = recurringWithStatus.slice(0, 12);
+    const topRecSum = topRec.reduce((s, m) => s + m.monthlyAverage, 0);
     const totalRecMonthly = recurringWithStatus.reduce((s, m) => s + m.monthlyAverage, 0);
+    const otherRecMonthly = Math.max(0, totalRecMonthly - topRecSum);
+
     sections.push(
       [
-        `### Recurring Bills & Subscriptions (${recurringWithStatus.length} detected, ${usd.format(totalRecMonthly)}/mo total · ${paidBills.length} paid, ${unpaidBills.length} still expected in ${monthLabel(curMonthKey)})`,
+        `### Recurring Bills & Subscriptions Math (${paidBills.length} paid, ${unpaidBills.length} left in ${monthLabel(curMonthKey)})`,
+        `| Recurring Bill | Category · ${monthLabel(curMonthKey)} Status | Monthly |`,
+        `| --- | --- | --- |`,
         ...topRec.map(
           (m) =>
-            `- **${m.merchantKey}** (${m.category}): **~${usd.format(m.monthlyAverage)}/mo** (${usd.format(m.monthlyAverage * 12)}/yr) — ${m.status.isPaidThisMonth ? `✅ ${m.status.countdownText || 'Paid this month'}` : `⏳ Expected ${m.status.expectedShortLabel || 'this month'} (${m.status.countdownText || 'unpaid'})`}`
+            `| **${m.merchantKey}** | ${m.category} · ${m.status.isPaidThisMonth ? `✅ ${m.status.countdownText || 'Paid'}` : `⏳ ${m.status.expectedShortLabel || 'Due'} (${m.status.countdownText || 'unpaid'})`} | -${usd.format(m.monthlyAverage)}/mo |`
         ),
-      ].join('\n')
+        recurringWithStatus.length > topRec.length
+          ? `| + ${recurringWithStatus.length - topRec.length} smaller subscriptions | Combined monthly average | -${usd.format(otherRecMonthly)}/mo |`
+          : '',
+        `| **= Total Recurring Bills (${recurringWithStatus.length})** | **${usd.format(totalRecMonthly * 12)}/yr (${usd.format(paidBillsTotalDollars)} paid, ${usd.format(unpaidBillsTotalDollars)} left)** | **-${usd.format(totalRecMonthly)}/mo** |`,
+      ]
+        .filter(Boolean)
+        .join('\n')
     );
   }
 
@@ -1192,13 +1256,15 @@ export async function analyzeQuestionAndFinances(
 
     sections.push(
       [
-        `### Concrete Ways to Save More Each Month`,
-        `- **Current Monthly Safe Remainder:** **${usd.format(monthlySafeRemainder)}/mo** (plus **${usd.format(monthlySavingsOutBaseline)}/mo** already flowing into savings/investments)`,
-        `- **20% Trim on Top Variable Categories:** Reducing your top 5 variable categories by 20% frees up **+${usd.format(trim20Total)}/mo** (**+${usd.format(trim20Total * 12)}/yr**):`,
+        `### Monthly Savings Optimization Math (20% Variable Trim)`,
+        `| Variable Category | 3-Mo Avg Spend | 20% Monthly Savings | Annual Savings |`,
+        `| --- | --- | --- | --- |`,
         ...discretionaryCats.map(
           (c) =>
-            `  - **${c.category}** (~${usd.format(c.avg)}/mo avg): Trimming 20% saves **${usd.format(c.avg * 0.2)}/mo** (${usd.format(c.avg * 0.2 * 12)}/yr)`
+            `| **${c.category}** | ${usd.format(c.avg)}/mo | +${usd.format(c.avg * 0.2)}/mo | +${usd.format(c.avg * 0.2 * 12)}/yr |`
         ),
+        `| **= Extra Savings from 20% Trim** | **Top ${discretionaryCats.length} categories** | **+${usd.format(trim20Total)}/mo** | **+${usd.format(trim20Total * 12)}/yr** |`,
+        `| **= New Monthly Safe Remainder** | **${usd.format(monthlySafeRemainder)}/mo base + ${usd.format(trim20Total)}/mo trim** | **+${usd.format(monthlySafeRemainder + trim20Total)}/mo** | **+${usd.format((monthlySafeRemainder + trim20Total) * 12)}/yr** |`,
       ].join('\n')
     );
   }
@@ -1214,25 +1280,22 @@ export async function analyzeQuestionAndFinances(
     qLower.includes('take home') ||
     qLower.includes('inflow')
   ) {
+    const streamReceivedSum = streamSchedules.reduce((s, i) => s + i.schedule.receivedToDate, 0);
     sections.push(
       [
-        `### Income & Paycheck Schedule Breakdown`,
-        `- **Projected Monthly Net Take-Home Income:** **${usd.format(monthlyNetIncomeBaseline)}/mo** (**${usd.format(monthlyNetIncomeBaseline * 12)}/yr**)`,
-        `- **Actual Inflows in ${timePeriod.label}:** **${usd.format(periodStats.incomeDollars)}**`,
-        `- **${monthLabel(curMonthKey)} Inflows So Far:** **${usd.format(curMonthStats.incomeDollars)}** (${receivedPaychecksCount} paycheck${receivedPaychecksCount === 1 ? '' : 's'} received · **${remainingPaychecksCount}** remaining for **+${usd.format(remainingPaychecksDollars)}**) · **${monthLabel(prevMonthKey)} Inflows:** **${usd.format(prevMonthStats.incomeDollars)}**`,
-        ...(streamSchedules.length > 0
-          ? [
-              '',
-              `**Detected Income Streams & ${monthLabel(curMonthKey)} Schedule:**`,
-              ...streamSchedules.map(({ stream: s, schedule: sch }) => {
-                const nextDays =
-                  sch.upcomingDays.length > 0
-                    ? `Next expected day(s): ${sch.upcomingDays.map((d) => `${curMonthKey}-${String(d).padStart(2, '0')}`).join(', ')}`
-                    : `All ${sch.receivedCount} expected paycheck(s) received this month (last: ${sch.lastDate || 'N/A'})`;
-                return `- **${s.name}** (${s.accountName || 'Checking'} · ${s.frequency || 'monthly'}): **${usd.format(s.monthlyAmount)}/mo** (~${usd.format(sch.netPerPaycheck)}/paycheck) — **${sch.receivedCount}/${sch.expectedCount}** received in ${monthLabel(curMonthKey)} · ${nextDays}`;
-              }),
-            ]
-          : []),
+        `### Income & Paycheck Schedule Math (${monthLabel(curMonthKey)})`,
+        `| Income Stream | Schedule · Next Payday | Received (${monthLabel(curMonthKey)}) | Still Coming | Monthly Baseline |`,
+        `| --- | --- | --- | --- | --- |`,
+        ...streamSchedules.map(({ stream: s, schedule: sch }) => {
+          const nextDays =
+            sch.upcomingDays.length > 0
+              ? `Next: ${sch.upcomingDays.map((d) => `${curMonthKey}-${String(d).padStart(2, '0')}`).join(', ')}`
+              : `All ${sch.receivedCount} landed`;
+          const stillComingAmt = sch.unpaidPaychecks * sch.netPerPaycheck;
+          return `| **${s.name}** | ${s.frequency || 'monthly'} (${sch.receivedCount}/${sch.expectedCount}) · ${nextDays} | +${usd.format(sch.receivedToDate)} | +${usd.format(stillComingAmt)} | +${usd.format(s.monthlyAmount)}/mo |`;
+        }),
+        `| **= Total Payroll Streams** | **${receivedPaychecksCount} received, ${remainingPaychecksCount} remaining** | **+${usd.format(streamReceivedSum)}** | **+${usd.format(remainingPaychecksDollars)}** | **+${usd.format(monthlyNetIncomeBaseline)}/mo** |`,
+        `> **Full Month Projection:** **+${usd.format(curMonthStats.incomeDollars)}** total inflows received so far + **+${usd.format(remainingPaychecksDollars)}** remaining paychecks = **+${usd.format(curMonthStats.incomeDollars + remainingPaychecksDollars)}** expected in ${monthLabel(curMonthKey)} (vs **+${usd.format(prevMonthStats.incomeDollars)}** in ${monthLabel(prevMonthKey)}).`,
       ].join('\n')
     );
   }
@@ -1250,14 +1313,7 @@ export async function analyzeQuestionAndFinances(
     qLower.includes('mortgage') ||
     qLower.includes('payoff')
   ) {
-    const acctLines = activeAccounts.map((a) => {
-      const st = periodStats.byAcct.get(a.id!);
-      const activityNote = st
-        ? ` — Period Spend: **${usd.format(st.spendCents)}**, Inflow: **${usd.format(st.incomeCents)}** (${st.count} txns)`
-        : '';
-      return `- **${a.name}** (${a.type}): Balance **${usd.format(a.currentBalance || 0)}**${activityNote}`;
-    });
-
+    const totalAssets = liquidCashDollars + investmentsDollars + propertyVal;
     const loanLines = activeLoans.map((l) => {
       const rMonthly = (l.rate || 0) / 100 / 12;
       const pmt = l.monthlyPayment || 0;
@@ -1272,23 +1328,37 @@ export async function analyzeQuestionAndFinances(
             ? Math.ceil(-Math.log(1 - (l.principal * rMonthly) / (pmt + 200)) / Math.log(1 + rMonthly))
             : Math.ceil(l.principal / (pmt + 200));
         const monthsSaved = Math.max(0, nMonths - nMonthsExtra200);
-        payoffNote = ` → ~${nMonths} mos (${(nMonths / 12).toFixed(1)} yrs) left${monthsSaved > 0 ? ` (+$200/mo saves **${monthsSaved} mos**)` : ''}`;
+        payoffNote = `~${nMonths} mos (${(nMonths / 12).toFixed(1)}y) left${monthsSaved > 0 ? ` (+$200/mo saves ${monthsSaved}m)` : ''}`;
       }
-      return `- **${l.name}** (${l.type}): **${usd.format(l.principal)}** principal @ **${l.rate}% APR** (${usd.format(pmt)}/mo)${payoffNote}`;
+      return `| **${l.name}** | ${l.rate}% APR · ${usd.format(pmt)}/mo · ${payoffNote} | -${usd.format(l.principal)} |`;
     });
 
     sections.push(
       [
-        `### Accounts, Net Worth & Debt Summary`,
-        `- **Estimated Net Worth:** **${usd.format(netWorthDollars)}**`,
-        `- **Liquid Cash:** **${usd.format(liquidCashDollars)}** (Checking: **${usd.format(checkingCashDollars)}** · Savings: **${usd.format(savingsCashDollars)}**)`,
-        `- **Investments:** **${usd.format(investmentsDollars)}**${propertyVal > 0 ? ` · **Property Value:** **${usd.format(propertyVal)}**` : ''}`,
-        `- **Total Debt:** **${usd.format(totalDebtDollars)}**`,
-        '',
-        '**Accounts & Period Activity:**',
-        ...(acctLines.length > 0 ? acctLines : ['- No active accounts found.']),
-        ...(loanLines.length > 0 ? ['', '**Loans & Payoff Timeline:**', ...loanLines] : []),
-      ].join('\n')
+        `### Net Worth & Balance Sheet Math`,
+        `| Balance Sheet Component | Details | Balance |`,
+        `| --- | --- | --- |`,
+        `| + Checking Cash | ${activeAccounts.filter((a) => a.type === 'checking').length} checking accounts | +${usd.format(checkingCashDollars)} |`,
+        `| + Savings Cash | ${activeAccounts.filter((a) => a.type === 'savings').length} savings accounts | +${usd.format(savingsCashDollars)} |`,
+        `| **= Total Liquid Cash** | **Immediate cash cushion** | **+${usd.format(liquidCashDollars)}** |`,
+        `| + Investment Accounts | ${activeAccounts.filter((a) => a.type === 'investment').length} retirement/brokerage accounts | +${usd.format(investmentsDollars)} |`,
+        propertyVal > 0 ? `| + Real Estate Property | Estimated home value | +${usd.format(propertyVal)} |` : '',
+        `| **= Total Assets** | **Cash + Investments${propertyVal > 0 ? ' + Property' : ''}** | **+${usd.format(totalAssets)}** |`,
+        `| - Total Liabilities / Debt | Mortgages, auto loans & credit | -${usd.format(totalDebtDollars)} |`,
+        `| **= Estimated Net Worth** | **Total Assets minus Total Debt** | **+${usd.format(netWorthDollars)}** |`,
+        ...(loanLines.length > 0
+          ? [
+              '',
+              `**Loans & Payoff Math:**`,
+              `| Loan | Rate · Payment · Payoff | Principal |`,
+              `| --- | --- | --- |`,
+              ...loanLines,
+              `| **= Total Loan Principal** | **${activeLoans.length} active loans** | **-${usd.format(totalDebtDollars)}** |`,
+            ]
+          : []),
+      ]
+        .filter(Boolean)
+        .join('\n')
     );
   }
 
@@ -1305,29 +1375,37 @@ export async function analyzeQuestionAndFinances(
     const topMerchList = Array.from(periodStats.byMerch.entries())
       .sort((a, b) => b[1].spendCents - a[1].spendCents)
       .slice(0, 8);
+    const topMerchTotal = topMerchList.reduce((s, [, v]) => s + v.spendCents, 0);
     const largestSingle = [...periodTxns]
       .filter((t) => t.amount < 0 && !isTransfer(t))
       .sort((a, b) => a.amount - b.amount)
       .slice(0, 6);
+    const largestSingleTotal = largestSingle.reduce((s, t) => s + Math.abs(t.amount), 0);
 
     sections.push(
       [
-        `### Top Merchants & Largest Expenses (${timePeriod.label})`,
-        '**Top Merchants by Total Spend:**',
+        `### Top Merchants & Largest Expenses Math (${timePeriod.label})`,
+        `| Top Merchant | Category · Count | Total Spend |`,
+        `| --- | --- | --- |`,
         ...(topMerchList.length > 0
           ? topMerchList.map(
               ([m, v], i) =>
-                `${i + 1}. **${m}** (${v.category}): **${usd.format(v.spendCents)}** (${v.count} charge${v.count === 1 ? '' : 's'})`
+                `| ${i + 1}. **${m}** | ${v.category} · ${v.count} charge${v.count === 1 ? '' : 's'} | -${usd.format(v.spendCents)} |`
             )
-          : ['- No merchant spending in this range.']),
+          : [`| No merchant spending | — | $0 |`]),
+        `| **= Top ${topMerchList.length} Merchants Subtotal** | **${periodStats.spendDollars > 0 ? Math.round((topMerchTotal / periodStats.spendDollars) * 100) : 0}% of period spend** | **-${usd.format(topMerchTotal)}** |`,
+        `| **= Total Period Spend** | **All ${periodTxns.length} transactions** | **-${usd.format(periodStats.spendDollars)}** |`,
         ...(largestSingle.length > 0
           ? [
               '',
-              '**Largest Single Transactions:**',
+              `**Largest Single Transactions (${timePeriod.label}):**`,
+              `| Date · Merchant | Category | Amount |`,
+              `| --- | --- | --- |`,
               ...largestSingle.map(
                 (t) =>
-                  `- **${t.date}** · **${(t.merchantKey || t.description).slice(0, 32)}** (${t.category || 'Uncategorized'}): **${usdCents.format(Math.abs(t.amount))}**`
+                  `| ${t.date} · **${(t.merchantKey || t.description).slice(0, 26)}** | ${t.category || 'Uncategorized'} | -${usdCents.format(Math.abs(t.amount))} |`
               ),
+              `| **= Top ${largestSingle.length} Charges Subtotal** | **Single largest expenses** | **-${usdCents.format(largestSingleTotal)}** |`,
             ]
           : []),
       ].join('\n')
@@ -1338,32 +1416,33 @@ export async function analyzeQuestionAndFinances(
   if (sections.length === 0 || qLower.includes('where is') || qLower.includes('money going') || qLower.includes('summary') || qLower.includes('overview')) {
     const sortedCats = Array.from(periodStats.byCat.entries())
       .sort((a, b) => b[1].spendCents - a[1].spendCents);
-    const sortedMerchs = Array.from(periodStats.byMerch.entries())
-      .sort((a, b) => b[1].spendCents - a[1].spendCents);
+    const top8Cats = sortedCats.slice(0, 8);
+    const top8Sum = top8Cats.reduce((s, [, v]) => s + v.spendCents, 0);
+    const otherCatsSum = Math.max(0, periodStats.spendDollars - top8Sum);
 
     sections.push(
       [
-        `### Spending & Cashflow Breakdown (${timePeriod.label})`,
-        `- **Total Spend:** **${usd.format(periodStats.spendDollars)}** across **${periodTxns.length}** transactions`,
-        `- **Total Income:** **${usd.format(periodStats.incomeDollars)}**`,
-        `- **Net Cashflow:** **${periodStats.netDollars >= 0 ? '+' : ''}${usd.format(periodStats.netDollars)}**`,
-        `- **Monthly Safe Remainder:** **${usd.format(monthlySafeRemainder)}/mo** (after **${usd.format(monthlyRecurringBaseline)}** fixed bills, **${usd.format(monthlyVariableBaseline)}** variable budget, and **${usd.format(monthlySavingsOutBaseline)}** savings transfers)`,
-        uncategorizedCount > 0 ? `- **Uncategorized Queue:** **${uncategorizedCount}** transactions waiting in Sort` : '',
+        `### Spending & Cashflow Math (${timePeriod.label})`,
+        `| Cashflow Component | Details | Amount |`,
+        `| --- | --- | --- |`,
+        `| + Total Inflows / Income | Deposits in period | +${usd.format(periodStats.incomeDollars)} |`,
+        `| - Total Spending | ${periodTxns.length} transactions | -${usd.format(periodStats.spendDollars)} |`,
+        `| **= Net Period Cashflow** | **Inflows minus Spending** | **${periodStats.netDollars >= 0 ? '+' : ''}${usd.format(periodStats.netDollars)}** |`,
         '',
-        '**Where Your Money Went (Top Categories):**',
-        ...(sortedCats.slice(0, 8).map(([cat, v]) => {
+        `**Where Your Money Went (Category Math):**`,
+        `| Category | Share · 3-Mo Avg | Spend |`,
+        `| --- | --- | --- |`,
+        ...top8Cats.map(([cat, v]) => {
           const dollars = v.spendCents;
           const pct = periodStats.spendDollars > 0 ? Math.round((dollars / periodStats.spendDollars) * 100) : 0;
           const avg = trailingAvgByCat.get(cat);
-          const avgNote = avg ? ` · 3-Mo Avg: ${usd.format(avg)}/mo` : '';
-          return `- **${cat}**: **${usd.format(dollars)}** (${pct}% of spend, ${v.count} txns${avgNote})`;
-        }) || ['- No spending recorded.']),
-        '',
-        '**Top Merchants:**',
-        ...(sortedMerchs.slice(0, 6).map(([m, v]) => {
-          const dollars = v.spendCents;
-          return `- **${m}** (${v.category}): **${usd.format(dollars)}** (${v.count}x)`;
-        }) || ['- No merchants recorded.']),
+          const avgNote = avg ? ` · Avg ${usd.format(avg)}/mo` : '';
+          return `| **${cat}** (${v.count}x) | ${pct}% of spend${avgNote} | -${usd.format(dollars)} |`;
+        }),
+        sortedCats.length > 8
+          ? `| + ${sortedCats.length - 8} smaller categories | ${periodStats.spendDollars > 0 ? Math.round((otherCatsSum / periodStats.spendDollars) * 100) : 0}% of spend | -${usd.format(otherCatsSum)} |`
+          : '',
+        `| **= Total Spending** | **100% (${periodTxns.length} txns)** | **-${usd.format(periodStats.spendDollars)}** |`,
       ]
         .filter(Boolean)
         .join('\n')
