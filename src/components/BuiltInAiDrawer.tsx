@@ -9,7 +9,6 @@ import {
   Button,
   Chip,
   Paper,
-  CircularProgress,
   LinearProgress,
   Collapse,
   Tooltip,
@@ -59,6 +58,8 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [scanStage, setScanStage] = useState(0);
+  const [activePromptText, setActivePromptText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,10 +74,27 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
   }, [open]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!isGenerating) {
+      setScanStage(0);
+      return;
     }
-  }, [messages, isGenerating]);
+    const timer = window.setTimeout(() => {
+      setScanStage(1);
+    }, 260);
+    return () => window.clearTimeout(timer);
+  }, [isGenerating]);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const el = scrollRef.current;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    const followTimer = window.setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      }
+    }, 380);
+    return () => window.clearTimeout(followTimer);
+  }, [messages, isGenerating, scanStage]);
 
   const handleSend = async (questionText?: string) => {
     const q = (questionText ?? input).trim();
@@ -96,27 +114,38 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
     };
 
     const priorHistory = messages.map((m) => ({ role: m.role, content: m.content }));
+    setActivePromptText(q);
+    setScanStage(0);
     setMessages((prev) => [...prev, userMsg, placeholderMsg]);
     setIsGenerating(true);
 
+    const minScanDelay = new Promise<void>((resolve) => window.setTimeout(resolve, 540));
+    let streamedChunks = 0;
+
     try {
-      const result = await askBuiltInFinancialAi({
-        question: q,
-        history: priorHistory,
-        data: { accounts, categories, budgets, loans },
-        onDownloadProgress: (pct) => {
-          setDownloadProgress(pct);
-          if (pct >= 100) {
-            setDownloadProgress(null);
-            setAvailability('available');
-          }
-        },
-        onChunk: (partial) => {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantMsgId ? { ...m, content: partial } : m))
-          );
-        },
-      });
+      const [result] = await Promise.all([
+        askBuiltInFinancialAi({
+          question: q,
+          history: priorHistory,
+          data: { accounts, categories, budgets, loans },
+          onDownloadProgress: (pct) => {
+            setDownloadProgress(pct);
+            if (pct >= 100) {
+              setDownloadProgress(null);
+              setAvailability('available');
+            }
+          },
+          onChunk: (partial) => {
+            streamedChunks++;
+            if (streamedChunks > 2) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantMsgId ? { ...m, content: partial } : m))
+              );
+            }
+          },
+        }),
+        minScanDelay,
+      ]);
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -153,6 +182,87 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
           display: 'flex',
           flexDirection: 'column',
           bgcolor: 'background.paper',
+          '@keyframes aiSparklePulse': {
+            '0%, 100%': { transform: 'scale(1) rotate(0deg)', opacity: 0.9 },
+            '50%': { transform: 'scale(1.18) rotate(12deg)', opacity: 1 },
+          },
+          '@keyframes aiShimmerSweep': {
+            '0%': { backgroundPosition: '-200% 0' },
+            '100%': { backgroundPosition: '200% 0' },
+          },
+          '@keyframes aiCardReveal': {
+            '0%': {
+              opacity: 0,
+              transform: 'translateY(10px) scale(0.985)',
+              boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.35), 0 12px 28px -8px rgba(59, 130, 246, 0.22)',
+            },
+            '60%': {
+              opacity: 1,
+              transform: 'translateY(-1px) scale(1.003)',
+              boxShadow: '0 0 0 1px rgba(16, 185, 129, 0.32), 0 8px 20px -6px rgba(16, 185, 129, 0.16)',
+            },
+            '100%': {
+              opacity: 1,
+              transform: 'translateY(0) scale(1)',
+              boxShadow: 'none',
+            },
+          },
+          '@keyframes aiBlockSlideUp': {
+            '0%': {
+              opacity: 0,
+              transform: 'translateY(8px)',
+              filter: 'blur(2px)',
+            },
+            '100%': {
+              opacity: 1,
+              transform: 'translateY(0)',
+              filter: 'blur(0px)',
+            },
+          },
+          '@keyframes aiVerdictPop': {
+            '0%': {
+              opacity: 0,
+              transform: 'translateY(6px) scale(0.98)',
+            },
+            '70%': {
+              opacity: 1,
+              transform: 'translateY(0) scale(1.01)',
+            },
+            '100%': {
+              opacity: 1,
+              transform: 'translateY(0) scale(1)',
+            },
+          },
+          '@keyframes aiRowSlideIn': {
+            '0%': {
+              opacity: 0,
+              transform: 'translateX(-8px)',
+            },
+            '100%': {
+              opacity: 1,
+              transform: 'translateX(0)',
+            },
+          },
+          '@keyframes aiTotalDopaminePop': {
+            '0%': {
+              opacity: 0,
+              transform: 'scale(0.975)',
+              backgroundColor: 'rgba(16, 185, 129, 0.22)',
+            },
+            '65%': {
+              opacity: 1,
+              transform: 'scale(1.012)',
+              backgroundColor: 'rgba(16, 185, 129, 0.14)',
+            },
+            '100%': {
+              opacity: 1,
+              transform: 'scale(1)',
+            },
+          },
+          '@keyframes aiUserBubblePop': {
+            '0%': { opacity: 0, transform: 'translateY(6px) scale(0.96)' },
+            '100%': { opacity: 1, transform: 'translateY(0) scale(1)' },
+          },
         },
       }}
       sx={{ zIndex: (theme) => theme.zIndex.drawer + 3 }}
@@ -171,7 +281,13 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
         }}
       >
         <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-          <AutoAwesomeIcon color="primary" sx={{ fontSize: 20 }} />
+          <AutoAwesomeIcon
+            color="primary"
+            sx={{
+              fontSize: 20,
+              animation: isGenerating ? 'aiSparklePulse 1.1s ease-in-out infinite' : 'none',
+            }}
+          />
           <Box sx={{ minWidth: 0 }}>
             <Stack direction="row" spacing={0.75} alignItems="center">
               <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
@@ -287,9 +403,11 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                     px: 1.5,
                     borderColor: 'divider',
                     color: 'text.primary',
+                    transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
                     '&:hover': {
                       borderColor: 'primary.main',
                       bgcolor: 'action.hover',
+                      transform: 'translateX(3px)',
                     },
                   }}
                 >
@@ -299,39 +417,47 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
             </Stack>
           </Box>
         ) : (
-          messages.map((m) => (
-            <Box
-              key={m.id}
-              sx={{
-                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: m.role === 'user' ? '85%' : '100%',
-                width: m.role === 'assistant' ? '100%' : 'auto',
-              }}
-            >
-              <Paper
-                elevation={0}
+          messages.map((m) => {
+            const isLoadingBubble = m.role === 'assistant' && !m.content && isGenerating;
+            return (
+              <Box
+                key={m.id}
                 sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: m.role === 'user' ? 'primary.main' : 'action.hover',
-                  color: m.role === 'user' ? 'primary.contrastText' : 'text.primary',
-                  border: m.role === 'assistant' ? '1px solid' : 'none',
-                  borderColor: 'divider',
+                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: m.role === 'user' ? '85%' : '100%',
+                  width: m.role === 'assistant' ? '100%' : 'auto',
+                  animation:
+                    m.role === 'user'
+                      ? 'aiUserBubblePop 0.22s cubic-bezier(0.16, 1, 0.3, 1) both'
+                      : 'none',
                 }}
               >
-                {m.role === 'assistant' && !m.content && isGenerating ? (
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <CircularProgress size={14} />
-                    <Typography variant="body2" color="text.secondary">
-                      Analyzing your finances...
-                    </Typography>
-                  </Stack>
-                ) : (
-                  <FormattedAiMessage content={m.content} isUser={m.role === 'user'} />
-                )}
-              </Paper>
-            </Box>
-          ))
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    bgcolor: m.role === 'user' ? 'primary.main' : 'action.hover',
+                    color: m.role === 'user' ? 'primary.contrastText' : 'text.primary',
+                    border: m.role === 'assistant' ? '1px solid' : 'none',
+                    borderColor: isLoadingBubble ? 'primary.main' : 'divider',
+                    animation:
+                      m.role === 'assistant' && m.content
+                        ? 'aiCardReveal 0.65s cubic-bezier(0.16, 1, 0.3, 1) both'
+                        : 'none',
+                  }}
+                >
+                  {isLoadingBubble ? (
+                    <AiLedgerScanner prompt={activePromptText} stage={scanStage} />
+                  ) : (
+                    <FormattedAiMessage key={m.content ? 'ready' : 'empty'} content={m.content} isUser={m.role === 'user'} />
+                  )}
+                </Paper>
+              </Box>
+            );
+          })
         )}
       </Box>
 
@@ -379,6 +505,114 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
   );
 }
 
+function AiLedgerScanner({ prompt, stage }: { prompt: string; stage: number }) {
+  const lower = prompt.toLowerCase();
+  let steps: [string, string] = [
+    'Scanning accounts & posted transactions...',
+    'Reconciling recurring bills & math ledger...',
+  ];
+  if (lower.includes('$') || lower.includes('spend') || lower.includes('afford') || lower.includes('hurt')) {
+    steps = [
+      'Checking liquid cash & credit card balances...',
+      'Simulating purchase impact & upcoming bill reserve...',
+    ];
+  } else if (lower.includes('upcoming') || lower.includes('payment') || lower.includes('bill') || lower.includes('due')) {
+    steps = [
+      'Scanning recurring bills & loan schedules...',
+      'Projecting remaining month-end obligations...',
+    ];
+  } else if (lower.includes('hit') || lower.includes('recent') || lower.includes('charge')) {
+    steps = [
+      'Auditing recent posted transactions...',
+      'Ranking largest outflows & anomalies...',
+    ];
+  } else if (lower.includes('compare') || lower.includes('last month')) {
+    steps = [
+      'Aggregating current vs. prior month ledgers...',
+      'Computing category deltas & net cashflow...',
+    ];
+  }
+
+  return (
+    <Box sx={{ py: 0.25 }}>
+      {/* Top shimmer accent bar */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 3,
+          background:
+            'linear-gradient(90deg, transparent 0%, rgba(59,130,246,0.85) 35%, rgba(16,185,129,0.9) 65%, transparent 100%)',
+          backgroundSize: '200% 100%',
+          animation: 'aiShimmerSweep 1.1s linear infinite',
+        }}
+      />
+      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1 }}>
+        <AutoAwesomeIcon
+          color="primary"
+          sx={{
+            fontSize: 18,
+            animation: 'aiSparklePulse 0.9s ease-in-out infinite',
+          }}
+        />
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 700,
+            fontSize: '0.82rem',
+            color: 'text.primary',
+            animation: 'aiBlockSlideUp 0.22s ease-out both',
+          }}
+          key={stage}
+        >
+          {steps[stage] ?? steps[0]}
+        </Typography>
+      </Stack>
+
+      {/* Mini skeleton math ledger preview */}
+      <Stack
+        spacing={0.6}
+        sx={{
+          p: 1,
+          borderRadius: 1.25,
+          bgcolor: 'background.paper',
+          border: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        {[0.72, 0.56, 0.84].map((w, idx) => (
+          <Stack key={idx} direction="row" justifyContent="space-between" alignItems="center">
+            <Box
+              sx={{
+                height: 8,
+                width: `${Math.round(w * 60)}%`,
+                borderRadius: 1,
+                background:
+                  'linear-gradient(90deg, rgba(148,163,184,0.16) 0%, rgba(148,163,184,0.34) 50%, rgba(148,163,184,0.16) 100%)',
+                backgroundSize: '200% 100%',
+                animation: 'aiShimmerSweep 1.2s linear infinite',
+              }}
+            />
+            <Box
+              sx={{
+                height: 8,
+                width: '22%',
+                borderRadius: 1,
+                background:
+                  'linear-gradient(90deg, rgba(59,130,246,0.14) 0%, rgba(16,185,129,0.32) 50%, rgba(59,130,246,0.14) 100%)',
+                backgroundSize: '200% 100%',
+                animation: 'aiShimmerSweep 1.2s linear infinite',
+              }}
+            />
+          </Stack>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
 function FormattedAiMessage({ content, isUser }: { content: string; isUser: boolean }) {
   if (isUser) {
     return (
@@ -391,6 +625,7 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
   let i = 0;
+  let animIndex = 0;
 
   while (i < lines.length) {
     const trimmed = lines[i].trim();
@@ -408,16 +643,26 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
         tableLines.push(lines[i].trim());
         i++;
       }
-      elements.push(<MathLedgerTable key={`tbl-${i}`} rawRows={tableLines} />);
+      const blockDelay = Math.min(animIndex * 55, 360);
+      animIndex++;
+      elements.push(<MathLedgerTable key={`tbl-${i}`} rawRows={tableLines} baseDelayMs={blockDelay} />);
       continue;
     }
 
     if (trimmed.startsWith('### ')) {
+      const delay = Math.min(animIndex * 55, 360);
+      animIndex++;
       elements.push(
         <Typography
           key={`h3-${i}`}
           variant="subtitle2"
-          sx={{ fontWeight: 700, pt: elements.length > 0 ? 0.75 : 0, pb: 0.25 }}
+          sx={{
+            fontWeight: 700,
+            pt: elements.length > 0 ? 0.75 : 0,
+            pb: 0.25,
+            animation: 'aiBlockSlideUp 0.34s cubic-bezier(0.16, 1, 0.3, 1) both',
+            animationDelay: `${delay}ms`,
+          }}
         >
           {renderInlineBold(trimmed.slice(4))}
         </Typography>
@@ -427,11 +672,19 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
     }
 
     if (trimmed.startsWith('## ')) {
+      const delay = Math.min(animIndex * 55, 360);
+      animIndex++;
       elements.push(
         <Typography
           key={`h2-${i}`}
           variant="subtitle2"
-          sx={{ fontWeight: 700, pt: elements.length > 0 ? 0.75 : 0, pb: 0.25 }}
+          sx={{
+            fontWeight: 700,
+            pt: elements.length > 0 ? 0.75 : 0,
+            pb: 0.25,
+            animation: 'aiBlockSlideUp 0.34s cubic-bezier(0.16, 1, 0.3, 1) both',
+            animationDelay: `${delay}ms`,
+          }}
         >
           {renderInlineBold(trimmed.slice(3))}
         </Typography>
@@ -441,21 +694,34 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
     }
 
     if (trimmed.startsWith('> ')) {
+      const delay = Math.min(animIndex * 55, 360);
+      animIndex++;
+      const quoteBody = trimmed.slice(2);
+      const isPositiveVerdict = /yes|comfortable|ahead|lower|surplus/i.test(quoteBody);
+      const isCautionVerdict = /tight|Wait|caution|higher|exceed/i.test(quoteBody);
+
       elements.push(
         <Box
           key={`q-${i}`}
           sx={{
             px: 1.25,
-            py: 0.75,
-            my: 0.25,
-            borderRadius: 1,
+            py: 0.85,
+            my: 0.35,
+            borderRadius: 1.25,
             bgcolor: 'background.paper',
-            borderLeft: '3px solid',
-            borderColor: 'primary.main',
+            borderLeft: '3.5px solid',
+            borderColor: isPositiveVerdict
+              ? 'success.main'
+              : isCautionVerdict
+                ? 'warning.main'
+                : 'primary.main',
+            boxShadow: '0 2px 10px -4px rgba(0,0,0,0.12)',
+            animation: 'aiVerdictPop 0.42s cubic-bezier(0.16, 1, 0.3, 1) both',
+            animationDelay: `${delay}ms`,
           }}
         >
           <Typography variant="body2" sx={{ lineHeight: 1.45, fontSize: '0.84rem' }}>
-            {renderInlineBold(trimmed.slice(2))}
+            {renderInlineBold(quoteBody)}
           </Typography>
         </Box>
       );
@@ -464,8 +730,20 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
     }
 
     if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      const delay = Math.min(animIndex * 45, 420);
+      animIndex++;
       elements.push(
-        <Typography key={`li-${i}`} variant="body2" sx={{ pl: 1, lineHeight: 1.45, fontSize: '0.83rem' }}>
+        <Typography
+          key={`li-${i}`}
+          variant="body2"
+          sx={{
+            pl: 1,
+            lineHeight: 1.45,
+            fontSize: '0.83rem',
+            animation: 'aiBlockSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
+            animationDelay: `${delay}ms`,
+          }}
+        >
           • {renderInlineBold(trimmed.slice(2))}
         </Typography>
       );
@@ -473,8 +751,20 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
       continue;
     }
 
+    const delay = Math.min(animIndex * 50, 380);
+    animIndex++;
     elements.push(
-      <Typography key={`p-${i}`} variant="body2" sx={{ lineHeight: 1.45, fontSize: '0.84rem', pt: 0.25 }}>
+      <Typography
+        key={`p-${i}`}
+        variant="body2"
+        sx={{
+          lineHeight: 1.45,
+          fontSize: '0.84rem',
+          pt: 0.25,
+          animation: 'aiBlockSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
+          animationDelay: `${delay}ms`,
+        }}
+      >
         {renderInlineBold(lines[i])}
       </Typography>
     );
@@ -484,7 +774,7 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
   return <Stack spacing={0.5}>{elements}</Stack>;
 }
 
-function MathLedgerTable({ rawRows }: { rawRows: string[] }) {
+function MathLedgerTable({ rawRows, baseDelayMs = 0 }: { rawRows: string[]; baseDelayMs?: number }) {
   const parsedRows = rawRows
     .map((r) =>
       r
@@ -519,6 +809,8 @@ function MathLedgerTable({ rawRows }: { rawRows: string[] }) {
         borderColor: 'divider',
         bgcolor: 'background.paper',
         overflowX: 'auto',
+        animation: 'aiBlockSlideUp 0.36s cubic-bezier(0.16, 1, 0.3, 1) both',
+        animationDelay: `${baseDelayMs}ms`,
       }}
     >
       <Box
@@ -572,6 +864,7 @@ function MathLedgerTable({ rawRows }: { rawRows: string[] }) {
               firstPlain.startsWith('=') ||
               firstPlain.startsWith('Total') ||
               firstPlain.startsWith('Subtotal');
+            const rowDelay = baseDelayMs + 70 + rIdx * 48;
 
             return (
               <Box
@@ -581,6 +874,10 @@ function MathLedgerTable({ rawRows }: { rawRows: string[] }) {
                   borderTop: isTotalRow ? '1.5px solid' : rIdx > 0 ? '1px solid' : 'none',
                   borderColor: isTotalRow ? 'text.secondary' : 'divider',
                   bgcolor: isTotalRow ? 'action.selected' : 'transparent',
+                  animation: isTotalRow
+                    ? 'aiTotalDopaminePop 0.52s cubic-bezier(0.16, 1, 0.3, 1) both'
+                    : 'aiRowSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both',
+                  animationDelay: `${rowDelay}ms`,
                 }}
               >
                 {row.map((cell, cIdx) => {
@@ -594,7 +891,7 @@ function MathLedgerTable({ rawRows }: { rawRows: string[] }) {
                       component="td"
                       key={cIdx}
                       sx={{
-                        py: isTotalRow ? 0.75 : 0.55,
+                        py: isTotalRow ? 0.8 : 0.55,
                         px: 1,
                         textAlign: numAlign ? 'right' : 'left',
                         fontWeight: isTotalRow || numAlign ? 700 : cIdx === 0 ? 600 : 400,
