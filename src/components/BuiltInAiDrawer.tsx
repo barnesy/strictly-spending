@@ -34,10 +34,12 @@ interface ChatMessage {
 }
 
 const STARTER_PROMPTS = [
-  'Where is most of my money going?',
-  'How is my budget & safe spend looking?',
-  'Summarize my net worth, cash, and debt',
-  'What are my top merchants this period?',
+  'How does this month compare to last month?',
+  'How much did I spend on food & eating out?',
+  'Can I afford a $500 purchase right now?',
+  'What are my recurring bills & subscriptions?',
+  'Where can I cut back to save more each month?',
+  'Summarize my net worth, cash, and debt payoff',
 ];
 
 interface BuiltInAiDrawerProps {
