@@ -804,16 +804,76 @@ export async function analyzeQuestionAndFinances(
   // Build ONE targeted, punchy roast + compact math table based on primary question intent
   let synthesizedMarkdownReport = '';
 
+  const isMortgageTradeoffAsk =
+    qLower.includes('threw half') ||
+    qLower.includes('throw half') ||
+    qLower.includes('extra mortgage') ||
+    qLower.includes('extra payment') ||
+    qLower.includes('years off') ||
+    qLower.includes('shave') ||
+    (qLower.includes('mortgage') && (qLower.includes('instead') || qLower.includes('half') || qLower.includes('pay off')));
+
+  const isWorkHoursAsk =
+    qLower.includes('hours of my life') ||
+    qLower.includes('hours at work') ||
+    qLower.includes('workdays') ||
+    (qLower.includes('convert') && qLower.includes('hours')) ||
+    qLower.includes('hourly');
+
+  const isMicroSwipesAsk =
+    qLower.includes('under $25') ||
+    qLower.includes('under 25') ||
+    qLower.includes('harmless') ||
+    qLower.includes('little swipes') ||
+    qLower.includes('tiny swipes') ||
+    qLower.includes('thousand swipes') ||
+    qLower.includes('small purchases');
+
+  const isWeekendVsWeekdayAsk =
+    qLower.includes('weekend') ||
+    qLower.includes('weekday') ||
+    qLower.includes('friday') ||
+    qLower.includes('monday');
+
+  const isWorstDayAsk =
+    qLower.includes('worst spending day') ||
+    qLower.includes('most expensive day') ||
+    qLower.includes('worst day') ||
+    qLower.includes('crime scene') ||
+    qLower.includes('48 hours');
+
+  const isMerchantOwnerAsk =
+    qLower.includes('which merchant') ||
+    qLower.includes('piece of my paycheck') ||
+    qLower.includes('owns me') ||
+    qLower.includes('top merchant') ||
+    qLower.includes('biggest merchant');
+
+  const isRunwayAsk =
+    qLower.includes('days would my cash last') ||
+    qLower.includes('cash last') ||
+    qLower.includes('runway') ||
+    qLower.includes('paycheck stopped') ||
+    qLower.includes('lost my income') ||
+    qLower.includes('emergency fund');
+
+  const isLastMonthReceiptAsk =
+    qLower.includes('every category last month') ||
+    qLower.includes('categories last month') ||
+    qLower.includes('spent last month by category');
+
   const isAffordOrImpulseAsk =
-    parsedDollarAmount !== null ||
-    qLower.includes('afford') ||
-    qLower.includes('talk me out') ||
-    qLower.includes('impulse') ||
-    qLower.includes('what if') ||
-    qLower.includes('can i buy') ||
-    qLower.includes('can i spend') ||
-    qLower.includes('not hurt') ||
-    qLower.includes('splurge');
+    !isMicroSwipesAsk &&
+    !isMortgageTradeoffAsk &&
+    (parsedDollarAmount !== null ||
+      qLower.includes('afford') ||
+      qLower.includes('talk me out') ||
+      qLower.includes('impulse') ||
+      qLower.includes('what if') ||
+      qLower.includes('can i buy') ||
+      qLower.includes('can i spend') ||
+      qLower.includes('not hurt') ||
+      qLower.includes('splurge'));
 
   const isUpcomingBillsAsk =
     qLower.includes('coming up') ||
@@ -842,21 +902,314 @@ export async function analyzeQuestionAndFinances(
     qLower.includes('cancel');
 
   const isCompareAsk =
-    qLower.includes('compare') ||
-    qLower.includes('last month') ||
-    qLower.includes('spike') ||
-    qLower.includes('trend');
+    !isWeekendVsWeekdayAsk &&
+    !isLastMonthReceiptAsk &&
+    (qLower.includes('compare') ||
+      qLower.includes('last month') ||
+      qLower.includes('spike') ||
+      qLower.includes('trend'));
 
   const isDebtOrNetWorthAsk =
-    qLower.includes('net worth') ||
-    qLower.includes('reality check') ||
-    qLower.includes('debt') ||
-    qLower.includes('loan') ||
-    qLower.includes('mortgage') ||
-    qLower.includes('payoff');
+    !isMortgageTradeoffAsk &&
+    (qLower.includes('net worth') ||
+      qLower.includes('reality check') ||
+      qLower.includes('debt') ||
+      qLower.includes('loan') ||
+      qLower.includes('mortgage') ||
+      qLower.includes('payoff'));
 
+  // A. 🏠 Tacos vs. Your Mortgage / Loans (Amortization & Extra Principal Tradeoff)
+  if (isMortgageTradeoffAsk) {
+    const targetLoan =
+      activeLoans.find((l) => l.type === 'house') ||
+      activeLoans[0] || {
+        name: 'Primary Mortgage / Debt',
+        principal: totalDebtDollars > 0 ? totalDebtDollars : 285000,
+        rate: 6.25,
+        monthlyPayment: totalDebtDollars > 0 ? Math.max(450, Math.round(totalDebtDollars * 0.0065)) : 1850,
+      };
+    const top2Disc = discretionaryCats.slice(0, 2);
+    const top2CombinedAvg = top2Disc.reduce((s, c) => s + Math.max(c.spend, c.avg), 0);
+    const habitLabel = top2Disc.map((c) => c.category).join(' & ') || 'Dining & Shopping';
+    const extraMonthly = parsedDollarAmount ?? Math.max(150, Math.round((top2CombinedAvg || 600) * 0.5));
+
+    const P = Math.max(1000, targetLoan.principal || 250000);
+    const r = Math.max(0.03, (targetLoan.rate || 6.0) / 100) / 12;
+    const minPaymentNeeded = Math.ceil(P * r + 50);
+    const M0 = Math.max(minPaymentNeeded, targetLoan.monthlyPayment || Math.round(P * 0.0065));
+    const M1 = M0 + extraMonthly;
+
+    const calcMonths = (pmt: number) =>
+      r > 0 && pmt > P * r
+        ? Math.ceil(-Math.log(1 - (P * r) / pmt) / Math.log(1 + r))
+        : Math.ceil(P / pmt);
+
+    const n0 = calcMonths(M0);
+    const n1 = calcMonths(M1);
+    const monthsShaved = Math.max(1, n0 - n1);
+    const yearsShaved = (monthsShaved / 12).toFixed(1);
+    const interest0 = Math.max(0, n0 * M0 - P);
+    const interest1 = Math.max(0, n1 * M1 - P);
+    const interestSaved = Math.max(0, interest0 - interest1);
+
+    synthesizedMarkdownReport = [
+      `### Tacos vs. Freedom: ${targetLoan.name} Payoff Math`,
+      `> 🏠 **Redirecting half of your ${habitLabel} habit (+${usd.format(extraMonthly)}/mo) shaves ${yearsShaved} years (${monthsShaved} mos) off your ${targetLoan.name} and erases ${usd.format(interestSaved)} in pure bank interest.** Stop tipping the bank just so you can impulse-swipe.`,
+      `| Payoff Scenario | Timeline · Total Interest | Monthly Payment |`,
+      `| --- | --- | --- |`,
+      `| Current ${targetLoan.name} Path | ${n0} mos (${(n0 / 12).toFixed(1)} yrs) · ${usd.format(interest0)} interest | -${usd.format(M0)}/mo |`,
+      `| + Redirect 50% of ${habitLabel} | Cut from ${usd.format(top2CombinedAvg || extraMonthly * 2)}/mo burn | +${usd.format(extraMonthly)}/mo |`,
+      `| New Accelerated Path | ${n1} mos (${(n1 / 12).toFixed(1)} yrs) · ${usd.format(interest1)} interest | -${usd.format(M1)}/mo |`,
+      `| **= Freedom & Interest Saved** | **Paid off ${yearsShaved} yrs (${monthsShaved} mos) sooner** | **+${usd.format(interestSaved)} saved** |`,
+      `- 💡 **Guaranteed Return:** Every extra dollar on a **${targetLoan.rate || 6.0}%** loan earns an instant, risk-free **${targetLoan.rate || 6.0}%** return.`,
+    ].join('\n');
+  }
+  // B. ⏱️ Life-Energy Math ("Convert my spending into hours of my life at work")
+  else if (isWorkHoursAsk) {
+    const netMonthly = Math.max(
+      2800,
+      monthlyNetIncomeBaseline || curMonthStats.incomeDollars || prevMonthStats.incomeDollars || 5200
+    );
+    const hourlyNet = netMonthly / 160;
+    const totalVarHours = curVariableSpent / hourlyNet;
+    const totalVarDays = totalVarHours / 8;
+    const top4 = discretionaryCats.slice(0, 4);
+
+    synthesizedMarkdownReport = [
+      `### Life-Energy Audit: Hours Worked for ${monthLabel(curMonthKey)} Spend`,
+      `> ⏱️ **At ~${usd.format(hourlyNet)}/hr after taxes, you sat at work for ${totalVarHours.toFixed(1)} hours (${totalVarDays.toFixed(1)} full workdays) this month just to pay for variable spending (-${usd.format(curVariableSpent)}).** Next time you tap your card, ask if it's worth another Monday morning meeting.`,
+      `| Category (${monthLabel(curMonthKey)}) | Life Energy Cost (at ${usd.format(hourlyNet)}/hr) | Dollars Burned |`,
+      `| --- | --- | --- |`,
+      ...(top4.length > 0
+        ? top4.map(
+            (c) =>
+              `| **${c.category}** (${c.count}x) | **${(c.spend / hourlyNet).toFixed(1)} hrs** (${(c.spend / hourlyNet / 8).toFixed(1)} workdays) | -${usd.format(c.spend)} |`
+          )
+        : [`| Variable spending | 0.0 hrs | $0 |`]),
+      `| **= Total Variable Work Time** | **${totalVarHours.toFixed(1)} hrs (${totalVarDays.toFixed(1)} 8-hr workdays)** | **-${usd.format(curVariableSpent)}** |`,
+      `- 💡 **Rule of Thumb:** Every **${usd.format(Math.round(hourlyNet * 2))}** impulse buy costs you **2 hours** of your life that you never get back.`,
+    ].join('\n');
+  }
+  // C. ☕ Death by a Thousand Swipes (Under-$25 Micro-Leak Audit)
+  else if (isMicroSwipesAsk) {
+    const pool = curMonthTxns.filter((t) => t.amount < 0 && !isTransfer(t)).length >= 5 ? curMonthTxns : periodTxns;
+    const microTxns = pool.filter((t) => t.amount < 0 && !isTransfer(t) && Math.abs(t.amount) <= 25);
+    const microTotal = microTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
+    const microAvg = microTxns.length > 0 ? microTotal / microTxns.length : 0;
+    const annualMicro = microTotal * 12;
+
+    const byMicroMerch = new Map<string, { sum: number; count: number }>();
+    for (const t of microTxns) {
+      const mk = (t.merchantKey || t.description || 'Unknown').trim();
+      const prev = byMicroMerch.get(mk) || { sum: 0, count: 0 };
+      prev.sum += Math.abs(t.amount);
+      prev.count += 1;
+      byMicroMerch.set(mk, prev);
+    }
+    const topMicro = Array.from(byMicroMerch.entries())
+      .sort((a, b) => b[1].sum - a[1].sum)
+      .slice(0, 4);
+    const topMicroSum = topMicro.reduce((s, [, v]) => s + v.sum, 0);
+    const otherMicroSum = Math.max(0, microTotal - topMicroSum);
+
+    synthesizedMarkdownReport = [
+      `### "Death by a Thousand Swipes" (Under-$25 Audit)`,
+      `> ☕ **You made ${microTxns.length} "harmless" little swipes under $25 totaling -${usd.format(microTotal)} (avg ${usdCents.format(microAvg)}/swipe).** That's a **-${usd.format(annualMicro)}/yr** leak while your brain rounds every $12 tap down to zero.`,
+      `| Micro-Swipe Culprit (≤$25) | Tiny Swipes | Subtotal |`,
+      `| --- | --- | --- |`,
+      ...(topMicro.length > 0
+        ? topMicro.map(
+            ([m, v]) => `| **${m}** | ${v.count}x (avg ${usdCents.format(v.sum / v.count)}) | -${usdCents.format(v.sum)} |`
+          )
+        : [`| No under-$25 swipes found | Impressive restraint | $0.00 |`]),
+      otherMicroSum > 1
+        ? `| + Other under-$25 taps | ${Math.max(0, microTxns.length - topMicro.reduce((s, [, v]) => s + v.count, 0))} small charges | -${usdCents.format(otherMicroSum)} |`
+        : '',
+      `| **= Total Under-$25 Leak** | **${microTxns.length} swipes (-${usd.format(annualMicro)}/yr pace)** | **-${usdCents.format(microTotal)}** |`,
+      `- 💡 **10-Year Cost:** Cutting just half of these tiny taps saves **+${usd.format(annualMicro / 2)}/yr** — worth **+${usd.format(Math.round((annualMicro / 2) * 14.48))}** in 10 years.`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+  // D. 🎉 Weekend You vs. Weekday You (Jekyll & Hyde Audit)
+  else if (isWeekendVsWeekdayAsk) {
+    const varPool = (curMonthTxns.length >= 6 ? curMonthTxns : periodTxns).filter((t) => {
+      if (t.amount >= 0 || isTransfer(t)) return false;
+      if (t.recurrence === 'recurring') return false;
+      const mk = (t.merchantKey || '').trim().toLowerCase();
+      if (mk && recurringKeysLower.has(mk)) return false;
+      const cObj = data.categories.find((c) => c.name === t.category);
+      if (cObj?.defaultRecurrence === 'recurring') return false;
+      return true;
+    });
+
+    let weekendSpend = 0;
+    let weekendSwipes = 0;
+    let weekdaySpend = 0;
+    let weekdaySwipes = 0;
+    const weekendDates = new Set<string>();
+    const weekdayDates = new Set<string>();
+    const weekendByCat = new Map<string, number>();
+
+    for (const t of varPool) {
+      const d = new Date(`${t.date}T12:00:00`).getDay();
+      const abs = Math.abs(t.amount);
+      if (d === 0 || d === 5 || d === 6) {
+        weekendSpend += abs;
+        weekendSwipes += 1;
+        weekendDates.add(t.date);
+        const cat = t.category || 'Uncategorized';
+        weekendByCat.set(cat, (weekendByCat.get(cat) || 0) + abs);
+      } else {
+        weekdaySpend += abs;
+        weekdaySwipes += 1;
+        weekdayDates.add(t.date);
+      }
+    }
+
+    const wkndDays = Math.max(3, weekendDates.size || Math.round(curDayOfMonth * (3 / 7)));
+    const wkdyDays = Math.max(4, weekdayDates.size || Math.round(curDayOfMonth * (4 / 7)));
+    const wkndDaily = weekendSpend / wkndDays;
+    const wkdyDaily = weekdaySpend / wkdyDays;
+    const totalVar = Math.max(1, weekendSpend + weekdaySpend);
+    const wkndSharePct = Math.round((weekendSpend / totalVar) * 100);
+    const topWkndCat = Array.from(weekendByCat.entries()).sort((a, b) => b[1] - a[1])[0];
+
+    synthesizedMarkdownReport = [
+      `### Weekend You vs. Weekday You (${monthLabel(curMonthKey)})`,
+      `> 🎉 **Mon–Thu you spend ${usd.format(wkdyDaily)}/day; Fri–Sun you burn ${usd.format(wkndDaily)}/day.** **${wkndSharePct}%** of your discretionary money disappears between Friday afternoon and Sunday night.`,
+      `| Personality | Swipes · Daily Burn Rate | Total Spend |`,
+      `| --- | --- | --- |`,
+      `| 🧘 **Weekday You (Mon–Thu)** | ${weekdaySwipes} swipes · **${usd.format(wkdyDaily)}/day** | -${usd.format(weekdaySpend)} |`,
+      `| 🕺 **Weekend You (Fri–Sun)** | ${weekendSwipes} swipes · **${usd.format(wkndDaily)}/day** | -${usd.format(weekendSpend)} |`,
+      topWkndCat
+        ? `| 🚨 **#1 Weekend Weakness** | **${topWkndCat[0]}** on Fri–Sun | -${usd.format(topWkndCat[1])} |`
+        : '',
+      `| **= Total Variable Spend** | **Weekend burn is ${(wkndDaily / Math.max(1, wkdyDaily)).toFixed(1)}x higher/day** | **-${usd.format(weekendSpend + weekdaySpend)}** |`,
+      `- 💡 **Weekend Cap Rule:** Cap your Fri–Sun spending at **$100 total** this weekend and transfer the rest straight to savings on Monday morning.`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+  // E. 🕵️ Crime Scene: Single Worst Spending Day This Month
+  else if (isWorstDayAsk) {
+    const varPool = (curMonthTxns.length >= 4 ? curMonthTxns : periodTxns).filter((t) => {
+      if (t.amount >= 0 || isTransfer(t)) return false;
+      if (t.recurrence === 'recurring') return false;
+      const mk = (t.merchantKey || '').trim().toLowerCase();
+      if (mk && recurringKeysLower.has(mk)) return false;
+      return true;
+    });
+
+    const byDate = new Map<string, { sum: number; txns: Transaction[] }>();
+    for (const t of varPool) {
+      const entry = byDate.get(t.date) || { sum: 0, txns: [] };
+      entry.sum += Math.abs(t.amount);
+      entry.txns.push(t);
+      byDate.set(t.date, entry);
+    }
+    const worstEntry = Array.from(byDate.entries()).sort((a, b) => b[1].sum - a[1].sum)[0];
+    const worstDate = worstEntry?.[0] || latestTxDate || curMonthKey;
+    const worstTxns = (worstEntry?.[1].txns || []).sort((a, b) => a.amount - b.amount);
+    const worstSum = worstEntry?.[1].sum || 0;
+    const pctOfMonthlyVar = Math.round((worstSum / Math.max(1, monthlyVariableBaseline || curVariableSpent)) * 100);
+
+    synthesizedMarkdownReport = [
+      `### Crime Scene Report: Worst Spending Day (${worstDate})`,
+      `> 🕵️ **On ${worstDate}, you swiped your card ${worstTxns.length} time${worstTxns.length === 1 ? '' : 's'} for -${usdCents.format(worstSum)}.** You torched **${pctOfMonthlyVar}%** of your entire monthly variable budget in a single 24-hour window.`,
+      `| Receipt on ${worstDate} | Category | Amount |`,
+      `| --- | --- | --- |`,
+      ...worstTxns.slice(0, 5).map(
+        (t) =>
+          `| **${(t.merchantKey || t.description).slice(0, 26)}** | ${t.category || 'Uncategorized'} | -${usdCents.format(Math.abs(t.amount))} |`
+      ),
+      `| **= Single-Day Damage (${worstDate})** | **${worstTxns.length} swipes in 24 hours** | **-${usdCents.format(worstSum)}** |`,
+      `- 💡 **24-Hour Cooling Rule:** Wait 24 hours before any non-essential purchase over **$75** so one bad afternoon doesn't wreck your month.`,
+    ].join('\n');
+  }
+  // F. 🏆 Which Merchant Owns Me? (The Silent Partner Tax)
+  else if (isMerchantOwnerAsk) {
+    const nonBillMerchants = Array.from(periodStats.byMerch.entries())
+      .filter(([m, v]) => {
+        const lowerM = `${m} ${v.category}`.toLowerCase();
+        return !/mortgage|rent|loan|utilit|insurance|transfer|tax/i.test(lowerM);
+      })
+      .sort((a, b) => b[1].spendCents - a[1].spendCents)
+      .slice(0, 5);
+
+    const topOne = nonBillMerchants[0];
+    const top5Sum = nonBillMerchants.reduce((s, [, v]) => s + v.spendCents, 0);
+    const topOneAnnual = (topOne ? topOne[1].spendCents : 0) * 12;
+    const topOneTenYr = Math.round(topOneAnnual * 14.48);
+
+    synthesizedMarkdownReport = [
+      `### "Silent Partner" Audit: Who Owns Your Paycheck?`,
+      `> 🏆 **${topOne ? topOne[0] : 'Your top merchant'} practically owns equity in your life (-${usd.format(topOne ? topOne[1].spendCents : 0)} across ${topOne ? topOne[1].count : 0} swipes).** At **-${usd.format(topOneAnnual)}/yr**, you're funding their corporate retreat instead of a **${usd.format(topOneTenYr)}** 10-year investment account.`,
+      `| Top Discretionary Merchant | Category · Swipes | Total Paid |`,
+      `| --- | --- | --- |`,
+      ...nonBillMerchants.map(
+        ([m, v], i) =>
+          `| ${i + 1}. **${m}** | ${v.category} · ${v.count}x (avg ${usd.format(v.spendCents / v.count)}) | -${usd.format(v.spendCents)} |`
+      ),
+      `| **= Top ${nonBillMerchants.length} Merchants Total** | **-${usd.format(top5Sum * 12)}/yr combined pace** | **-${usd.format(top5Sum)}** |`,
+      `- 💡 **Delete Saved Card:** Remove your saved credit card from **${topOne ? topOne[0] : 'checkout'}** so you have to type all 16 digits by hand before buying.`,
+    ].join('\n');
+  }
+  // G. 🛟 Cash Runway: "If My Paycheck Stopped Today, How Many Days Do I Last?"
+  else if (isRunwayAsk) {
+    const currentMonthlyBurn = Math.max(
+      1800,
+      curMonthStats.spendDollars,
+      prevMonthStats.spendDollars,
+      monthlyRecurringBaseline + monthlyVariableBaseline
+    );
+    const currentDailyBurn = currentMonthlyBurn / 30;
+    const survivalMonthlyBurn = Math.max(1200, monthlyRecurringBaseline + 650);
+    const survivalDailyBurn = survivalMonthlyBurn / 30;
+    const daysCurrent = Math.round(liquidCashDollars / Math.max(1, currentDailyBurn));
+    const daysSurvival = Math.round(liquidCashDollars / Math.max(1, survivalDailyBurn));
+    const extraDays = Math.max(0, daysSurvival - daysCurrent);
+
+    synthesizedMarkdownReport = [
+      `### Cash Runway & Survival Reality Check`,
+      `> 🛟 **At your current ${usd.format(currentDailyBurn)}/day burn rate, your ${usd.format(liquidCashDollars)} cash lasts ${daysCurrent} days (${(daysCurrent / 30).toFixed(1)} mos).** Cut the discretionary fluff and your runway jumps to **${daysSurvival} days (+${extraDays} extra days of survival)**.`,
+      `| Runway Scenario | Burn Rate | Days of Survival |`,
+      `| --- | --- | --- |`,
+      `| Total Liquid Cash Available | Checking (${usd.format(checkingCashDollars)}) + Savings (${usd.format(savingsCashDollars)}) | +${usd.format(liquidCashDollars)} |`,
+      `| Current Lifestyle Pace | -${usd.format(currentMonthlyBurn)}/mo (-${usd.format(currentDailyBurn)}/day) | **${daysCurrent} days (${(daysCurrent / 30).toFixed(1)} mos)** |`,
+      `| Lean Bills-Only Mode | -${usd.format(survivalMonthlyBurn)}/mo (-${usd.format(survivalDailyBurn)}/day) | **${daysSurvival} days (${(daysSurvival / 30).toFixed(1)} mos)** |`,
+      `| **= Runway Gained by Cutting Fluff** | **Saves +${usd.format(Math.max(0, currentMonthlyBurn - survivalMonthlyBurn))}/mo** | **+${extraDays} extra days** |`,
+      `- 💡 **6-Month Target:** A rock-solid 180-day emergency fund requires **${usd.format(survivalMonthlyBurn * 6)}** in liquid cash.`,
+    ].join('\n');
+  }
+  // H. 📅 Last Month's Full Category Receipt
+  else if (isLastMonthReceiptAsk) {
+    const prevCats = Array.from(prevMonthStats.byCat.entries())
+      .sort((a, b) => b[1].spendCents - a[1].spendCents);
+    const top6Prev = prevCats.slice(0, 6);
+    const top6Sum = top6Prev.reduce((s, [, v]) => s + v.spendCents, 0);
+    const otherPrevSum = Math.max(0, prevMonthStats.spendDollars - top6Sum);
+    const worstPrev = top6Prev[0];
+
+    synthesizedMarkdownReport = [
+      `### ${monthLabel(prevMonthKey)} Category Receipt (Full Breakdown)`,
+      `> 📅 **Last month (${monthLabel(prevMonthKey)}) you burned -${usd.format(prevMonthStats.spendDollars)} against +${usd.format(prevMonthStats.incomeDollars)} in inflows.** ${worstPrev ? `**${worstPrev[0]}** led the damage at **-${usd.format(worstPrev[1].spendCents)}** (${worstPrev[1].count} swipes).` : ''}`,
+      `| ${monthLabel(prevMonthKey)} Category | Swipes · 3-Mo Avg | ${monthLabel(prevMonthKey)} Spend |`,
+      `| --- | --- | --- |`,
+      ...top6Prev.map(([cat, v]) => {
+        const avg = trailingAvgByCat.get(cat) || v.spendCents;
+        return `| **${cat}** (${v.count}x) | Avg ${usd.format(avg)}/mo | -${usd.format(v.spendCents)} |`;
+      }),
+      prevCats.length > 6
+        ? `| + ${prevCats.length - 6} other categories | Combined smaller spend | -${usd.format(otherPrevSum)} |`
+        : '',
+      `| **= Total ${monthLabel(prevMonthKey)} Spend** | **Net kept: ${prevMonthStats.netDollars >= 0 ? '+' : ''}${usd.format(prevMonthStats.netDollars)}** | **-${usd.format(prevMonthStats.spendDollars)}** |`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
   // 1. Affordability / "Talk me out of spending $X"
-  if (isAffordOrImpulseAsk) {
+  else if (isAffordOrImpulseAsk) {
     const isRecurringAsk =
       qLower.includes('/mo') ||
       qLower.includes('per month') ||
@@ -918,7 +1271,7 @@ export async function analyzeQuestionAndFinances(
       unpaidBills.length > topUnpaid.length
         ? `| + ${unpaidBills.length - topUnpaid.length} more unpaid bills | Due before month-end | -${usd.format(otherUnpaidSum)} |`
         : '',
-      `| **= Total Unpaid Bills Left** | **${ paidBills.length } paid (${usd.format(paidBillsTotalDollars)}), ${unpaidBills.length} left** | **-${usd.format(unpaidBillsTotalDollars)}** |`,
+      `| **= Total Unpaid Bills Left** | **${paidBills.length} paid (${usd.format(paidBillsTotalDollars)}), ${unpaidBills.length} left** | **-${usd.format(unpaidBillsTotalDollars)}** |`,
       `- 💡 **True Uncommitted Cash:** Checking (**${usd.format(checkingCashDollars)}**) − Unpaid Bills (**${usd.format(unpaidBillsTotalDollars)}**) = **${usd.format(freeCheckingAfterBills)}**. Keep your wallet shut until month-end.`,
     ]
       .filter(Boolean)
@@ -947,7 +1300,7 @@ export async function analyzeQuestionAndFinances(
       recentOutflows.length > topRecent.length
         ? `| + ${recentOutflows.length - topRecent.length} smaller swipes | Death by a thousand cuts | -${usdCents.format(otherRecentSum)} |`
         : '',
-      `| **= 7-Day Total Burn** | **${recentOutflows.length} charges (${ recent7DayBigCharges.length } over $50)** | **-${usdCents.format(recentTotal)}** |`,
+      `| **= 7-Day Total Burn** | **${recentOutflows.length} charges (${recent7DayBigCharges.length} over $50)** | **-${usdCents.format(recentTotal)}** |`,
       `- 💡 **No-Spend Challenge:** Do **$0** in non-essential spending for the next 72 hours to stop the bleeding.`,
     ]
       .filter(Boolean)

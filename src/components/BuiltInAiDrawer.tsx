@@ -32,73 +32,142 @@ interface ChatMessage {
   usedBuiltInModel?: boolean;
 }
 
+type PromptGroup = 'all' | 'roast' | 'wealth' | 'bills';
+
 interface StarterPromptOption {
   icon: string;
   title: string;
   subtitle: string;
   prompt: string;
+  group: Exclude<PromptGroup, 'all'>;
 }
 
 const STARTER_PROMPTS: StarterPromptOption[] = [
   {
-    icon: '🛑',
-    title: 'Talk me out of $500',
-    subtitle: 'Impulse check vs. unpaid bills & 10-yr growth',
-    prompt: 'Can I spend $500 right now and it not hurt?',
+    icon: '🏠',
+    title: 'Tacos vs. my mortgage payoff',
+    subtitle: 'What if I threw half my dining/shopping spend at my loan?',
+    prompt: 'What if I threw half my dining and shopping spend at my mortgage or loans?',
+    group: 'wealth',
   },
   {
-    icon: '🔥',
-    title: 'Roast my spending habits',
-    subtitle: 'Expose my worst leaks & instant savings',
-    prompt: 'Where can I cut back to save more each month?',
+    icon: '⏱️',
+    title: 'Convert spending into work hours',
+    subtitle: 'How many hours of my life did I sit at work to pay for this?',
+    prompt: 'Convert my spending this month into hours of my life at work',
+    group: 'roast',
+  },
+  {
+    icon: '☕',
+    title: 'Death by a thousand swipes (≤$25)',
+    subtitle: 'Add up all my "harmless" little taps under $25 this month',
+    prompt: 'Add up all my harmless little swipes under $25',
+    group: 'roast',
+  },
+  {
+    icon: '🎉',
+    title: 'Weekend me vs. Weekday me',
+    subtitle: 'Compare my Friday–Sunday burn rate vs. Monday–Thursday',
+    prompt: 'Compare my Friday-Sunday weekend spending vs Monday-Thursday weekday',
+    group: 'roast',
+  },
+  {
+    icon: '🛑',
+    title: 'Talk me out of spending $500',
+    subtitle: 'Impulse check vs. unpaid bills & 10-yr compound growth',
+    prompt: 'Can I spend $500 right now and it not hurt?',
+    group: 'wealth',
+  },
+  {
+    icon: '🕵️',
+    title: 'My single worst spending day',
+    subtitle: 'Crime-scene receipt of my most expensive 24 hours this month',
+    prompt: 'What was my single worst spending day this month?',
+    group: 'roast',
+  },
+  {
+    icon: '🏆',
+    title: 'Which merchant owns my paycheck?',
+    subtitle: 'Rank who gets the biggest cut of my money & 10-yr cost',
+    prompt: 'Which merchant is taking the biggest piece of my paycheck?',
+    group: 'roast',
+  },
+  {
+    icon: '🛟',
+    title: 'How many days would my cash last?',
+    subtitle: 'Survival runway at current pace vs. bare-bones bills mode',
+    prompt: 'How many days would my cash last at my current spending pace?',
+    group: 'wealth',
   },
   {
     icon: '⏳',
     title: 'Big bills still coming up?',
-    subtitle: 'Unpaid month-end bills vs. checking cash',
+    subtitle: 'Unpaid month-end bills waiting to hit my checking cash',
     prompt: 'Are there any big payments coming up this month?',
+    group: 'bills',
   },
   {
     icon: '🚨',
-    title: 'What hit my accounts?',
-    subtitle: '7-day damage report & biggest charges',
+    title: 'What hit my accounts this week?',
+    subtitle: '7-day damage report & largest recent charges',
     prompt: 'Has anything big hit my accounts recently?',
+    group: 'bills',
   },
   {
     icon: '🍔',
-    title: 'Roast my food & dining',
-    subtitle: 'Restaurants, groceries & takeout burn rate',
+    title: 'Roast my food & dining spend',
+    subtitle: 'Restaurants, groceries & takeout burn rate vs. savings',
     prompt: 'How much did I spend on food & eating out?',
+    group: 'roast',
   },
   {
     icon: '🛍️',
-    title: 'Stop a $150 impulse buy',
+    title: 'Stop a $150 impulse buy today',
     subtitle: 'Show what $150 really costs my future self',
     prompt: 'Talk me out of a $150 impulse buy today',
+    group: 'wealth',
+  },
+  {
+    icon: '🔥',
+    title: 'Roast my worst spending leaks',
+    subtitle: 'Expose my top 4 discretionary habits & 30% cut savings',
+    prompt: 'Where can I cut back to save more each month?',
+    group: 'roast',
   },
   {
     icon: '🧛',
-    title: 'Audit subscription drains',
-    subtitle: 'Autopays quietly bleeding me every month',
+    title: 'Audit my subscription drains',
+    subtitle: 'Recurring autopays quietly bleeding me every month',
     prompt: 'Which subscriptions and recurring bills are draining me?',
+    group: 'bills',
+  },
+  {
+    icon: '📅',
+    title: 'Last month’s full category receipt',
+    subtitle: 'What did I actually spend on every category last month?',
+    prompt: 'What did I actually spend on every category last month?',
+    group: 'bills',
   },
   {
     icon: '📊',
     title: 'This month vs. last month',
-    subtitle: 'Did I actually save or just spend more?',
+    subtitle: 'Did I actually save money or just spend more?',
     prompt: 'How does this month compare to last month?',
+    group: 'bills',
   },
   {
     icon: '📦',
     title: 'Roast my shopping spend',
-    subtitle: 'Amazon, retail & impulse merchandise check',
+    subtitle: 'Amazon, retail & impulse merchandise reality check',
     prompt: 'How much did I spend on shopping this month?',
+    group: 'roast',
   },
   {
     icon: '🏦',
     title: 'Debt vs. cash reality check',
-    subtitle: 'Loans & interest drag vs. liquid cash',
+    subtitle: 'Loans & interest drag vs. my liquid cash & net worth',
     prompt: 'Reality check my debt vs liquid cash and net worth',
+    group: 'wealth',
   },
 ];
 
@@ -623,122 +692,165 @@ function PromptCardGrid({
   onSelect: (promptText: string) => void;
   compact?: boolean;
 }) {
+  const [activeGroup, setActiveGroup] = useState<PromptGroup>('all');
+
+  const filtered = prompts.filter((p) => (activeGroup === 'all' ? true : p.group === activeGroup));
+
   // Put unasked prompts first so fresh options are always top-of-list after a response
-  const ordered = [...prompts].sort((a, b) => {
+  const ordered = [...filtered].sort((a, b) => {
     const aAsked = askedSet.has(a.prompt.toLowerCase()) ? 1 : 0;
     const bAsked = askedSet.has(b.prompt.toLowerCase()) ? 1 : 0;
     return aAsked - bAsked;
   });
 
+  const groups: { key: PromptGroup; label: string }[] = [
+    { key: 'all', label: `All (${prompts.length})` },
+    { key: 'roast', label: '🔥 Roast Me' },
+    { key: 'wealth', label: '🏠 Debt & Wealth' },
+    { key: 'bills', label: '⏳ Bills & Cash' },
+  ];
+
   return (
-    <Stack spacing={1.25}>
-      {ordered.map((opt) => {
-        const alreadyAsked = askedSet.has(opt.prompt.toLowerCase());
-        return (
-          <Button
-            key={opt.prompt}
-            variant="outlined"
-            disabled={disabled}
-            onClick={() => onSelect(opt.prompt)}
-            sx={{
-              height: 'auto !important',
-              minHeight: compact ? 64 : 72,
-              width: '100%',
-              textTransform: 'none',
-              justifyContent: 'flex-start',
-              alignItems: 'center',
-              textAlign: 'left',
-              whiteSpace: 'normal',
-              overflow: 'visible',
-              py: compact ? 1.25 : 1.5,
-              px: 1.75,
-              borderRadius: 2.25,
-              borderWidth: '1.5px',
-              borderColor: alreadyAsked ? 'divider' : 'rgba(59, 130, 246, 0.32)',
-              bgcolor: alreadyAsked ? 'transparent' : 'action.hover',
-              opacity: alreadyAsked ? 0.75 : 1,
-              color: 'text.primary',
-              transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-              '&:hover': {
+    <Box>
+      <Stack
+        direction="row"
+        spacing={0.75}
+        sx={{
+          mb: 1.5,
+          flexWrap: 'wrap',
+          rowGap: 0.75,
+        }}
+      >
+        {groups.map((g) => {
+          const selected = activeGroup === g.key;
+          return (
+            <Chip
+              key={g.key}
+              label={g.label}
+              size="small"
+              clickable
+              onClick={() => setActiveGroup(g.key)}
+              color={selected ? 'primary' : 'default'}
+              variant={selected ? 'filled' : 'outlined'}
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.74rem',
+                height: 28,
+              }}
+            />
+          );
+        })}
+      </Stack>
+
+      <Stack spacing={1.25}>
+        {ordered.map((opt) => {
+          const alreadyAsked = askedSet.has(opt.prompt.toLowerCase());
+          return (
+            <Button
+              key={opt.prompt}
+              variant="outlined"
+              disabled={disabled}
+              onClick={() => onSelect(opt.prompt)}
+              sx={{
+                height: 'auto !important',
+                minHeight: compact ? 64 : 72,
+                width: '100%',
+                textTransform: 'none',
+                justifyContent: 'flex-start',
+                alignItems: 'center',
+                textAlign: 'left',
+                whiteSpace: 'normal',
+                overflow: 'visible',
+                py: compact ? 1.25 : 1.5,
+                px: 1.75,
+                borderRadius: 2.25,
                 borderWidth: '1.5px',
-                borderColor: 'primary.main',
-                bgcolor: 'action.selected',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 8px 20px -6px rgba(59, 130, 246, 0.28)',
-                opacity: 1,
-              },
-            }}
-          >
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
-              <Box
-                sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  fontSize: '1.3rem',
-                  lineHeight: 1,
-                  flexShrink: 0,
-                }}
-              >
-                {opt.icon}
-              </Box>
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                borderColor: alreadyAsked ? 'divider' : 'rgba(59, 130, 246, 0.32)',
+                bgcolor: alreadyAsked ? 'transparent' : 'action.hover',
+                opacity: alreadyAsked ? 0.75 : 1,
+                color: 'text.primary',
+                transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                '&:hover': {
+                  borderWidth: '1.5px',
+                  borderColor: 'primary.main',
+                  bgcolor: 'action.selected',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 20px -6px rgba(59, 130, 246, 0.28)',
+                  opacity: 1,
+                },
+              }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
+                <Box
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    fontSize: '1.3rem',
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  {opt.icon}
+                </Box>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        fontWeight: 800,
+                        fontSize: '0.94rem',
+                        lineHeight: 1.3,
+                        color: 'text.primary',
+                        whiteSpace: 'normal',
+                      }}
+                    >
+                      {opt.title}
+                    </Typography>
+                    {alreadyAsked && (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: '0.66rem',
+                          fontWeight: 700,
+                          px: 0.75,
+                          py: 0.15,
+                          borderRadius: 1,
+                          bgcolor: 'action.selected',
+                          color: 'text.secondary',
+                          flexShrink: 0,
+                        }}
+                      >
+                        Asked
+                      </Typography>
+                    )}
+                  </Stack>
                   <Typography
-                    variant="subtitle2"
+                    variant="body2"
+                    color="text.secondary"
                     sx={{
-                      fontWeight: 800,
-                      fontSize: '0.94rem',
-                      lineHeight: 1.3,
-                      color: 'text.primary',
+                      display: 'block',
+                      fontSize: '0.8rem',
+                      lineHeight: 1.38,
+                      mt: 0.35,
                       whiteSpace: 'normal',
                     }}
                   >
-                    {opt.title}
+                    {opt.subtitle}
                   </Typography>
-                  {alreadyAsked && (
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontSize: '0.66rem',
-                        fontWeight: 700,
-                        px: 0.75,
-                        py: 0.15,
-                        borderRadius: 1,
-                        bgcolor: 'action.selected',
-                        color: 'text.secondary',
-                        flexShrink: 0,
-                      }}
-                    >
-                      Asked
-                    </Typography>
-                  )}
-                </Stack>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{
-                    display: 'block',
-                    fontSize: '0.8rem',
-                    lineHeight: 1.38,
-                    mt: 0.35,
-                    whiteSpace: 'normal',
-                  }}
-                >
-                  {opt.subtitle}
-                </Typography>
-              </Box>
-            </Stack>
-          </Button>
-        );
-      })}
-    </Stack>
+                </Box>
+              </Stack>
+            </Button>
+          );
+        })}
+      </Stack>
+    </Box>
   );
 }
 
@@ -748,7 +860,37 @@ function AiLedgerScanner({ prompt, stage }: { prompt: string; stage: number }) {
     'Scanning accounts & posted transactions...',
     'Reconciling recurring bills & math ledger...',
   ];
-  if (lower.includes('$') || lower.includes('spend') || lower.includes('afford') || lower.includes('hurt')) {
+  if (lower.includes('mortgage') || lower.includes('threw half')) {
+    steps = [
+      'Pulling loan principal, APR & amortization schedule...',
+      'Calculating years shaved & bank interest erased...',
+    ];
+  } else if (lower.includes('hours') || lower.includes('life at work')) {
+    steps = [
+      'Calculating your true after-tax hourly wage...',
+      'Converting category spending into hours at your desk...',
+    ];
+  } else if (lower.includes('under $25') || lower.includes('harmless')) {
+    steps = [
+      'Rounding up every "harmless" card tap under $25...',
+      'Annualizing your micro-swipe leak...',
+    ];
+  } else if (lower.includes('weekend') || lower.includes('friday')) {
+    steps = [
+      'Splitting Fri–Sun vs. Mon–Thu card activity...',
+      'Comparing Weekend You against Weekday You...',
+    ];
+  } else if (lower.includes('worst spending day')) {
+    steps = [
+      'Grouping non-bill charges by 24-hour window...',
+      'Reconstructing your single most expensive day...',
+    ];
+  } else if (lower.includes('cash last') || lower.includes('runway')) {
+    steps = [
+      'Summing liquid checking & savings balances...',
+      'Computing survival days at current vs. lean burn rate...',
+    ];
+  } else if (lower.includes('$') || lower.includes('spend') || lower.includes('afford') || lower.includes('hurt')) {
     steps = [
       'Checking liquid cash & credit card balances...',
       'Simulating purchase impact & upcoming bill reserve...',
