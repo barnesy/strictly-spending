@@ -499,16 +499,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Tooltip>
             )}
             <Button
-              onClick={async () => {
+              component="a"
+              href="https://github.com/barnesy/strictly-spending/issues/new"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={async (e: React.MouseEvent<HTMLAnchorElement>) => {
                 const url = 'https://github.com/barnesy/strictly-spending/issues/new';
-                const isTauri =
+                const isNativeTauri =
                   typeof window !== 'undefined' &&
-                  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
-                if (isTauri) {
-                  const { open } = await import('@tauri-apps/plugin-shell');
-                  await open(url);
-                } else {
-                  window.open(url, '_blank');
+                  ('__TAURI__' in window ||
+                    ('__TAURI_INTERNALS__' in window &&
+                      'metadata' in (window as unknown as { __TAURI_INTERNALS__: Record<string, unknown> }).__TAURI_INTERNALS__));
+                if (isNativeTauri) {
+                  e.preventDefault();
+                  try {
+                    const { open } = await import('@tauri-apps/plugin-shell');
+                    await open(url);
+                  } catch {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  }
                 }
               }}
               variant="text"
@@ -686,6 +695,37 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 ))}
               </Box>
             ))}
+
+            <Divider sx={{ my: 1 }} />
+            <ListItem disablePadding sx={{ mb: 0.5 }}>
+              <ListItemButton
+                component="a"
+                href="https://github.com/barnesy/strictly-spending/issues/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={async (e: React.MouseEvent<HTMLAnchorElement>) => {
+                  setIsMobileNavOpen(false);
+                  const url = 'https://github.com/barnesy/strictly-spending/issues/new';
+                  const isNativeTauri =
+                    typeof window !== 'undefined' &&
+                    ('__TAURI__' in window ||
+                      ('__TAURI_INTERNALS__' in window &&
+                        'metadata' in (window as unknown as { __TAURI_INTERNALS__: Record<string, unknown> }).__TAURI_INTERNALS__));
+                  if (isNativeTauri) {
+                    e.preventDefault();
+                    try {
+                      const { open } = await import('@tauri-apps/plugin-shell');
+                      await open(url);
+                    } catch {
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }
+                  }
+                }}
+                sx={{ borderRadius: 1 }}
+              >
+                <ListItemText primary="Feedback / Report Issue" />
+              </ListItemButton>
+            </ListItem>
           </List>
         </Drawer>
 

@@ -16,7 +16,10 @@ function notifyListeners() {
 
 export function initPwaServiceWorker(): void {
   if (typeof window === 'undefined') return;
-  const isTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
+  const isTauri =
+    '__TAURI__' in window ||
+    ('__TAURI_INTERNALS__' in window &&
+      'metadata' in (window as unknown as { __TAURI_INTERNALS__: Record<string, unknown> }).__TAURI_INTERNALS__);
   if (isTauri) return;
 
   window.addEventListener('beforeinstallprompt', (e: Event) => {

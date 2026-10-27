@@ -63,6 +63,13 @@ if (typeof window !== 'undefined') {
 
     (window as any).__TAURI_INTERNALS__ = {
       invoke: async (cmd: string, args?: any) => {
+        if (cmd === 'plugin:shell|open' || cmd === 'open_document') {
+          const targetUrl = args?.path || args?.url;
+          if (targetUrl && typeof window !== 'undefined') {
+            window.open(targetUrl, '_blank', 'noopener,noreferrer');
+          }
+          return null;
+        }
         if (!isLandingBuild) {
           try {
             const res = await fetch('/api/tauri-ipc', {
