@@ -1064,7 +1064,7 @@ export async function analyzeQuestionAndFinances(
       qLower.includes('mortgage') ||
       qLower.includes('payoff'));
 
-  // 00. 😈 Hall of Shame Receipt (Most Embarrassing Roast & Public Dare)
+  // 00. 😈 Hall of Shame Receipt (Crazy Persona Name + Embarrassing Assumptions + Animated GIF Takeaway)
   if (isEmbarrassingDareAsk) {
     const nonBillMerchants = Array.from(periodStats.byMerch.entries()).filter(([m, v]) => {
       const lowerM = `${m} ${v.category}`.toLowerCase();
@@ -1075,7 +1075,6 @@ export async function analyzeQuestionAndFinances(
     const mostSwipedMerch =
       [...nonBillMerchants].sort((a, b) => b[1].count - a[1].count || b[1].spendCents - a[1].spendCents)[0] ||
       nonBillMerchants[0];
-    const biggestDollarMerch = [...nonBillMerchants].sort((a, b) => b[1].spendCents - a[1].spendCents)[0];
 
     const obsessionName = mostSwipedMerch ? mostSwipedMerch[0] : 'Takeout & Impulse Swipes';
     const obsessionSwipes = mostSwipedMerch ? mostSwipedMerch[1].count : 9;
@@ -1125,27 +1124,87 @@ export async function analyzeQuestionAndFinances(
     const monthlyRedirect = Math.max(175, Math.round(combinedShameSpend * 0.5));
     const rSp500 = 0.085 / 12;
     const shame10YrWealth = Math.round(monthlyRedirect * ((Math.pow(1 + rSp500, 120) - 1) / rSp500));
-    const shame20YrWealth = Math.round(monthlyRedirect * ((Math.pow(1 + rSp500, 240) - 1) / rSp500));
     const carAccel = calcLoanAccel(carLoan, monthlyRedirect, 'monthly');
 
+    // Deduce a ridiculous persona nickname + embarrassing assumptions from their actual habits
+    const habitSignal = `${obsessionName} ${topHabit.category} ${secondHabit.category}`.toLowerCase();
+    let crazyName = `Lord Lukewarm of the ${obsessionName} Drive-Thru`;
+    let avatarEmoji = '🤡';
+    const assumptions: string[] = [];
+
+    if (/coffee|starbucks|dunkin|cafe|espresso|dutch bros|boba/i.test(habitSignal)) {
+      crazyName = `Supreme Chancellor of $9 Emotional-Support Iced Lattes`;
+      avatarEmoji = '🧋';
+      assumptions.push(
+        `• You swiped ${obsessionSwipes}x at ${obsessionName} (-${usd.format(obsessionSpend)}) — we assume you physically cannot answer a single Slack message before 10 AM without a plastic cup sweating on your desk.`
+      );
+      assumptions.push(
+        `• Your car cupholders currently contain at least 3 half-empty cups and a crumpled receipt you refuse to look at.`
+      );
+    } else if (/doordash|uber|grubhub|dining|restaurant|fast food|takeout|chipotle|taco|mcdonald|pizza|chick-fil-a/i.test(habitSignal)) {
+      crazyName = `Duke of $28 Cold Fries & The Unopened Oven`;
+      avatarEmoji = '🍔';
+      assumptions.push(
+        `• With ${usd.format(topHabit.spend)} blown on ${topHabit.category} (${topHabit.count} swipes), we assume your oven is strictly used as extra storage for baking sheets you haven't washed since 2023.`
+      );
+      assumptions.push(
+        `• There is 100% a bag of "aspirational salad mix" turning into brown liquid in your crisper drawer right now while you tap ${obsessionName} (${obsessionSwipes}x swipes).`
+      );
+    } else if (/amazon|target|walmart|shopping|clothing|costco|retail/i.test(habitSignal)) {
+      crazyName = `The 1:47 AM "Add-to-Cart" Dopamine Gremlin`;
+      avatarEmoji = '📦';
+      assumptions.push(
+        `• After ${obsessionSwipes} swipes at ${obsessionName} (-${usd.format(obsessionSpend)}), your front porch looks like a regional UPS hub and your delivery driver knows your government name.`
+      );
+      assumptions.push(
+        `• You have definitely buried an empty cardboard box at the bottom of the recycling bin so nobody in the house asks what you ordered.`
+      );
+    } else if (/grocer/i.test(habitSignal) && /dining|restaurant|food/i.test(habitSignal)) {
+      crazyName = `Head Caretaker of the Rotting Produce Graveyard`;
+      avatarEmoji = '🥬';
+      assumptions.push(
+        `• You buy groceries on Sunday pretending you're a meal-prep influencer, then panic-order ${obsessionName} by Tuesday because "dishes are too hard."`
+      );
+      assumptions.push(
+        `• Your fridge has 14 different specialty condiments, zero actual meals, and a tub of spinach that expired four days ago.`
+      );
+    } else {
+      crazyName = `Baron Von "It's Only Twenty Dollars" of ${obsessionName}`;
+      avatarEmoji = '😈';
+      assumptions.push(
+        `• You tapped your card ${obsessionSwipes}x at ${obsessionName} (-${usd.format(obsessionSpend)}) like you're trying to win a high-score trophy on their POS terminal.`
+      );
+      assumptions.push(
+        `• You check your bank balance with one eye squinted shut like you're defusing a bomb.`
+      );
+    }
+
+    if (microTxns.length >= 6) {
+      assumptions.push(
+        `• You made ${microTxns.length} "harmless" taps under $25 (-${usd.format(microTotal)}) because your brain legally classifies anything under $20 as "basically free."`
+      );
+    } else {
+      assumptions.push(
+        `• On ${worstDayDate}, you blacked out and swiped ${worstDaySwipes} times for -${usd.format(worstDaySpend)} in a single 24-hour dopamine speedrun.`
+      );
+    }
+
+    const gifPayload = {
+      crazyName,
+      avatarEmoji,
+      totalAmountFormatted: `-${usd.format(combinedShameSpend)}`,
+      subtitleLine: `TORCHED ON ${topHabit.category.toUpperCase()} & ${secondHabit.category.toUpperCase()} · ${shameWorkHours} HRS AT WORK`,
+      assumptions,
+      roastOneLiner: `Swiped ${obsessionSwipes}x at ${obsessionName} (-${usd.format(obsessionSpend)}) + ${microTxns.length} tiny taps under $25 (-${usd.format(microTotal)}).`,
+      opportunityCostLine: `Could've been +${usd.format(shame10YrWealth)} in a Roth IRA (or ${carLoan.name} paid off ${carAccel.monthsShaved} mos early) 🤡`,
+      topMerchantLabel: `${monthLabel(curMonthKey)} Hall of Shame · #1 Accomplice: ${obsessionName} (${obsessionSwipes}x)`,
+    };
+
     synthesizedMarkdownReport = [
-      `### 😈 Financial Hall of Shame Receipt (${monthLabel(curMonthKey)})`,
-      `> 😈 **You swiped at ${obsessionName} ${obsessionSwipes} times (-${usd.format(obsessionSpend)}), made ${microTxns.length} "harmless" taps under $25 (-${usd.format(microTotal)}), and sat at work for ${shameWorkHours} hours just to fund ${topHabit.category} & ${secondHabit.category}.** You traded **+${usd.format(shame10YrWealth)}** in 10-yr S&P 500 wealth (or paying off **${carLoan.name}** **${carAccel.monthsShaved} mos early**) for convenience.`,
-      `| Hall of Shame Exhibit | The Embarrassing Receipt | Damage |`,
-      `| --- | --- | --- |`,
-      `| 🤡 **#1 Loyalty Obsession** | **${obsessionName}** (${obsessionSwipes}x swipes — practically on their payroll) | -${usd.format(obsessionSpend)} |`,
-      biggestDollarMerch && biggestDollarMerch[0] !== obsessionName
-        ? `| 💸 **Biggest Cash Drain** | **${biggestDollarMerch[0]}** (${biggestDollarMerch[1].count}x charges) | -${usd.format(biggestDollarMerch[1].spendCents)} |`
-        : '',
-      `| 🔥 **#1 Weakness (${topHabit.category})** | ${topHabit.count} swipes · **${(topHabit.spend / hourlyNet).toFixed(1)} hrs** of your life at work | -${usd.format(topHabit.spend)} |`,
-      `| ☕ **"It's Only $12" Delusion** | **${microTxns.length} tiny swipes ≤$25** (-${usd.format(microTotal * 12)}/yr pace) | -${usd.format(microTotal)} |`,
-      `| 🚨 **24-Hour Binge Record** | **${worstDayDate}** (${worstDaySwipes} swipes in a single day) | -${usd.format(worstDaySpend)} |`,
-      `| **= Total Hall of Shame Burn** | **Cost you ${shameWorkHours} hrs at work (${(Number(shameWorkHours) / 8).toFixed(1)} workdays)** | **-${usd.format(combinedShameSpend)}** |`,
-      ...buildWealthRedirectLines(monthlyRedirect, 'monthly'),
-      `- 😈 **DOUBLE-DOG DARE:** If you aren't scared of your own receipts, hit **Copy Roast for Reddit** below and post this to **r/MiddleClassFinance** or your group chat (**+${usd.format(shame20YrWealth)}** 20-yr Roth IRA opportunity cost on the line).`,
-    ]
-      .filter(Boolean)
-      .join('\n');
+      `### 😈 Official Diagnosis: **${crazyName}**`,
+      `> ${avatarEmoji} **You torched -${usd.format(combinedShameSpend)} (${shameWorkHours} hours of your life at work) on ${topHabit.category} & ${secondHabit.category}, led by ${obsessionSwipes} swipes at ${obsessionName}.** Here is your animated Hall of Shame GIF — download it or dare to post it on Reddit:`,
+      `[ROAST_GIF_CARD]${JSON.stringify(gifPayload)}[/ROAST_GIF_CARD]`,
+    ].join('\n');
   }
   // A0. 📈🚗 Invest in Accounts vs. Pay Off Car Loan & Mortgage Early
   else if (isInvestVsPayoffAsk) {

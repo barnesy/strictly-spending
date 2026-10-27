@@ -24,6 +24,11 @@ import {
   checkBuiltInAiAvailability,
   type BuiltInAiAvailability,
 } from '../domain/builtInAi';
+import {
+  generateRoastAnimatedGif,
+  drawRoastFrame,
+  type RoastGifPayload,
+} from '../utils/roastGifGenerator';
 
 interface ChatMessage {
   id: string;
@@ -46,7 +51,7 @@ const STARTER_PROMPTS: StarterPromptOption[] = [
   {
     icon: '😈',
     title: 'Dare Me: My Most Embarrassing Roast',
-    subtitle: 'Cook up my most humiliating spending receipt & dare me to post it',
+    subtitle: 'Gives you a ridiculous spending nickname, wild assumptions & an animated Roast GIF',
     prompt: '😈 Cook up the most embarrassing, brutal roast of my spending and dare me to post it',
     group: 'roast',
   },
@@ -599,7 +604,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                     ) : (
                       <>
                         <FormattedAiMessage key={m.content ? 'ready' : 'empty'} content={m.content} isUser={m.role === 'user'} />
-                        {m.role === 'assistant' && m.content && (
+                        {m.role === 'assistant' && m.content && !m.content.includes('[ROAST_GIF_CARD]') && (
                           <RoastShareBar content={m.content} />
                         )}
                       </>
@@ -1131,6 +1136,216 @@ function AiLedgerScanner({ prompt, stage }: { prompt: string; stage: number }) {
   );
 }
 
+function RoastAnimatedGifWidget({ payload }: { payload: RoastGifPayload }) {
+  const [gifUrl, setGifUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Live canvas animation while the GIF89a blob encodes, and fallback if needed
+  useEffect(() => {
+    let cancelled = false;
+    let createdUrl: string | null = null;
+
+    generateRoastAnimatedGif(payload)
+      .then(({ url }) => {
+        if (!cancelled) {
+          createdUrl = url;
+          setGifUrl(url);
+        } else {
+          URL.revokeObjectURL(url);
+        }
+      })
+      .catch(() => {
+        // Keep live canvas running if GIF encoding fails
+      });
+
+    return () => {
+      cancelled = true;
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [payload]);
+
+  useEffect(() => {
+    if (gifUrl) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let frame = 0;
+    const totalFrames = 12;
+    drawRoastFrame(ctx, canvas.width, canvas.height, payload, 0, totalFrames);
+    const timer = window.setInterval(() => {
+      frame = (frame + 1) % totalFrames;
+      drawRoastFrame(ctx, canvas.width, canvas.height, payload, frame, totalFrames);
+    }, 90);
+
+    return () => window.clearInterval(timer);
+  }, [gifUrl, payload]);
+
+  const handleDownloadGif = () => {
+    if (!gifUrl) return;
+    const a = document.createElement('a');
+    a.href = gifUrl;
+    const slug = payload.crazyName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40);
+    a.download = `roast-${slug || 'hall-of-shame'}.gif`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const buildRedditShareText = () => {
+    return [
+      `### 😈 My Offline Finance App Diagnosed Me As: "${payload.crazyName}" (${payload.totalAmountFormatted})`,
+      '',
+      `**${payload.subtitleLine}**`,
+      '',
+      '**🕵️ Embarrassing Assumptions It Made From My Swipes:**',
+      ...payload.assumptions,
+      '',
+      `**📈 Opportunity Cost:** ${payload.opportunityCostLine}`,
+      '',
+      '---',
+      '*Generated 100% offline on my device by Strictly Spending.*',
+    ].join('\n');
+  };
+
+  const handleCopyText = async () => {
+    try {
+      await navigator.clipboard.writeText(buildRedditShareText());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handlePostReddit = async () => {
+    await handleCopyText();
+    if (gifUrl) {
+      handleDownloadGif();
+    }
+    const title = encodeURIComponent(
+      `My finance app diagnosed me as "${payload.crazyName}" (${payload.totalAmountFormatted}) and made these assumptions about me 😈`
+    );
+    window.open(`https://www.reddit.com/submit?title=${title}`, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 1.5,
+        my: 0.5,
+        animation: 'aiBlockSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
+      }}
+    >
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 460,
+          borderRadius: 2.5,
+          overflow: 'hidden',
+          border: '2px solid',
+          borderColor: 'error.main',
+          boxShadow: '0 14px 34px -8px rgba(239, 68, 68, 0.42)',
+          bgcolor: '#14080e',
+          lineHeight: 0,
+        }}
+      >
+        {gifUrl ? (
+          <Box
+            component="img"
+            src={gifUrl}
+            alt={`Animated Financial Roast: ${payload.crazyName}`}
+            sx={{
+              width: '100%',
+              height: 'auto',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <Box
+            component="canvas"
+            ref={canvasRef}
+            width={520}
+            height={640}
+            sx={{
+              width: '100%',
+              height: 'auto',
+              display: 'block',
+            }}
+          />
+        )}
+      </Box>
+
+      <Stack
+        direction="row"
+        spacing={1}
+        justifyContent="center"
+        sx={{ width: '100%', flexWrap: 'wrap', rowGap: 1 }}
+      >
+        <Button
+          size="small"
+          variant="contained"
+          color="error"
+          disabled={!gifUrl}
+          onClick={handleDownloadGif}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 800,
+            fontSize: '0.78rem',
+            py: 0.65,
+            px: 1.5,
+            borderRadius: 1.75,
+          }}
+        >
+          ⬇️ Download Animated .GIF
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={handleCopyText}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            fontSize: '0.76rem',
+            py: 0.65,
+            px: 1.35,
+            borderRadius: 1.75,
+          }}
+        >
+          {copied ? '✅ Copied Roast!' : '📋 Copy Roast Text'}
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          color="warning"
+          onClick={handlePostReddit}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 800,
+            fontSize: '0.76rem',
+            py: 0.65,
+            px: 1.35,
+            borderRadius: 1.75,
+          }}
+        >
+          🔥 Dare: Post to Reddit
+        </Button>
+      </Stack>
+    </Box>
+  );
+}
+
 function FormattedAiMessage({ content, isUser }: { content: string; isUser: boolean }) {
   if (isUser) {
     return (
@@ -1149,6 +1364,21 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
     const trimmed = lines[i].trim();
 
     if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Check for embedded Animated Roast GIF Card
+    if (trimmed.startsWith('[ROAST_GIF_CARD]') && trimmed.endsWith('[/ROAST_GIF_CARD]')) {
+      const jsonStr = trimmed
+        .slice('[ROAST_GIF_CARD]'.length, -'[/ROAST_GIF_CARD]'.length)
+        .trim();
+      try {
+        const parsed = JSON.parse(jsonStr) as RoastGifPayload;
+        elements.push(<RoastAnimatedGifWidget key={`gif-${i}`} payload={parsed} />);
+      } catch {
+        // Ignore malformed payload
+      }
       i++;
       continue;
     }
