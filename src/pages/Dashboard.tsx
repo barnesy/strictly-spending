@@ -1718,6 +1718,8 @@ export default function Dashboard() {
               sx={{
                 '& .MuiInputBase-root': {
                   height: 36,
+                  pl: 1.5,
+                  pr: 1,
                   fontSize: '0.84rem',
                   bgcolor: 'background.paper',
                 },
