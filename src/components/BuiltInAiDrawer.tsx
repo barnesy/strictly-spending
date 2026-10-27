@@ -631,13 +631,7 @@ function PromptCardGrid({
   });
 
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-        gap: 1.1,
-      }}
-    >
+    <Stack spacing={1.25}>
       {ordered.map((opt) => {
         const alreadyAsked = askedSet.has(opt.prompt.toLowerCase());
         return (
@@ -647,16 +641,22 @@ function PromptCardGrid({
             disabled={disabled}
             onClick={() => onSelect(opt.prompt)}
             sx={{
+              height: 'auto !important',
+              minHeight: compact ? 64 : 72,
+              width: '100%',
               textTransform: 'none',
               justifyContent: 'flex-start',
-              alignItems: 'flex-start',
+              alignItems: 'center',
               textAlign: 'left',
-              p: compact ? 1.1 : 1.35,
-              borderRadius: 2,
+              whiteSpace: 'normal',
+              overflow: 'visible',
+              py: compact ? 1.25 : 1.5,
+              px: 1.75,
+              borderRadius: 2.25,
               borderWidth: '1.5px',
-              borderColor: alreadyAsked ? 'divider' : 'rgba(59, 130, 246, 0.28)',
+              borderColor: alreadyAsked ? 'divider' : 'rgba(59, 130, 246, 0.32)',
               bgcolor: alreadyAsked ? 'transparent' : 'action.hover',
-              opacity: alreadyAsked ? 0.72 : 1,
+              opacity: alreadyAsked ? 0.75 : 1,
               color: 'text.primary',
               transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
               '&:hover': {
@@ -664,31 +664,40 @@ function PromptCardGrid({
                 borderColor: 'primary.main',
                 bgcolor: 'action.selected',
                 transform: 'translateY(-2px)',
-                boxShadow: '0 6px 16px -6px rgba(59, 130, 246, 0.28)',
+                boxShadow: '0 8px 20px -6px rgba(59, 130, 246, 0.28)',
                 opacity: 1,
               },
             }}
           >
-            <Stack direction="row" spacing={1.1} alignItems="flex-start" sx={{ width: '100%' }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
               <Box
                 sx={{
-                  fontSize: '1.25rem',
-                  lineHeight: 1.1,
-                  mt: 0.15,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  fontSize: '1.3rem',
+                  lineHeight: 1,
                   flexShrink: 0,
                 }}
               >
                 {opt.icon}
               </Box>
               <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={0.5}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
                   <Typography
-                    variant="body2"
+                    variant="subtitle2"
                     sx={{
                       fontWeight: 800,
-                      fontSize: '0.84rem',
-                      lineHeight: 1.25,
+                      fontSize: '0.94rem',
+                      lineHeight: 1.3,
                       color: 'text.primary',
+                      whiteSpace: 'normal',
                     }}
                   >
                     {opt.title}
@@ -697,11 +706,11 @@ function PromptCardGrid({
                     <Typography
                       variant="caption"
                       sx={{
-                        fontSize: '0.62rem',
+                        fontSize: '0.66rem',
                         fontWeight: 700,
-                        px: 0.6,
-                        py: 0.1,
-                        borderRadius: 0.75,
+                        px: 0.75,
+                        py: 0.15,
+                        borderRadius: 1,
                         bgcolor: 'action.selected',
                         color: 'text.secondary',
                         flexShrink: 0,
@@ -712,13 +721,14 @@ function PromptCardGrid({
                   )}
                 </Stack>
                 <Typography
-                  variant="caption"
+                  variant="body2"
                   color="text.secondary"
                   sx={{
                     display: 'block',
-                    fontSize: '0.72rem',
-                    lineHeight: 1.3,
-                    mt: 0.3,
+                    fontSize: '0.8rem',
+                    lineHeight: 1.38,
+                    mt: 0.35,
+                    whiteSpace: 'normal',
                   }}
                 >
                   {opt.subtitle}
@@ -728,7 +738,7 @@ function PromptCardGrid({
           </Button>
         );
       })}
-    </Box>
+    </Stack>
   );
 }
 
