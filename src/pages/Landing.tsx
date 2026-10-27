@@ -17,7 +17,6 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import AnimatedLogo from '../components/AnimatedLogo';
 import IphoneInstallModal from '../components/IphoneInstallModal';
 import { usePwaInstall } from '../utils/pwaInstall';
@@ -119,7 +118,7 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
   const [downloadUrls, setDownloadUrls] = useState(DEFAULT_DOWNLOAD_URLS);
   const [androidModalOpen, setAndroidModalOpen] = useState(false);
   const [iosModalOpen, setIosModalOpen] = useState(false);
-  const { canInstall, isIos, promptInstall } = usePwaInstall();
+  const { canInstall, promptInstall } = usePwaInstall();
 
   const handlePlayProtectSafeInstall = async () => {
     if (canInstall) {
@@ -258,7 +257,7 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
           Ingest multi-bank CSVs, sync 12,000+ banks via SimpleFIN, automate categorization rules, and forecast your net worth—without monthly cloud fees.
         </Typography>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '780px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: { xs: 6, md: 10 } }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '760px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: { xs: 6, md: 10 } }}>
           {onLaunchDemo && (
             <Button
               variant="contained"
@@ -267,188 +266,151 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
               onClick={onLaunchDemo}
               sx={{
                 width: '100%',
-                borderRadius: '8px',
-                py: { xs: 1.75, md: 2.25 },
-                px: 2.5,
+                borderRadius: '10px',
+                py: { xs: 1.5, md: 1.75 },
+                px: 3,
                 textTransform: 'none',
                 fontWeight: 600,
                 fontSize: { xs: '1rem', md: '1.05rem' },
                 whiteSpace: 'nowrap',
                 bgcolor: '#2563EB',
                 color: '#FFFFFF',
-                boxShadow: 'none',
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)',
                 '&:hover': {
                   bgcolor: '#1D4ED8',
-                  transform: 'translateY(-2px)',
-                  boxShadow: 'none',
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 6px 20px rgba(37, 99, 235, 0.32)',
                 },
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
               }}
             >
               Try Interactive Live Demo
             </Button>
           )}
 
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Button
-              onClick={() => setIosModalOpen(true)}
-              variant="contained"
-              size="large"
-              startIcon={<PhoneIphoneIcon />}
-              sx={{
-                flex: 1,
-                width: { xs: '100%', md: 'auto' },
-                borderRadius: '8px',
-                py: { xs: 1.75, md: 2.25 },
-                px: 2.25,
-                textTransform: 'none',
-                fontWeight: 600,
-                fontSize: { xs: '1rem', md: '1rem' },
-                whiteSpace: 'nowrap',
-                bgcolor: isIos ? '#2563EB' : '#111827',
-                color: '#FFFFFF',
-                boxShadow: 'none',
-                '&:hover': { bgcolor: isIos ? '#1D4ED8' : '#374151', transform: 'translateY(-2px)', boxShadow: 'none' },
-                transition: 'all 0.2s',
-              }}
-            >
-              Install on iPhone (iOS)
-            </Button>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+              gap: 1.25,
+            }}
+          >
             <Button
               component="a"
               href={downloadUrls.mac}
-              variant="contained"
+              variant="outlined"
               size="large"
               startIcon={<AppleIcon />}
               sx={{
-                flex: 1,
-                width: { xs: '100%', md: 'auto' },
-                borderRadius: '8px',
-                py: { xs: 1.75, md: 2.25 },
-                px: 2.25,
+                borderRadius: '10px',
+                py: 1.4,
+                px: 2,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: { xs: '1rem', md: '1rem' },
+                fontSize: '0.95rem',
                 whiteSpace: 'nowrap',
-                bgcolor: '#000000',
-                color: '#FFFFFF',
-                boxShadow: 'none',
-                '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)', boxShadow: 'none' },
-                transition: 'all 0.2s'
+                bgcolor: '#FFFFFF',
+                color: '#111827',
+                borderColor: '#D1D5DB',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                '&:hover': {
+                  bgcolor: '#F9FAFB',
+                  borderColor: '#9CA3AF',
+                  transform: 'translateY(-1px)',
+                },
+                transition: 'all 0.2s',
               }}
             >
-              Download for Mac
+              macOS
             </Button>
             <Button
               component="a"
               href={downloadUrls.windows}
-              variant="contained"
+              variant="outlined"
               size="large"
               startIcon={<WindowIcon />}
               sx={{
-                flex: 1,
-                width: { xs: '100%', md: 'auto' },
-                borderRadius: '8px',
-                py: { xs: 1.75, md: 2.25 },
-                px: 2.25,
+                borderRadius: '10px',
+                py: 1.4,
+                px: 2,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: { xs: '1rem', md: '1rem' },
+                fontSize: '0.95rem',
                 whiteSpace: 'nowrap',
                 bgcolor: '#FFFFFF',
                 color: '#111827',
-                border: '1px solid #D1D5DB',
-                '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)', boxShadow: 'none' },
+                borderColor: '#D1D5DB',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                '&:hover': {
+                  bgcolor: '#F9FAFB',
+                  borderColor: '#9CA3AF',
+                  transform: 'translateY(-1px)',
+                },
                 transition: 'all 0.2s',
-                boxShadow: 'none',
               }}
             >
-              Download for Windows
+              Windows
+            </Button>
+            <Button
+              onClick={() => setIosModalOpen(true)}
+              variant="outlined"
+              size="large"
+              startIcon={<PhoneIphoneIcon />}
+              sx={{
+                borderRadius: '10px',
+                py: 1.4,
+                px: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem',
+                whiteSpace: 'nowrap',
+                bgcolor: '#FFFFFF',
+                color: '#111827',
+                borderColor: '#D1D5DB',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                '&:hover': {
+                  bgcolor: '#F9FAFB',
+                  borderColor: '#9CA3AF',
+                  transform: 'translateY(-1px)',
+                },
+                transition: 'all 0.2s',
+              }}
+            >
+              iPhone (iOS)
             </Button>
             <Button
               component="a"
               href={downloadUrls.android}
-              variant="contained"
+              variant="outlined"
               size="large"
               startIcon={<AndroidIcon />}
               sx={{
-                flex: 1,
-                width: { xs: '100%', md: 'auto' },
-                borderRadius: '8px',
-                py: { xs: 1.75, md: 2.25 },
-                px: 2.25,
+                borderRadius: '10px',
+                py: 1.4,
+                px: 2,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: { xs: '1rem', md: '1rem' },
+                fontSize: '0.95rem',
                 whiteSpace: 'nowrap',
-                bgcolor: '#059669',
-                color: '#FFFFFF',
-                '&:hover': { bgcolor: '#047857', transform: 'translateY(-2px)', boxShadow: 'none' },
+                bgcolor: '#FFFFFF',
+                color: '#111827',
+                borderColor: '#D1D5DB',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                '&:hover': {
+                  bgcolor: '#F9FAFB',
+                  borderColor: '#9CA3AF',
+                  transform: 'translateY(-1px)',
+                },
                 transition: 'all 0.2s',
-                boxShadow: 'none',
               }}
             >
-              Download for Android (APK)
+              Android
             </Button>
           </Box>
 
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
-            <Button
-              variant="outlined"
-              size="medium"
-              startIcon={<PhoneIphoneIcon sx={{ color: '#2563EB' }} />}
-              onClick={() => setIosModalOpen(true)}
-              sx={{
-                flex: 1,
-                borderRadius: '8px',
-                py: 1.25,
-                px: 2,
-                textTransform: 'none',
-                fontWeight: 700,
-                fontSize: { xs: '0.85rem', sm: '0.9rem' },
-                bgcolor: 'rgba(37,99,235,0.06)',
-                color: '#1E40AF',
-                borderColor: 'rgba(37,99,235,0.35)',
-                '&:hover': {
-                  bgcolor: 'rgba(37,99,235,0.12)',
-                  borderColor: '#2563EB',
-                },
-              }}
-            >
-              iPhone Tester? Get Direct iOS Link & Home Screen Guide
-            </Button>
-
-            <Button
-              variant="outlined"
-              size="medium"
-              startIcon={<VerifiedUserIcon sx={{ color: '#059669' }} />}
-              onClick={handlePlayProtectSafeInstall}
-              sx={{
-                flex: 1,
-                borderRadius: '8px',
-                py: 1.25,
-                px: 2,
-                textTransform: 'none',
-                fontWeight: 700,
-                fontSize: { xs: '0.85rem', sm: '0.9rem' },
-                bgcolor: 'rgba(16,185,129,0.06)',
-                color: '#065F46',
-                borderColor: 'rgba(16,185,129,0.35)',
-                '&:hover': {
-                  bgcolor: 'rgba(16,185,129,0.12)',
-                  borderColor: '#059669',
-                },
-              }}
-            >
-              {canInstall
-                ? 'Install Android App Directly (Play Protect Safe)'
-                : 'Android Play Protect / WebAPK Guide'}
-            </Button>
-          </Box>
-
-          <Box sx={{ width: '100%' }}>
+          <Box sx={{ width: '100%', mt: 0.5 }}>
             <InstallationNotes
-              onOpenAndroidHelp={() => setAndroidModalOpen(true)}
+              onOpenAndroidHelp={handlePlayProtectSafeInstall}
               onOpenIosHelp={() => setIosModalOpen(true)}
             />
           </Box>
@@ -583,167 +545,130 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 4, color: '#111827' }}>
             Ready to take control?
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '780px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: 4 }}>
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <Button
-                onClick={() => setIosModalOpen(true)}
-                variant="contained"
-                size="large"
-                startIcon={<PhoneIphoneIcon />}
-                sx={{
-                  flex: 1,
-                  width: { xs: '100%', md: 'auto' },
-                  borderRadius: '8px',
-                  py: { xs: 1.75, md: 2.25 },
-                  px: 2.25,
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1rem' },
-                  whiteSpace: 'nowrap',
-                  bgcolor: isIos ? '#2563EB' : '#111827',
-                  color: '#FFFFFF',
-                  boxShadow: 'none',
-                  '&:hover': { bgcolor: isIos ? '#1D4ED8' : '#374151', transform: 'translateY(-2px)', boxShadow: 'none' },
-                  transition: 'all 0.2s',
-                }}
-              >
-                Install on iPhone (iOS)
-              </Button>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '760px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: 4 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                gap: 1.25,
+              }}
+            >
               <Button
                 component="a"
                 href={downloadUrls.mac}
-                variant="contained"
+                variant="outlined"
                 size="large"
                 startIcon={<AppleIcon />}
                 sx={{
-                  flex: 1,
-                  width: { xs: '100%', md: 'auto' },
-                  borderRadius: '8px',
-                  py: { xs: 1.75, md: 2.25 },
-                  px: 2.25,
+                  borderRadius: '10px',
+                  py: 1.4,
+                  px: 2,
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1rem' },
+                  fontSize: '0.95rem',
                   whiteSpace: 'nowrap',
-                  bgcolor: '#000000',
-                  color: '#FFFFFF',
-                  boxShadow: 'none',
-                  '&:hover': { bgcolor: '#333333', transform: 'translateY(-2px)', boxShadow: 'none' },
-                  transition: 'all 0.2s'
+                  bgcolor: '#FFFFFF',
+                  color: '#111827',
+                  borderColor: '#D1D5DB',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  '&:hover': {
+                    bgcolor: '#F9FAFB',
+                    borderColor: '#9CA3AF',
+                    transform: 'translateY(-1px)',
+                  },
+                  transition: 'all 0.2s',
                 }}
               >
-                Download for Mac
+                macOS
               </Button>
               <Button
                 component="a"
                 href={downloadUrls.windows}
-                variant="contained"
+                variant="outlined"
                 size="large"
                 startIcon={<WindowIcon />}
                 sx={{
-                  flex: 1,
-                  width: { xs: '100%', md: 'auto' },
-                  borderRadius: '8px',
-                  py: { xs: 1.75, md: 2.25 },
-                  px: 2.25,
+                  borderRadius: '10px',
+                  py: 1.4,
+                  px: 2,
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1rem' },
+                  fontSize: '0.95rem',
                   whiteSpace: 'nowrap',
                   bgcolor: '#FFFFFF',
                   color: '#111827',
-                  border: '1px solid #D1D5DB',
-                  '&:hover': { bgcolor: '#F9FAFB', transform: 'translateY(-2px)', boxShadow: 'none' },
+                  borderColor: '#D1D5DB',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  '&:hover': {
+                    bgcolor: '#F9FAFB',
+                    borderColor: '#9CA3AF',
+                    transform: 'translateY(-1px)',
+                  },
                   transition: 'all 0.2s',
-                  boxShadow: 'none',
                 }}
               >
-                Download for Windows
+                Windows
+              </Button>
+              <Button
+                onClick={() => setIosModalOpen(true)}
+                variant="outlined"
+                size="large"
+                startIcon={<PhoneIphoneIcon />}
+                sx={{
+                  borderRadius: '10px',
+                  py: 1.4,
+                  px: 2,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  whiteSpace: 'nowrap',
+                  bgcolor: '#FFFFFF',
+                  color: '#111827',
+                  borderColor: '#D1D5DB',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  '&:hover': {
+                    bgcolor: '#F9FAFB',
+                    borderColor: '#9CA3AF',
+                    transform: 'translateY(-1px)',
+                  },
+                  transition: 'all 0.2s',
+                }}
+              >
+                iPhone (iOS)
               </Button>
               <Button
                 component="a"
                 href={downloadUrls.android}
-                variant="contained"
+                variant="outlined"
                 size="large"
                 startIcon={<AndroidIcon />}
                 sx={{
-                  flex: 1,
-                  width: { xs: '100%', md: 'auto' },
-                  borderRadius: '8px',
-                  py: { xs: 1.75, md: 2.25 },
-                  px: 2.25,
+                  borderRadius: '10px',
+                  py: 1.4,
+                  px: 2,
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1rem' },
+                  fontSize: '0.95rem',
                   whiteSpace: 'nowrap',
-                  bgcolor: '#059669',
-                  color: '#FFFFFF',
-                  '&:hover': { bgcolor: '#047857', transform: 'translateY(-2px)', boxShadow: 'none' },
+                  bgcolor: '#FFFFFF',
+                  color: '#111827',
+                  borderColor: '#D1D5DB',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  '&:hover': {
+                    bgcolor: '#F9FAFB',
+                    borderColor: '#9CA3AF',
+                    transform: 'translateY(-1px)',
+                  },
                   transition: 'all 0.2s',
-                  boxShadow: 'none',
                 }}
               >
-                Download for Android (APK)
+                Android
               </Button>
             </Box>
 
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
-              <Button
-                variant="outlined"
-                size="medium"
-                startIcon={<PhoneIphoneIcon sx={{ color: '#2563EB' }} />}
-                onClick={() => setIosModalOpen(true)}
-                sx={{
-                  flex: 1,
-                  borderRadius: '8px',
-                  py: 1.25,
-                  px: 2,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: { xs: '0.85rem', sm: '0.9rem' },
-                  bgcolor: 'rgba(37,99,235,0.06)',
-                  color: '#1E40AF',
-                  borderColor: 'rgba(37,99,235,0.35)',
-                  '&:hover': {
-                    bgcolor: 'rgba(37,99,235,0.12)',
-                    borderColor: '#2563EB',
-                  },
-                }}
-              >
-                iPhone Tester? Get Direct iOS Link & Home Screen Guide
-              </Button>
-
-              <Button
-                variant="outlined"
-                size="medium"
-                startIcon={<VerifiedUserIcon sx={{ color: '#059669' }} />}
-                onClick={handlePlayProtectSafeInstall}
-                sx={{
-                  flex: 1,
-                  borderRadius: '8px',
-                  py: 1.25,
-                  px: 2,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  fontSize: { xs: '0.85rem', sm: '0.9rem' },
-                  bgcolor: 'rgba(16,185,129,0.06)',
-                  color: '#065F46',
-                  borderColor: 'rgba(16,185,129,0.35)',
-                  '&:hover': {
-                    bgcolor: 'rgba(16,185,129,0.12)',
-                    borderColor: '#059669',
-                  },
-                }}
-              >
-                {canInstall
-                  ? 'Install Android App Directly (Play Protect Safe)'
-                  : 'Android Play Protect / WebAPK Guide'}
-              </Button>
-            </Box>
-
-            <Box sx={{ width: '100%' }}>
+            <Box sx={{ width: '100%', mt: 0.5 }}>
               <InstallationNotes
-                onOpenAndroidHelp={() => setAndroidModalOpen(true)}
+                onOpenAndroidHelp={handlePlayProtectSafeInstall}
                 onOpenIosHelp={() => setIosModalOpen(true)}
               />
             </Box>
