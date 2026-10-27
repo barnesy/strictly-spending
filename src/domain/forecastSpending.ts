@@ -241,10 +241,10 @@ export function computeCategoryProjections({
     }
   }
 
-  // 3. Trailing average map
+  // 3. Trailing average map (populate for all non-disabled categories so actuals/trailing aren't hidden by budget switch)
   const trailingByCat = new Map<string, number>();
   for (const t of trailingAverages) {
-    if (!disabledSet.has(t.category) && !excludedBudgetCategories.has(t.category)) {
+    if (!disabledSet.has(t.category)) {
       trailingByCat.set(t.category, t.average || 0);
     }
   }
@@ -254,12 +254,33 @@ export function computeCategoryProjections({
   const lastYearMonthSpendMap = priorMonthKey && historicalMonthlySpend ? historicalMonthlySpend.get(priorMonthKey) : undefined;
 
   const resultMap = new Map<string, CategoryProjection>();
-  const spendCats = (categories || []).filter(
+  const nonSpendCatNames = new Set(
+    (categories || []).filter((c) => c.type === 'income' || c.type === 'transfer').map((c) => c.name)
+  );
+  const baseSpendCats = (categories || []).filter(
     (c) => c.type === 'spend' && !disabledSet.has(c.name)
   );
+  const seenCatNames = new Set(baseSpendCats.map((c) => c.name));
+  const extraSpendCats: Category[] = [];
+  if (actualSpendByCategory) {
+    for (const catName of actualSpendByCategory.keys()) {
+      if (catName && !seenCatNames.has(catName) && !nonSpendCatNames.has(catName) && !disabledSet.has(catName)) {
+        seenCatNames.add(catName);
+        extraSpendCats.push({ name: catName, color: '#78909c', defaultRecurrence: 'onetime', type: 'spend', sortOrder: 999 });
+      }
+    }
+  }
+  for (const catName of trailingByCat.keys()) {
+    if (catName && !seenCatNames.has(catName) && !nonSpendCatNames.has(catName) && !disabledSet.has(catName)) {
+      seenCatNames.add(catName);
+      extraSpendCats.push({ name: catName, color: '#78909c', defaultRecurrence: 'onetime', type: 'spend', sortOrder: 999 });
+    }
+  }
+  const spendCats = extraSpendCats.length > 0 ? [...baseSpendCats, ...extraSpendCats] : baseSpendCats;
 
   for (const cat of spendCats) {
     const isRecurringCat = cat.defaultRecurrence === 'recurring';
+    const isExcludedCat = excludedBudgetCategories.has(cat.name);
     const recurring = Math.round(recurringByCat.get(cat.name) || 0);
     const budgetEntry = !isRecurringCat ? budgetByCat.get(cat.name) : undefined;
     const hasExplicitBudget = budgetEntry !== undefined;
@@ -275,18 +296,22 @@ export function computeCategoryProjections({
     let baselineTotal = 0;
     let basis: CategoryProjection['basis'] = 'trailing';
 
-    if (isRecurringCat) {
+    if (isExcludedCat) {
+      // Excluded budget categories have $0 planned variable budget (only recurring if not excluded)
+      baselineTotal = isRecurringCat ? recurring : 0;
+      basis = isRecurringCat ? 'recurring' : 'budget';
+    } else if (isRecurringCat) {
       // Recurring categories are driven strictly by active consolidated recurring bills
       baselineTotal = recurring;
       basis = 'recurring';
+    } else if (hasExplicitBudget && !budgetEntry?.userSet && trailing > 0) {
+      // Auto-seeded (non-userSet) variable budget: always track the latest 3-month trailing actual average
+      baselineTotal = Math.max(trailing, budget, recurring);
+      basis = 'trailing';
     } else if (budget > 0) {
-      // User has an active budget for this category: budget dictates variable capacity
+      // User has an explicit budget for this category: budget dictates variable capacity
       baselineTotal = Math.max(budget, recurring);
       basis = 'budget';
-    } else if (hasExplicitBudget && !budgetEntry?.userSet && trailing > 0) {
-      // Auto-seeded $0 budget row before trailing averages loaded: use trailing average
-      baselineTotal = Math.max(trailing, recurring);
-      basis = 'trailing';
     } else if (hasExplicitBudget) {
       // Explicit $0 budget (or $0 trailing average on an isolated bank account)
       baselineTotal = recurring;
@@ -321,7 +346,7 @@ export function computeCategoryProjections({
       basis = 'actual_exceeded';
     }
 
-    if (total > 0) {
+    if (total > 0 || (actualToDate || 0) > 0 || trailing > 0) {
       resultMap.set(cat.name, {
         category: cat.name,
         color: cat.color || '#bdbdbd',

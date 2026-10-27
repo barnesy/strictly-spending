@@ -433,10 +433,49 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
     }
   }
 
-  // 4. Ensure s.budgets has entries for all spend categories, seeding missing or non-userSet $0 rows from trailing actuals
+  // 4. Upgrade any non-userOverridden Uncategorized or false-Transfers transactions that match real spend rules/heuristics
+  const validCatSet = new Set(s.categories.map((c) => c.name));
+  const recurringCatSet = new Set(
+    s.categories.filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+  );
+  for (let i = 0; i < s.transactions.length; i++) {
+    const t = s.transactions[i];
+    if (t.source === 'demo' || t.userOverridden) continue;
+    if (!t.category || t.category === 'Uncategorized' || (t.category === 'Transfers' && t.amount < 0)) {
+      let nextCat = categorize(t.description, t.merchantKey, t.rawCategory, ctx);
+      if (nextCat === 'Uncategorized') {
+        const inferred =
+          inferTypeCategory(t.amount, t.source, t.rawCategory, undefined, t.description) ||
+          heuristicCategory(`${t.merchantKey || ''} ${t.description}`, t.amount, validCatSet);
+        if (inferred) nextCat = inferred;
+      }
+      if (nextCat && nextCat !== 'Uncategorized' && nextCat !== t.category) {
+        s.transactions[i] = {
+          ...t,
+          category: nextCat,
+          recurrence: t.recurrenceOverride
+            ? t.recurrence
+            : recurringCatSet.has(nextCat)
+            ? 'recurring'
+            : 'onetime',
+        };
+        changed = true;
+      }
+    }
+  }
+
+  // 5. Ensure s.budgets has entries for all spend categories, syncing non-userSet rows from trailing actuals
   const nonDemoSpendTxns = s.transactions.filter((t) => t.source !== 'demo' && t.amount < 0);
-  const now = new Date();
-  const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().slice(0, 10);
+  let anchorDate = new Date();
+  if (nonDemoSpendTxns.length > 0) {
+    let maxDateStr = '';
+    for (const t of nonDemoSpendTxns) {
+      if (t.date > maxDateStr) maxDateStr = t.date;
+    }
+    const parsed = new Date(`${maxDateStr}T00:00:00`);
+    if (!Number.isNaN(parsed.getTime())) anchorDate = parsed;
+  }
+  const cutoff = new Date(anchorDate.getFullYear(), anchorDate.getMonth() - 3, 1).toISOString().slice(0, 10);
   const recentTxns = nonDemoSpendTxns.filter((t) => t.date >= cutoff);
   const activeTxns = recentTxns.length > 0 ? recentTxns : nonDemoSpendTxns;
   const distinctMonths = new Set(activeTxns.map((t) => t.date.slice(0, 7)));
@@ -457,7 +496,7 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
         userSet: false,
       });
       changed = true;
-    } else if (!prev.userSet && prev.monthlyAmount === 0 && avg > 0) {
+    } else if (!prev.userSet && Math.abs((prev.monthlyAmount || 0) - avg) > 0.01) {
       prev.monthlyAmount = avg;
       changed = true;
     }
@@ -975,9 +1014,17 @@ function normalizeSortMerchantKey(rawKey: string, description: string): string {
 }
 
 function heuristicCategory(text: string, netSum: number, validCategories: Set<string>): string | null {
-  const padded = ` ${text.toLowerCase()} `;
+  const normalized = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `;
+  const rawLower = text.toLowerCase();
   const hasAny = (keywords: string[]) =>
-    keywords.some((kw) => (kw.includes(' ') ? padded.includes(kw) : padded.includes(` ${kw} `) || padded.includes(kw)));
+    keywords.some((kw) => {
+      const cleanKw = kw.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (!cleanKw) return false;
+      if (cleanKw.length <= 4 && !cleanKw.includes(' ')) {
+        return normalized.includes(` ${cleanKw} `);
+      }
+      return normalized.includes(` ${cleanKw} `) || rawLower.includes(kw.toLowerCase());
+    });
 
   const loanRules: Array<[string, string[]]> = [
     ['Mortgage', ['rocket mortgage', 'mortgage', 'mr cooper', 'pennymac', 'loancare', 'freedom mortgage', 'shellpoint', 'flagstar', 'caliber home', 'guild mortgage', 'united wholesale', 'uwm', 'loan depot', 'loandepot', 'cenlar', 'dovenmuehle', 'phh mortgage', 'carrington', 'newrez']],
@@ -988,18 +1035,6 @@ function heuristicCategory(text: string, netSum: number, validCategories: Set<st
     if (validCategories.has(cat) && hasAny(keywords)) {
       return cat;
     }
-  }
-
-  if (
-    validCategories.has('Transfers') &&
-    hasAny([
-      'wire', 'xfer', 'transfer', 'zelle', 'venmo', 'cash app', 'robinhood',
-      'coinbase', 'fidelity', 'vanguard', 'schwab', 'wealthfront', 'betterment',
-      'autopay', 'credit card pmt', 'crcardpmt', 'epayment', 'mobile pymt',
-      'online pmt', 'bill pay', 'payment thank you', 'online transfer', 'check',
-    ])
-  ) {
-    return 'Transfers';
   }
 
   if (
@@ -1015,15 +1050,15 @@ function heuristicCategory(text: string, netSum: number, validCategories: Set<st
   }
 
   const rules: Array<[string, string[]]> = [
-    ['Groceries', ['publix', 'kroger', 'whole foods', 'trader joe', 'aldi', 'costco', 'sams club', 'safeway', 'wegmans', 'sprouts', 'instacart', 'food lion', 'piggly wiggly', 'supermarket', 'grocery', 'market']],
-    ['Restaurants & Coffee', ['starbucks', 'dunkin', 'mcdonald', 'chick fil a', 'chipotle', 'panera', 'wendys', 'taco bell', 'burger king', 'subway', 'dominos', 'pizza', 'cafe', 'coffee', 'bakery', 'grill', 'kitchen', 'bistro', 'tavern', 'restaurant', 'doordash', 'ubereats', 'grubhub', 'waffle house', 'sweetgreen', 'cava', 'shake shack', 'popeyes', 'zaxby', 'bojangles']],
-    ['Transportation', ['chevron', 'shell', 'exxon', 'mobil', 'racetrac', 'quiktrip', 'wawa', 'sheetz', 'speedway', 'marathon', 'valero', 'citgo', 'circle k', 'sunoco', 'uber', 'lyft', 'parking', 'parkmobile', 'peach pass', 'sunpass', 'ezpass', 'toll', 'marta', 'delta', 'united', 'southwest', 'autozone', 'jiffy lube', 'discount tire']],
-    ['Utilities', ['georgia power', 'duke energy', 'fpl', 'comcast', 'xfinity', 'att', 'verizon', 't mobile', 'tmobile', 'spectrum', 'cox', 'google fiber', 'electric', 'gas south', 'scana', 'sanitation', 'utility', 'water']],
-    ['Subscriptions', ['netflix', 'spotify', 'hulu', 'disney', 'icloud', 'youtube', 'openai', 'chatgpt', 'claude', 'anthropic', 'github', 'cursor', 'adobe', 'microsoft', 'dropbox', 'nytimes', 'patreon', 'substack', 'xero', 'quickbooks', 'audible', 'kindle']],
-    ['Shopping', ['amazon', 'amzn', 'target', 'walmart', 'home depot', 'lowes', 'ikea', 'best buy', 'etsy', 'ebay', 'wayfair', 'tj maxx', 'marshalls', 'ross', 'nordstrom', 'macys', 'kohls', 'old navy', 'nike', 'lululemon', 'chewy', 'petco', 'petsmart', 'ups store', 'fedex', 'usps']],
-    ['Health', ['cvs', 'walgreens', 'rite aid', 'pharmacy', 'medical', 'dental', 'dentist', 'doctor', 'clinic', 'hospital', 'urgent care', 'quest diag', 'labcorp', 'optometry', 'vision', 'therapy', 'fitness', 'peloton', 'ymca']],
+    ['Groceries', ['publix', 'kroger', 'whole foods', 'trader joe', 'aldi', 'costco', 'sams club', 'safeway', 'wegmans', 'sprouts', 'instacart', 'food lion', 'piggly wiggly', 'supermarket', 'grocery', 'kelly s market', 'atlanta american food', 'market']],
+    ['Restaurants & Coffee', ['starbucks', 'dunkin', 'dutch bros', 'mcdonald', 'chick fil a', 'chipotle', 'panera', 'wendys', 'taco bell', 'burger king', 'subway', 'dominos', 'pizza', 'antico', 'bellwood coffee', 'dancing goats', 'chai pani', 'desi tadka', 'thinkingmantavern', 'the earl', 'firehouse subs', 'raising cane', 'jenchan', 'estoria', 'flat shoals', 'twain', 'cafe', 'coffee', 'bakery', 'grill', 'kitchen', 'bistro', 'tavern', 'restaurant', 'doordash', 'ubereats', 'grubhub', 'waffle house', 'sweetgreen', 'cava', 'shake shack', 'popeyes', 'zaxby', 'bojangles']],
+    ['Transportation', ['chevron', 'shell', 'exxon', 'mobil', 'racetrac', 'quiktrip', 'wawa', 'sheetz', 'speedway', 'marathon', 'valero', 'citgo', 'circle k', 'sunoco', 'am pm convenience', 'six star service', 'supercharger', 'tesla supercharger', 'uber', 'lyft', 'laz parking', 'peakparking', 'parking', 'parkmobile', 'peach pass', 'sunpass', 'ezpass', 'toll', 'marta', 'delta', 'united', 'southwest', 'autozone', 'jiffy lube', 'discount tire']],
+    ['Utilities', ['georgia power', 'duke energy', 'fpl', 'comcast', 'xfinity', 'att', 'verizon', 't mobile', 'tmobile', 'google fi', 'spectrum', 'cox', 'google fiber', 'electric', 'gas south', 'scana', 'dekalb county', 'sanitation', 'utility', 'water']],
+    ['Subscriptions', ['netflix', 'spotify', 'hulu', 'disney', 'icloud', 'youtube', 'openai', 'chatgpt', 'claude', 'anthropic', 'github', 'cursor', 'adobe', 'microsoft', 'dropbox', 'nytimes', 'patreon', 'substack', 'xero', 'quickbooks', 'audible', 'kindle', 'godaddy']],
+    ['Shopping', ['amazon', 'amzn', 'target', 'walmart', 'home depot', 'lowes', 'ikea', 'best buy', 'etsy', 'ebay', 'wayfair', 'homegoods', 'tj maxx', 'marshalls', 'ross', 'nordstrom', 'macys', 'kohls', 'old navy', 'dick s sporting', 'depop', 'fleet feet', 'scented cottage', 'nike', 'lululemon', 'chewy', 'petco', 'petsmart', 'ups store', 'fedex', 'usps']],
+    ['Health', ['cvs', 'walgreens', 'rite aid', 'pharmacy', 'medical', 'dental', 'dentist', 'doctor', 'clinic', 'hospital', 'urgent care', 'quest diag', 'labcorp', 'optometry', 'vision', 'therapy', 'planet fitness', 'la fitness', 'health unlimit', 'fitness', 'peloton', 'ymca']],
     ['Entertainment', ['amc', 'regal', 'cinemark', 'cinema', 'movie', 'ticketmaster', 'stubhub', 'seatgeek', 'steam', 'playstation', 'xbox', 'nintendo', 'golf', 'bowling', 'museum', 'zoo', 'aquarium']],
-    ['Insurance', ['geico', 'state farm', 'progressive', 'allstate', 'usaa', 'liberty mutual', 'farmers', 'insurance']],
+    ['Insurance', ['geico', 'state farm', 'progressive', 'allstate', 'usaa', 'liberty mutual', 'farmers', 'homesite', 'insurance']],
     ['Housing', ['rent', 'hoa', 'property mgmt', 'apartments']],
     ['Taxes', ['internal revenue', 'dept of rev', 'property tax', 'county tax']],
     ['Fees & Interest', ['overdraft', 'late charge', 'interest charge', 'service charge', 'wire fee', 'atm fee', 'annual fee', 'maintenance fee']],
@@ -1034,6 +1069,19 @@ function heuristicCategory(text: string, netSum: number, validCategories: Set<st
       return cat;
     }
   }
+
+  if (
+    validCategories.has('Transfers') &&
+    hasAny([
+      'wire', 'xfer', 'transfer', 'zelle', 'venmo', 'cash app', 'robinhood',
+      'coinbase', 'fidelity', 'vanguard', 'schwab', 'wealthfront', 'betterment',
+      'credit card pmt', 'crcardpmt', 'epayment', 'mobile pymt',
+      'payment thank you', 'online transfer',
+    ])
+  ) {
+    return 'Transfers';
+  }
+
   return null;
 }
 
@@ -1696,16 +1744,25 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     }
     case 'get_category_trailing_averages': {
       const months = Math.max(1, args.months || 3);
-      const now = new Date();
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString().slice(0, 10);
       const accountFilter = args.accountId ? { enabledAccountIds: [args.accountId] } : {};
-      const recent = filterTransactions(s.transactions, {
+      const allSpend = filterTransactions(s.transactions, {
         ...(args.filters || {}),
         ...accountFilter,
-        startDate: cutoff,
         spendOnly: true,
-      });
-      const distinctMonths = new Set(recent.filter((t) => t.amount < 0).map((t) => t.date.slice(0, 7)));
+      }).filter((t) => t.amount < 0);
+      let anchorDate = new Date();
+      if (allSpend.length > 0) {
+        let maxDateStr = '';
+        for (const t of allSpend) {
+          if (t.date > maxDateStr) maxDateStr = t.date;
+        }
+        const parsed = new Date(`${maxDateStr}T00:00:00`);
+        if (!Number.isNaN(parsed.getTime())) anchorDate = parsed;
+      }
+      const cutoff = new Date(anchorDate.getFullYear(), anchorDate.getMonth() - months, 1).toISOString().slice(0, 10);
+      const recentFiltered = allSpend.filter((t) => t.date >= cutoff);
+      const recent = recentFiltered.length > 0 ? recentFiltered : allSpend;
+      const distinctMonths = new Set(recent.map((t) => t.date.slice(0, 7)));
       const divisor = Math.max(1, Math.min(months, distinctMonths.size || months));
       const byCat = new Map<string, { total: number; recurring: number; variable: number }>();
       for (const t of recent) {
@@ -1860,9 +1917,29 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
     case 'recategorize_all': {
       let updatedCount = 0;
       const ctx = { rules: s.rules };
+      const userRulesCtx = { rules: s.rules.filter((r) => (r.priority || 0) >= 1000) };
       const validCats = new Set(s.categories.map((c) => c.name));
+      const recurringCats = new Set(
+        s.categories.filter((c) => c.defaultRecurrence === 'recurring').map((c) => c.name)
+      );
       s.transactions = s.transactions.map((t) => {
-        if (t.userOverridden && !args.forceUserRules) return t;
+        if (t.userOverridden) {
+          if (!args.forceUserRules) return t;
+          const userRuleMatch = categorize(t.description, t.merchantKey, t.rawCategory, userRulesCtx);
+          if (userRuleMatch !== 'Uncategorized' && userRuleMatch !== t.category) {
+            updatedCount += 1;
+            return {
+              ...t,
+              category: userRuleMatch,
+              recurrence: t.recurrenceOverride
+                ? t.recurrence
+                : recurringCats.has(userRuleMatch)
+                ? 'recurring'
+                : 'onetime',
+            };
+          }
+          return t;
+        }
         let nextCat = categorize(t.description, t.merchantKey, t.rawCategory, ctx);
         if (nextCat === 'Uncategorized') {
           const inferred =
@@ -1870,9 +1947,21 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
             heuristicCategory(`${t.merchantKey || ''} ${t.description}`, t.amount, validCats);
           if (inferred) nextCat = inferred;
         }
+        // Never downgrade an already-categorized transaction to Uncategorized
+        if (nextCat === 'Uncategorized' && t.category && t.category !== 'Uncategorized') {
+          return t;
+        }
         if (nextCat !== t.category) {
           updatedCount += 1;
-          return { ...t, category: nextCat };
+          return {
+            ...t,
+            category: nextCat,
+            recurrence: t.recurrenceOverride
+              ? t.recurrence
+              : recurringCats.has(nextCat)
+              ? 'recurring'
+              : 'onetime',
+          };
         }
         return t;
       });

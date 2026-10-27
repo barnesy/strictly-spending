@@ -16,6 +16,11 @@ const TRANSACTION_DERIVED_QUERY_KEYS = [
   'top_merchants',
   'spend_chart_data',
   'income_chart_data',
+  'historical_spend_by_category',
+  'historical_monthly_income',
+  'recurrence_map',
+  'last_month_actual_spend',
+  'budgets',
   'uncategorized_count',
   'category_transaction_counts',
   'rule_match_counts',
@@ -160,6 +165,7 @@ export const useAddRule = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] });
       queryClient.invalidateQueries({ queryKey: ['rule_match_counts'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -171,6 +177,7 @@ export const useUpdateRule = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] });
       queryClient.invalidateQueries({ queryKey: ['rule_match_counts'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -182,6 +189,7 @@ export const useDeleteRule = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] });
       queryClient.invalidateQueries({ queryKey: ['rule_match_counts'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };

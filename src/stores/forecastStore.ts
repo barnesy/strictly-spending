@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { api } from '../api';
 import type { Scenario, Goal, DestinationAccount, IncomeStream } from '../api/scenarios';
 import {
   calculateMonthlyFromPaycheck,
@@ -8,6 +9,27 @@ import {
 import { getStreamPaycheckSchedule } from '../domain/forecastSpending';
 
 export type { DestinationAccount, IncomeStream };
+
+function persistDestinationsOverrideToDb(destinations: DestinationAccount[]) {
+  try {
+    void api
+      .putSetting(
+        'forecast_destinations_override',
+        destinations.map((d) => ({
+          id: d.id,
+          accountId: d.accountId,
+          name: d.name,
+          monthlyAllocation: d.monthlyAllocation,
+          sourceAllocations: d.sourceAllocations,
+          isOverridden: d.isOverridden,
+          enabled: d.enabled,
+        }))
+      )
+      .catch(() => {});
+  } catch {
+    // ignore in non-browser/test environments
+  }
+}
 
 export interface ForecastWindfall {
   id: string;
@@ -496,6 +518,7 @@ export const useForecastStore = create<ForecastState>()(
   setDestinations: (destinations) => {
     const savings = computeSavingsFromDestinations(destinations);
     const growth = computeWeightedGrowthRate(destinations, get().investmentGrowthRate);
+    persistDestinationsOverrideToDb(destinations);
     set({
       destinations,
       savingsBudget: savings,
@@ -513,6 +536,7 @@ export const useForecastStore = create<ForecastState>()(
     });
     const savings = computeSavingsFromDestinations(next);
     const growth = computeWeightedGrowthRate(next, get().investmentGrowthRate);
+    persistDestinationsOverrideToDb(next);
     set({
       destinations: next,
       savingsBudget: savings,
@@ -524,6 +548,7 @@ export const useForecastStore = create<ForecastState>()(
     const next = [...get().destinations, { ...dest, isOverridden: true }];
     const savings = computeSavingsFromDestinations(next);
     const growth = computeWeightedGrowthRate(next, get().investmentGrowthRate);
+    persistDestinationsOverrideToDb(next);
     set({
       destinations: next,
       savingsBudget: savings,
@@ -535,6 +560,7 @@ export const useForecastStore = create<ForecastState>()(
     const next = get().destinations.filter((d) => d.id !== id);
     const savings = computeSavingsFromDestinations(next);
     const growth = computeWeightedGrowthRate(next, get().investmentGrowthRate);
+    persistDestinationsOverrideToDb(next);
     set({
       destinations: next,
       savingsBudget: savings,
@@ -676,6 +702,7 @@ export const useForecastStore = create<ForecastState>()(
       } else {
         const existingByAccId = new Map<number, DestinationAccount>();
         const existingById = new Map<string, DestinationAccount>();
+        const anyExistingOverridden = state.destinations.some((d) => d.isOverridden);
         for (const d of state.destinations) {
           if (d.accountId !== undefined) {
             existingByAccId.set(d.accountId, d);
@@ -696,9 +723,9 @@ export const useForecastStore = create<ForecastState>()(
             || existingById.get(incoming.id);
 
           if (existing) {
-            const shouldAdoptSourceSplit =
-              incoming.sourceAllocations !== undefined &&
-              (existing.sourceAllocations === undefined || !existing.isOverridden);
+            const shouldAdoptIncoming =
+              incoming.isOverridden ||
+              (!existing.isOverridden && !anyExistingOverridden && incoming.sourceAllocations !== undefined && existing.sourceAllocations === undefined);
             merged.push({
               ...existing,
               name: incoming.name || existing.name,
@@ -706,8 +733,9 @@ export const useForecastStore = create<ForecastState>()(
               isRothIra: incoming.isRothIra ?? existing.isRothIra,
               realBalance: incoming.realBalance,
               currentBalance: existing.isOverridden ? existing.currentBalance : (incoming.realBalance ?? incoming.currentBalance),
-              monthlyAllocation: shouldAdoptSourceSplit ? incoming.monthlyAllocation : existing.monthlyAllocation,
-              sourceAllocations: shouldAdoptSourceSplit ? incoming.sourceAllocations : existing.sourceAllocations,
+              monthlyAllocation: shouldAdoptIncoming ? incoming.monthlyAllocation : existing.monthlyAllocation,
+              sourceAllocations: shouldAdoptIncoming ? incoming.sourceAllocations : existing.sourceAllocations,
+              isOverridden: existing.isOverridden || incoming.isOverridden,
             });
           } else {
             // Newly imported account from settings!
@@ -724,7 +752,33 @@ export const useForecastStore = create<ForecastState>()(
           }
         }
 
-        nextState.destinations = merged;
+        // Deduplicate sourceAllocations across multiple savings destinations so a second savings destination
+        // never double-counts the same checking account transfer
+        const claimedSourceKeys = new Set<string>();
+        const sortedForDedup = [...merged].sort((a, b) => (b.isOverridden ? 1 : 0) - (a.isOverridden ? 1 : 0));
+        const cleanedById = new Map<string, DestinationAccount>();
+        for (const d of sortedForDedup) {
+          if (d.accountType === 'savings' && d.sourceAllocations) {
+            const nextAlloc: Record<string, number> = {};
+            for (const [k, v] of Object.entries(d.sourceAllocations)) {
+              if (!claimedSourceKeys.has(k)) {
+                claimedSourceKeys.add(k);
+                nextAlloc[k] = v;
+              }
+            }
+            const hasKeys = Object.keys(nextAlloc).length > 0;
+            const totalAlloc = Object.values(nextAlloc).reduce((sum, val) => sum + (val || 0), 0);
+            cleanedById.set(d.id, {
+              ...d,
+              sourceAllocations: hasKeys ? nextAlloc : (d.isOverridden ? {} : undefined),
+              monthlyAllocation: hasKeys || d.isOverridden ? totalAlloc : 0,
+            });
+          } else {
+            cleanedById.set(d.id, d);
+          }
+        }
+
+        nextState.destinations = merged.map((d) => cleanedById.get(d.id) || d);
       }
 
       nextState.savingsBudget = computeSavingsFromDestinations(nextState.destinations || state.destinations);
@@ -756,6 +810,7 @@ export const useForecastStore = create<ForecastState>()(
           currentBalance: d.realBalance ?? d.currentBalance,
           isOverridden: false,
         }));
+    persistDestinationsOverrideToDb([]);
 
     const resetStreams = (realBaseline.incomeStreams || [])
       .filter((s) => !isNonCheckingInvestmentStream(s))
@@ -907,7 +962,7 @@ export const useForecastStore = create<ForecastState>()(
 }),
     {
       name: 'strictly-spending-forecast-store',
-      version: 3,
+      version: 4,
       migrate: (persistedState: any, version: number) => {
         if (!persistedState || typeof persistedState !== 'object') {
           return persistedState;
@@ -935,6 +990,36 @@ export const useForecastStore = create<ForecastState>()(
                   ? { ...s, isOverridden: false }
                   : s
               );
+          }
+        }
+        if (version < 4) {
+          if (Array.isArray(migrated.destinations)) {
+            const claimedKeys = new Set<string>();
+            const sorted = [...migrated.destinations].sort(
+              (a: DestinationAccount, b: DestinationAccount) => (b.isOverridden ? 1 : 0) - (a.isOverridden ? 1 : 0)
+            );
+            const byId = new Map<string, DestinationAccount>();
+            for (const d of sorted) {
+              if (d.accountType === 'savings' && d.sourceAllocations) {
+                const nextAlloc: Record<string, number> = {};
+                for (const [k, v] of Object.entries(d.sourceAllocations)) {
+                  if (!claimedKeys.has(k)) {
+                    claimedKeys.add(k);
+                    nextAlloc[k] = Number(v) || 0;
+                  }
+                }
+                const hasKeys = Object.keys(nextAlloc).length > 0;
+                const totalAlloc = Object.values(nextAlloc).reduce((sum, val) => sum + (val || 0), 0);
+                byId.set(d.id, {
+                  ...d,
+                  sourceAllocations: hasKeys ? nextAlloc : (d.isOverridden ? {} : undefined),
+                  monthlyAllocation: hasKeys || d.isOverridden ? totalAlloc : 0,
+                });
+              } else {
+                byId.set(d.id, d);
+              }
+            }
+            migrated.destinations = migrated.destinations.map((d: DestinationAccount) => byId.get(d.id) || d);
           }
         }
         return migrated;

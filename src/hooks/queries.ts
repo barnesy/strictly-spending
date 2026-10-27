@@ -224,41 +224,24 @@ export const useCategoryTrailingAverages = (accountScope?: number | number[]) =>
 
 export const useHistoricalSpendByCategory = (accountScope?: number | number[]) => {
   const demoMode = useFilters((state) => state.demoMode);
-  const enabledAccountIds = useFilters((state) => state.enabledAccountIds);
-  const disabledCategories = useFilters((state) => state.disabledCategories);
-  const scopedIds = normalizeAccountScope(accountScope);
-  const effectiveAccountIds =
-    scopedIds !== undefined
-      ? scopedIds
-      : enabledAccountIds && enabledAccountIds.length > 0
-      ? enabledAccountIds
-      : undefined;
+  const effectiveAccountIds = normalizeAccountScope(accountScope);
   return useQuery({
-    queryKey: ['historical_spend_by_category', demoMode, effectiveAccountIds, disabledCategories],
+    queryKey: ['historical_spend_by_category', demoMode, effectiveAccountIds],
     queryFn: () => api.getSpendChartData({
       startDate: '1970-01-01',
       endDate: '2100-01-01',
       enabledAccountIds: effectiveAccountIds,
-      disabledCategories,
       spendOnly: true,
       transactionType: 'spend',
       demoMode,
     }, 'category'),
     placeholderData: keepPreviousData,
-    staleTime: 60_000,
   });
 };
 
 export const useHistoricalMonthlyIncome = (accountScope?: number | number[]) => {
   const demoMode = useFilters((state) => state.demoMode);
-  const enabledAccountIds = useFilters((state) => state.enabledAccountIds);
-  const scopedIds = normalizeAccountScope(accountScope);
-  const effectiveAccountIds =
-    scopedIds !== undefined
-      ? scopedIds
-      : enabledAccountIds && enabledAccountIds.length > 0
-      ? enabledAccountIds
-      : undefined;
+  const effectiveAccountIds = normalizeAccountScope(accountScope);
   return useQuery({
     queryKey: ['historical_monthly_income', demoMode, effectiveAccountIds],
     queryFn: () => api.getIncomeChartData({
@@ -268,7 +251,6 @@ export const useHistoricalMonthlyIncome = (accountScope?: number | number[]) => 
       demoMode,
     }),
     placeholderData: keepPreviousData,
-    staleTime: 60_000,
   });
 };
 

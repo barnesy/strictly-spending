@@ -124,10 +124,39 @@ export default function Budget() {
   const toggleBudgetCategory = useBudgetStore((s) => s.toggleBudgetCategory);
   const reset = useBudgetStore((s) => s.reset);
 
-  const spendCategories = useMemo(
-    () => (categories || []).filter((c) => c.type === 'spend'),
-    [categories]
-  );
+  const spendCategories = useMemo(() => {
+    const base = (categories || []).filter((c) => c.type === 'spend');
+    const nonSpendNames = new Set(
+      (categories || []).filter((c) => c.type === 'income' || c.type === 'transfer').map((c) => c.name)
+    );
+    const seen = new Set(base.map((c) => c.name));
+    const extras: Category[] = [];
+    for (const item of trailingAverages) {
+      if (item.category && !seen.has(item.category) && !nonSpendNames.has(item.category)) {
+        seen.add(item.category);
+        extras.push({
+          name: item.category,
+          color: '#78909c',
+          defaultRecurrence: 'onetime',
+          type: 'spend',
+          sortOrder: 999,
+        });
+      }
+    }
+    for (const [catName, proj] of currentMonthProjections.entries()) {
+      if (catName && !seen.has(catName) && !nonSpendNames.has(catName)) {
+        seen.add(catName);
+        extras.push({
+          name: catName,
+          color: proj.color || '#78909c',
+          defaultRecurrence: 'onetime',
+          type: 'spend',
+          sortOrder: 999,
+        });
+      }
+    }
+    return extras.length > 0 ? [...base, ...extras] : base;
+  }, [categories, trailingAverages, currentMonthProjections]);
 
   const trailingAvgByCategory = useMemo(() => {
     const map = new Map<string, number>();
@@ -139,7 +168,7 @@ export default function Budget() {
 
   const bulkPutBudgets = useBulkPutBudgets();
 
-  // Auto-seed budgets for any spend category with no budget row yet (only when viewing all accounts).
+  // Auto-seed and sync non-userSet budgets with latest trailing actuals (only when viewing all accounts).
   useEffect(() => {
     if (!budgets || !categories || isDataLoading || !isAllSelected) return;
     const existingByCat = new Map(budgets.map((b) => [b.category, b]));
@@ -153,7 +182,7 @@ export default function Budget() {
           monthlyAmount: avg,
           userSet: false,
         });
-      } else if (!prev.userSet && prev.monthlyAmount === 0 && avg > 0) {
+      } else if (!prev.userSet && Math.abs((prev.monthlyAmount || 0) - avg) > 0.01) {
         toAdd.push({
           category: cat.name,
           monthlyAmount: avg,
@@ -207,10 +236,7 @@ export default function Budget() {
       } else if (existing) {
         result.push({
           ...existing,
-          monthlyAmount:
-            !existing.userSet && existing.monthlyAmount === 0 && trailingAvg > 0
-              ? trailingAvg
-              : existing.monthlyAmount,
+          monthlyAmount: !existing.userSet ? trailingAvg : existing.monthlyAmount,
         });
       } else {
         result.push({
@@ -270,23 +296,20 @@ export default function Budget() {
     .reduce((s, b) => s + b.monthlyAmount, 0);
   const projected = recurringProjected + budgetProjected;
 
-  // Actuals totals (this month to date & 3-month trailing actuals) for Recurring and Variable
+  // Actuals totals (this month to date & 3-month trailing actuals) for Recurring and Variable.
+  // Never exclude categories from ACTUAL spend — toggling a category switch only excludes its planned target budget.
   const actualRecurringCategoryThisMonth = Array.from(recurringCategoryNames)
-    .filter((cat) => !excludedBudgetCategories.has(cat))
     .reduce((s, cat) => s + (currentMonthProjections.get(cat)?.actualToDate ?? 0), 0);
   const actualRecurringThisMonth = Math.max(
     actualRecurringCategoryThisMonth,
     currentMonthForecastSummary.paidRecurringSpend
   );
   const trailingRecurringAvg = Array.from(recurringCategoryNames)
-    .filter((cat) => !excludedBudgetCategories.has(cat))
     .reduce((s, cat) => s + (trailingAvgByCategory.get(cat) || 0), 0);
 
   const actualVariableCategoryThisMonth = oneTimeBudgets
-    .filter((b) => !excludedBudgetCategories.has(b.category))
     .reduce((s, b) => s + (currentMonthProjections.get(b.category)?.actualToDate ?? 0), 0);
   const trailingVariableAvg = oneTimeBudgets
-    .filter((b) => !excludedBudgetCategories.has(b.category))
     .reduce((s, b) => s + (trailingAvgByCategory.get(b.category) || 0), 0);
 
   const recurringExcludedSavings = consolidatedMerchants
@@ -463,26 +486,31 @@ export default function Budget() {
                 </Typography>
               </Box>
 
-              {selectedAccount && (
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <SavingsIcon fontSize="small" color="secondary" />
-                  <Typography variant="caption" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
-                    Savings Moved Out:
-                  </Typography>
-                  <BudgetAmountInput
-                    category={`savings-out-${selectedAccount.id}`}
-                    initialAmount={savingsTransferOut}
-                    onSave={async (newAmt) => {
-                      const updated = buildUpdatedDestinationsForAccountTransfer(
-                        destinations,
-                        selectedAccount,
-                        newAmt
-                      );
-                      setDestinations(updated);
-                    }}
-                  />
-                </Stack>
-              )}
+              <Stack direction="row" spacing={1} alignItems="center">
+                <SavingsIcon fontSize="small" color="secondary" />
+                <Typography variant="caption" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  Savings Moved Out:
+                </Typography>
+                <BudgetAmountInput
+                  category={`savings-out-${selectedAccount ? selectedAccount.id : isAllSelected ? 'all' : selectedAccounts.map((a) => a.id).join('-')}`}
+                  initialAmount={savingsTransferOut}
+                  saveOnChange
+                  onSave={async (newAmt) => {
+                    const currentDests = useForecastStore.getState().destinations;
+                    const targetAccounts = selectedAccount
+                      ? selectedAccount
+                      : isAllSelected
+                      ? checkingAccounts
+                      : selectedAccounts;
+                    const updated = buildUpdatedDestinationsForAccountTransfer(
+                      currentDests,
+                      targetAccounts,
+                      newAmt
+                    );
+                    setDestinations(updated);
+                  }}
+                />
+              </Stack>
             </Stack>
 
             {/* 5-Column Cashflow Equation Grid (Actuals Featured Prominently, Forecast/Plan Secondary) */}
@@ -938,26 +966,32 @@ export default function Budget() {
 // ----- Budget amount editor with local state (new) -----
 
 function BudgetAmountInput({
+  category,
   initialAmount,
   disabled,
+  saveOnChange,
   onSave,
 }: {
   category: string;
   initialAmount: number;
   disabled?: boolean;
+  saveOnChange?: boolean;
   onSave: (amount: number) => Promise<void>;
 }) {
   const [value, setValue] = useState(() => initialAmount.toFixed(2));
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
-    setValue(initialAmount.toFixed(2));
-  }, [initialAmount]);
+    if (!isFocused) {
+      setValue(initialAmount.toFixed(2));
+    }
+  }, [initialAmount, category, isFocused]);
 
   const handleSave = async (val: string) => {
     const cleaned = val.replace(/[^0-9.]/g, '');
     const amount = Number(cleaned) || 0;
     setValue(amount.toFixed(2));
-    if (Math.abs(amount - initialAmount) > 0.001) {
+    if (Math.abs(amount - initialAmount) > 0.001 || saveOnChange) {
       await onSave(amount);
     }
   };
@@ -966,11 +1000,24 @@ function BudgetAmountInput({
     <TextField
       size="small"
       value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => handleSave(value)}
+      onFocus={() => setIsFocused(true)}
+      onChange={(e) => {
+        const nextVal = e.target.value;
+        setValue(nextVal);
+        if (saveOnChange) {
+          const cleaned = nextVal.replace(/[^0-9.]/g, '');
+          const amount = Number(cleaned) || 0;
+          void onSave(amount);
+        }
+      }}
+      onBlur={() => {
+        setIsFocused(false);
+        void handleSave(value);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
-          handleSave(value);
+          setIsFocused(false);
+          void handleSave(value);
           (e.target as HTMLInputElement).blur();
         }
       }}
@@ -1024,11 +1071,9 @@ function BudgetCard({
     .reduce((s, b) => s + b.monthlyAmount, 0);
 
   const actualThisMonthSubtotal = budgets
-    .filter((b) => !excluded.has(b.category))
     .reduce((s, b) => s + (currentMonthProjections.get(b.category)?.actualToDate ?? 0), 0);
 
   const trailingAvgSubtotal = budgets
-    .filter((b) => !excluded.has(b.category))
     .reduce((s, b) => s + (trailingAvgByCategory.get(b.category) || 0), 0);
 
   const categoryColor = (name: string) =>

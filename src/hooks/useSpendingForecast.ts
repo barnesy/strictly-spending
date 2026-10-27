@@ -61,12 +61,11 @@ export function useSpendingForecast(options?: {
   const { data: historicalSpendData = [] } = useHistoricalSpendByCategory(scopedAccountScope);
   const { data: historicalIncomeData = [] } = useHistoricalMonthlyIncome(scopedAccountScope);
   const demoMode = useFilters((s) => s.demoMode);
-  const disabledCategories = useFilters((s) => s.disabledCategories);
-  const globalEnabledAccountIds = useFilters((s) => s.enabledAccountIds);
+  const disabledCategories: string[] = useMemo(() => [], []);
   const enabledAccountIds = useMemo(() => {
-    if (scopedAccountScope === undefined) return globalEnabledAccountIds;
+    if (scopedAccountScope === undefined) return undefined;
     return Array.isArray(scopedAccountScope) ? scopedAccountScope : [scopedAccountScope];
-  }, [scopedAccountScope, globalEnabledAccountIds]);
+  }, [scopedAccountScope]);
   const { data: recurrenceMapObj = {} } = useRecurrenceMap(demoMode, scopedAccountScope);
   const excludedBudgetCategories = useBudgetStore((s) => s.excludedBudgetCategories);
   const excludedMerchants = useBudgetStore((s) => s.excludedMerchants);
@@ -183,14 +182,17 @@ export function useSpendingForecast(options?: {
 
   const currentCalMonth = useMemo(() => {
     const sysMonth = getMonthKey(new Date());
-    let latestMonth = sysMonth;
+    let maxDataMonth = '';
     for (const m of historicalMonthlySpend.keys()) {
-      if (m > latestMonth) latestMonth = m;
+      if (m > maxDataMonth) maxDataMonth = m;
     }
     for (const m of historicalMonthlyIncome.keys()) {
-      if (m > latestMonth) latestMonth = m;
+      if (m > maxDataMonth) maxDataMonth = m;
     }
-    return latestMonth;
+    if (historicalMonthlySpend.has(sysMonth) || historicalMonthlyIncome.has(sysMonth)) {
+      return maxDataMonth > sysMonth ? maxDataMonth : sysMonth;
+    }
+    return maxDataMonth || sysMonth;
   }, [historicalMonthlySpend, historicalMonthlyIncome]);
 
   const incomeCategoryColor = useMemo(() => {

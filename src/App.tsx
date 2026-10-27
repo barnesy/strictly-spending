@@ -124,12 +124,17 @@ export default function App() {
       }
       const realIds = accounts.filter((a) => a.source !== 'demo' && a.id !== undefined).map((a) => a.id!);
       const realIdSet = new Set(realIds);
+      const seenSet = new Set(state.seenAccountIds || []);
+      const newlyDiscoveredIds = realIds.filter((id) => !seenSet.has(id));
       const validEnabled = state.enabledAccountIds.filter((id) => realIdSet.has(id));
       if (validEnabled.length === 0 && realIds.length > 0) {
         state.setEnabledAccounts(realIds);
         state.setSeenAccounts(realIds);
-      } else if (validEnabled.length !== state.enabledAccountIds.length) {
-        state.setEnabledAccounts(validEnabled);
+      } else if (newlyDiscoveredIds.length > 0 || validEnabled.length !== state.enabledAccountIds.length) {
+        const mergedEnabled = Array.from(new Set([...validEnabled, ...newlyDiscoveredIds]));
+        const mergedSeen = Array.from(new Set([...(state.seenAccountIds || []).filter((id) => realIdSet.has(id)), ...realIds]));
+        state.setEnabledAccounts(mergedEnabled);
+        state.setSeenAccounts(mergedSeen);
       }
     } else if (LANDING_ONLY_BUILD && accounts.length > 0 && accounts.every((a) => a.source === 'demo')) {
       if (!useFilters.getState().demoMode) {

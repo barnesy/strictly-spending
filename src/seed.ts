@@ -738,4 +738,7 @@ export async function seedAndMigrate(): Promise<void> {
     }
     localStorage.setItem('seed_version', String(SEED_VERSION));
   }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('db-update'));
+  }
 }

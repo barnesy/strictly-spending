@@ -424,6 +424,31 @@ export async function loadForecastBaselineData(): Promise<{
   const truistPrimaryKey = truist5463Acc?.id !== undefined ? String(truist5463Acc.id) : 'truist';
   const boaPrimaryKey = boa6669Acc?.id !== undefined ? String(boa6669Acc.id) : 'boa';
 
+  const savedDestOverrides = await api
+    .getSetting<
+      Array<{
+        id?: string;
+        accountId?: number;
+        monthlyAllocation?: number;
+        sourceAllocations?: Record<string, number>;
+        isOverridden?: boolean;
+        enabled?: boolean;
+      }>
+    >('forecast_destinations_override')
+    .catch(() => null);
+  const hasAnySavedDestOverride = Array.isArray(savedDestOverrides) && savedDestOverrides.some((d) => d?.isOverridden);
+
+  // If multiple Truist savings accounts exist (e.g. 3234 and 4322), only seed default allocations on the primary one
+  const primaryTruistSavingsAcc = accounts
+    .filter((a) => a.type === 'savings' && a.enabled !== false && /truist/i.test(a.name || ''))
+    .sort((a, b) => {
+      const a3234 = /\b3234\b/.test(`${a.name || ''} ${a.last4 || ''}`) ? 1 : 0;
+      const b3234 = /\b3234\b/.test(`${b.name || ''} ${b.last4 || ''}`) ? 1 : 0;
+      if (b3234 !== a3234) return b3234 - a3234;
+      return (b.currentBalance || 0) - (a.currentBalance || 0);
+    })[0];
+  let seededLegacyTruistSavings = false;
+
   for (const acc of accounts) {
     const bal = acc.currentBalance || 0;
     const isEnabled = acc.enabled !== false;
@@ -433,41 +458,71 @@ export async function loadForecastBaselineData(): Promise<{
     } else if (acc.type === 'savings') {
       realSavingsTotal += Math.max(0, bal);
       if (isEnabled) {
-        const isLegacyTruistSavings = hasLegacyTruistBoaPair && /truist/i.test(acc.name);
+        const isPrimaryTruistSavings =
+          !seededLegacyTruistSavings &&
+          !hasAnySavedDestOverride &&
+          hasLegacyTruistBoaPair &&
+          /truist/i.test(acc.name) &&
+          (!primaryTruistSavingsAcc || acc.id === primaryTruistSavingsAcc.id);
+        if (isPrimaryTruistSavings) {
+          seededLegacyTruistSavings = true;
+        }
         const displayName =
-          isLegacyTruistSavings && !/shared/i.test(acc.name) ? 'Truist Shared Savings' : acc.name;
-        const effectiveBal = bal > 0 ? bal : isLegacyTruistSavings ? 30000 : Math.max(0, bal);
+          isPrimaryTruistSavings && !/shared/i.test(acc.name) ? 'Truist Shared Savings' : acc.name;
+        const effectiveBal = bal > 0 ? bal : isPrimaryTruistSavings ? 30000 : Math.max(0, bal);
+        const destId = `account-${acc.id ?? acc.name}`;
+        const savedOverride = Array.isArray(savedDestOverrides)
+          ? savedDestOverrides.find(
+              (o) => (acc.id !== undefined && o.accountId === acc.id) || o.id === destId
+            )
+          : undefined;
         initialDestinations.push({
-          id: `account-${acc.id ?? acc.name}`,
+          id: destId,
           accountId: acc.id,
           name: displayName,
           accountType: 'savings',
           currentBalance: effectiveBal,
           realBalance: effectiveBal,
-          monthlyAllocation: isLegacyTruistSavings ? 8000 : 0,
-          sourceAllocations: isLegacyTruistSavings
-            ? { [truistPrimaryKey]: 2000, [boaPrimaryKey]: 6000 }
-            : {},
+          monthlyAllocation:
+            savedOverride?.monthlyAllocation !== undefined
+              ? savedOverride.monthlyAllocation
+              : isPrimaryTruistSavings
+              ? 8000
+              : 0,
+          sourceAllocations:
+            savedOverride?.sourceAllocations !== undefined
+              ? savedOverride.sourceAllocations
+              : isPrimaryTruistSavings
+              ? { [truistPrimaryKey]: 2000, [boaPrimaryKey]: 6000 }
+              : {},
           annualGrowthRate: 4.0,
-          enabled: true,
+          enabled: savedOverride?.enabled ?? true,
+          isOverridden: savedOverride?.isOverridden ?? false,
         });
       }
     } else if (acc.type === 'investment') {
       realInvestmentsTotal += Math.max(0, bal);
       const isRoth = acc.name.toUpperCase().includes('ROTH') || acc.name.toUpperCase().includes('IRA');
       if (isEnabled) {
+        const destId = `account-${acc.id ?? acc.name}`;
+        const savedOverride = Array.isArray(savedDestOverrides)
+          ? savedDestOverrides.find(
+              (o) => (acc.id !== undefined && o.accountId === acc.id) || o.id === destId
+            )
+          : undefined;
         initialDestinations.push({
-          id: `account-${acc.id ?? acc.name}`,
+          id: destId,
           accountId: acc.id,
           name: acc.name,
           accountType: 'investment',
           isRothIra: isRoth,
           currentBalance: bal,
           realBalance: bal,
-          monthlyAllocation: 0,
-          sourceAllocations: {},
+          monthlyAllocation: savedOverride?.monthlyAllocation ?? 0,
+          sourceAllocations: savedOverride?.sourceAllocations ?? {},
           annualGrowthRate: isRoth ? 7.5 : 8.0,
-          enabled: true,
+          enabled: savedOverride?.enabled ?? true,
+          isOverridden: savedOverride?.isOverridden ?? false,
         });
       }
     }

@@ -155,43 +155,166 @@ export function getAccountSavingsTransferOut(
 }
 
 /**
- * Updates the monthly savings transfer out of a specific checking account into the primary savings destination,
- * preserving other checking accounts' allocations and keeping `monthlyAllocation` synchronized.
+ * Updates the monthly savings transfer out of a specific checking account (or set of accounts)
+ * into the primary savings destination, preserving other checking accounts' allocations,
+ * clearing duplicate allocations for the edited account from any secondary destinations,
+ * and keeping `monthlyAllocation` synchronized.
  */
 export function buildUpdatedDestinationsForAccountTransfer(
   destinations: DestinationAccount[],
-  account: Account,
+  accountOrAccounts: Account | Account[] | null | undefined,
   newMonthlyTransferOut: number
 ): DestinationAccount[] {
-  const sourceKey = getCheckingSourceKey(account);
-  if (!sourceKey) return destinations;
-  const legacyKey = getLegacyCheckingSourceKey(account);
-
   const cleanAmount = Math.max(0, Math.round(newMonthlyTransferOut));
+  const accountsList = Array.isArray(accountOrAccounts)
+    ? accountOrAccounts
+    : accountOrAccounts
+    ? [accountOrAccounts]
+    : [];
+
+  const baseDestinations: DestinationAccount[] =
+    destinations && destinations.length > 0
+      ? destinations
+      : [
+          {
+            id: 'account-savings-transfer',
+            name: 'Savings Transfer',
+            accountType: 'savings',
+            currentBalance: 0,
+            realBalance: 0,
+            monthlyAllocation: 0,
+            sourceAllocations: {},
+            annualGrowthRate: 4.0,
+            enabled: true,
+            isOverridden: true,
+          },
+        ];
+
   const targetDest =
-    destinations.find((d) => d.enabled && d.accountType === 'savings') ||
-    destinations.find((d) => d.accountType === 'savings') ||
-    destinations.find((d) => d.enabled) ||
-    destinations[0];
+    baseDestinations.find((d) => d.enabled && d.accountType === 'savings' && /\b3234\b|shared/i.test(d.name || '')) ||
+    baseDestinations.find((d) => d.enabled && d.accountType === 'savings') ||
+    baseDestinations.find((d) => d.accountType === 'savings') ||
+    baseDestinations.find((d) => d.enabled) ||
+    baseDestinations[0];
 
-  if (!targetDest) return destinations;
+  if (!targetDest) return baseDestinations;
 
-  return destinations.map((d) => {
-    if (d.id !== targetDest.id) return d;
-    const prevAllocs = { ...(d.sourceAllocations || {}) };
-    prevAllocs[sourceKey] = cleanAmount;
-    if (legacyKey && legacyKey !== sourceKey && prevAllocs[legacyKey] !== undefined) {
-      delete prevAllocs[legacyKey];
+  // All Accounts / no specific checking account list provided
+  if (accountsList.length === 0) {
+    return baseDestinations.map((d) => {
+      if (d.id === targetDest.id) {
+        return {
+          ...d,
+          enabled: cleanAmount > 0 ? true : d.enabled,
+          sourceAllocations: {},
+          monthlyAllocation: cleanAmount,
+          isOverridden: true,
+        };
+      }
+      return {
+        ...d,
+        sourceAllocations: {},
+        monthlyAllocation: 0,
+        isOverridden: true,
+      };
+    });
+  }
+
+  // Collect keys for all target accounts being updated
+  const targetKeys = new Set<string>();
+  const legacyKeys = new Set<string>();
+  for (const acc of accountsList) {
+    const sk = getCheckingSourceKey(acc);
+    if (sk) targetKeys.add(sk);
+    const lk = getLegacyCheckingSourceKey(acc);
+    if (lk) legacyKeys.add(lk);
+  }
+
+  if (targetKeys.size === 0) return baseDestinations;
+
+  // Compute per-account split when multiple accounts are selected
+  const nextAmountBySourceKey = new Map<string, number>();
+  if (accountsList.length === 1) {
+    const sk = getCheckingSourceKey(accountsList[0]);
+    if (sk) nextAmountBySourceKey.set(sk, cleanAmount);
+  } else {
+    const currentAmounts = accountsList.map((acc) => {
+      let sum = 0;
+      for (const d of baseDestinations) {
+        if (!d.enabled) continue;
+        sum += getSingleAccountSavingsAllocation(d, acc);
+      }
+      return { key: getCheckingSourceKey(acc), amount: sum };
+    }).filter((x): x is { key: string; amount: number } => Boolean(x.key));
+
+    const currentTotal = currentAmounts.reduce((s, x) => s + x.amount, 0);
+    if (currentTotal > 0) {
+      let allocated = 0;
+      currentAmounts.forEach((item, idx) => {
+        if (idx === currentAmounts.length - 1) {
+          nextAmountBySourceKey.set(item.key, Math.max(0, cleanAmount - allocated));
+        } else {
+          const share = Math.round((cleanAmount * item.amount) / currentTotal);
+          nextAmountBySourceKey.set(item.key, share);
+          allocated += share;
+        }
+      });
+    } else if (currentAmounts[0]) {
+      nextAmountBySourceKey.set(currentAmounts[0].key, cleanAmount);
+      for (let i = 1; i < currentAmounts.length; i++) {
+        nextAmountBySourceKey.set(currentAmounts[i].key, 0);
+      }
     }
+  }
+
+  return baseDestinations.map((d) => {
+    const prevAllocs = { ...(d.sourceAllocations || {}) };
+    for (const lk of legacyKeys) {
+      if (!targetKeys.has(lk) && prevAllocs[lk] !== undefined) {
+        delete prevAllocs[lk];
+      }
+    }
+
+    if (d.id === targetDest.id) {
+      for (const [sk, amt] of nextAmountBySourceKey.entries()) {
+        prevAllocs[sk] = amt;
+      }
+      const totalFromSources = Object.values(prevAllocs).reduce<number>(
+        (sum, v) => sum + (typeof v === 'number' && !Number.isNaN(v) ? v : 0),
+        0
+      );
+      return {
+        ...d,
+        enabled: totalFromSources > 0 ? true : d.enabled,
+        sourceAllocations: prevAllocs,
+        monthlyAllocation: totalFromSources,
+        isOverridden: true,
+      };
+    }
+
+    // Clear edited checking account(s) from all other destinations so they cannot double-count
+    let modifiedOther = false;
+    for (const sk of targetKeys) {
+      if (prevAllocs[sk] !== undefined && prevAllocs[sk] !== 0) {
+        prevAllocs[sk] = 0;
+        modifiedOther = true;
+      }
+    }
+    for (const lk of legacyKeys) {
+      if (prevAllocs[lk] !== undefined) {
+        delete prevAllocs[lk];
+        modifiedOther = true;
+      }
+    }
+    const hasSourceKeys = Object.keys(prevAllocs).length > 0;
     const totalFromSources = Object.values(prevAllocs).reduce<number>(
       (sum, v) => sum + (typeof v === 'number' && !Number.isNaN(v) ? v : 0),
       0
     );
     return {
       ...d,
-      enabled: totalFromSources > 0 ? true : d.enabled,
       sourceAllocations: prevAllocs,
-      monthlyAllocation: totalFromSources,
+      monthlyAllocation: hasSourceKeys ? totalFromSources : modifiedOther ? 0 : d.monthlyAllocation,
       isOverridden: true,
     };
   });
