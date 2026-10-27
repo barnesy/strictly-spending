@@ -197,66 +197,93 @@ export function FinancialInsightsCard() {
       }}
     >
       <Stack
-        direction="row"
+        direction={{ xs: 'column', md: 'row' }}
         justifyContent="space-between"
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
-        spacing={1}
+        alignItems={{ xs: 'stretch', md: 'center' }}
+        spacing={{ xs: 1, md: 1.5 }}
         onClick={() => setExpanded((prev) => !prev)}
         sx={{ cursor: 'pointer', userSelect: 'none' }}
       >
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1, minWidth: 0, width: '100%' }}>
           <WarningAmberIcon
             fontSize="small"
             color={totalFindings > 0 ? 'warning' : 'success'}
+            sx={{ flexShrink: 0 }}
           />
-          <Typography variant="subtitle1" fontWeight={600} sx={{ fontSize: { xs: '0.92rem', sm: '1rem' }, lineHeight: 1.3 }}>
+          <Typography
+            variant="subtitle1"
+            fontWeight={600}
+            sx={{ fontSize: { xs: '0.92rem', sm: '1rem' }, lineHeight: 1.35, flex: 1, minWidth: 0 }}
+          >
             Automated Subscription &amp; Anomaly Audit (Last 30 Days)
           </Typography>
-          {totalFindings > 0 ? (
-            <Chip
-              size="small"
-              color="warning"
-              label={`${totalFindings} insight${totalFindings === 1 ? '' : 's'} detected`}
-              sx={{ height: 22, fontSize: '0.72rem', fontWeight: 700 }}
-            />
-          ) : (
-            <Chip
-              size="small"
-              color="success"
-              icon={<CheckCircleOutlineIcon />}
-              label="No active alerts"
-              sx={{ height: 22, fontSize: '0.72rem', fontWeight: 600 }}
-            />
-          )}
-          {dismissedCount > 0 && (
-            <Typography variant="caption" color="text.secondary">
-              ({dismissedCount} dismissed)
-            </Typography>
-          )}
         </Stack>
 
-        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
-          {totalFindings > 0 && (
-            <Button
-              size="small"
-              onClick={handleDismissAll}
-              sx={{ textTransform: 'none', fontSize: '0.75rem', whiteSpace: 'nowrap', minWidth: 'auto', px: 1 }}
-            >
-              Dismiss all
-            </Button>
-          )}
-          {dismissedCount > 0 && (
-            <Button
-              size="small"
-              onClick={handleRestoreAll}
-              sx={{ textTransform: 'none', fontSize: '0.75rem', whiteSpace: 'nowrap', minWidth: 'auto', px: 1 }}
-            >
-              Restore ({dismissedCount})
-            </Button>
-          )}
-          <IconButton size="small">
-            {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-          </IconButton>
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          justifyContent="space-between"
+          flexWrap="wrap"
+          useFlexGap
+          sx={{ width: { xs: '100%', md: 'auto' }, flexShrink: 0 }}
+        >
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            {totalFindings > 0 ? (
+              <Chip
+                size="small"
+                color="warning"
+                label={`${totalFindings} insight${totalFindings === 1 ? '' : 's'} detected`}
+                sx={{ height: 24, fontSize: '0.73rem', fontWeight: 700 }}
+              />
+            ) : (
+              <Chip
+                size="small"
+                color="success"
+                icon={<CheckCircleOutlineIcon />}
+                label="No active alerts"
+                sx={{ height: 24, fontSize: '0.73rem', fontWeight: 600 }}
+              />
+            )}
+          </Stack>
+
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ ml: 'auto' }}>
+            {totalFindings > 0 && (
+              <Button
+                size="small"
+                onClick={handleDismissAll}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.75rem',
+                  whiteSpace: 'nowrap',
+                  minWidth: 'auto',
+                  height: 28,
+                  px: 1,
+                }}
+              >
+                Dismiss all
+              </Button>
+            )}
+            {dismissedCount > 0 && (
+              <Button
+                size="small"
+                onClick={handleRestoreAll}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.75rem',
+                  whiteSpace: 'nowrap',
+                  minWidth: 'auto',
+                  height: 28,
+                  px: 1,
+                }}
+              >
+                Restore ({dismissedCount})
+              </Button>
+            )}
+            <IconButton size="small" sx={{ p: 0.5 }}>
+              {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </IconButton>
+          </Stack>
         </Stack>
       </Stack>
 
