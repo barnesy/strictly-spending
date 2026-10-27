@@ -801,17 +801,137 @@ export async function analyzeQuestionAndFinances(
     })
     .reduce((s, t) => s + Math.abs(t.amount), 0);
 
+  // Helper: Personalized Investing (Roth IRA / S&P 500 / Brokerage / HYSA) + Early Car Loan & Mortgage Payoff advice
+  const userInvAcct =
+    activeAccounts.find((a) => a.type === 'investment') ||
+    (activeDestinations[0] ? { name: activeDestinations[0].name } : null);
+  const invAcctLabel = userInvAcct ? `${userInvAcct.name} / S&P 500` : 'Roth IRA / S&P 500 Index';
+
+  const userSavAcct = activeAccounts.find((a) => a.type === 'savings');
+  const savAcctLabel = userSavAcct ? userSavAcct.name : 'High-Yield Savings';
+
+  const carLoan =
+    activeLoans.find(
+      (l) =>
+        l.type === 'car' ||
+        /car|auto|vehicle|truck|civic|accord|camry|rav4|tesla|ford|subaru|jeep|honda|toyota|bmw|hyundai|kia/i.test(
+          l.name
+        )
+    ) ||
+    activeLoans.find((l) => l.type !== 'house') || {
+      name: 'Car / Auto Loan',
+      type: 'car',
+      principal: 18500,
+      rate: 6.9,
+      monthlyPayment: 430,
+    };
+
+  const primaryHouseLoan =
+    activeLoans.find((l) => l.type === 'house') ||
+    activeLoans[0] || {
+      name: 'Primary Mortgage',
+      type: 'house',
+      principal: totalDebtDollars > 25000 ? totalDebtDollars : 285000,
+      rate: 6.25,
+      monthlyPayment: totalDebtDollars > 25000 ? Math.max(950, Math.round(totalDebtDollars * 0.0065)) : 1850,
+    };
+
+  const calcLoanAccel = (
+    loan: { name: string; principal: number; rate: number; monthlyPayment?: number },
+    extraAmt: number,
+    mode: 'monthly' | 'onetime'
+  ) => {
+    const P0 = Math.max(1500, loan.principal || 18000);
+    const r = Math.max(0.025, (loan.rate || 6.5) / 100) / 12;
+    const minPmt = Math.ceil(P0 * r + 25);
+    const M0 = Math.max(minPmt, loan.monthlyPayment || Math.round(P0 * 0.022));
+    const calcN = (prin: number, pmt: number) =>
+      r > 0 && pmt > prin * r
+        ? Math.ceil(-Math.log(1 - (prin * r) / pmt) / Math.log(1 + r))
+        : Math.max(1, Math.ceil(prin / pmt));
+
+    const n0 = calcN(P0, M0);
+    const int0 = Math.max(0, n0 * M0 - P0);
+
+    if (mode === 'monthly') {
+      const M1 = M0 + Math.max(25, extraAmt);
+      const n1 = calcN(P0, M1);
+      const int1 = Math.max(0, n1 * M1 - P0);
+      return {
+        monthsShaved: Math.max(1, n0 - n1),
+        newMonths: n1,
+        oldMonths: n0,
+        interestSaved: Math.max(25, Math.round(int0 - int1)),
+      };
+    } else {
+      const P1 = Math.max(0, P0 - extraAmt);
+      const n1 = P1 > 0 ? calcN(P1, M0) : 0;
+      const int1 = P1 > 0 ? Math.max(0, n1 * M0 - P1) : 0;
+      return {
+        monthsShaved: Math.max(1, n0 - n1),
+        newMonths: n1,
+        oldMonths: n0,
+        interestSaved: Math.max(15, Math.round(int0 - int1)),
+      };
+    }
+  };
+
+  const buildWealthRedirectLines = (rawAmount: number, mode: 'monthly' | 'onetime' = 'monthly'): string[] => {
+    const amt = Math.max(25, Math.round(rawAmount));
+    const rSp500Mo = 0.085 / 12;
+    const rHysaMo = 0.045 / 12;
+
+    const fv5 =
+      mode === 'monthly'
+        ? Math.round(amt * ((Math.pow(1 + rSp500Mo, 60) - 1) / rSp500Mo))
+        : Math.round(amt * Math.pow(1.085, 5));
+    const fv10 =
+      mode === 'monthly'
+        ? Math.round(amt * ((Math.pow(1 + rSp500Mo, 120) - 1) / rSp500Mo))
+        : Math.round(amt * Math.pow(1.085, 10));
+    const fv20 =
+      mode === 'monthly'
+        ? Math.round(amt * ((Math.pow(1 + rSp500Mo, 240) - 1) / rSp500Mo))
+        : Math.round(amt * Math.pow(1.085, 20));
+    const hysa5 =
+      mode === 'monthly'
+        ? Math.round(amt * ((Math.pow(1 + rHysaMo, 60) - 1) / rHysaMo))
+        : Math.round(amt * Math.pow(1.045, 5));
+
+    const carStats = calcLoanAccel(carLoan, amt, mode);
+    const houseStats = calcLoanAccel(primaryHouseLoan, amt, mode);
+    const showBothLoans = primaryHouseLoan.name !== carLoan.name;
+
+    return [
+      `- 📈 **Invest It Instead (${invAcctLabel}):** Putting **+${usd.format(amt)}${mode === 'monthly' ? '/mo' : ''}** into a **Roth IRA / S&P 500 Index (8.5%/yr)** grows to **+${usd.format(fv5)} in 5 yrs**, **+${usd.format(fv10)} in 10 yrs**, and **+${usd.format(fv20)} in 20 yrs** (or **+${usd.format(hysa5)}** in 5 yrs inside **${savAcctLabel} @ 4.5% APY**).`,
+      `- 🚗 **Pay Off Car & Loans Early:** Throwing **+${usd.format(amt)}${mode === 'monthly' ? '/mo' : ''}** at **${carLoan.name}** (${carLoan.rate || 6.9}% APR) kills it **${carStats.monthsShaved} mos (${(carStats.monthsShaved / 12).toFixed(1)} yrs) early** and saves **+${usd.format(carStats.interestSaved)}** in interest${showBothLoans ? ` — or shaves **${(houseStats.monthsShaved / 12).toFixed(1)} yrs** and **+${usd.format(houseStats.interestSaved)}** off **${primaryHouseLoan.name}**` : ''}.`,
+    ];
+  };
+
   // Build ONE targeted, punchy roast + compact math table based on primary question intent
   let synthesizedMarkdownReport = '';
 
+  const isInvestVsPayoffAsk =
+    qLower.includes('invest') ||
+    qLower.includes('roth') ||
+    qLower.includes('s&p') ||
+    qLower.includes('401k') ||
+    qLower.includes('brokerage') ||
+    qLower.includes('index fund') ||
+    qLower.includes('car loan') ||
+    qLower.includes('auto loan') ||
+    qLower.includes('pay off my car') ||
+    (qLower.includes('car') && (qLower.includes('early') || qLower.includes('pay off') || qLower.includes('loan')));
+
   const isMortgageTradeoffAsk =
-    qLower.includes('threw half') ||
-    qLower.includes('throw half') ||
-    qLower.includes('extra mortgage') ||
-    qLower.includes('extra payment') ||
-    qLower.includes('years off') ||
-    qLower.includes('shave') ||
-    (qLower.includes('mortgage') && (qLower.includes('instead') || qLower.includes('half') || qLower.includes('pay off')));
+    !isInvestVsPayoffAsk &&
+    (qLower.includes('threw half') ||
+      qLower.includes('throw half') ||
+      qLower.includes('extra mortgage') ||
+      qLower.includes('extra payment') ||
+      qLower.includes('years off') ||
+      qLower.includes('shave') ||
+      (qLower.includes('mortgage') && (qLower.includes('instead') || qLower.includes('half') || qLower.includes('pay off'))));
 
   const isWorkHoursAsk =
     qLower.includes('hours of my life') ||
@@ -865,6 +985,7 @@ export async function analyzeQuestionAndFinances(
   const isAffordOrImpulseAsk =
     !isMicroSwipesAsk &&
     !isMortgageTradeoffAsk &&
+    !isInvestVsPayoffAsk &&
     (parsedDollarAmount !== null ||
       qLower.includes('afford') ||
       qLower.includes('talk me out') ||
@@ -911,6 +1032,7 @@ export async function analyzeQuestionAndFinances(
 
   const isDebtOrNetWorthAsk =
     !isMortgageTradeoffAsk &&
+    !isInvestVsPayoffAsk &&
     (qLower.includes('net worth') ||
       qLower.includes('reality check') ||
       qLower.includes('debt') ||
@@ -918,16 +1040,41 @@ export async function analyzeQuestionAndFinances(
       qLower.includes('mortgage') ||
       qLower.includes('payoff'));
 
+  // A0. 📈🚗 Invest in Accounts vs. Pay Off Car Loan & Mortgage Early
+  if (isInvestVsPayoffAsk) {
+    const top2Disc = discretionaryCats.slice(0, 2);
+    const top2CombinedAvg = top2Disc.reduce((s, c) => s + Math.max(c.spend, c.avg), 0);
+    const habitLabel = top2Disc.map((c) => c.category).join(' & ') || 'Dining & Shopping';
+    const monthlyRedirect = parsedDollarAmount ?? Math.max(200, Math.round((top2CombinedAvg || 600) * 0.4));
+
+    const rSp500 = 0.085 / 12;
+    const rHysa = 0.045 / 12;
+    const sp5yr = Math.round(monthlyRedirect * ((Math.pow(1 + rSp500, 60) - 1) / rSp500));
+    const sp10yr = Math.round(monthlyRedirect * ((Math.pow(1 + rSp500, 120) - 1) / rSp500));
+    const sp20yr = Math.round(monthlyRedirect * ((Math.pow(1 + rSp500, 240) - 1) / rSp500));
+    const hysa5yr = Math.round(monthlyRedirect * ((Math.pow(1 + rHysa, 60) - 1) / rHysa));
+    const hysa10yr = Math.round(monthlyRedirect * ((Math.pow(1 + rHysa, 120) - 1) / rHysa));
+
+    const carAccel = calcLoanAccel(carLoan, monthlyRedirect, 'monthly');
+    const houseAccel = calcLoanAccel(primaryHouseLoan, monthlyRedirect, 'monthly');
+
+    synthesizedMarkdownReport = [
+      `### Where Your Money Should Go Instead (+${usd.format(monthlyRedirect)}/mo from ${habitLabel})`,
+      `> 📈 **Redirecting +${usd.format(monthlyRedirect)}/mo from ${habitLabel} builds +${usd.format(sp10yr)} in 10 yrs (+${usd.format(sp20yr)} in 20 yrs) inside a Roth IRA / S&P 500 account — OR pays off your ${carLoan.name} ${carAccel.monthsShaved} months early.** Pick literally any row below over another forgettable swipe.`,
+      `| Account / Payoff Strategy | 5-Yr / Payoff Speed | 10-Yr Wealth / Interest Saved |`,
+      `| --- | --- | --- |`,
+      `| 📈 **Roth IRA (Tax-Free S&P 500 @ 8.5%)** | **+${usd.format(sp5yr)}** in 5 yrs | **+${usd.format(sp10yr)}** (20-yr: **+${usd.format(sp20yr)}**) |`,
+      `| 💼 **${invAcctLabel} (Brokerage / 401k)** | **+${usd.format(sp5yr)}** (${usd.format(monthlyRedirect * 60)} principal) | **+${usd.format(sp10yr)}** (+${usd.format(sp10yr - monthlyRedirect * 120)} pure gain) |`,
+      `| 🏦 **${savAcctLabel} (4.5% APY Cash)** | **+${usd.format(hysa5yr)}** risk-free | **+${usd.format(hysa10yr)}** liquid emergency buffer |`,
+      `| 🚗 **Pay Off ${carLoan.name} Early (${carLoan.rate || 6.9}%)** | **Done ${carAccel.monthsShaved} mos (${(carAccel.monthsShaved / 12).toFixed(1)} yrs) sooner** | **+${usd.format(carAccel.interestSaved)} interest saved** |`,
+      `| 🏠 **Pay Off ${primaryHouseLoan.name} Early (${primaryHouseLoan.rate || 6.25}%)** | **Done ${(houseAccel.monthsShaved / 12).toFixed(1)} yrs (${houseAccel.monthsShaved} mos) sooner** | **+${usd.format(houseAccel.interestSaved)} interest saved** |`,
+      `| **= Keeping +${usd.format(monthlyRedirect)}/mo (${usd.format(monthlyRedirect * 12)}/yr)** | **Kills ${carLoan.name} ${carAccel.monthsShaved} mos early** | **Or compounds to +${usd.format(sp10yr)} in 10 yrs** |`,
+      `- 💡 **Best Order of Operations:** 1) Grab any 401(k) match, 2) Kill any car/debt over **6% APR** (**${carLoan.name}** saves **+${usd.format(carAccel.interestSaved)}** guaranteed), 3) Max your **Roth IRA / S&P 500 Index** for **+${usd.format(sp20yr)}** tax-free over 20 years.`,
+    ].join('\n');
+  }
   // A. 🏠 Tacos vs. Your Mortgage / Loans (Amortization & Extra Principal Tradeoff)
-  if (isMortgageTradeoffAsk) {
-    const targetLoan =
-      activeLoans.find((l) => l.type === 'house') ||
-      activeLoans[0] || {
-        name: 'Primary Mortgage / Debt',
-        principal: totalDebtDollars > 0 ? totalDebtDollars : 285000,
-        rate: 6.25,
-        monthlyPayment: totalDebtDollars > 0 ? Math.max(450, Math.round(totalDebtDollars * 0.0065)) : 1850,
-      };
+  else if (isMortgageTradeoffAsk) {
+    const targetLoan = primaryHouseLoan;
     const top2Disc = discretionaryCats.slice(0, 2);
     const top2CombinedAvg = top2Disc.reduce((s, c) => s + Math.max(c.spend, c.avg), 0);
     const habitLabel = top2Disc.map((c) => c.category).join(' & ') || 'Dining & Shopping';
@@ -961,7 +1108,7 @@ export async function analyzeQuestionAndFinances(
       `| + Redirect 50% of ${habitLabel} | Cut from ${usd.format(top2CombinedAvg || extraMonthly * 2)}/mo burn | +${usd.format(extraMonthly)}/mo |`,
       `| New Accelerated Path | ${n1} mos (${(n1 / 12).toFixed(1)} yrs) · ${usd.format(interest1)} interest | -${usd.format(M1)}/mo |`,
       `| **= Freedom & Interest Saved** | **Paid off ${yearsShaved} yrs (${monthsShaved} mos) sooner** | **+${usd.format(interestSaved)} saved** |`,
-      `- 💡 **Guaranteed Return:** Every extra dollar on a **${targetLoan.rate || 6.0}%** loan earns an instant, risk-free **${targetLoan.rate || 6.0}%** return.`,
+      ...buildWealthRedirectLines(extraMonthly, 'monthly'),
     ].join('\n');
   }
   // B. ⏱️ Life-Energy Math ("Convert my spending into hours of my life at work")
@@ -987,7 +1134,7 @@ export async function analyzeQuestionAndFinances(
           )
         : [`| Variable spending | 0.0 hrs | $0 |`]),
       `| **= Total Variable Work Time** | **${totalVarHours.toFixed(1)} hrs (${totalVarDays.toFixed(1)} 8-hr workdays)** | **-${usd.format(curVariableSpent)}** |`,
-      `- 💡 **Rule of Thumb:** Every **${usd.format(Math.round(hourlyNet * 2))}** impulse buy costs you **2 hours** of your life that you never get back.`,
+      ...buildWealthRedirectLines(Math.max(150, Math.round(curVariableSpent * 0.3)), 'monthly'),
     ].join('\n');
   }
   // C. ☕ Death by a Thousand Swipes (Under-$25 Micro-Leak Audit)
@@ -1026,7 +1173,7 @@ export async function analyzeQuestionAndFinances(
         ? `| + Other under-$25 taps | ${Math.max(0, microTxns.length - topMicro.reduce((s, [, v]) => s + v.count, 0))} small charges | -${usdCents.format(otherMicroSum)} |`
         : '',
       `| **= Total Under-$25 Leak** | **${microTxns.length} swipes (-${usd.format(annualMicro)}/yr pace)** | **-${usdCents.format(microTotal)}** |`,
-      `- 💡 **10-Year Cost:** Cutting just half of these tiny taps saves **+${usd.format(annualMicro / 2)}/yr** — worth **+${usd.format(Math.round((annualMicro / 2) * 14.48))}** in 10 years.`,
+      ...buildWealthRedirectLines(Math.max(75, Math.round(microTotal * 0.5)), 'monthly'),
     ]
       .filter(Boolean)
       .join('\n');
@@ -1086,7 +1233,7 @@ export async function analyzeQuestionAndFinances(
         ? `| 🚨 **#1 Weekend Weakness** | **${topWkndCat[0]}** on Fri–Sun | -${usd.format(topWkndCat[1])} |`
         : '',
       `| **= Total Variable Spend** | **Weekend burn is ${(wkndDaily / Math.max(1, wkdyDaily)).toFixed(1)}x higher/day** | **-${usd.format(weekendSpend + weekdaySpend)}** |`,
-      `- 💡 **Weekend Cap Rule:** Cap your Fri–Sun spending at **$100 total** this weekend and transfer the rest straight to savings on Monday morning.`,
+      ...buildWealthRedirectLines(Math.max(100, Math.round(weekendSpend * 0.4)), 'monthly'),
     ]
       .filter(Boolean)
       .join('\n');
@@ -1124,7 +1271,7 @@ export async function analyzeQuestionAndFinances(
           `| **${(t.merchantKey || t.description).slice(0, 26)}** | ${t.category || 'Uncategorized'} | -${usdCents.format(Math.abs(t.amount))} |`
       ),
       `| **= Single-Day Damage (${worstDate})** | **${worstTxns.length} swipes in 24 hours** | **-${usdCents.format(worstSum)}** |`,
-      `- 💡 **24-Hour Cooling Rule:** Wait 24 hours before any non-essential purchase over **$75** so one bad afternoon doesn't wreck your month.`,
+      ...buildWealthRedirectLines(Math.max(100, Math.round(worstSum)), 'onetime'),
     ].join('\n');
   }
   // F. 🏆 Which Merchant Owns Me? (The Silent Partner Tax)
@@ -1152,7 +1299,7 @@ export async function analyzeQuestionAndFinances(
           `| ${i + 1}. **${m}** | ${v.category} · ${v.count}x (avg ${usd.format(v.spendCents / v.count)}) | -${usd.format(v.spendCents)} |`
       ),
       `| **= Top ${nonBillMerchants.length} Merchants Total** | **-${usd.format(top5Sum * 12)}/yr combined pace** | **-${usd.format(top5Sum)}** |`,
-      `- 💡 **Delete Saved Card:** Remove your saved credit card from **${topOne ? topOne[0] : 'checkout'}** so you have to type all 16 digits by hand before buying.`,
+      ...buildWealthRedirectLines(Math.max(100, Math.round(topOne ? topOne[1].spendCents : top5Sum * 0.3)), 'monthly'),
     ].join('\n');
   }
   // G. 🛟 Cash Runway: "If My Paycheck Stopped Today, How Many Days Do I Last?"
@@ -1169,6 +1316,7 @@ export async function analyzeQuestionAndFinances(
     const daysCurrent = Math.round(liquidCashDollars / Math.max(1, currentDailyBurn));
     const daysSurvival = Math.round(liquidCashDollars / Math.max(1, survivalDailyBurn));
     const extraDays = Math.max(0, daysSurvival - daysCurrent);
+    const monthlyFluffSaved = Math.max(150, Math.round(currentMonthlyBurn - survivalMonthlyBurn));
 
     synthesizedMarkdownReport = [
       `### Cash Runway & Survival Reality Check`,
@@ -1178,8 +1326,8 @@ export async function analyzeQuestionAndFinances(
       `| Total Liquid Cash Available | Checking (${usd.format(checkingCashDollars)}) + Savings (${usd.format(savingsCashDollars)}) | +${usd.format(liquidCashDollars)} |`,
       `| Current Lifestyle Pace | -${usd.format(currentMonthlyBurn)}/mo (-${usd.format(currentDailyBurn)}/day) | **${daysCurrent} days (${(daysCurrent / 30).toFixed(1)} mos)** |`,
       `| Lean Bills-Only Mode | -${usd.format(survivalMonthlyBurn)}/mo (-${usd.format(survivalDailyBurn)}/day) | **${daysSurvival} days (${(daysSurvival / 30).toFixed(1)} mos)** |`,
-      `| **= Runway Gained by Cutting Fluff** | **Saves +${usd.format(Math.max(0, currentMonthlyBurn - survivalMonthlyBurn))}/mo** | **+${extraDays} extra days** |`,
-      `- 💡 **6-Month Target:** A rock-solid 180-day emergency fund requires **${usd.format(survivalMonthlyBurn * 6)}** in liquid cash.`,
+      `| **= Runway Gained by Cutting Fluff** | **Saves +${usd.format(monthlyFluffSaved)}/mo** | **+${extraDays} extra days** |`,
+      ...buildWealthRedirectLines(monthlyFluffSaved, 'monthly'),
     ].join('\n');
   }
   // H. 📅 Last Month's Full Category Receipt
@@ -1204,6 +1352,7 @@ export async function analyzeQuestionAndFinances(
         ? `| + ${prevCats.length - 6} other categories | Combined smaller spend | -${usd.format(otherPrevSum)} |`
         : '',
       `| **= Total ${monthLabel(prevMonthKey)} Spend** | **Net kept: ${prevMonthStats.netDollars >= 0 ? '+' : ''}${usd.format(prevMonthStats.netDollars)}** | **-${usd.format(prevMonthStats.spendDollars)}** |`,
+      ...buildWealthRedirectLines(Math.max(150, Math.round((worstPrev?.[1].spendCents || 400) * 0.5)), 'monthly'),
     ]
       .filter(Boolean)
       .join('\n');
@@ -1223,12 +1372,12 @@ export async function analyzeQuestionAndFinances(
       unpaidBillsTotalDollars -
       remainingVarAllowance;
     const projectedMonthEndAfter = projectedMonthEndBefore - amountToTest;
-    const tenYearCost = Math.round(amountToTest * Math.pow(1.08, 10));
+    const tenYearCost = Math.round(amountToTest * Math.pow(1.085, 10));
 
     const roastLine =
       projectedMonthEndAfter < 500 || monthlySafeRemainder - amountToTest < 0
         ? `🚨 **Put the card down.** Dropping **${usd.format(amountToTest)}** leaves your checking with **${usd.format(projectedMonthEndAfter)}** after **${usd.format(unpaidBillsTotalDollars)}** in unpaid bills${topDiscretionary ? ` — and you already blew **${usd.format(topDiscretionary.spend)}** on **${topDiscretionary.category}** this month` : ''}.`
-        : `🛑 **Your card won't decline, which is the lowest bar in finance.** You still have **${usd.format(unpaidBillsTotalDollars)}** in unpaid bills this month${topDiscretionary ? `, you've already burned **${usd.format(topDiscretionary.spend)}** on **${topDiscretionary.category}**` : ''}, and **${usd.format(amountToTest)}** invested at 8% is **${usd.format(tenYearCost)}** in 10 years. Close the tab.`;
+        : `🛑 **Your card won't decline, which is the lowest bar in finance.** You still have **${usd.format(unpaidBillsTotalDollars)}** in unpaid bills this month${topDiscretionary ? `, you've already burned **${usd.format(topDiscretionary.spend)}** on **${topDiscretionary.category}**` : ''}, and **${usd.format(amountToTest)}** invested at 8.5% is **${usd.format(tenYearCost)}** in 10 years. Close the tab.`;
 
     synthesizedMarkdownReport = [
       `### Reality Check: Spending ${usd.format(amountToTest)}${isRecurringAsk ? '/mo' : ' Right Now'}`,
@@ -1240,7 +1389,7 @@ export async function analyzeQuestionAndFinances(
       `| - Unpaid Bills & Budget Left | ${unpaidBills.length} bills (${usd.format(unpaidBillsTotalDollars)}) + ${usd.format(remainingVarAllowance)} var left | -${usd.format(unpaidBillsTotalDollars + remainingVarAllowance)} |`,
       `| - This ${usd.format(amountToTest)} Spend | ${isRecurringAsk ? `${usd.format(amountToTest * 12)}/yr drain` : `Costs ${usd.format(tenYearCost)} in 10-yr growth`} | -${usd.format(amountToTest)} |`,
       `| **= Month-End Cash Left** | **After bills & ${usd.format(amountToTest)} spend** | **${projectedMonthEndAfter >= 0 ? '+' : ''}${usd.format(projectedMonthEndAfter)}** |`,
-      `- 💡 **Save-It Move:** Transfer **${usd.format(amountToTest)}** to savings right now → worth **${usd.format(tenYearCost)}** in 10 yrs (or knocks **${usd.format(amountToTest)}** off your **${usd.format(totalDebtDollars)}** debt).`,
+      ...buildWealthRedirectLines(amountToTest, isRecurringAsk ? 'monthly' : 'onetime'),
     ].join('\n');
   }
   // 2. Upcoming Bills ("Are there any big bills coming up?")
@@ -1253,7 +1402,7 @@ export async function analyzeQuestionAndFinances(
     const roastLine =
       unpaidBills.length > 0
         ? `⏳ **Hands off your checking balance — ${usd.format(unpaidBillsTotalDollars)} of it already belongs to your bills.** You have **${unpaidBills.length} unpaid bills** waiting to hit in the next **${daysRemainingInMonth} days**.`
-        : `✅ **All ${paidBills.length} bills (${usd.format(paidBillsTotalDollars)}) cleared — which is NOT an invitation to go shopping.** Sweep your surplus into savings before you invent a way to spend it.`;
+        : `✅ **All ${paidBills.length} bills (${usd.format(paidBillsTotalDollars)}) cleared — which is NOT an invitation to go shopping.** Sweep your surplus into investments or loan principal before you invent a way to spend it.`;
 
     synthesizedMarkdownReport = [
       `### Upcoming Bill Reality Check (${daysRemainingInMonth}d left in ${monthLabel(curMonthKey)})`,
@@ -1272,7 +1421,8 @@ export async function analyzeQuestionAndFinances(
         ? `| + ${unpaidBills.length - topUnpaid.length} more unpaid bills | Due before month-end | -${usd.format(otherUnpaidSum)} |`
         : '',
       `| **= Total Unpaid Bills Left** | **${paidBills.length} paid (${usd.format(paidBillsTotalDollars)}), ${unpaidBills.length} left** | **-${usd.format(unpaidBillsTotalDollars)}** |`,
-      `- 💡 **True Uncommitted Cash:** Checking (**${usd.format(checkingCashDollars)}**) − Unpaid Bills (**${usd.format(unpaidBillsTotalDollars)}**) = **${usd.format(freeCheckingAfterBills)}**. Keep your wallet shut until month-end.`,
+      `- 💡 **True Uncommitted Cash:** Checking (**${usd.format(checkingCashDollars)}**) − Unpaid Bills (**${usd.format(unpaidBillsTotalDollars)}**) = **${usd.format(freeCheckingAfterBills)}**.`,
+      ...buildWealthRedirectLines(Math.max(150, Math.round(Math.max(200, freeCheckingAfterBills) * 0.25)), 'monthly'),
     ]
       .filter(Boolean)
       .join('\n');
@@ -1301,7 +1451,7 @@ export async function analyzeQuestionAndFinances(
         ? `| + ${recentOutflows.length - topRecent.length} smaller swipes | Death by a thousand cuts | -${usdCents.format(otherRecentSum)} |`
         : '',
       `| **= 7-Day Total Burn** | **${recentOutflows.length} charges (${recent7DayBigCharges.length} over $50)** | **-${usdCents.format(recentTotal)}** |`,
-      `- 💡 **No-Spend Challenge:** Do **$0** in non-essential spending for the next 72 hours to stop the bleeding.`,
+      ...buildWealthRedirectLines(Math.max(100, Math.round(recentTotal)), 'onetime'),
     ]
       .filter(Boolean)
       .join('\n');
@@ -1339,7 +1489,6 @@ export async function analyzeQuestionAndFinances(
       const otherMerchSum = Math.max(0, combinedSpend - topMerchSum);
       const monthlyRate = Math.max(combinedSpend, combinedTrailingAvg);
       const annualBurn = monthlyRate * 12;
-      const halfCutTenYr = Math.round((annualBurn * 0.5) * 14.48);
 
       synthesizedMarkdownReport = [
         `### ${catList.join(' + ')} Reality Check (${timePeriod.label})`,
@@ -1356,7 +1505,7 @@ export async function analyzeQuestionAndFinances(
           ? `| + Other ${catList[0]} spots | ${Math.max(0, combinedTxCount - topMerch.reduce((s, [, v]) => s + v.count, 0))} swipes | -${usd.format(otherMerchSum)} |`
           : '',
         `| **= Total ${catList.join(' + ')}** | **3-Mo Avg: ${usd.format(combinedTrailingAvg)}/mo** | **-${usd.format(combinedSpend)}** |`,
-        `- 💡 **Compound Wake-Up Call:** Trimming 50% here saves **+${usd.format(monthlyRate / 2)}/mo** — worth **+${usd.format(halfCutTenYr)}** invested over 10 years.`,
+        ...buildWealthRedirectLines(Math.max(75, Math.round(monthlyRate * 0.5)), 'monthly'),
       ]
         .filter(Boolean)
         .join('\n');
@@ -1369,7 +1518,7 @@ export async function analyzeQuestionAndFinances(
 
       synthesizedMarkdownReport = [
         `### Merchant Audit: "${kwLabel}"`,
-        `> 🔥 **You've handed "${kwLabel}" -${usdCents.format(totalMatchSpend)} across ${spendTxns.length} charges.** Imagine if you funded your brokerage account with that same loyalty.`,
+        `> 🔥 **You've handed "${kwLabel}" -${usdCents.format(totalMatchSpend)} across ${spendTxns.length} charges.** Imagine if you funded your brokerage account or killed your car loan with that same loyalty.`,
         `| Date · Merchant | Category | Amount |`,
         `| --- | --- | --- |`,
         ...shown.map(
@@ -1379,6 +1528,7 @@ export async function analyzeQuestionAndFinances(
           ? `| + ${spendTxns.length - shown.length} older charges | Historical burn | -${usdCents.format(Math.max(0, totalMatchSpend - shownSum))} |`
           : '',
         `| **= Total "${kwLabel}" Spend** | **${spendTxns.length} charges total** | **-${usdCents.format(totalMatchSpend)}** |`,
+        ...buildWealthRedirectLines(Math.max(75, Math.round(totalMatchSpend)), 'onetime'),
       ]
         .filter(Boolean)
         .join('\n');
@@ -1396,7 +1546,7 @@ export async function analyzeQuestionAndFinances(
 
     synthesizedMarkdownReport = [
       `### Subscription & Autopay Drain Audit`,
-      `> 🧛 **${recurringWithStatus.length} recurring charges quietly siphon -${usd.format(totalRecMonthly)}/mo (-${usd.format(totalRecMonthly * 12)}/yr) before you even buy coffee.** Cancel two things you barely use and give yourself an instant raise.`,
+      `> 🧛 **${recurringWithStatus.length} recurring charges quietly siphon -${usd.format(totalRecMonthly)}/mo (-${usd.format(totalRecMonthly * 12)}/yr) before you even buy coffee.** Cancel two things you barely use and redirect that autopay into your own wealth.`,
       `| Recurring Drain | Category · ${monthLabel(curMonthKey)} Status | Monthly |`,
       `| --- | --- | --- |`,
       ...listToShow.map(
@@ -1407,7 +1557,7 @@ export async function analyzeQuestionAndFinances(
         ? `| + ${recurringWithStatus.length - listToShow.length} other fixed bills | Includes housing/loans | -${usd.format(otherRec)}/mo |`
         : '',
       `| **= Total Autopay Drain** | **-${usd.format(totalRecMonthly * 12)}/yr on autopilot** | **-${usd.format(totalRecMonthly)}/mo** |`,
-      `- 💡 **10-Minute Fix:** Cancel just **$50/mo** of recurring bloat → **+$600/yr** saved (**+$8,690** in 10 yrs at 8%).`,
+      ...buildWealthRedirectLines(Math.max(60, Math.round(listSum * 0.35)), 'monthly'),
     ]
       .filter(Boolean)
       .join('\n');
@@ -1431,7 +1581,7 @@ export async function analyzeQuestionAndFinances(
     const roastLine =
       spendDelta > 0
         ? `📈 **You've already spent +${usd.format(spendDelta)} MORE than ${monthLabel(prevMonthKey)} — wrong direction.** ${topSpikes[0] && topSpikes[0].delta > 0 ? `**${topSpikes[0].category}** jumped **+${usd.format(topSpikes[0].delta)}**. ` : ''}Lock your wallet for the next **${daysRemainingInMonth} days**.`
-        : `📉 **You're ${usd.format(Math.abs(spendDelta))} below ${monthLabel(prevMonthKey)} so far — DO NOT blow it on a "treat yourself" purchase.** Transfer that **+${usd.format(Math.abs(spendDelta))}** win straight to savings today.`;
+        : `📉 **You're ${usd.format(Math.abs(spendDelta))} below ${monthLabel(prevMonthKey)} so far — DO NOT blow it on a "treat yourself" purchase.** Sweep that **+${usd.format(Math.abs(spendDelta))}** win straight into your investment account or car loan today.`;
 
     synthesizedMarkdownReport = [
       `### ${monthLabel(curMonthKey)} vs. ${monthLabel(prevMonthKey)} Showdown`,
@@ -1446,6 +1596,7 @@ export async function analyzeQuestionAndFinances(
             `| ${s.delta > 0 ? '🚨' : '✅'} **${s.category}** | -${usd.format(s.cur)} | -${usd.format(s.prev)} | ${s.delta >= 0 ? '+' : ''}${usd.format(s.delta)} |`
         ),
       `| **= Net Cashflow Kept** | **${curMonthStats.netDollars >= 0 ? '+' : ''}${usd.format(curMonthStats.netDollars)}** | **${prevMonthStats.netDollars >= 0 ? '+' : ''}${usd.format(prevMonthStats.netDollars)}** | **${curMonthStats.netDollars - prevMonthStats.netDollars >= 0 ? '+' : ''}${usd.format(curMonthStats.netDollars - prevMonthStats.netDollars)}** |`,
+      ...buildWealthRedirectLines(Math.max(150, Math.round(Math.abs(spendDelta) || 250)), 'monthly'),
     ].join('\n');
   }
   // 7. Debt vs Liquid Cash / Net Worth Reality Check
@@ -1455,28 +1606,27 @@ export async function analyzeQuestionAndFinances(
 
     synthesizedMarkdownReport = [
       `### Debt vs. Cash Reality Check`,
-      `> 🏦 **You're carrying -${usd.format(totalDebtDollars)} in debt while sitting on ${usd.format(liquidCashDollars)} in cash.** Every dollar you spend on forgettable stuff is a dollar that isn't killing interest or compounding your **${usd.format(netWorthDollars)}** net worth.`,
+      `> 🏦 **You're carrying -${usd.format(totalDebtDollars)} in debt while sitting on ${usd.format(liquidCashDollars)} in cash.** Every dollar you spend on forgettable stuff is a dollar that isn't killing your loans early or compounding your **${usd.format(netWorthDollars)}** net worth.`,
       `| Balance Sheet Line | Reality Check | Balance |`,
       `| --- | --- | --- |`,
       `| + Liquid Cash | Checking (${usd.format(checkingCashDollars)}) + Savings (${usd.format(savingsCashDollars)}) | +${usd.format(liquidCashDollars)} |`,
       `| + Investments & Property | Long-term wealth engine | +${usd.format(investmentsDollars + propertyVal)} |`,
       `| - Total Debt Drag | ${activeLoans.length} loans${topLoan ? ` (led by ${topLoan.name} @ ${topLoan.rate}%)` : ''} | -${usd.format(totalDebtDollars)} |`,
       `| **= True Net Worth** | **Assets (${usd.format(totalAssets)}) − Debt** | **+${usd.format(netWorthDollars)}** |`,
-      `- 💡 **Payoff Power:** Throwing an extra **$250/mo** at principal instead of impulse buys shaves months off your debt and saves thousands in interest.`,
+      ...buildWealthRedirectLines(250, 'monthly'),
     ].join('\n');
   }
   // 8. Default: Roast My Spending & Show Where to Cut Back & Save
   else {
     const top4Disc = discretionaryCats.slice(0, 4);
     const discTotal = top4Disc.reduce((s, c) => s + c.avg, 0);
-    const cut30Monthly = Math.round(discTotal * 0.3);
+    const cut30Monthly = Math.max(150, Math.round(discTotal * 0.3));
     const cut30Annual = cut30Monthly * 12;
     const cut30TenYr = Math.round(cut30Annual * 14.48);
 
     synthesizedMarkdownReport = [
       `### Roast & Savings Audit (${monthLabel(curMonthKey)})`,
-      `> 🔥 **You say you want to save more, yet your top 4 discretionary habits burn -${usd.format(discTotal)}/mo (-${usd.format(discTotal * 12)}/yr).** Cut 30% of the fluff below and you instantly keep **+${usd.format(cut30Monthly)}/mo (+${usd.format(cut30Annual)}/yr)**.
-`,
+      `> 🔥 **You say you want to build wealth, yet your top 4 discretionary habits burn -${usd.format(discTotal)}/mo (-${usd.format(discTotal * 12)}/yr).** Cut 30% of the fluff below and you instantly unlock **+${usd.format(cut30Monthly)}/mo (+${usd.format(cut30Annual)}/yr)** to invest or crush your loans.`,
       `| Leak Category | Monthly Burn | 30% Cut Saves |`,
       `| --- | --- | --- |`,
       ...top4Disc.map(
@@ -1484,7 +1634,7 @@ export async function analyzeQuestionAndFinances(
           `| **${c.category}** (${c.count} swipes) | -${usd.format(c.avg)}/mo | +${usd.format(Math.round(c.avg * 0.3))}/mo |`
       ),
       `| **= Instant Savings Unlocked** | **+${usd.format(cut30Annual)}/yr (${usd.format(cut30TenYr)} in 10y)** | **+${usd.format(cut30Monthly)}/mo** |`,
-      `- 💡 **Bottom Line:** Your monthly safe remainder jumps from **+${usd.format(monthlySafeRemainder)}/mo** to **+${usd.format(monthlySafeRemainder + cut30Monthly)}/mo** the moment you stop swiping out of boredom.`,
+      ...buildWealthRedirectLines(cut30Monthly, 'monthly'),
     ].join('\n');
   }
 

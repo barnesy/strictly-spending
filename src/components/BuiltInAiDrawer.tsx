@@ -44,6 +44,13 @@ interface StarterPromptOption {
 
 const STARTER_PROMPTS: StarterPromptOption[] = [
   {
+    icon: '📈',
+    title: 'Invest it vs. pay off car & loans early',
+    subtitle: 'Roth IRA / S&P 500 growth vs. killing my car loan & mortgage early',
+    prompt: 'What if I invested my extra spending into a Roth IRA or S&P 500 vs paying off my car loan early?',
+    group: 'wealth',
+  },
+  {
     icon: '🏠',
     title: 'Tacos vs. my mortgage payoff',
     subtitle: 'What if I threw half my dining/shopping spend at my loan?',
