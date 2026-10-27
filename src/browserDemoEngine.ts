@@ -99,7 +99,7 @@ function hasConnectedRealSources(s: BrowserDemoState): boolean {
 }
 
 function inferOrgNameFromAccount(
-  sfAccountId?: string | null,
+  _sfAccountId?: string | null,
   rawName?: string | null,
   rawOrg?: string | null
 ): string {
@@ -107,23 +107,20 @@ function inferOrgNameFromAccount(
   if (trimmedOrg && trimmedOrg !== 'Bank' && trimmedOrg !== 'Financial Institution') {
     return trimmedOrg;
   }
-  const id = (sfAccountId || '').trim();
-  if (id === 'ACT-d29e6950-a8db-42e5-91f2-a65291589e16') return 'Rocket Mortgage';
-  if (id === 'ACT-7fcf74b3-d66a-4abf-8e60-63b2ff4f8189') return 'Santander Consumer';
 
   const n = (rawName || '').trim();
-  if (/\*{3,}7073|\(7073\)|rocket\s*mortgage/i.test(n)) return 'Rocket Mortgage';
-  if (/\b(19|20)\d{2}\s+tesla|model\s*[3ysx]|\(5192\)|santander/i.test(n)) return 'Santander Consumer';
+  if (/rocket\s*mortgage/i.test(n)) return 'Rocket Mortgage';
+  if (/\b(19|20)\d{2}\s+tesla|model\s*[3ysx]|santander/i.test(n)) return 'Santander Consumer';
   if (/adv\s*plus\s*banking|customized\s*cash\s*rewards|bank\s*of\s*america/i.test(n)) return 'Bank of America';
-  if (/\b(checking\s*1770|checking\s*5463|sav\s*4322|savings\s*3234)\b|truist/i.test(n)) return 'Truist';
+  if (/truist/i.test(n)) return 'Truist';
   if (
-    /vertex.*401\(k\)|roth\s*ira|traditional\s*ira|restricted\s*stock\s*units|employee\s*stock\s*purchase|individual\s*-\s*tod|health\s*savings\s*account|cash\s*management|fidelity/i.test(
+    /401\(k\)|roth\s*ira|traditional\s*ira|restricted\s*stock\s*units|employee\s*stock\s*purchase|individual\s*-\s*tod|health\s*savings\s*account|cash\s*management|fidelity/i.test(
       n
     )
   ) {
     return 'Fidelity Investments';
   }
-  if (/crypto\s*\(1773\)|robinhood/i.test(n)) return 'Robinhood';
+  if (/robinhood/i.test(n)) return 'Robinhood';
   return trimmedOrg || 'Bank';
 }
 
@@ -324,7 +321,7 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
     const combined = `${acc.institution || ''} ${acc.name || ''}`.toLowerCase();
     const isMortgage =
       acc.type === 'mortgage' ||
-      /mortgage|home\s*loan|rocket|cooper|pennymac|loancare|\*{3,}7073/i.test(combined);
+      /mortgage|home\s*loan|rocket|cooper|pennymac|loancare/i.test(combined);
     const isStudent =
       /student|nelnet|aidvantage|mohela|navient|sallie\s*mae|edfinancial|pheaa|fedloan|dept\s*of\s*ed|education/i.test(
         combined
@@ -389,27 +386,23 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
     });
 
     if (!existing) {
-      const isRocket = combined.includes('rocket');
-      const isSantander = combined.includes('santander');
-      const defaultPayment = isRocket ? 2288.41 : isSantander ? 544.41 : undefined;
       const newLoan: Loan = {
         id: nextLoanId++,
         name: acc.name,
         type: loanType,
-        principal: rawBalance > 0 ? rawBalance : loanType === 'house' ? 326463.1 : 19486.85,
+        principal: rawBalance > 0 ? rawBalance : loanType === 'house' ? 300000 : 20000,
         rate: loanType === 'house' ? 6.5 : 5.5,
         termYears: loanType === 'house' ? 30 : loanType === 'student' ? 10 : 5,
-        startDate: isRocket ? '2023-05-01' : isSantander ? '2023-12-01' : '2024-01-01',
+        startDate: '2024-01-01',
         category,
         merchant: merchant || undefined,
-        monthlyPayment: detectedPayment ?? defaultPayment,
+        monthlyPayment: detectedPayment,
         propertyValue:
           loanType === 'house'
-            ? 500000
+            ? 450000
             : loanType === 'car'
-            ? 35000
+            ? 30000
             : undefined,
-        extraMonthlyPayment: isRocket ? 3010 : isSantander ? 1000 : undefined,
         createdAt: new Date().toISOString(),
         enabled: true,
       };
@@ -792,6 +785,19 @@ function ensureInitialized(): BrowserDemoState {
   return state;
 }
 
+function isAllowedSimpleFinHost(hostAndPath: string): boolean {
+  const hostPort = (hostAndPath.split('/')[0] || '').trim();
+  const host = (hostPort.split(':')[0] || '').toLowerCase();
+  return host === 'simplefin.org' || host.endsWith('.simplefin.org');
+}
+
+function redactSimpleFinConfigForUi(cfg: SimpleFinConfig): SimpleFinConfig {
+  return {
+    ...cfg,
+    access_url: cfg.access_url && cfg.access_url.trim().length > 0 ? '[REDACTED]' : '',
+  };
+}
+
 function parseSimpleFinUrl(rawUrl: string): { username: string; password: string; cleanUrl: string } {
   const trimmed = (rawUrl || '').trim();
   const schemeSplit = trimmed.split('://');
@@ -799,19 +805,25 @@ function parseSimpleFinUrl(rawUrl: string): { username: string; password: string
     throw new Error('Invalid SimpleFIN URL format: missing scheme');
   }
   const [scheme, rest] = schemeSplit;
+  if (scheme.toLowerCase() !== 'https') {
+    throw new Error('Invalid SimpleFIN URL: only https:// is permitted');
+  }
   const atIdx = rest.indexOf('@');
   if (atIdx === -1) {
     throw new Error('Invalid SimpleFIN URL format: missing credentials before @');
   }
   const authPart = rest.slice(0, atIdx);
   const hostPart = rest.slice(atIdx + 1);
+  if (!isAllowedSimpleFinHost(hostPart)) {
+    throw new Error('Invalid SimpleFIN URL host: must be an official simplefin.org domain');
+  }
   const colonIdx = authPart.indexOf(':');
   if (colonIdx === -1) {
     throw new Error('Invalid SimpleFIN URL credentials: expected username:password');
   }
   const username = authPart.slice(0, colonIdx);
   const password = authPart.slice(colonIdx + 1);
-  const cleanUrl = `${scheme}://${hostPart.replace(/\/+$/, '')}`;
+  const cleanUrl = `https://${hostPart.replace(/\/+$/, '')}`;
   return { username, password, cleanUrl };
 }
 
@@ -844,17 +856,14 @@ function inferStrictlyAccountDetails(
   const bankName = inferOrgNameFromAccount(sfAccountId, cleanRawName, orgName);
   const lower = `${bankName} ${cleanRawName}`.toLowerCase();
   const isMortgage =
-    sfAccountId === 'ACT-d29e6950-a8db-42e5-91f2-a65291589e16' ||
     lower.includes('mortgage') ||
     lower.includes('home loan') ||
     lower.includes('rocket') ||
     lower.includes('mr. cooper') ||
     lower.includes('pennymac') ||
-    lower.includes('loancare') ||
-    /\*{3,}7073/.test(lower);
+    lower.includes('loancare');
   const isLoan =
     isMortgage ||
-    sfAccountId === 'ACT-7fcf74b3-d66a-4abf-8e60-63b2ff4f8189' ||
     lower.includes('loan') ||
     lower.includes('auto finance') ||
     lower.includes('santander') ||
@@ -955,9 +964,14 @@ function getSavedSimpleFinConfig(s: BrowserDemoState): SimpleFinConfig {
 }
 
 function saveSimpleFinConfigToState(s: BrowserDemoState, cfg: SimpleFinConfig): void {
+  const existingCfg = getSavedSimpleFinConfig(s);
+  const resolvedCfg: SimpleFinConfig = {
+    ...cfg,
+    access_url: cfg.access_url === '[REDACTED]' ? existingCfg.access_url : cfg.access_url,
+  };
   const existing = s.settings.find((x) => x.key === 'simplefin_config');
-  if (existing) existing.value = cfg;
-  else s.settings.push({ key: 'simplefin_config', value: cfg });
+  if (existing) existing.value = resolvedCfg;
+  else s.settings.push({ key: 'simplefin_config', value: resolvedCfg });
   purgeDemoDataIfRealSourcesConnected(s);
   persistState();
 }
@@ -2017,8 +2031,9 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return null;
     }
     case 'get_settings':
-      return s.settings;
+      return s.settings.filter((x) => x.key !== 'simplefin_config');
     case 'get_setting':
+      if (args.key === 'simplefin_config') return null;
       return s.settings.find((x) => x.key === args.key)?.value ?? null;
     case 'put_setting': {
       const key = args.item?.key ?? args.key;
@@ -2053,11 +2068,11 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         executablePath,
         dbPath,
         configJson: JSON.stringify(configObj, null, 2),
-        localUrls: ['http://192.168.1.94:5173', 'http://100.78.187.58:5173'],
+        localUrls: ['http://localhost:5173'],
       };
     }
     case 'simplefin_get_config': {
-      return getSavedSimpleFinConfig(s);
+      return redactSimpleFinConfigForUi(getSavedSimpleFinConfig(s));
     }
     case 'simplefin_save_config': {
       const cfg = args.config || { access_url: '', claimed_at: null, last_synced_at: null };
@@ -2077,14 +2092,16 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       }
 
       // Allow pasting an already-claimed SimpleFIN Access URL directly (https://user:pass@beta-bridge.simplefin.org/simplefin)
-      if ((trimmed.startsWith('https://') || trimmed.startsWith('http://')) && trimmed.includes('@')) {
+      if (trimmed.startsWith('https://') && trimmed.includes('@')) {
+        const cleaned = trimmed.replace(/\/+$/, '');
+        parseSimpleFinUrl(cleaned);
         const cfg: SimpleFinConfig = {
-          access_url: trimmed.replace(/\/+$/, ''),
+          access_url: cleaned,
           claimed_at: new Date().toISOString(),
           last_synced_at: null,
         };
         saveSimpleFinConfigToState(s, cfg);
-        return cfg;
+        return redactSimpleFinConfigForUi(cfg);
       }
 
       let claimUrl = '';
@@ -2094,8 +2111,12 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         throw new Error('Invalid SimpleFIN Setup Token (not valid Base64).');
       }
 
-      if (!claimUrl.startsWith('https://') && !claimUrl.startsWith('http://')) {
-        throw new Error('Decoded SimpleFIN Setup Token is not a valid URL.');
+      if (!claimUrl.startsWith('https://')) {
+        throw new Error('Decoded SimpleFIN Setup Token must be an https:// URL.');
+      }
+      const claimHostPart = claimUrl.slice('https://'.length);
+      if (!isAllowedSimpleFinHost(claimHostPart)) {
+        throw new Error('Decoded SimpleFIN Setup Token host must be an official simplefin.org domain.');
       }
 
       // Simple POST with no custom headers avoids CORS preflight and works directly with beta-bridge.simplefin.org
@@ -2105,18 +2126,16 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
           `SimpleFIN token claim failed (HTTP ${resp.status}). Note: Setup tokens are single-use and expire quickly.`
         );
       }
-      const accessUrl = (await resp.text()).trim();
-      if (!accessUrl.startsWith('https://') && !accessUrl.startsWith('http://')) {
-        throw new Error('SimpleFIN Bridge returned an invalid access URL.');
-      }
+      const accessUrl = (await resp.text()).trim().replace(/\/+$/, '');
+      parseSimpleFinUrl(accessUrl);
 
       const cfg: SimpleFinConfig = {
-        access_url: accessUrl.replace(/\/+$/, ''),
+        access_url: accessUrl,
         claimed_at: new Date().toISOString(),
         last_synced_at: null,
       };
       saveSimpleFinConfigToState(s, cfg);
-      return cfg;
+      return redactSimpleFinConfigForUi(cfg);
     }
     case 'simplefin_get_accounts': {
       const cfg = getSavedSimpleFinConfig(s);

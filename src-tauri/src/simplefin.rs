@@ -104,6 +104,19 @@ struct SFinTransaction {
     pending: Option<bool>,
 }
 
+fn is_allowed_simplefin_host(host_and_path: &str) -> bool {
+    let host_port = host_and_path.split('/').next().unwrap_or("");
+    let host = host_port.split(':').next().unwrap_or("").to_ascii_lowercase();
+    host == "simplefin.org" || host.ends_with(".simplefin.org")
+}
+
+fn redact_config_for_ui(mut config: SimpleFinConfig) -> SimpleFinConfig {
+    if !config.access_url.trim().is_empty() {
+        config.access_url = "[REDACTED]".to_string();
+    }
+    config
+}
+
 // Helper to parse basic auth credentials and target URL from a SimpleFIN Access URL
 pub fn parse_simplefin_url(raw_url: &str) -> Result<(String, String, String), String> {
     let trimmed = raw_url.trim();
@@ -112,6 +125,9 @@ pub fn parse_simplefin_url(raw_url: &str) -> Result<(String, String, String), St
         return Err("Invalid SimpleFIN URL format: missing scheme".to_string());
     }
     let scheme = scheme_split[0];
+    if !scheme.eq_ignore_ascii_case("https") {
+        return Err("Invalid SimpleFIN URL: only https:// is permitted".to_string());
+    }
     let rest = scheme_split[1];
 
     let at_split: Vec<&str> = rest.splitn(2, '@').collect();
@@ -121,6 +137,10 @@ pub fn parse_simplefin_url(raw_url: &str) -> Result<(String, String, String), St
     let auth_part = at_split[0];
     let host_part = at_split[1];
 
+    if !is_allowed_simplefin_host(host_part) {
+        return Err("Invalid SimpleFIN URL host: must be an official simplefin.org domain".to_string());
+    }
+
     let colon_split: Vec<&str> = auth_part.splitn(2, ':').collect();
     if colon_split.len() != 2 {
         return Err("Invalid SimpleFIN URL credentials: expected username:password".to_string());
@@ -128,7 +148,7 @@ pub fn parse_simplefin_url(raw_url: &str) -> Result<(String, String, String), St
     let username = colon_split[0].to_string();
     let password = colon_split[1].to_string();
 
-    let clean_url = format!("{}://{}", scheme, host_part.trim_end_matches('/'));
+    let clean_url = format!("https://{}", host_part.trim_end_matches('/'));
     Ok((username, password, clean_url))
 }
 
@@ -157,7 +177,7 @@ pub fn resolve_transaction_date(posted: Option<i64>, transacted_at: Option<i64>)
     date
 }
 
-// 1. Get current SimpleFIN configuration
+// 1. Get current SimpleFIN configuration (internal helper returns unredacted config)
 pub fn get_config(conn_mutex: &std::sync::Mutex<rusqlite::Connection>) -> Result<SimpleFinConfig, String> {
     let conn = conn_mutex.lock().unwrap();
     let mut stmt = conn
@@ -172,7 +192,12 @@ pub fn get_config(conn_mutex: &std::sync::Mutex<rusqlite::Connection>) -> Result
     }
 }
 
-pub fn save_config(conn_mutex: &std::sync::Mutex<rusqlite::Connection>, config: SimpleFinConfig) -> Result<(), String> {
+pub fn save_config(conn_mutex: &std::sync::Mutex<rusqlite::Connection>, mut config: SimpleFinConfig) -> Result<(), String> {
+    if config.access_url == "[REDACTED]" {
+        if let Ok(existing) = get_config(conn_mutex) {
+            config.access_url = existing.access_url;
+        }
+    }
     let json_str = serde_json::to_string(&config).map_err(|e| e.to_string())?;
     let mut conn = conn_mutex.lock().unwrap();
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -188,7 +213,7 @@ pub fn save_config(conn_mutex: &std::sync::Mutex<rusqlite::Connection>, config: 
 
 #[tauri::command]
 pub fn simplefin_get_config(state: State<DbState>) -> Result<SimpleFinConfig, String> {
-    get_config(&state.conn)
+    get_config(&state.conn).map(redact_config_for_ui)
 }
 
 // 2. Save SimpleFIN configuration directly
@@ -225,8 +250,11 @@ pub async fn simplefin_claim_setup_token(
         };
 
         let claim_url_clean = claim_url.trim().to_string();
-        if !claim_url_clean.starts_with("https://") {
-            return Err("Decoded setup token is not a valid HTTPS URL".to_string());
+        let after_scheme = claim_url_clean
+            .strip_prefix("https://")
+            .ok_or_else(|| "Decoded setup token is not a valid HTTPS URL".to_string())?;
+        if !is_allowed_simplefin_host(after_scheme) {
+            return Err("Decoded setup token host must be an official simplefin.org domain".to_string());
         }
 
         let client = reqwest::Client::new();
@@ -255,7 +283,7 @@ pub async fn simplefin_claim_setup_token(
             .to_string()
     };
 
-    // Verify format
+    // Verify format and simplefin.org host
     parse_simplefin_url(&access_url)?;
 
     let now = chrono::Utc::now().to_rfc3339();
@@ -265,8 +293,8 @@ pub async fn simplefin_claim_setup_token(
         last_synced_at: None,
     };
 
-    simplefin_save_config(state.clone(), config.clone())?;
-    Ok(config)
+    save_config(&state.conn, config.clone())?;
+    Ok(redact_config_for_ui(config))
 }
 
 fn read_simplefin_accounts_from_db(
@@ -319,7 +347,7 @@ fn read_simplefin_accounts_from_db(
 pub async fn simplefin_get_accounts(
     state: State<'_, DbState>,
 ) -> Result<Vec<SimpleFinAccountRecord>, String> {
-    let config = simplefin_get_config(state.clone())?;
+    let config = get_config(&state.conn)?;
     if config.access_url.trim().is_empty() {
         return Ok(Vec::new());
     }
@@ -1240,20 +1268,17 @@ mod tests {
     }
 
     #[test]
-    fn test_sync_with_real_db_if_available() {
-        let db_path = std::path::PathBuf::from(r"C:\Users\Chris Barnes\AppData\Roaming\com.strictlyspending.app\spending-viz.sqlite");
-        if !db_path.exists() {
-            return;
-        }
-        let conn = rusqlite::Connection::open(&db_path).unwrap();
-        let db_state = DbState {
-            conn: std::sync::Mutex::new(conn),
-            recurrence_cache: std::sync::Mutex::new(None),
+    fn test_parse_simplefin_url_security_and_redaction() {
+        assert!(parse_simplefin_url("http://user:pass@beta-bridge.simplefin.org/simplefin").is_err());
+        assert!(parse_simplefin_url("https://user:pass@evil-attacker.com/simplefin").is_err());
+        assert!(parse_simplefin_url("https://user:pass@simplefin.org.evil.com/simplefin").is_err());
+
+        let cfg = SimpleFinConfig {
+            access_url: "https://user:pass@beta-bridge.simplefin.org/simplefin".to_string(),
+            claimed_at: None,
+            last_synced_at: None,
         };
-        let res_full = tauri::async_runtime::block_on(sync_transactions_core(&db_state, Some("0".to_string()))).unwrap();
-        println!("Full sync result: added={}, accounts_synced={}, warnings={:?}", res_full.added, res_full.accounts_synced, res_full.warnings);
-        let res_inc = tauri::async_runtime::block_on(sync_transactions_core(&db_state, None)).unwrap();
-        println!("Incremental sync result: added={}, start_date={:?}, accounts={:#?}", res_inc.added, res_inc.sync_start_date, res_inc.accounts);
-        assert_eq!(res_inc.added, 0, "Incremental sync after full sync should add 0 duplicate rows");
+        let redacted = redact_config_for_ui(cfg);
+        assert_eq!(redacted.access_url, "[REDACTED]");
     }
 }

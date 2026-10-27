@@ -12,7 +12,9 @@ pub struct AppSetting {
 #[tauri::command]
 pub fn get_settings(state: State<DbState>) -> Result<Vec<AppSetting>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare("SELECT key, value FROM settings").map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM settings WHERE key != 'simplefin_config'")
+        .map_err(|e| e.to_string())?;
     let iter = stmt.query_map([], |row| {
         Ok(AppSetting {
             key: row.get(0)?,
@@ -26,6 +28,9 @@ pub fn get_settings(state: State<DbState>) -> Result<Vec<AppSetting>, String> {
 
 #[tauri::command]
 pub fn get_setting(state: State<DbState>, key: String) -> Result<Option<serde_json::Value>, String> {
+    if key == "simplefin_config" {
+        return Ok(None);
+    }
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare("SELECT value FROM settings WHERE key = ?1")

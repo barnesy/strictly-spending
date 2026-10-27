@@ -69,6 +69,9 @@ export async function createWorkspaceBackupPayload(): Promise<WorkspaceBackupPay
 
   const accounts = allAccounts.filter((a) => a.source !== 'demo');
   const transactions = allTransactions.filter((t) => t.source !== 'demo');
+  const safeSettings = (settings || []).filter(
+    (s) => s.key && s.key !== 'simplefin_config' && !s.key.toLowerCase().includes('token') && !s.key.toLowerCase().includes('secret')
+  );
 
   const localStorageKeys: Record<string, string> = {};
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -101,7 +104,7 @@ export async function createWorkspaceBackupPayload(): Promise<WorkspaceBackupPay
       budgets,
       loans,
       merchantOverrides,
-      settings,
+      settings: safeSettings,
       localStorageKeys,
     },
   };

@@ -263,10 +263,18 @@ export const SimpleFinBankSyncCard: React.FC = () => {
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
                   <TextField
                     fullWidth
+                    type="password"
+                    autoComplete="off"
                     label="SimpleFIN Setup Token (Base64 or Access URL)"
                     placeholder="aHR0cHM6Ly9iZXRhLWJyaWRnZS5zaW1wbGVmaW4ub3JnL3NpbXBsZWZpbi9jbGFpbS8..."
                     value={tokenInput}
                     onChange={(e) => setTokenInput(e.target.value)}
+                    inputProps={{
+                      autoComplete: 'new-password',
+                      autoCorrect: 'off',
+                      autoCapitalize: 'off',
+                      spellCheck: false,
+                    }}
                     size="small"
                     disabled={isLoading}
                   />
