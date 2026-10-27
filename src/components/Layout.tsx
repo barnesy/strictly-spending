@@ -34,12 +34,14 @@ import PieChartOutlineOutlinedIcon from '@mui/icons-material/PieChartOutlineOutl
 import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
 import RealEstateAgentOutlinedIcon from '@mui/icons-material/RealEstateAgentOutlined';
 import StyleOutlinedIcon from '@mui/icons-material/StyleOutlined';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 import AnimatedLogo from './AnimatedLogo';
 import { useFilters } from '../stores/store';
 import { useAccounts, useTransactionBounds, useUncategorizedCount, useLoans } from '../hooks/queries';
 
 const BalanceSheetModal = lazy(() => import('./BalanceSheetModal'));
+const GeminiAssistantDrawer = lazy(() => import('./GeminiAssistantDrawer'));
 
 type NavItem = {
   to: string;
@@ -167,7 +169,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const profile = useFilters((s) => s.profile);
 
   const [isBalanceSheetOpen, setIsBalanceSheetOpen] = useState(false);
+  const [isGeminiOpen, setIsGeminiOpen] = useState(false);
   const { data: loans = [] } = useLoans();
+
+  useEffect(() => {
+    const onOpenGemini = () => setIsGeminiOpen(true);
+    window.addEventListener('strictly-open-gemini', onOpenGemini);
+    return () => window.removeEventListener('strictly-open-gemini', onOpenGemini);
+  }, []);
 
   const activeAccounts = useMemo(() => {
     if (!accountsAll) return [];
@@ -367,8 +376,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             </Box>
 
-            {/* Net Worth */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: { xs: 0.5, sm: 1 } }}>
+            {/* Net Worth & Ask Gemini */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 1 }, mr: { xs: 0.5, sm: 1 } }}>
+              <Tooltip title="Ask Gemini about your finances">
+                <Button
+                  onClick={() => setIsGeminiOpen(true)}
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<AutoAwesomeIcon sx={{ fontSize: { xs: 15, sm: 16 } }} />}
+                  sx={{
+                    height: { xs: 36, sm: 34 },
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: { xs: '0.78rem', sm: '0.8rem' },
+                    borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+                    px: { xs: 1, sm: 1.25 },
+                    whiteSpace: 'nowrap',
+                    '& .MuiButton-startIcon': {
+                      mr: { xs: 0.4, sm: 0.6 },
+                    },
+                  }}
+                >
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, mr: 0.35 }}>
+                    Ask
+                  </Box>
+                  Gemini
+                </Button>
+              </Tooltip>
+
               <Tooltip title="View Balance Sheet & Net Worth details">
                 <Button
                   onClick={() => setIsBalanceSheetOpen(true)}
@@ -496,7 +532,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <CloseIcon />
             </IconButton>
           </Box>
-          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Button
+              fullWidth
+              variant="contained"
+              color="primary"
+              size="small"
+              startIcon={<AutoAwesomeIcon fontSize="small" />}
+              onClick={() => {
+                setIsMobileNavOpen(false);
+                setIsGeminiOpen(true);
+              }}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+              }}
+            >
+              Ask Gemini Assistant
+            </Button>
             <Button
               fullWidth
               variant="outlined"
@@ -722,6 +776,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
             open={isBalanceSheetOpen}
             onClose={() => setIsBalanceSheetOpen(false)}
             defaultProfile={profile}
+          />
+        </Suspense>
+      )}
+
+      {/* Gemini Financial Assistant Drawer */}
+      {isGeminiOpen && (
+        <Suspense fallback={null}>
+          <GeminiAssistantDrawer
+            open={isGeminiOpen}
+            onClose={() => setIsGeminiOpen(false)}
           />
         </Suspense>
       )}

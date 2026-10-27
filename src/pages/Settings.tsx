@@ -13,10 +13,17 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
+  MenuItem,
+  Collapse,
+  Link,
 } from '@mui/material';
 import ScienceIcon from '@mui/icons-material/Science';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HubIcon from '@mui/icons-material/Hub';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import IosShareIcon from '@mui/icons-material/IosShare';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
@@ -26,10 +33,19 @@ import InstallMobileIcon from '@mui/icons-material/InstallMobile';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import StorageIcon from '@mui/icons-material/Storage';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { clearImportedData, seedDemoData, clearDemoData } from '../demoData';
 import { downloadWorkspaceBackup, restoreWorkspaceBackup } from '../domain/workspaceBackup';
+import {
+  GEMINI_MODELS,
+  getGeminiConfig,
+  hydrateGeminiConfigFromSettings,
+  saveGeminiConfig,
+  copyFinancialBriefingForGemini,
+  shareFinancialBriefingToGemini,
+} from '../domain/geminiFinanceAssistant';
 import { useFilters } from '../stores/store';
 import { queryClient } from '../queryClient';
 import AnimatedLogo from '../components/AnimatedLogo';
@@ -60,8 +76,14 @@ export default function Settings() {
   const [safeMode, setSafeMode] = useState(false);
   const [mcpInfo, setMcpInfo] = useState<McpServerInfo | null>(null);
   const [copiedMcp, setCopiedMcp] = useState(false);
+  const [showAdvancedMcp, setShowAdvancedMcp] = useState(false);
   const [copiedPhoneUrl, setCopiedPhoneUrl] = useState<string | null>(null);
   const { canInstall, isStandalone, promptInstall } = usePwaInstall();
+
+  const [geminiKey, setGeminiKey] = useState(() => getGeminiConfig().apiKey);
+  const [geminiModel, setGeminiModel] = useState(() => getGeminiConfig().model);
+  const [geminiStatusMsg, setGeminiStatusMsg] = useState<string | null>(null);
+  const [copiedGeminiBriefing, setCopiedGeminiBriefing] = useState(false);
 
   useEffect(() => {
     api.getTransactions().then((rows) => {
@@ -69,6 +91,10 @@ export default function Settings() {
     });
     api.isSafeMode().then(setSafeMode).catch(() => setSafeMode(false));
     api.getMcpServerInfo().then(setMcpInfo).catch(() => {});
+    hydrateGeminiConfigFromSettings().then((cfg) => {
+      setGeminiKey(cfg.apiKey);
+      setGeminiModel(cfg.model);
+    });
   }, []);
 
   const handleEnableDemoMode = async () => {
@@ -164,70 +190,216 @@ export default function Settings() {
     }
   };
 
+  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
   return (
     <Stack spacing={{ xs: 2, sm: 3 }}>
       <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700 }}>Settings</Typography>
 
-      {/* Model Context Protocol (MCP) Server Card */}
+      {/* Easy Gemini AI Financial Assistant Card */}
       <Paper sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2}>
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1.5}>
             <Box sx={{ flex: 1, minWidth: 240 }}>
               <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                <HubIcon fontSize="small" color="primary" />
+                <AutoAwesomeIcon fontSize="small" color="primary" />
                 <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
-                  Model Context Protocol (MCP) Server
+                  Gemini AI Financial Assistant
                 </Typography>
-                <Chip label="stdio + HTTP /api/mcp" size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }} />
+                <Chip
+                  label={geminiKey ? 'In-App Chat Ready' : '1-Click Briefing + In-App Chat'}
+                  size="small"
+                  color={geminiKey ? 'success' : 'primary'}
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }}
+                />
               </Stack>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                Connect Claude Desktop, Antigravity, Cursor, or any MCP client directly to your Strictly Spending SQLite database. Ask your AI to audit deductions, compile Schedule C &amp; personal tax documents (CSV &amp; Markdown), analyze single-account cashflow, or control the live app UI.
+                Ask Gemini questions about your spending, variable budgets, cashflow, and loans — either with zero setup by copying/sharing a live snapshot into the Gemini app, or by chatting right inside Strictly Spending.
               </Typography>
             </Box>
             <Button
               size="small"
-              variant={copiedMcp ? 'contained' : 'outlined'}
-              color={copiedMcp ? 'success' : 'primary'}
-              startIcon={copiedMcp ? <CheckIcon /> : <ContentCopyIcon />}
-              onClick={handleCopyMcpConfig}
-              sx={UNIFORM_TOOLBAR_BUTTON_SX}
+              variant="contained"
+              color="primary"
+              startIcon={<AutoAwesomeIcon fontSize="small" />}
+              onClick={() => window.dispatchEvent(new Event('strictly-open-gemini'))}
+              sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontWeight: 700 }}
             >
-              {copiedMcp ? 'Copied MCP Config' : 'Copy MCP Config'}
+              Open Ask Gemini
             </Button>
           </Stack>
 
-          <Box
-            component="pre"
-            sx={{
-              m: 0,
-              p: 1.5,
-              borderRadius: 1,
-              bgcolor: 'action.hover',
-              border: '1px solid',
-              borderColor: 'divider',
-              fontSize: '0.78rem',
-              fontFamily: 'monospace',
-              overflowX: 'auto',
-            }}
-          >
-            {displayMcpJson}
+          {/* Method 1: Zero-Setup 1-Click Briefing for Gemini App */}
+          <Box sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+              Option 1: 1-Click Copy / Share to the Gemini App (No API Key Needed)
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Generates a complete Markdown snapshot of your connected accounts, net worth, loans, monthly cashflow, variable &amp; recurring budgets, top merchants, and recent transactions so you can paste or share it directly into the Gemini app on your phone or browser:
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Button
+                size="small"
+                variant={copiedGeminiBriefing ? 'contained' : 'outlined'}
+                color={copiedGeminiBriefing ? 'success' : 'primary'}
+                startIcon={copiedGeminiBriefing ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                onClick={async () => {
+                  const res = await copyFinancialBriefingForGemini();
+                  setCopiedGeminiBriefing(true);
+                  setGeminiStatusMsg(
+                    `Copied financial briefing (${res.summaryStats.accountCount} accounts, ${res.summaryStats.transactionCount} transactions, ${res.summaryStats.loanCount} loans). Open Gemini and paste!`
+                  );
+                  setTimeout(() => setCopiedGeminiBriefing(false), 2500);
+                }}
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
+              >
+                {copiedGeminiBriefing ? 'Copied Financial Snapshot!' : 'Copy Financial Snapshot for Gemini'}
+              </Button>
+              {canNativeShare && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<IosShareIcon fontSize="small" />}
+                  onClick={async () => {
+                    await shareFinancialBriefingToGemini();
+                  }}
+                  sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                >
+                  Share to Gemini App
+                </Button>
+              )}
+              <Button
+                size="small"
+                variant="outlined"
+                color="primary"
+                endIcon={<OpenInNewIcon fontSize="small" />}
+                component="a"
+                href="https://gemini.google.com/app"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
+              >
+                Open gemini.google.com
+              </Button>
+            </Stack>
           </Box>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Chip size="small" color="secondary" variant="outlined" label="generate_tax_documents" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }} />
-            <Chip size="small" color="secondary" variant="outlined" label="update_tax_classification" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }} />
-            <Chip size="small" color="primary" variant="outlined" label="get_account_cashflow" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }} />
-            <Chip size="small" color="primary" variant="outlined" label="control_app_ui" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }} />
-            <Chip size="small" label="query_transactions" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="get_spending_summary" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="categorize_transactions" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="manage_rule" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="manage_budget" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="manage_loan" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="get_financial_insights" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="run_cashflow_projection" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="sync_bank_accounts" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-          </Stack>
+          {/* Method 2: Built-In Gemini Chat (API Key) */}
+          <Box sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+              Option 2: Built-In Gemini Chat Inside Strictly Spending
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Paste a free API key from{' '}
+              <Link href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" sx={{ fontWeight: 700 }}>
+                Google AI Studio (aistudio.google.com/apikey)
+              </Link>{' '}
+              to chat with Gemini directly inside the app (tap <strong>Ask Gemini</strong> in the top bar anytime). Gemini can search all historical transactions, update your category budgets, and categorize merchants automatically.
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+              <TextField
+                size="small"
+                type="password"
+                label="Gemini API Key (AIza...)"
+                placeholder="Paste your free Google AI Studio key..."
+                value={geminiKey}
+                onChange={(e) => setGeminiKey(e.target.value)}
+                sx={{ flex: 2 }}
+              />
+              <TextField
+                select
+                size="small"
+                label="Gemini Model"
+                value={geminiModel}
+                onChange={(e) => setGeminiModel(e.target.value)}
+                sx={{ flex: 1, minWidth: 210 }}
+              >
+                {GEMINI_MODELS.map((m) => (
+                  <MenuItem key={m.id} value={m.id}>
+                    {m.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={async () => {
+                  await saveGeminiConfig(geminiKey, geminiModel);
+                  setGeminiStatusMsg(
+                    geminiKey.trim()
+                      ? `Saved Gemini API key (${geminiModel}). Tap "Ask Gemini" in the top bar to start chatting!`
+                      : 'Cleared Gemini API key.'
+                  );
+                }}
+                sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontWeight: 700 }}
+              >
+                Save Key
+              </Button>
+            </Stack>
+          </Box>
+
+          {geminiStatusMsg && (
+            <Alert severity="success" onClose={() => setGeminiStatusMsg(null)}>
+              {geminiStatusMsg}
+            </Alert>
+          )}
+
+          {/* Collapsible Advanced Desktop MCP Server */}
+          <Box>
+            <Button
+              size="small"
+              variant="text"
+              color="inherit"
+              startIcon={<HubIcon fontSize="small" />}
+              endIcon={
+                <KeyboardArrowDownIcon
+                  fontSize="small"
+                  sx={{ transform: showAdvancedMcp ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                />
+              }
+              onClick={() => setShowAdvancedMcp((v) => !v)}
+              sx={{ textTransform: 'none', color: 'text.secondary', fontWeight: 600, fontSize: '0.78rem' }}
+            >
+              Advanced: Desktop Model Context Protocol (MCP) Server Config
+            </Button>
+            <Collapse in={showAdvancedMcp}>
+              <Stack spacing={1.5} sx={{ mt: 1, p: 1.5, borderRadius: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                  <Typography variant="caption" color="text.secondary">
+                    For desktop developer tools (Claude Desktop, Antigravity, Cursor) connected to your PC&apos;s SQLite database:
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant={copiedMcp ? 'contained' : 'outlined'}
+                    color={copiedMcp ? 'success' : 'primary'}
+                    startIcon={copiedMcp ? <CheckIcon /> : <ContentCopyIcon />}
+                    onClick={handleCopyMcpConfig}
+                    sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                  >
+                    {copiedMcp ? 'Copied MCP Config' : 'Copy MCP Config'}
+                  </Button>
+                </Stack>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    fontSize: '0.76rem',
+                    fontFamily: 'monospace',
+                    overflowX: 'auto',
+                  }}
+                >
+                  {displayMcpJson}
+                </Box>
+              </Stack>
+            </Collapse>
+          </Box>
         </Stack>
       </Paper>
 
