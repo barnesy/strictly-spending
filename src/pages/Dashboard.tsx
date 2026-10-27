@@ -1707,6 +1707,7 @@ export default function Dashboard() {
         {!isDesktop ? (
           <>
             <TextField
+              variant="outlined"
               size="small"
               fullWidth
               placeholder="Quick search merchants, descriptions, or notes..."
@@ -1717,11 +1718,26 @@ export default function Dashboard() {
               }}
               sx={{
                 '& .MuiInputBase-root': {
-                  height: 36,
+                  height: 38,
                   pl: 1.5,
                   pr: 1,
                   fontSize: '0.84rem',
                   bgcolor: 'background.paper',
+                  borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+                  display: 'flex',
+                  alignItems: 'center',
+                },
+                '& .MuiInputBase-input': {
+                  py: 0,
+                  px: 0.5,
+                  height: '100%',
+                  boxSizing: 'border-box',
+                },
+                '& .MuiInputAdornment-root': {
+                  my: 0,
+                  height: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
                 },
               }}
               slotProps={{
