@@ -40,7 +40,6 @@ import { api } from '../api';
 import { loadForecastBaselineData } from '../domain/incomeStreams';
 import * as echarts from '../utils/echarts';
 import { usd, formatDisplayCurrency } from '../lib';
-import { usePutArtifact } from '../hooks/mutations';
 import {
   useScenarios,
   useAccounts,
@@ -151,7 +150,6 @@ export default function Forecast() {
     isRecurringOverridden,
     isVariableOverridden,
     isStartingBalanceOverridden,
-    realBaseline,
     setBaselineData,
     resetToRealData,
   } = useForecastStore();
@@ -163,7 +161,6 @@ export default function Forecast() {
   const [addIncomeStreamDialogOpen, setAddIncomeStreamDialogOpen] = useState(false);
   const [availableAccounts, setAvailableAccounts] = useState<Account[]>([]);
 
-  const putArtifact = usePutArtifact();
   const { data: rawScenarios = [] } = useScenarios();
   const scenarios = rawScenarios || [];
   const createScenario = useCreateScenario();
@@ -531,80 +528,6 @@ export default function Forecast() {
     (isHomeValueOverridden ? 1 : 0) +
     (extraLoanPayment > 0 ? 1 : 0) +
     destinations.filter((d) => d.isOverridden).length;
-
-  const handleSaveScenarioArtifact = () => {
-    const markdown = `# Financial Forecast Scenario
-
-## Real Data Baseline vs Overrides
-- **Status:** ${overriddenCount > 0 ? `${overriddenCount} custom overrides active` : 'Fully synced with real accounts'}
-- **Operating Starting Cash:** ${usd.format(startingBalance)} (Real: ${usd.format(realBaseline.startingCash)})
-- **Net Monthly Cashflow:** ${usd.format(effectiveNetIncome)} (Gross: ${usd.format(totalGrossIncome)})
-- **Tax Rate:** ${taxRate}% (Deducted: ${usd.format(taxesDeducted)}/mo - actuals are post-tax take-home pay)
-- **Monthly Recurring Bills:** ${usd.format(recurringBudget)} (Real: ${usd.format(realBaseline.recurring)})
-- **Monthly Variable Living:** ${usd.format(variableBudget)} (Real: ${usd.format(realBaseline.variable)})
-- **Extra Loan Payment:** ${usd.format(extraLoanPayment)}
-- **Divert to Savings:** ${divertExtraToSavings ? 'Yes' : 'No'}
-- **Loan Strategy:** ${loanStrategy}
-- **Horizon:** ${months} months
-
-## Income Streams
-${incomeStreams
-  .map(
-    (s) =>
-      `- **${s.name}** (${s.accountName || 'Custom'}): ${usd.format(s.monthlyAmount)}/mo [${s.isTaxed ? 'Post-Tax' : 'Pre-Tax'}] - ${s.enabled ? 'Active' : 'Disabled'}`
-  )
-  .join('\n')}
-
-## Destination Accounts & Money Flow
-${destinations
-  .map(
-    (d) =>
-      `- **${d.name}** (${d.accountType.toUpperCase()}${d.isRothIra ? ' - Roth IRA' : ''}): Balance ${usd.format(
-        d.currentBalance
-      )} | Flow: ${usd.format(d.monthlyAllocation)}/mo @ ${d.annualGrowthRate}% return`
-  )
-  .join('\n')}
-
-## Summary Results
-- **Monthly Safe Remainder:** ${usd.format(monthlySafeRemainder)}/mo
-- **Monthly Wealth Building Flow:** ${usd.format(totalWealthFlow)} (${wealthRatePercent}% of net income)
-- **Projected Ending Net Worth:** ${usd.format(
-    lastPoint?.net_worth ??
-      ((lastPoint?.ending_balance || 0) +
-        (lastPoint?.investment_balance || 0) +
-        (includeHomeEquity ? (lastPoint?.home_equity || 0) : 0) -
-        (includeHomeEquity
-          ? Math.max(0, (lastPoint?.total_debt || 0) - (lastPoint?.mortgage_debt || 0))
-          : (lastPoint?.total_debt || 0)))
-  )}
-${includeHomeEquity ? `- **Projected Home Equity:** ${usd.format(lastPoint?.home_equity || 0)} (Property: ${usd.format(lastPoint?.property_value || 0)}, Mortgage: ${usd.format(lastPoint?.mortgage_debt || 0)})\n- **Liquid Net Worth:** ${usd.format(lastPoint?.liquid_net_worth || 0)}` : ''}
-- **Projected Destination Portfolio:** ${usd.format(lastPoint?.investment_balance || 0)}
-`;
-
-    putArtifact.mutate(
-      {
-        id: `scenario-${Date.now()}`,
-        type: 'markdown',
-        title: `Scenario: ${usd.format(monthlySafeRemainder)}/mo Safe Remainder (${months}mo)`,
-        content: markdown,
-        explanation: 'A snapshot of an account-driven financial scenario from the forecast simulator.',
-        summary: 'Account-Driven Forecast Scenario Snapshot',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        path: null,
-        source: null,
-        associatedChecklistId: null,
-      },
-      {
-        onSuccess: () => {
-          setSnackbarMessage('Scenario saved to Artifacts successfully!');
-        },
-        onError: () => {
-          setSnackbarMessage('Failed to save scenario.');
-        },
-      }
-    );
-  };
 
   const panelIds = useMemo(
     () => [
@@ -1607,7 +1530,6 @@ ${includeHomeEquity ? `- **Projected Home Equity:** ${usd.format(lastPoint?.home
               monthLabels={safePoints.map((p) => p.month_label)}
               onToggleSettings={() => setSettingsVisible(false)}
               onOpenAddIncomeStreamDialog={() => setAddIncomeStreamDialogOpen(true)}
-              onSaveScenarioArtifact={handleSaveScenarioArtifact}
             />
           </Drawer>
           <Drawer
@@ -1666,7 +1588,6 @@ ${includeHomeEquity ? `- **Projected Home Equity:** ${usd.format(lastPoint?.home
                   monthLabels={safePoints.map((p) => p.month_label)}
                   onToggleSettings={toggleSettings}
                   onOpenAddIncomeStreamDialog={() => setAddIncomeStreamDialogOpen(true)}
-                  onSaveScenarioArtifact={handleSaveScenarioArtifact}
                 />
               </Panel>
             )}

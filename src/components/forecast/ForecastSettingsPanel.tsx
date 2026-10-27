@@ -66,7 +66,6 @@ export interface ForecastSettingsPanelProps {
   monthLabels: string[];
   onToggleSettings: () => void;
   onOpenAddIncomeStreamDialog: () => void;
-  onSaveScenarioArtifact: () => void;
 }
 
 export function ForecastSettingsPanel({
@@ -76,7 +75,6 @@ export function ForecastSettingsPanel({
   monthLabels,
   onToggleSettings,
   onOpenAddIncomeStreamDialog,
-  onSaveScenarioArtifact,
 }: ForecastSettingsPanelProps) {
   const {
     startingBalance,
@@ -1219,7 +1217,7 @@ export function ForecastSettingsPanel({
         </Box>
 
         {/* 9. Time Horizon */}
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: 1 }}>
           <Typography variant="subtitle2" fontWeight="600" gutterBottom>
             Time Horizon
           </Typography>
@@ -1246,16 +1244,6 @@ export function ForecastSettingsPanel({
             onChange={(_, val) => setMonths(val as number)}
           />
         </Box>
-
-        <Button
-          variant="contained"
-          color="primary"
-          fullWidth
-          onClick={onSaveScenarioArtifact}
-          sx={{ textTransform: 'none', fontWeight: 600 }}
-        >
-          Save Scenario as Artifact
-        </Button>
       </Paper>
     </Box>
   );
