@@ -6,10 +6,13 @@ import AndroidIcon from '@mui/icons-material/Android';
 import SecurityIcon from '@mui/icons-material/Security';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import RuleIcon from '@mui/icons-material/Rule';
-import MemoryIcon from '@mui/icons-material/Memory';
-import TerminalIcon from '@mui/icons-material/Terminal';
-import NoAccountsIcon from '@mui/icons-material/NoAccounts';
-import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import RealEstateAgentOutlinedIcon from '@mui/icons-material/RealEstateAgentOutlined';
+import SyncAltIcon from '@mui/icons-material/SyncAlt';
+import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
+import CalculateOutlinedIcon from '@mui/icons-material/CalculateOutlined';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
@@ -213,7 +216,7 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
 
         <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', mb: { xs: 2.5, md: 3 }, gap: 1 }}>
           <Chip
-            label="Free Early Access · No Subscription"
+            label="Free & Open Source · No Subscription"
             size="small"
             sx={{
               bgcolor: 'rgba(16,185,129,0.1)',
@@ -226,7 +229,7 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
             }}
           />
           <Chip
-            label="100% Local SQLite & Private AI"
+            label="100% Local SQLite · Zero Cloud Tracking"
             size="small"
             sx={{
               bgcolor: 'rgba(0,0,0,0.04)',
@@ -243,18 +246,18 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
         <Typography variant="h1" component="h1" sx={{
           fontWeight: 800,
           fontSize: { xs: '2.5rem', sm: '3.25rem', md: '4.5rem' },
-          lineHeight: 1.1,
+          lineHeight: 1.08,
           mb: { xs: 2, md: 3 },
           background: 'linear-gradient(180deg, #111827 0%, #4B5563 100%)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           textShadow: '0px 4px 20px rgba(0,0,0,0.05)'
         }}>
-          Unlimited intelligence,<br />Absolute Privacy.
+          Know your true cashflow.<br />Keep your data strictly yours.
         </Typography>
 
-        <Typography variant="h5" sx={{ mb: { xs: 4, md: 5 }, maxWidth: '700px', mx: 'auto', lineHeight: 1.5, color: '#4B5563', fontWeight: 400, fontSize: { xs: '1.05rem', md: '1.5rem' }, px: 1 }}>
-          Ingest multi-bank CSVs, sync 12,000+ banks via SimpleFIN, automate categorization rules, and forecast your net worth—without monthly cloud fees.
+        <Typography variant="h5" sx={{ mb: { xs: 4, md: 5 }, maxWidth: '720px', mx: 'auto', lineHeight: 1.5, color: '#4B5563', fontWeight: 400, fontSize: { xs: '1.05rem', md: '1.4rem' }, px: 1 }}>
+          Track every account, sort transactions in seconds, see which monthly bills have cleared vs. what’s still due, and forecast your net worth years ahead—all stored locally on your device.
         </Typography>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '760px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: { xs: 6, md: 10 } }}>
@@ -447,94 +450,140 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
           </Paper>
         </Box>
 
-
-
-        {/* Features Section */}
-        <Grid container spacing={4} sx={{ mt: { xs: 10, md: 16 } }}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
-              <Box sx={{ width: 48, height: 48, borderRadius: '8px', bgcolor: 'rgba(10,132,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
-                <SecurityIcon sx={{ color: '#0A84FF' }} />
-              </Box>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
-                Absolute Secrecy
-              </Typography>
-              <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                Your data never leaves your device. No cloud syncing, no mandatory accounts, total offline privacy for your most sensitive financial data.
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
-              <Box sx={{ width: 48, height: 48, borderRadius: '8px', bgcolor: 'rgba(48,209,88,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
-                <RuleIcon sx={{ color: '#30D158' }} />
-              </Box>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
-                Smart Rules
-              </Typography>
-              <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                Set up precise logic to automatically categorize transactions from multiple bank CSV formats instantly. Spend less time tagging, more time analyzing.
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
-              <Box sx={{ width: 48, height: 48, borderRadius: '8px', bgcolor: 'rgba(255,159,10,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
-                <AutoGraphIcon sx={{ color: '#FF9F0A' }} />
-              </Box>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
-                Visual Grandeur
-              </Typography>
-              <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                Visualize your spending patterns, track your budget, and plan for taxes with meticulous detail and beautiful interactive charts.
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
-
-        {/* AI Deep Dive Section */}
-        <Box sx={{ mt: { xs: 12, md: 20 }, textAlign: 'center' }}>
-          <Typography variant="h2" sx={{ fontWeight: 800, fontSize: { xs: '2.5rem', md: '3.5rem' }, mb: 2, color: '#111827' }}>
-            Meet Your Built-In On-Device AI.
+        {/* Primary Features Section (6 Core Workflows) */}
+        <Box sx={{ mt: { xs: 10, md: 16 }, textAlign: 'center' }}>
+          <Typography variant="h2" sx={{ fontWeight: 800, fontSize: { xs: '2.25rem', md: '3.25rem' }, mb: 2, color: '#111827' }}>
+            Everything you need to run your household finances.
           </Typography>
-          <Typography sx={{ maxWidth: '800px', mx: 'auto', color: '#4B5563', fontSize: '1.2rem', lineHeight: 1.6, mb: 8 }}>
-            Ask about upcoming end-of-month bills, paycheck schedules, or whether you can afford a purchase right now—with instant step-by-step math ledger tables and zero API keys.
+          <Typography sx={{ maxWidth: '760px', mx: 'auto', color: '#4B5563', fontSize: { xs: '1.05rem', md: '1.2rem' }, lineHeight: 1.6, mb: { xs: 5, md: 8 } }}>
+            Built for speed, accuracy, and day-to-day clarity—from importing raw bank statements to projecting your cash position ten years out.
+          </Typography>
+
+          <Grid container spacing={3.5}>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: '10px', bgcolor: 'rgba(37,99,235,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
+                  <AutoGraphIcon sx={{ color: '#2563EB' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
+                  Multi-Account Forecasting
+                </Typography>
+                <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
+                  Project checking, savings, and net worth from end-of-month out to 10 years. Inspect month-by-month inflows, outflows, and account balances before bills hit.
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: '10px', bgcolor: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
+                  <AccountBalanceWalletOutlinedIcon sx={{ color: '#059669' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
+                  Live Budget & Bill Tracking
+                </Typography>
+                <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
+                  Automatically separates fixed recurring bills from variable spending. See at a glance which monthly bills have already cleared and what is still unpaid.
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: '10px', bgcolor: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
+                  <RuleIcon sx={{ color: '#D97706' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
+                  Rapid Sorting & Smart Rules
+                </Typography>
+                <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
+                  Breeze through uncategorized transactions with fast sorting cards showing the exact account and merchant history, backed by deterministic auto-categorization rules.
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: '10px', bgcolor: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
+                  <RealEstateAgentOutlinedIcon sx={{ color: '#7C3AED' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
+                  Loans, Equity & Balance Sheet
+                </Typography>
+                <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
+                  Model mortgages, home equity, auto loans, and credit balances alongside cash and investments for an accurate, real-time net worth breakdown.
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: '10px', bgcolor: 'rgba(14,165,233,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
+                  <SyncAltIcon sx={{ color: '#0284C7' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
+                  SimpleFIN Sync & Multi-Bank CSVs
+                </Typography>
+                <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
+                  Sync 12,000+ banks via SimpleFIN Bridge or drag-and-drop CSV statements from any bank with automatic duplicate detection and merchant normalization.
+                </Typography>
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Paper elevation={0} sx={{ p: 4, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: '10px', bgcolor: 'rgba(17,24,39,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
+                  <SecurityIcon sx={{ color: '#111827' }} />
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#111827' }}>
+                  100% Local SQLite Storage
+                </Typography>
+                <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
+                  Your financial history never sits on a third-party SaaS server. Everything runs locally on your Mac, Windows PC, iPhone, or Android device.
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Box>
+
+        {/* End-of-Month Clarity & Lightweight Math Assistant Section */}
+        <Box sx={{ mt: { xs: 12, md: 18 }, textAlign: 'center' }}>
+          <Typography variant="h2" sx={{ fontWeight: 800, fontSize: { xs: '2.25rem', md: '3.25rem' }, mb: 2, color: '#111827' }}>
+            Built for real end-of-month decisions.
+          </Typography>
+          <Typography sx={{ maxWidth: '780px', mx: 'auto', color: '#4B5563', fontSize: { xs: '1.05rem', md: '1.2rem' }, lineHeight: 1.6, mb: { xs: 5, md: 8 } }}>
+            When the month is winding down, you don’t need another generic pie chart—you need to know what bills are still pending and how much checking cushion you actually have left.
           </Typography>
 
           <Grid container spacing={4}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Paper elevation={0} sx={{ p: 5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
-                <NoAccountsIcon sx={{ fontSize: 40, color: '#FF3B30', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Zero API Keys or Setup</Typography>
+              <Paper elevation={0} sx={{ p: 4.5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <EventAvailableOutlinedIcon sx={{ fontSize: 36, color: '#059669', mb: 2 }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Cleared vs. Upcoming Bills</Typography>
                 <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                  You don't need a ChatGPT, Gemini, or Claude account. No API keys, no monthly fees, no external servers—it works out of the box on desktop and iPhone.
+                  Strictly matches this month’s posted transactions against your recurring bill schedule so you never double-count a paid bill or get surprised by a late-month auto-pay.
                 </Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Paper elevation={0} sx={{ p: 5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
-                <AllInclusiveIcon sx={{ fontSize: 40, color: '#007AFF', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Aligned Math Ledger Tables</Typography>
+              <Paper elevation={0} sx={{ p: 4.5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <CalculateOutlinedIcon sx={{ fontSize: 36, color: '#2563EB', mb: 2 }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Single-Account Cushion Checks</Typography>
                 <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                  Every answer shows exact step-by-step equations—checking cash, remaining paychecks, unpaid bills, and safe remainder—summing to clear totals.
+                  Filter your dashboard, budget, or forecast down to any individual checking account to verify your exact cash floor before making a large purchase or transfer.
                 </Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Paper elevation={0} sx={{ p: 5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
-                <MemoryIcon sx={{ fontSize: 40, color: '#34C759', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>100% Data Privacy</Typography>
+              <Paper elevation={0} sx={{ p: 4.5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <AutoAwesomeIcon sx={{ fontSize: 36, color: '#7C3AED', mb: 2 }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Quick On-Device Math Assistant</Typography>
                 <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                  Your sensitive financial data is never sent to the cloud. Every calculation and browser AI session runs locally on your device.
+                  Need a fast sanity check? Ask the lightweight built-in assistant <i>“Can I spend $500 right now?”</i> or <i>“What big payments are left?”</i> to get an aligned, step-by-step math ledger with zero API keys.
                 </Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Paper elevation={0} sx={{ p: 5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
-                <TerminalIcon sx={{ fontSize: 40, color: '#AF52DE', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>End-of-Month Intelligence</Typography>
+              <Paper elevation={0} sx={{ p: 4.5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
+                <LockOutlinedIcon sx={{ fontSize: 36, color: '#D97706', mb: 2 }} />
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>No Subscriptions or Cloud Lock-In</Typography>
                 <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                  Track which recurring bills have already cleared, which payments are still coming up this month, and whether a one-time spend fits your checking cushion.
+                  No mandatory accounts, no $15/month subscription fees, and no selling your transaction history. Your budget, rules, and database stay under your control forever.
                 </Typography>
               </Paper>
             </Grid>
