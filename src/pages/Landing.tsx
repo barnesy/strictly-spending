@@ -16,12 +16,20 @@ import CheckIcon from '@mui/icons-material/Check';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import AnimatedLogo from '../components/AnimatedLogo';
+import IphoneInstallModal from '../components/IphoneInstallModal';
 import { usePwaInstall } from '../utils/pwaInstall';
 import packageJson from '../../package.json';
 
-function InstallationNotes({ onOpenAndroidHelp }: { onOpenAndroidHelp?: () => void }) {
+function InstallationNotes({
+  onOpenAndroidHelp,
+  onOpenIosHelp,
+}: {
+  onOpenAndroidHelp?: () => void;
+  onOpenIosHelp?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyCommand = () => {
@@ -36,11 +44,27 @@ function InstallationNotes({ onOpenAndroidHelp }: { onOpenAndroidHelp?: () => vo
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <InfoOutlinedIcon sx={{ color: '#6B7280', fontSize: 20 }} />
           <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151' }}>
-            Installation Notes & Troubleshooting (Mac, Windows & Android Play Protect)
+            Installation Notes & Troubleshooting (iPhone, Android, Mac & Windows)
           </Typography>
         </Box>
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0, pb: 2.5, px: 2.5, textAlign: 'left' }}>
+        <Alert severity="success" sx={{ mb: 2, borderRadius: '8px', '& .MuiAlert-message': { width: '100%' } }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            iPhone & iPad Testers — Install Full-Screen iOS App (No App Store Required)
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            1. Open <code>https://barnesy.github.io/strictly-spending/?pwa=1</code> in <b>Safari</b> on your iPhone.<br />
+            2. Tap the <b>Share</b> icon (bottom toolbar) → scroll down and tap <b>&ldquo;Add to Home Screen&rdquo;</b> → tap <b>Add</b>.<br />
+            3. Launch <b>Strictly</b> from your Home Screen for the full-screen native layout with persistent local database, CSV import, SimpleFIN bank sync, and on-device AI.
+          </Typography>
+          {onOpenIosHelp && (
+            <Button size="small" variant="outlined" color="success" onClick={onOpenIosHelp} sx={{ textTransform: 'none', fontWeight: 600 }}>
+              Open iPhone Tester Guide & Copy Link
+            </Button>
+          )}
+        </Alert>
+
         <Alert severity="info" sx={{ mb: 2, borderRadius: '8px', '& .MuiAlert-message': { width: '100%' } }}>
           <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
             Android Users — Blocked by Play Protect or Advanced Protection?
@@ -94,7 +118,8 @@ const DEFAULT_DOWNLOAD_URLS = {
 export default function Landing({ onLaunchDemo }: LandingProps) {
   const [downloadUrls, setDownloadUrls] = useState(DEFAULT_DOWNLOAD_URLS);
   const [androidModalOpen, setAndroidModalOpen] = useState(false);
-  const { canInstall, promptInstall } = usePwaInstall();
+  const [iosModalOpen, setIosModalOpen] = useState(false);
+  const { canInstall, isIos, promptInstall } = usePwaInstall();
 
   const handlePlayProtectSafeInstall = async () => {
     if (canInstall) {
@@ -264,7 +289,31 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
             </Button>
           )}
 
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center' }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Button
+              onClick={() => setIosModalOpen(true)}
+              variant="contained"
+              size="large"
+              startIcon={<PhoneIphoneIcon />}
+              sx={{
+                flex: 1,
+                width: { xs: '100%', md: 'auto' },
+                borderRadius: '8px',
+                py: { xs: 1.75, md: 2.25 },
+                px: 2.25,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: { xs: '1rem', md: '1rem' },
+                whiteSpace: 'nowrap',
+                bgcolor: isIos ? '#2563EB' : '#111827',
+                color: '#FFFFFF',
+                boxShadow: 'none',
+                '&:hover': { bgcolor: isIos ? '#1D4ED8' : '#374151', transform: 'translateY(-2px)', boxShadow: 'none' },
+                transition: 'all 0.2s',
+              }}
+            >
+              Install on iPhone (iOS)
+            </Button>
             <Button
               component="a"
               href={downloadUrls.mac}
@@ -275,11 +324,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
-                py: { xs: 1.75, md: 2.5 },
-                px: 2.5,
+                py: { xs: 1.75, md: 2.25 },
+                px: 2.25,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: { xs: '1rem', md: '1.05rem' },
+                fontSize: { xs: '1rem', md: '1rem' },
                 whiteSpace: 'nowrap',
                 bgcolor: '#000000',
                 color: '#FFFFFF',
@@ -300,11 +349,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
-                py: { xs: 1.75, md: 2.5 },
-                px: 2.5,
+                py: { xs: 1.75, md: 2.25 },
+                px: 2.25,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: { xs: '1rem', md: '1.05rem' },
+                fontSize: { xs: '1rem', md: '1rem' },
                 whiteSpace: 'nowrap',
                 bgcolor: '#FFFFFF',
                 color: '#111827',
@@ -326,11 +375,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 flex: 1,
                 width: { xs: '100%', md: 'auto' },
                 borderRadius: '8px',
-                py: { xs: 1.75, md: 2.5 },
-                px: 2.5,
+                py: { xs: 1.75, md: 2.25 },
+                px: 2.25,
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: { xs: '1rem', md: '1.05rem' },
+                fontSize: { xs: '1rem', md: '1rem' },
                 whiteSpace: 'nowrap',
                 bgcolor: '#059669',
                 color: '#FFFFFF',
@@ -343,35 +392,65 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
             </Button>
           </Box>
 
-          <Button
-            variant="outlined"
-            size="medium"
-            startIcon={<VerifiedUserIcon sx={{ color: '#059669' }} />}
-            onClick={handlePlayProtectSafeInstall}
-            sx={{
-              width: '100%',
-              borderRadius: '8px',
-              py: 1.25,
-              px: 2,
-              textTransform: 'none',
-              fontWeight: 700,
-              fontSize: { xs: '0.875rem', sm: '0.9375rem' },
-              bgcolor: 'rgba(16,185,129,0.06)',
-              color: '#065F46',
-              borderColor: 'rgba(16,185,129,0.35)',
-              '&:hover': {
-                bgcolor: 'rgba(16,185,129,0.12)',
-                borderColor: '#059669',
-              },
-            }}
-          >
-            {canInstall
-              ? 'Install Android App Directly (Play Protect Safe · No APK)'
-              : 'Blocked by Android Play Protect / Advanced Protection? Tap Here'}
-          </Button>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="medium"
+              startIcon={<PhoneIphoneIcon sx={{ color: '#2563EB' }} />}
+              onClick={() => setIosModalOpen(true)}
+              sx={{
+                flex: 1,
+                borderRadius: '8px',
+                py: 1.25,
+                px: 2,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: { xs: '0.85rem', sm: '0.9rem' },
+                bgcolor: 'rgba(37,99,235,0.06)',
+                color: '#1E40AF',
+                borderColor: 'rgba(37,99,235,0.35)',
+                '&:hover': {
+                  bgcolor: 'rgba(37,99,235,0.12)',
+                  borderColor: '#2563EB',
+                },
+              }}
+            >
+              iPhone Tester? Get Direct iOS Link & Home Screen Guide
+            </Button>
+
+            <Button
+              variant="outlined"
+              size="medium"
+              startIcon={<VerifiedUserIcon sx={{ color: '#059669' }} />}
+              onClick={handlePlayProtectSafeInstall}
+              sx={{
+                flex: 1,
+                borderRadius: '8px',
+                py: 1.25,
+                px: 2,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: { xs: '0.85rem', sm: '0.9rem' },
+                bgcolor: 'rgba(16,185,129,0.06)',
+                color: '#065F46',
+                borderColor: 'rgba(16,185,129,0.35)',
+                '&:hover': {
+                  bgcolor: 'rgba(16,185,129,0.12)',
+                  borderColor: '#059669',
+                },
+              }}
+            >
+              {canInstall
+                ? 'Install Android App Directly (Play Protect Safe)'
+                : 'Android Play Protect / WebAPK Guide'}
+            </Button>
+          </Box>
 
           <Box sx={{ width: '100%' }}>
-            <InstallationNotes onOpenAndroidHelp={() => setAndroidModalOpen(true)} />
+            <InstallationNotes
+              onOpenAndroidHelp={() => setAndroidModalOpen(true)}
+              onOpenIosHelp={() => setIosModalOpen(true)}
+            />
           </Box>
         </Box>
 
@@ -454,28 +533,28 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
         {/* AI Deep Dive Section */}
         <Box sx={{ mt: { xs: 12, md: 20 }, textAlign: 'center' }}>
           <Typography variant="h2" sx={{ fontWeight: 800, fontSize: { xs: '2.5rem', md: '3.5rem' }, mb: 2, color: '#111827' }}>
-            Meet Your Free, Local AI Assistant.
+            Meet Your Built-In On-Device AI.
           </Typography>
           <Typography sx={{ maxWidth: '800px', mx: 'auto', color: '#4B5563', fontSize: '1.2rem', lineHeight: 1.6, mb: 8 }}>
-            Ask questions about your spending, get summaries, and find anomalous transactions. Our AI copilot runs entirely on your local machine using Ollama.
+            Ask about upcoming end-of-month bills, paycheck schedules, or whether you can afford a purchase right now—with instant step-by-step math ledger tables and zero API keys.
           </Typography>
 
           <Grid container spacing={4}>
             <Grid size={{ xs: 12, md: 6 }}>
               <Paper elevation={0} sx={{ p: 5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
                 <NoAccountsIcon sx={{ fontSize: 40, color: '#FF3B30', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>No Subscriptions Required</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Zero API Keys or Setup</Typography>
                 <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                  You don't need a ChatGPT, Gemini, or Claude account. No API keys, no monthly fees, no hidden costs. It's completely free to use.
+                  You don't need a ChatGPT, Gemini, or Claude account. No API keys, no monthly fees, no external servers—it works out of the box on desktop and iPhone.
                 </Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <Paper elevation={0} sx={{ p: 5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
                 <AllInclusiveIcon sx={{ fontSize: 40, color: '#007AFF', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Unlimited Tokens</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Aligned Math Ledger Tables</Typography>
                 <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                  Chat as much as you want. Because the model runs on your hardware, there are no token limits or usage quotas to worry about.
+                  Every answer shows exact step-by-step equations—checking cash, remaining paychecks, unpaid bills, and safe remainder—summing to clear totals.
                 </Typography>
               </Paper>
             </Grid>
@@ -484,16 +563,16 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                 <MemoryIcon sx={{ fontSize: 40, color: '#34C759', mb: 2 }} />
                 <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>100% Data Privacy</Typography>
                 <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                  Your sensitive financial data is never sent to the cloud. The AI analyzes your data locally, ensuring your finances remain strictly confidential.
+                  Your sensitive financial data is never sent to the cloud. Every calculation and browser AI session runs locally on your device.
                 </Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <Paper elevation={0} sx={{ p: 5, height: '100%', bgcolor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 8px 30px rgba(0,0,0,0.04)' } }}>
                 <TerminalIcon sx={{ fontSize: 40, color: '#AF52DE', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>Model Flexibility</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: '#111827' }}>End-of-Month Intelligence</Typography>
                 <Typography sx={{ color: '#4B5563', lineHeight: 1.6 }}>
-                  Choose the right model for your hardware. Run lightweight 8B models on laptops, or scale up to massive 70B models if you have the compute.
+                  Track which recurring bills have already cleared, which payments are still coming up this month, and whether a one-time spend fits your checking cushion.
                 </Typography>
               </Paper>
             </Grid>
@@ -504,8 +583,32 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 4, color: '#111827' }}>
             Ready to take control?
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '700px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: 4 }}>
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: '780px', width: '100%', mx: 'auto', px: { xs: 1, sm: 2 }, mb: 4 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button
+                onClick={() => setIosModalOpen(true)}
+                variant="contained"
+                size="large"
+                startIcon={<PhoneIphoneIcon />}
+                sx={{
+                  flex: 1,
+                  width: { xs: '100%', md: 'auto' },
+                  borderRadius: '8px',
+                  py: { xs: 1.75, md: 2.25 },
+                  px: 2.25,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: { xs: '1rem', md: '1rem' },
+                  whiteSpace: 'nowrap',
+                  bgcolor: isIos ? '#2563EB' : '#111827',
+                  color: '#FFFFFF',
+                  boxShadow: 'none',
+                  '&:hover': { bgcolor: isIos ? '#1D4ED8' : '#374151', transform: 'translateY(-2px)', boxShadow: 'none' },
+                  transition: 'all 0.2s',
+                }}
+              >
+                Install on iPhone (iOS)
+              </Button>
               <Button
                 component="a"
                 href={downloadUrls.mac}
@@ -516,11 +619,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                   flex: 1,
                   width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
-                  py: { xs: 1.75, md: 2.5 },
-                  px: 2.5,
+                  py: { xs: 1.75, md: 2.25 },
+                  px: 2.25,
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1.05rem' },
+                  fontSize: { xs: '1rem', md: '1rem' },
                   whiteSpace: 'nowrap',
                   bgcolor: '#000000',
                   color: '#FFFFFF',
@@ -541,11 +644,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                   flex: 1,
                   width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
-                  py: { xs: 1.75, md: 2.5 },
-                  px: 2.5,
+                  py: { xs: 1.75, md: 2.25 },
+                  px: 2.25,
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1.05rem' },
+                  fontSize: { xs: '1rem', md: '1rem' },
                   whiteSpace: 'nowrap',
                   bgcolor: '#FFFFFF',
                   color: '#111827',
@@ -567,11 +670,11 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
                   flex: 1,
                   width: { xs: '100%', md: 'auto' },
                   borderRadius: '8px',
-                  py: { xs: 1.75, md: 2.5 },
-                  px: 2.5,
+                  py: { xs: 1.75, md: 2.25 },
+                  px: 2.25,
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: { xs: '1rem', md: '1.05rem' },
+                  fontSize: { xs: '1rem', md: '1rem' },
                   whiteSpace: 'nowrap',
                   bgcolor: '#059669',
                   color: '#FFFFFF',
@@ -584,35 +687,65 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
               </Button>
             </Box>
 
-            <Button
-              variant="outlined"
-              size="medium"
-              startIcon={<VerifiedUserIcon sx={{ color: '#059669' }} />}
-              onClick={handlePlayProtectSafeInstall}
-              sx={{
-                width: '100%',
-                borderRadius: '8px',
-                py: 1.25,
-                px: 2,
-                textTransform: 'none',
-                fontWeight: 700,
-                fontSize: { xs: '0.875rem', sm: '0.9375rem' },
-                bgcolor: 'rgba(16,185,129,0.06)',
-                color: '#065F46',
-                borderColor: 'rgba(16,185,129,0.35)',
-                '&:hover': {
-                  bgcolor: 'rgba(16,185,129,0.12)',
-                  borderColor: '#059669',
-                },
-              }}
-            >
-              {canInstall
-                ? 'Install Android App Directly (Play Protect Safe · No APK)'
-                : 'Blocked by Android Play Protect / Advanced Protection? Tap Here'}
-            </Button>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+              <Button
+                variant="outlined"
+                size="medium"
+                startIcon={<PhoneIphoneIcon sx={{ color: '#2563EB' }} />}
+                onClick={() => setIosModalOpen(true)}
+                sx={{
+                  flex: 1,
+                  borderRadius: '8px',
+                  py: 1.25,
+                  px: 2,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: { xs: '0.85rem', sm: '0.9rem' },
+                  bgcolor: 'rgba(37,99,235,0.06)',
+                  color: '#1E40AF',
+                  borderColor: 'rgba(37,99,235,0.35)',
+                  '&:hover': {
+                    bgcolor: 'rgba(37,99,235,0.12)',
+                    borderColor: '#2563EB',
+                  },
+                }}
+              >
+                iPhone Tester? Get Direct iOS Link & Home Screen Guide
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="medium"
+                startIcon={<VerifiedUserIcon sx={{ color: '#059669' }} />}
+                onClick={handlePlayProtectSafeInstall}
+                sx={{
+                  flex: 1,
+                  borderRadius: '8px',
+                  py: 1.25,
+                  px: 2,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  fontSize: { xs: '0.85rem', sm: '0.9rem' },
+                  bgcolor: 'rgba(16,185,129,0.06)',
+                  color: '#065F46',
+                  borderColor: 'rgba(16,185,129,0.35)',
+                  '&:hover': {
+                    bgcolor: 'rgba(16,185,129,0.12)',
+                    borderColor: '#059669',
+                  },
+                }}
+              >
+                {canInstall
+                  ? 'Install Android App Directly (Play Protect Safe)'
+                  : 'Android Play Protect / WebAPK Guide'}
+              </Button>
+            </Box>
 
             <Box sx={{ width: '100%' }}>
-              <InstallationNotes onOpenAndroidHelp={() => setAndroidModalOpen(true)} />
+              <InstallationNotes
+                onOpenAndroidHelp={() => setAndroidModalOpen(true)}
+                onOpenIosHelp={() => setIosModalOpen(true)}
+              />
             </Box>
 
             <Paper elevation={0} sx={{ p: 3, width: '100%', bgcolor: 'rgba(0,0,0,0.02)', borderRadius: '12px', border: '1px dashed rgba(0,0,0,0.15)', textAlign: 'left' }}>
@@ -654,6 +787,12 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
         </Box>
 
       </Container>
+
+      <IphoneInstallModal
+        open={iosModalOpen}
+        onClose={() => setIosModalOpen(false)}
+        onLaunchAppNow={onLaunchDemo}
+      />
 
       <Dialog
         open={androidModalOpen}

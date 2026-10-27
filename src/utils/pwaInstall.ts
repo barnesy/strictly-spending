@@ -45,8 +45,30 @@ export function initPwaServiceWorker(): void {
   }
 }
 
+export function isIosDevice(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const isIphoneOrIpad = /iPhone|iPad|iPod/i.test(ua);
+  const isIpadOs = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return isIphoneOrIpad || isIpadOs;
+}
+
+export function getDirectPwaTesterUrl(): string {
+  if (typeof window === 'undefined') {
+    return 'https://barnesy.github.io/strictly-spending/?pwa=1';
+  }
+  const { origin, hostname } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('100.')) {
+    return 'https://barnesy.github.io/strictly-spending/?pwa=1';
+  }
+  const base = import.meta.env.BASE_URL || '/';
+  const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+  return `${origin}${normalizedBase}?pwa=1`;
+}
+
 export function usePwaInstall() {
   const [canInstall, setCanInstall] = useState<boolean>(() => deferredPrompt !== null);
+  const [isIos] = useState<boolean>(() => isIosDevice());
   const [isStandalone, setIsStandalone] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return (
@@ -78,5 +100,5 @@ export function usePwaInstall() {
     return choice.outcome === 'accepted';
   }, []);
 
-  return { canInstall, isStandalone, promptInstall };
+  return { canInstall, isIos, isStandalone, promptInstall };
 }

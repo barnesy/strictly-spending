@@ -2,7 +2,9 @@ import { useSettings, useAccounts } from './hooks/queries';
 import { useEffect, useMemo, useRef, useState, useCallback, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { queryClient } from './queryClient';
-import { ThemeProvider, CssBaseline, Snackbar, Alert, Button, Box, Typography } from '@mui/material';
+import { ThemeProvider, CssBaseline, Snackbar, Alert, Button, Box, Typography, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { getAppTheme } from './theme';
@@ -22,6 +24,8 @@ import { simplefinGetConfig, simplefinGetAccounts } from './api/simplefin';
 import { monthsBetween } from './lib';
 
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
+import IphoneInstallModal from './components/IphoneInstallModal';
+import { isIosDevice } from './utils/pwaInstall';
 import { LANDING_ONLY_BUILD } from './env';
 import { Layout } from './components/Layout';
 import { AppRoutes } from './AppRoutes';
@@ -93,10 +97,26 @@ export default function App() {
   const undoSnapshotRef = useRef<UiUndoSnapshot | null>(null);
   const [aiToastMessage, setAiToastMessage] = useState<string | null>(null);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+  const [iosGuideOpen, setIosGuideOpen] = useState<boolean>(false);
+  const [iosBannerDismissed, setIosBannerDismissed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('strictly_ios_banner_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [isStandalonePwa] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true
+    );
+  });
   const [isInstalledPwa] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('pwa') === '1') {
+    if (params.get('pwa') === '1' || params.get('ios') === '1' || params.get('tester') === '1') {
       try {
         localStorage.setItem('strictly_installed_pwa', '1');
       } catch {
@@ -109,7 +129,7 @@ export default function App() {
       (window.navigator as unknown as { standalone?: boolean }).standalone === true;
     if (standalone) return true;
     try {
-      return localStorage.getItem('strictly_installed_pwa') === '1' && standalone;
+      return localStorage.getItem('strictly_installed_pwa') === '1';
     } catch {
       return false;
     }
@@ -478,7 +498,14 @@ export default function App() {
             <Button
               size="small"
               variant="outlined"
-              onClick={() => setInBrowserDemo(false)}
+              onClick={() => {
+                try {
+                  localStorage.removeItem('strictly_installed_pwa');
+                } catch {
+                  // ignore
+                }
+                setInBrowserDemo(false);
+              }}
               sx={{
                 color: '#FFFFFF',
                 borderColor: 'rgba(255,255,255,0.45)',
@@ -501,6 +528,75 @@ export default function App() {
             </Button>
           </Box>
         )}
+        {LANDING_ONLY_BUILD && isIosDevice() && !isStandalonePwa && !iosBannerDismissed && (
+          <Box
+            sx={{
+              bgcolor: '#0F172A',
+              color: '#FFFFFF',
+              px: 1.5,
+              py: 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+              zIndex: 1300,
+              borderBottom: '1px solid rgba(255,255,255,0.12)',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+              <PhoneIphoneIcon sx={{ fontSize: 16, color: '#60A5FA', flexShrink: 0 }} />
+              <Typography
+                variant="caption"
+                sx={{
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                Install full-screen on iPhone: Share → Add to Home Screen
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => setIosGuideOpen(true)}
+                sx={{
+                  bgcolor: '#2563EB',
+                  color: '#FFFFFF',
+                  py: 0.2,
+                  px: 1,
+                  minWidth: 0,
+                  height: 24,
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#1D4ED8' },
+                }}
+              >
+                How to
+              </Button>
+              <IconButton
+                size="small"
+                aria-label="Dismiss iPhone install hint"
+                onClick={() => {
+                  try {
+                    localStorage.setItem('strictly_ios_banner_dismissed', '1');
+                  } catch {
+                    // ignore
+                  }
+                  setIosBannerDismissed(true);
+                }}
+                sx={{ color: 'rgba(255,255,255,0.7)', p: 0.25 }}
+              >
+                <CloseIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Box>
+          </Box>
+        )}
+        <IphoneInstallModal open={iosGuideOpen} onClose={() => setIosGuideOpen(false)} />
         <Layout>
           <AppRoutes />
         </Layout>

@@ -35,6 +35,7 @@ import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
 import RealEstateAgentOutlinedIcon from '@mui/icons-material/RealEstateAgentOutlined';
 import StyleOutlinedIcon from '@mui/icons-material/StyleOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 
 import AnimatedLogo from './AnimatedLogo';
 import { useFilters } from '../stores/store';
@@ -42,6 +43,7 @@ import { useAccounts, useTransactionBounds, useUncategorizedCount, useLoans } fr
 
 const BalanceSheetModal = lazy(() => import('./BalanceSheetModal'));
 const BuiltInAiDrawer = lazy(() => import('./BuiltInAiDrawer'));
+const IphoneInstallModal = lazy(() => import('./IphoneInstallModal'));
 
 type NavItem = {
   to: string;
@@ -170,6 +172,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const [isBalanceSheetOpen, setIsBalanceSheetOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
+  const [isIphoneModalOpen, setIsIphoneModalOpen] = useState(false);
   const { data: loans = [] } = useLoans();
 
   const activeAccounts = useMemo(() => {
@@ -366,6 +369,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       );
                     }),
                   ])}
+                  <Divider sx={{ my: 0.5 }} />
+                  <MenuItem
+                    onClick={() => {
+                      handleSettingsClose();
+                      setIsIphoneModalOpen(true);
+                    }}
+                    sx={{
+                      color: 'primary.main',
+                      fontWeight: 600,
+                      py: 1,
+                      px: 2,
+                      gap: 1,
+                      '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                  >
+                    <PhoneIphoneIcon sx={{ fontSize: 16 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
+                      iPhone Tester Link
+                    </Typography>
+                  </MenuItem>
                 </Menu>
               )}
             </Box>
@@ -573,6 +596,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
               }}
             >
               Ask Strictly AI
+            </Button>
+            <Button
+              fullWidth
+              variant="outlined"
+              size="small"
+              startIcon={<PhoneIphoneIcon fontSize="small" color="primary" />}
+              onClick={() => {
+                setIsMobileNavOpen(false);
+                setIsIphoneModalOpen(true);
+              }}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                justifyContent: 'flex-start',
+                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+                borderColor: 'divider',
+                color: 'text.primary',
+              }}
+            >
+              iPhone Tester Link & Guide
             </Button>
           </Box>
           <List sx={{ pt: 1, px: 1 }}>
@@ -785,6 +828,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <BuiltInAiDrawer
             open={isAiDrawerOpen}
             onClose={() => setIsAiDrawerOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {/* iPhone / iOS Tester & Home Screen Install Modal */}
+      {isIphoneModalOpen && (
+        <Suspense fallback={null}>
+          <IphoneInstallModal
+            open={isIphoneModalOpen}
+            onClose={() => setIsIphoneModalOpen(false)}
           />
         </Suspense>
       )}
