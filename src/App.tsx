@@ -1,5 +1,5 @@
 import { useSettings, useAccounts } from './hooks/queries';
-import { useEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { queryClient } from './queryClient';
 import { ThemeProvider, CssBaseline, Snackbar, Alert, Button, Box, Typography } from '@mui/material';
@@ -25,8 +25,9 @@ import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import { LANDING_ONLY_BUILD } from './env';
 import { Layout } from './components/Layout';
 import { AppRoutes } from './AppRoutes';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
-const Landing = lazy(() => import('./pages/Landing'));
+const Landing = lazyWithRetry(() => import('./pages/Landing'));
 
 interface McpUiCommand {
   id?: number;

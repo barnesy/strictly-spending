@@ -1,20 +1,21 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { PageTransition } from './components/PageTransition';
-import React, { Suspense } from 'react';
+import { Suspense } from 'react';
 import PageLoader from './components/PageLoader';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
-const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-const Budget = React.lazy(() => import('./pages/Budget'));
-const Forecast = React.lazy(() => import('./pages/Forecast'));
-const Import = React.lazy(() => import('./pages/Import'));
-const Rules = React.lazy(() => import('./pages/Rules'));
-const Categories = React.lazy(() => import('./pages/Categories'));
-const Settings = React.lazy(() => import('./pages/Settings'));
-const ThemeManager = React.lazy(() => import('./pages/ThemeManager'));
-const Sort = React.lazy(() => import('./pages/Sort'));
-const Merchants = React.lazy(() => import('./pages/Merchants'));
-const Loans = React.lazy(() => import('./pages/Loans'));
-const PrivacyPolicy = React.lazy(() => import('./pages/PrivacyPolicy'));
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const Budget = lazyWithRetry(() => import('./pages/Budget'));
+const Forecast = lazyWithRetry(() => import('./pages/Forecast'));
+const Import = lazyWithRetry(() => import('./pages/Import'));
+const Rules = lazyWithRetry(() => import('./pages/Rules'));
+const Categories = lazyWithRetry(() => import('./pages/Categories'));
+const Settings = lazyWithRetry(() => import('./pages/Settings'));
+const ThemeManager = lazyWithRetry(() => import('./pages/ThemeManager'));
+const Sort = lazyWithRetry(() => import('./pages/Sort'));
+const Merchants = lazyWithRetry(() => import('./pages/Merchants'));
+const Loans = lazyWithRetry(() => import('./pages/Loans'));
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'));
 
 export function AppRoutes() {
   const location = useLocation();

@@ -1,6 +1,7 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Box, Typography, Button, Paper } from '@mui/material';
+import { isChunkLoadError, reloadOnceOnChunkError } from './utils/lazyWithRetry';
 
 interface Props {
   children: ReactNode;
@@ -24,6 +25,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    if (isChunkLoadError(error) && reloadOnceOnChunkError()) {
+      return;
+    }
     console.error('Uncaught error:', error, errorInfo);
     this.setState({
       error,
@@ -58,7 +62,7 @@ export class ErrorBoundary extends Component<Props, State> {
               variant="contained" 
               onClick={() => {
                 this.setState({ hasError: false, error: null, errorInfo: null });
-                window.location.href = '/';
+                window.location.reload();
               }}
             >
               Reload Application
