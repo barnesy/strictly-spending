@@ -106,9 +106,9 @@ export function TopMerchantsCard({
                         &#x21bb;
                       </Box>
                     )}
-                    <Typography variant="body2">{r.merchant}</Typography>
+                    <Typography variant="body2" color="text.secondary">{r.merchant}</Typography>
                   </Stack>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.85 }}>
                     {r.recurrence && isRecurring(r.recurrence.kind) && (
                       <>
                         {' · '}
@@ -117,8 +117,15 @@ export function TopMerchantsCard({
                     )}
                   </Typography>
                 </TableCell>
-                <TableCell align="right">{r.count}</TableCell>
-                <TableCell align="right" sx={{ color: isIncome ? 'success.main' : 'inherit', fontWeight: isIncome ? 600 : 400 }}>
+                <TableCell align="right" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>{r.count}</TableCell>
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: isIncome ? 'success.main' : 'text.primary',
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
                   {isIncome ? `+${usd.format(r.total)}` : usd.format(r.total)}
                 </TableCell>
               </TableRow>

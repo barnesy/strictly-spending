@@ -530,9 +530,10 @@ export default function Dashboard() {
                     <Typography
                       variant="body2"
                       sx={{
-                        fontWeight: 600,
+                        fontWeight: 500,
                         fontSize: '0.85rem',
                         lineHeight: 1.3,
+                        color: 'text.secondary',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -555,7 +556,7 @@ export default function Dashboard() {
                       variant="body2"
                       sx={{
                         fontWeight: 700,
-                        fontSize: '0.875rem',
+                        fontSize: '0.9rem',
                         lineHeight: 1.3,
                         fontVariantNumeric: 'tabular-nums',
                         whiteSpace: 'nowrap',
@@ -582,6 +583,7 @@ export default function Dashboard() {
                       color="text.secondary"
                       sx={{
                         fontSize: '0.72rem',
+                        opacity: 0.85,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -754,7 +756,7 @@ export default function Dashboard() {
           <TableBody>
             {pageRows.map((t) => (
               <TableRow key={t.id} hover>
-                <TableCell sx={{ whiteSpace: 'nowrap', py: 0.75, px: 0.75, fontSize: '0.78rem' }}>{t.date}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', py: 0.75, px: 0.75, fontSize: '0.78rem', color: 'text.secondary' }}>{t.date}</TableCell>
                 <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 0.75, px: 0.75 }} title={accountName(t.accountId)}>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {accountName(t.accountId)}
@@ -767,6 +769,7 @@ export default function Dashboard() {
                     whiteSpace: 'nowrap',
                     py: 0.75,
                     px: 0.75,
+                    color: 'text.secondary',
                   }}
                   title={t.description}
                 >
@@ -848,8 +851,9 @@ export default function Dashboard() {
                     whiteSpace: 'nowrap',
                     py: 0.75,
                     px: 1,
-                    color: t.amount > 0 ? 'success.main' : 'inherit',
-                    fontWeight: t.amount > 0 ? 600 : 500,
+                    color: t.amount > 0 ? 'success.main' : 'text.primary',
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
                   }}
                 >
                   {t.amount > 0 ? `+${usdCents.format(t.amount)}` : usdCents.format(t.amount)}
