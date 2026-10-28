@@ -342,41 +342,73 @@ fn read_simplefin_accounts_from_db(
     Ok(results)
 }
 
-// 4. Get connected accounts (fetches from SimpleFIN and updates SQLite cache)
+// 4. Get connected accounts (returns SQLite cache unless force_refresh is requested or cache is empty)
 #[tauri::command]
 pub async fn simplefin_get_accounts(
     state: State<'_, DbState>,
+    force_refresh: Option<bool>,
 ) -> Result<Vec<SimpleFinAccountRecord>, String> {
+    let cached = {
+        let conn = state.conn.lock().map_err(|e| e.to_string())?;
+        read_simplefin_accounts_from_db(&conn).unwrap_or_default()
+    };
+
     let config = get_config(&state.conn)?;
     if config.access_url.trim().is_empty() {
-        return Ok(Vec::new());
+        return Ok(cached);
+    }
+
+    if !cached.is_empty() && !force_refresh.unwrap_or(false) {
+        return Ok(cached);
     }
 
     let (username, password, clean_url) = parse_simplefin_url(&config.access_url)?;
     let client = reqwest::Client::new();
     let accounts_url = format!("{}/accounts?version=2&balances-only=1", clean_url);
 
-    let resp = client
+    let resp = match client
         .get(&accounts_url)
         .basic_auth(&username, Some(&password))
         .send()
         .await
-        .map_err(|e| format!("Failed to connect to SimpleFIN: {}", e))?;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            if !cached.is_empty() {
+                return Ok(cached);
+            }
+            return Err(format!("Failed to connect to SimpleFIN: {}", e));
+        }
+    };
 
     let status = resp.status();
     if status.as_u16() == 402 {
+        if !cached.is_empty() {
+            return Ok(cached);
+        }
         return Err("Payment required: Your SimpleFIN subscription is pending or inactive. Please activate your subscription at bridge.simplefin.org.".to_string());
     }
     if !status.is_success() {
+        if !cached.is_empty() {
+            return Ok(cached);
+        }
         let body = resp.text().await.unwrap_or_default();
         return Err(format!("SimpleFIN API error (HTTP {}): {}", status, body));
     }
 
-    let sfin_data: SFinResponse = resp.json().await.map_err(|e| e.to_string())?;
+    let sfin_data: SFinResponse = match resp.json().await {
+        Ok(d) => d,
+        Err(e) => {
+            if !cached.is_empty() {
+                return Ok(cached);
+            }
+            return Err(e.to_string());
+        }
+    };
 
     // Check errlist
     for err in &sfin_data.errlist {
-        if err.msg.to_lowercase().contains("payment required") {
+        if err.msg.to_lowercase().contains("payment required") && cached.is_empty() {
             return Err("Payment required: Please log in to your SimpleFIN Bridge account to activate your subscription ($1.50/mo or $15/yr).".to_string());
         }
     }

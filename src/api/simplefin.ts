@@ -40,8 +40,8 @@ export async function simplefinClaimSetupToken(tokenInput: string): Promise<Simp
   return invoke<SimpleFinConfig>('simplefin_claim_setup_token', { tokenInput });
 }
 
-export async function simplefinGetAccounts(): Promise<SimpleFinAccountRecord[]> {
-  return invoke<SimpleFinAccountRecord[]>('simplefin_get_accounts');
+export async function simplefinGetAccounts(forceRefresh?: boolean): Promise<SimpleFinAccountRecord[]> {
+  return invoke<SimpleFinAccountRecord[]>('simplefin_get_accounts', { forceRefresh });
 }
 
 export async function simplefinMapAccount(

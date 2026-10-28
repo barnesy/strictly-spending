@@ -107,7 +107,7 @@ export const SimpleFinBankSyncCard: React.FC = () => {
 
   const handleRefreshAccounts = async () => {
     clearMessages();
-    await fetchAccounts();
+    await fetchAccounts(true);
     await activateRealAccountsAndTurnOffDemo();
   };
 

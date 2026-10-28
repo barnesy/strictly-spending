@@ -131,6 +131,70 @@ function stripGenericInstitutionPrefix(name: string): string {
 function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
   let changed = false;
 
+  // 1a-0. Recover any SimpleFIN account records if s.simplefinAccounts was cleared while real accounts exist
+  const hasSfConfig = Boolean(getSavedSimpleFinConfig(s).access_url?.trim());
+  const mappedStrictIds = new Set<number>(
+    s.simplefinAccounts
+      .map((a) => a.strictly_account_id)
+      .filter((id): id is number => id !== null && id !== undefined)
+  );
+  const existingSfAccountIds = new Set<string>(s.simplefinAccounts.map((a) => a.account_id));
+  let nextRecoveredSfId = Math.max(0, ...s.simplefinAccounts.map((a) => a.id || 0)) + 1;
+
+  for (const acc of s.accounts) {
+    if (acc.source === 'demo' || acc.id === undefined) continue;
+    if (mappedStrictIds.has(acc.id)) continue;
+
+    const isSfAccount =
+      acc.source === 'simplefin' ||
+      hasSfConfig ||
+      s.transactions.some(
+        (t) =>
+          t.accountId === acc.id &&
+          (t.source === 'simplefin' || Boolean(t.dedupKey && t.dedupKey.startsWith('simplefin_')))
+      );
+    if (!isSfAccount) continue;
+
+    let recoveredSfAccId: string | undefined;
+    let latestTxDate: string | null = null;
+    for (const t of s.transactions) {
+      if (t.accountId !== acc.id || t.source === 'demo') continue;
+      if (!latestTxDate || t.date > latestTxDate) {
+        latestTxDate = t.date;
+      }
+      if (!recoveredSfAccId && t.dedupKey) {
+        const m = t.dedupKey.match(/^simplefin_(ACT-[0-9a-fA-F-]+)_/);
+        if (m && !existingSfAccountIds.has(m[1])) {
+          recoveredSfAccId = m[1];
+        }
+      }
+    }
+
+    const sfAccountId =
+      recoveredSfAccId && !existingSfAccountIds.has(recoveredSfAccId)
+        ? recoveredSfAccId
+        : `sfin_acc_${acc.id}`;
+    existingSfAccountIds.add(sfAccountId);
+    mappedStrictIds.add(acc.id);
+
+    const cleanRawName = stripGenericInstitutionPrefix(acc.name || 'Account');
+    const resolvedOrg = inferOrgNameFromAccount(sfAccountId, cleanRawName, acc.institution);
+
+    s.simplefinAccounts.push({
+      id: nextRecoveredSfId++,
+      account_id: sfAccountId,
+      org_name: resolvedOrg,
+      name: cleanRawName,
+      currency: 'USD',
+      balance: acc.currentBalance ?? null,
+      available_balance: acc.currentBalance ?? null,
+      balance_date: null,
+      strictly_account_id: acc.id,
+      latest_transaction_date: latestTxDate,
+    });
+    changed = true;
+  }
+
   // 1a. Repair SimpleFIN account records and ensure each has a mapped Strictly account
   if (s.simplefinAccounts.length > 0) {
     s.simplefinAccounts = s.simplefinAccounts.map((sfAcc) => {
@@ -2138,144 +2202,186 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return redactSimpleFinConfigForUi(cfg);
     }
     case 'simplefin_get_accounts': {
+      if (syncConnectedAccountsAndLoans(s)) {
+        persistState();
+      }
       const cfg = getSavedSimpleFinConfig(s);
       if (!cfg.access_url) {
         return s.simplefinAccounts;
       }
 
-      const parsed = parseSimpleFinUrl(cfg.access_url);
-      const endpoint = `${parsed.cleanUrl}/accounts?version=2&balances-only=1`;
-      const headers: Record<string, string> = {
-        Authorization: 'Basic ' + btoa(`${parsed.username}:${parsed.password}`),
-      };
-
-      const resp = await fetch(endpoint, { method: 'GET', headers });
-      if (!resp.ok) {
-        throw new Error(`SimpleFIN accounts request failed (HTTP ${resp.status})`);
+      if (s.simplefinAccounts.length > 0 && !args?.forceRefresh) {
+        return s.simplefinAccounts;
       }
 
-      const accountSet = await resp.json();
-      const orgMap = new Map<string, string>();
-      if (Array.isArray(accountSet?.connections)) {
-        for (const c of accountSet.connections) {
-          const cid = c?.conn_id || c?.id;
-          const cname = c?.org_name || c?.name;
-          if (cid && cname) orgMap.set(String(cid), String(cname));
-        }
-      }
-      const rawAccounts: any[] = Array.isArray(accountSet?.accounts) ? accountSet.accounts : [];
-      const existingById = new Map(s.simplefinAccounts.map((a) => [a.account_id, a]));
-      const results: SimpleFinAccountRecord[] = [];
-      let nextSfRowId = Math.max(0, ...s.simplefinAccounts.map((a) => a.id || 0)) + 1;
+      try {
+        const parsed = parseSimpleFinUrl(cfg.access_url);
+        const endpoint = `${parsed.cleanUrl}/accounts?version=2&balances-only=1`;
+        const headers: Record<string, string> = {
+          Authorization: 'Basic ' + btoa(`${parsed.username}:${parsed.password}`),
+        };
 
-      for (const acc of rawAccounts) {
-        const sfAccId = String(acc.id);
-        const rawAccName = stripGenericInstitutionPrefix(String(acc.name || 'Account'));
-        const rawOrg =
-          acc?.org_name ||
-          (acc?.conn_id ? orgMap.get(String(acc.conn_id)) : undefined) ||
-          acc?.org?.name ||
-          acc?.org?.['sfin-url'] ||
-          acc?.org?.domain ||
-          undefined;
-        const orgName = inferOrgNameFromAccount(sfAccId, rawAccName, rawOrg);
-        const balanceVal =
-          typeof acc?.balance === 'string' || typeof acc?.balance === 'number'
-            ? parseFloat(String(acc.balance))
-            : NaN;
-        const balance = Number.isFinite(balanceVal) ? balanceVal : null;
-        const availVal =
-          typeof acc?.['available-balance'] === 'string' || typeof acc?.['available-balance'] === 'number'
-            ? parseFloat(String(acc['available-balance']))
-            : NaN;
-        const availableBalance = Number.isFinite(availVal) ? availVal : null;
-        const balanceDateEpoch = typeof acc?.['balance-date'] === 'number' ? acc['balance-date'] : null;
-
-        const prev = existingById.get(sfAccId);
-        let mappedAccountId: number | null = prev?.strictly_account_id ?? null;
-
-        if (mappedAccountId !== null && !s.accounts.some((a) => a.id === mappedAccountId)) {
-          mappedAccountId = null;
+        const resp = await fetch(endpoint, { method: 'GET', headers });
+        if (!resp.ok) {
+          if (s.simplefinAccounts.length > 0) {
+            return s.simplefinAccounts;
+          }
+          throw new Error(`SimpleFIN accounts request failed (HTTP ${resp.status})`);
         }
 
-        const { name: accountName, type: accountType, institution, last4 } = inferStrictlyAccountDetails(
-          orgName,
-          rawAccName,
-          sfAccId
-        );
-
-        if (mappedAccountId === null) {
-          const match = s.accounts.find(
-            (a) =>
-              a.source !== 'demo' &&
-              (a.name.toLowerCase() === accountName.toLowerCase() ||
-                stripGenericInstitutionPrefix(a.name).toLowerCase() === rawAccName.toLowerCase())
-          );
-          if (match?.id) {
-            mappedAccountId = match.id;
-          } else {
-            const nextId = Math.max(0, ...s.accounts.map((a) => a.id || 0)) + 1;
-            const newAcc: Account = {
-              id: nextId,
-              name: accountName,
-              type: accountType,
-              institution,
-              last4,
-              currentBalance: balance ?? undefined,
-              enabled: true,
-              source: 'simplefin',
-            };
-            s.accounts = [...s.accounts, newAcc];
-            mappedAccountId = nextId;
+        const accountSet = await resp.json();
+        const orgMap = new Map<string, string>();
+        if (Array.isArray(accountSet?.connections)) {
+          for (const c of accountSet.connections) {
+            const cid = c?.conn_id || c?.id;
+            const cname = c?.org_name || c?.name;
+            if (cid && cname) orgMap.set(String(cid), String(cname));
           }
         }
-        if (mappedAccountId !== null) {
-          s.accounts = s.accounts.map((a) =>
-            a.id === mappedAccountId
-              ? {
-                  ...a,
-                  name: accountName,
-                  type: a.type === 'checking' && accountType !== 'checking' ? accountType : a.type,
-                  institution:
-                    !a.institution || a.institution === 'Financial Institution' || a.institution === 'Bank'
-                      ? institution
-                      : a.institution,
-                  last4: a.last4 || last4,
-                  currentBalance: balance !== null ? balance : a.currentBalance,
-                }
-              : a
-          );
+        const rawAccounts: any[] = Array.isArray(accountSet?.accounts) ? accountSet.accounts : [];
+        if (rawAccounts.length === 0) {
+          return s.simplefinAccounts;
         }
 
-        let latestFromTxns: string | null = prev?.latest_transaction_date ?? null;
-        if (mappedAccountId !== null) {
-          for (const t of s.transactions) {
-            if (t.accountId === mappedAccountId && t.source !== 'demo') {
-              if (!latestFromTxns || t.date > latestFromTxns) {
-                latestFromTxns = t.date;
+        const existingById = new Map(s.simplefinAccounts.map((a) => [a.account_id, a]));
+        const results: SimpleFinAccountRecord[] = [];
+        let nextSfRowId = Math.max(0, ...s.simplefinAccounts.map((a) => a.id || 0)) + 1;
+
+        for (const acc of rawAccounts) {
+          const sfAccId = String(acc.id);
+          const rawAccName = stripGenericInstitutionPrefix(String(acc.name || 'Account'));
+          const rawOrg =
+            acc?.org_name ||
+            (acc?.conn_id ? orgMap.get(String(acc.conn_id)) : undefined) ||
+            acc?.org?.name ||
+            acc?.org?.['sfin-url'] ||
+            acc?.org?.domain ||
+            undefined;
+          const orgName = inferOrgNameFromAccount(sfAccId, rawAccName, rawOrg);
+          const balanceVal =
+            typeof acc?.balance === 'string' || typeof acc?.balance === 'number'
+              ? parseFloat(String(acc.balance))
+              : NaN;
+          const balance = Number.isFinite(balanceVal) ? balanceVal : null;
+          const availVal =
+            typeof acc?.['available-balance'] === 'string' || typeof acc?.['available-balance'] === 'number'
+              ? parseFloat(String(acc['available-balance']))
+              : NaN;
+          const availableBalance = Number.isFinite(availVal) ? availVal : null;
+          const balanceDateEpoch = typeof acc?.['balance-date'] === 'number' ? acc['balance-date'] : null;
+
+          let prev = existingById.get(sfAccId);
+          let mappedAccountId: number | null = prev?.strictly_account_id ?? null;
+
+          if (mappedAccountId !== null && !s.accounts.some((a) => a.id === mappedAccountId)) {
+            mappedAccountId = null;
+          }
+
+          const { name: accountName, type: accountType, institution, last4 } = inferStrictlyAccountDetails(
+            orgName,
+            rawAccName,
+            sfAccId
+          );
+
+          if (mappedAccountId === null) {
+            const match = s.accounts.find(
+              (a) =>
+                a.source !== 'demo' &&
+                (a.name.toLowerCase() === accountName.toLowerCase() ||
+                  stripGenericInstitutionPrefix(a.name).toLowerCase() === rawAccName.toLowerCase() ||
+                  (Boolean(last4) &&
+                    a.last4 === last4 &&
+                    (a.institution || '').toLowerCase() === institution.toLowerCase()))
+            );
+            if (match?.id) {
+              mappedAccountId = match.id;
+            } else {
+              const nextId = Math.max(0, ...s.accounts.map((a) => a.id || 0)) + 1;
+              const newAcc: Account = {
+                id: nextId,
+                name: accountName,
+                type: accountType,
+                institution,
+                last4,
+                currentBalance: balance ?? undefined,
+                enabled: true,
+                source: 'simplefin',
+              };
+              s.accounts = [...s.accounts, newAcc];
+              mappedAccountId = nextId;
+            }
+          }
+          if (!prev && mappedAccountId !== null) {
+            prev = s.simplefinAccounts.find((a) => a.strictly_account_id === mappedAccountId);
+          }
+          if (mappedAccountId !== null) {
+            s.accounts = s.accounts.map((a) =>
+              a.id === mappedAccountId
+                ? {
+                    ...a,
+                    name: accountName,
+                    type: a.type === 'checking' && accountType !== 'checking' ? accountType : a.type,
+                    institution:
+                      !a.institution || a.institution === 'Financial Institution' || a.institution === 'Bank'
+                        ? institution
+                        : a.institution,
+                    last4: a.last4 || last4,
+                    currentBalance: balance !== null ? balance : a.currentBalance,
+                  }
+                : a
+            );
+          }
+
+          let latestFromTxns: string | null = prev?.latest_transaction_date ?? null;
+          if (mappedAccountId !== null) {
+            for (const t of s.transactions) {
+              if (t.accountId === mappedAccountId && t.source !== 'demo') {
+                if (!latestFromTxns || t.date > latestFromTxns) {
+                  latestFromTxns = t.date;
+                }
               }
             }
           }
+
+          results.push({
+            id: prev?.id || nextSfRowId++,
+            account_id: sfAccId,
+            org_name: String(orgName),
+            name: rawAccName,
+            currency: String(acc.currency || 'USD'),
+            balance,
+            available_balance: availableBalance,
+            balance_date: balanceDateEpoch,
+            strictly_account_id: mappedAccountId,
+            latest_transaction_date: latestFromTxns,
+          });
         }
 
-        results.push({
-          id: prev?.id || nextSfRowId++,
-          account_id: sfAccId,
-          org_name: String(orgName),
-          name: rawAccName,
-          currency: String(acc.currency || 'USD'),
-          balance,
-          available_balance: availableBalance,
-          balance_date: balanceDateEpoch,
-          strictly_account_id: mappedAccountId,
-          latest_transaction_date: latestFromTxns,
-        });
-      }
+        const seenAccountIds = new Set(results.map((r) => r.account_id));
+        const seenStrictIds = new Set(
+          results.map((r) => r.strictly_account_id).filter((id): id is number => id !== null && id !== undefined)
+        );
+        for (const existing of s.simplefinAccounts) {
+          if (
+            !seenAccountIds.has(existing.account_id) &&
+            (existing.strictly_account_id === null ||
+              existing.strictly_account_id === undefined ||
+              !seenStrictIds.has(existing.strictly_account_id))
+          ) {
+            results.push(existing);
+          }
+        }
 
-      s.simplefinAccounts = results;
-      purgeDemoDataIfRealSourcesConnected(s);
-      persistState();
-      return results;
+        s.simplefinAccounts = results;
+        purgeDemoDataIfRealSourcesConnected(s);
+        persistState();
+        return results;
+      } catch (err) {
+        if (s.simplefinAccounts.length > 0) {
+          return s.simplefinAccounts;
+        }
+        throw err;
+      }
     }
     case 'simplefin_map_account': {
       const sfId = String(args.accountId || args.simplefinAccountId || '');
@@ -2287,6 +2393,9 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return null;
     }
     case 'simplefin_sync_transactions': {
+      if (syncConnectedAccountsAndLoans(s)) {
+        persistState();
+      }
       const cfg = getSavedSimpleFinConfig(s);
       if (!cfg.access_url) {
         throw new Error('SimpleFIN is not configured. Claim a setup token first.');
@@ -2329,7 +2438,14 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         }
       }
       const rawAccounts: any[] = Array.isArray(accountSet?.accounts) ? accountSet.accounts : [];
-      const warnings: string[] = Array.isArray(accountSet?.errors) ? [...accountSet.errors] : [];
+      const warnings: string[] = [
+        ...(Array.isArray(accountSet?.errors) ? accountSet.errors.map(String) : []),
+        ...(Array.isArray(accountSet?.errlist)
+          ? accountSet.errlist.map((e: any) =>
+              e?.code && e?.msg ? `${e.code}: ${e.msg}` : String(e?.msg || e?.code || '')
+            ).filter(Boolean)
+          : []),
+      ];
 
       const existingKeys = new Set(s.transactions.map((t) => t.dedupKey).filter(Boolean));
       const existingById = new Map(s.simplefinAccounts.map((a) => [a.account_id, a]));
@@ -2365,7 +2481,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         const availableBalance = Number.isFinite(availVal) ? availVal : null;
         const balanceDateEpoch = typeof acc?.['balance-date'] === 'number' ? acc['balance-date'] : null;
 
-        const prev = existingById.get(sfAccId);
+        let prev = existingById.get(sfAccId);
         let mappedAccountId: number | null = prev?.strictly_account_id ?? null;
 
         if (mappedAccountId !== null && !s.accounts.some((a) => a.id === mappedAccountId)) {
@@ -2407,6 +2523,9 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
             ];
             mappedAccountId = nextAccId;
           }
+        }
+        if (!prev && mappedAccountId !== null) {
+          prev = s.simplefinAccounts.find((a) => a.strictly_account_id === mappedAccountId);
         }
         if (mappedAccountId !== null) {
           s.accounts = s.accounts.map((a) =>
@@ -2522,7 +2641,24 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
         });
       }
 
-      s.simplefinAccounts = updatedSfAccounts;
+      if (updatedSfAccounts.length > 0) {
+        const seenAccountIds = new Set(updatedSfAccounts.map((r) => r.account_id));
+        const seenStrictIds = new Set(
+          updatedSfAccounts.map((r) => r.strictly_account_id).filter((id): id is number => id !== null && id !== undefined)
+        );
+        for (const existing of s.simplefinAccounts) {
+          if (
+            !seenAccountIds.has(existing.account_id) &&
+            (existing.strictly_account_id === null ||
+              existing.strictly_account_id === undefined ||
+              !seenStrictIds.has(existing.strictly_account_id))
+          ) {
+            updatedSfAccounts.push(existing);
+          }
+        }
+        s.simplefinAccounts = updatedSfAccounts;
+      }
+
       if (newTransactions.length > 0) {
         s.transactions = [...newTransactions, ...s.transactions].sort((a, b) =>
           b.date.localeCompare(a.date)
@@ -2541,11 +2677,11 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
 
       const response: SimpleFinSyncResponse = {
         added: transactionsInserted,
-        accounts_synced: accountsSynced,
+        accounts_synced: accountsSynced > 0 ? accountsSynced : s.simplefinAccounts.filter((a) => a.strictly_account_id !== null).length,
         last_synced_at: syncedAt,
         sync_start_date: syncStartDateStr,
         warnings,
-        accounts: updatedSfAccounts,
+        accounts: s.simplefinAccounts,
       };
       return response;
     }

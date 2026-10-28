@@ -27,7 +27,7 @@ interface SimpleFinState {
   fetchConfig: () => Promise<void>;
   saveConfig: (config: SimpleFinConfig) => Promise<void>;
   claimToken: (tokenInput: string) => Promise<SimpleFinConfig>;
-  fetchAccounts: () => Promise<void>;
+  fetchAccounts: (forceRefresh?: boolean) => Promise<void>;
   mapAccount: (accountId: string, strictlyAccountId: number | null) => Promise<void>;
   syncTransactions: (startDate?: string) => Promise<SimpleFinSyncResponse>;
   disconnect: () => Promise<void>;
@@ -92,7 +92,7 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
         successMessage: 'SimpleFIN connected successfully! Fetching bank accounts...',
       });
       // Automatically attempt to fetch accounts right after connecting
-      await get().fetchAccounts();
+      await get().fetchAccounts(true);
       return safeConfig;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -101,15 +101,18 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
     }
   },
 
-  fetchAccounts: async () => {
+  fetchAccounts: async (forceRefresh?: boolean) => {
     set({ isLoading: true, error: null });
     try {
-      const accounts = await simplefinGetAccounts();
+      const accounts = await simplefinGetAccounts(forceRefresh);
       const list = Array.isArray(accounts) ? accounts : [];
       if (list.length > 0 && useFilters.getState().demoMode) {
         useFilters.getState().setDemoMode(false);
       }
-      set({ accounts: list, isLoading: false });
+      set((state) => ({
+        accounts: list.length > 0 ? list : state.accounts,
+        isLoading: false,
+      }));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       set({ isLoading: false, error: msg });
@@ -144,7 +147,7 @@ export const useSimpleFinStore = create<SimpleFinState>((set, get) => ({
           ...state.config,
           last_synced_at: resp.last_synced_at,
         },
-        accounts: resp.accounts ?? state.accounts,
+        accounts: resp.accounts && resp.accounts.length > 0 ? resp.accounts : state.accounts,
         warnings: resp.warnings || [],
         lastSyncStats: { added: resp.added, accountsSynced: resp.accounts_synced },
         successMessage: resp.sync_start_date
