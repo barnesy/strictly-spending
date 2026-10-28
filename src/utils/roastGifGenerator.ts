@@ -8,11 +8,76 @@ export interface RoastGifPayload {
   stampText?: string;
 }
 
+export interface RoastThemeStyle {
+  mode: 'light' | 'dark';
+  bgDefault: string;
+  bgPaper: string;
+  primaryMain: string;
+  primaryContrast: string;
+  secondaryMain: string;
+  errorMain: string;
+  warningMain: string;
+  textPrimary: string;
+  textSecondary: string;
+  divider: string;
+  fontFamily: string;
+  borderRadius: number;
+}
+
+export const DEFAULT_ROAST_THEME: RoastThemeStyle = {
+  mode: 'dark',
+  bgDefault: '#0f172a',
+  bgPaper: '#1e293b',
+  primaryMain: '#3b82f6',
+  primaryContrast: '#ffffff',
+  secondaryMain: '#f59e0b',
+  errorMain: '#ef4444',
+  warningMain: '#f59e0b',
+  textPrimary: '#f8fafc',
+  textSecondary: '#94a3b8',
+  divider: '#334155',
+  fontFamily: '"Atkinson Hyperlegible", "Inter", "Segoe UI", system-ui, sans-serif',
+  borderRadius: 12,
+};
+
+function parseColorToRgb(color: string): [number, number, number] {
+  const c = (color || '').trim();
+  if (c.startsWith('#')) {
+    if (c.length === 4) {
+      return [
+        parseInt(c[1] + c[1], 16) || 0,
+        parseInt(c[2] + c[2], 16) || 0,
+        parseInt(c[3] + c[3], 16) || 0,
+      ];
+    }
+    if (c.length >= 7) {
+      return [
+        parseInt(c.slice(1, 3), 16) || 0,
+        parseInt(c.slice(3, 5), 16) || 0,
+        parseInt(c.slice(5, 7), 16) || 0,
+      ];
+    }
+  }
+  const match = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (match) {
+    return [Number(match[1]) || 0, Number(match[2]) || 0, Number(match[3]) || 0];
+  }
+  return [30, 41, 59];
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const [r, g, b] = parseColorToRgb(color);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /**
  * Generates an animated looping GIF89a Blob + URL AND a crisp PNG Blob (for 1-click clipboard image copy)
- * completely client-side with zero external servers.
+ * completely client-side with zero external servers, styled to match the active app theme.
  */
-export async function generateRoastAnimatedGif(payload: RoastGifPayload): Promise<{
+export async function generateRoastAnimatedGif(
+  payload: RoastGifPayload,
+  themeStyle: RoastThemeStyle = DEFAULT_ROAST_THEME
+): Promise<{
   gifBlob: Blob;
   gifUrl: string;
   pngBlob: Blob | null;
@@ -30,18 +95,18 @@ export async function generateRoastAnimatedGif(payload: RoastGifPayload): Promis
     throw new Error('Canvas 2D context unavailable');
   }
 
-  const palette = buildFixedPalette();
+  const palette = buildThemeAwarePalette(themeStyle);
   const framesIndices: Uint8Array[] = [];
 
   for (let f = 0; f < frameCount; f++) {
-    drawRoastFrame(ctx, width, height, payload, f, frameCount);
+    drawRoastFrame(ctx, width, height, payload, f, frameCount, themeStyle);
     const imgData = ctx.getImageData(0, 0, width, height).data;
-    const indexed = mapRgbaToPaletteIndices(imgData, width * height);
+    const indexed = mapRgbaToPaletteIndices(imgData, width * height, palette);
     framesIndices.push(indexed);
   }
 
   // Draw hero frame (frame 0) for crisp clipboard PNG copy
-  drawRoastFrame(ctx, width, height, payload, 0, frameCount);
+  drawRoastFrame(ctx, width, height, payload, 0, frameCount, themeStyle);
   const pngBlob = await new Promise<Blob | null>((resolve) => {
     canvas.toBlob((b) => resolve(b), 'image/png');
   });
@@ -74,9 +139,6 @@ function wrapTextLines(
   return lines;
 }
 
-/**
- * Automatically steps down font size until a single-line string fits within maxWidth.
- */
 function setFittedSingleLineFont(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -98,10 +160,6 @@ function setFittedSingleLineFont(
   return minFontPx;
 }
 
-/**
- * Automatically selects the largest font size where the wrapped paragraph fits both
- * maxWidth and maxHeight cleanly.
- */
 function layoutFittedParagraph(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -138,16 +196,17 @@ function drawRoundedRect(
   h: number,
   r: number
 ) {
+  const radius = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
 }
 
@@ -157,81 +216,84 @@ export function drawRoastFrame(
   h: number,
   payload: RoastGifPayload,
   frame: number,
-  totalFrames: number
+  totalFrames: number,
+  themeStyle: RoastThemeStyle = DEFAULT_ROAST_THEME
 ) {
   const phase = (frame / totalFrames) * Math.PI * 2;
   const isAlt = frame % 2 === 0;
   const isFlash = frame % 4 < 2;
-  const sansFamily = '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
-  const displayFamily = '"Inter", "Segoe UI", "Arial Black", sans-serif';
+  const sansFamily = themeStyle.fontFamily || DEFAULT_ROAST_THEME.fontFamily;
+  const cardRadius = Math.max(8, Math.min(20, themeStyle.borderRadius * 1.4));
 
-  // 1. Dark dramatic poster background
+  // 1. Solid theme background (never transparent, never hardcoded black)
+  ctx.fillStyle = themeStyle.bgPaper;
+  ctx.fillRect(0, 0, w, h);
+
   const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-  bgGrad.addColorStop(0, '#13070c');
-  bgGrad.addColorStop(0.55, '#1d0b14');
-  bgGrad.addColorStop(1, '#320810');
+  bgGrad.addColorStop(0, themeStyle.bgPaper);
+  bgGrad.addColorStop(1, themeStyle.bgDefault);
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, w, h);
 
-  // 2. Pulsing radial spotlight
-  const glowRadius = 230 + Math.sin(phase) * 26;
-  const radGrad = ctx.createRadialGradient(w / 2, 230, 12, w / 2, 230, glowRadius);
-  radGrad.addColorStop(0, 'rgba(239, 68, 68, 0.28)');
-  radGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+  // 2. Subtle pulsing theme-colored spotlight glow
+  const glowRadius = 230 + Math.sin(phase) * 24;
+  const radGrad = ctx.createRadialGradient(w / 2, 225, 12, w / 2, 225, glowRadius);
+  radGrad.addColorStop(0, withAlpha(themeStyle.primaryMain, themeStyle.mode === 'dark' ? 0.22 : 0.12));
+  radGrad.addColorStop(1, withAlpha(themeStyle.primaryMain, 0));
   ctx.fillStyle = radGrad;
   ctx.fillRect(0, 0, w, h);
 
-  // 3. Floating habit emojis rising in the background
+  // 3. Floating habit emojis drifting smoothly
   const floaters =
     payload.floatingEmojis && payload.floatingEmojis.length >= 4
       ? payload.floatingEmojis
       : ['🍺', '☕', '🚬', '💸', '🔥', '😈'];
   const emberSeeds = [
     { x: 42, baseY: 515, label: floaters[0 % floaters.length] },
-    { x: 110, baseY: 530, label: floaters[1 % floaters.length] },
-    { x: 430, baseY: 510, label: floaters[2 % floaters.length] },
+    { x: 112, baseY: 530, label: floaters[1 % floaters.length] },
+    { x: 428, baseY: 510, label: floaters[2 % floaters.length] },
     { x: 494, baseY: 525, label: floaters[3 % floaters.length] },
     { x: 64, baseY: 315, label: floaters[4 % floaters.length] },
     { x: 476, baseY: 305, label: floaters[5 % floaters.length] },
   ];
   ctx.save();
-  ctx.font = '21px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+  ctx.font = '20px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
   ctx.textAlign = 'center';
   for (let i = 0; i < emberSeeds.length; i++) {
     const e = emberSeeds[i];
     const progress = ((frame / totalFrames) + i * 0.17) % 1;
-    const yPos = e.baseY - progress * 200;
-    const xWobble = e.x + Math.sin(phase + i * 1.4) * 10;
-    ctx.globalAlpha = Math.max(0.16, 1 - progress * 0.8);
+    const yPos = e.baseY - progress * 195;
+    const xWobble = e.x + Math.sin(phase + i * 1.4) * 9;
+    ctx.globalAlpha = Math.max(0.14, (1 - progress * 0.8) * (themeStyle.mode === 'dark' ? 0.75 : 0.55));
     ctx.fillText(e.label, xWobble, yPos);
   }
   ctx.restore();
 
-  // 4. Animated bottom cartoon flames
-  drawBottomFlames(ctx, w, h, phase, frame);
+  // 4. Theme-colored animated bottom waves
+  drawThemeWaves(ctx, w, h, phase, frame, themeStyle);
 
-  // 5. Outer neon border pulsing between crimson and gold
+  // 5. Outer frame border following theme primary/secondary
   ctx.save();
-  ctx.strokeStyle = isFlash ? '#ef4444' : '#f59e0b';
-  ctx.lineWidth = 4;
-  drawRoundedRect(ctx, 12, 12, w - 24, h - 24, 18);
+  ctx.strokeStyle = isFlash ? themeStyle.primaryMain : themeStyle.secondaryMain;
+  ctx.lineWidth = 3;
+  drawRoundedRect(ctx, 10, 10, w - 20, h - 20, cardRadius + 4);
   ctx.stroke();
   ctx.restore();
 
-  // 6. Top Siren Header Banner (y: 26..62)
-  const padX = 28;
+  // 6. Top Header Banner (y: 26..62) in theme.primaryMain
+  const padX = 26;
   const innerW = w - padX * 2;
   ctx.save();
-  drawRoundedRect(ctx, padX, 26, innerW, 36, 9);
-  ctx.fillStyle = isFlash ? '#dc2626' : '#b91c1c';
+  drawRoundedRect(ctx, padX, 26, innerW, 36, Math.max(6, cardRadius - 2));
+  ctx.fillStyle = themeStyle.primaryMain;
   ctx.fill();
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = themeStyle.primaryContrast;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const sirenLeft = isAlt ? '🚨' : '😈';
-  const sirenRight = isAlt ? '😈' : '🚨';
+  const sirenLeft = isAlt ? '😈' : '🚨';
+  const sirenRight = isAlt ? '🚨' : '😈';
   const headerBannerText = `${sirenLeft}  ALL-TIME HABITUAL SPENDING ROAST  ${sirenRight}`;
-  setFittedSingleLineFont(ctx, headerBannerText, innerW - 24, 13, 10, '800', sansFamily);
+  setFittedSingleLineFont(ctx, headerBannerText, innerW - 24, 12.5, 10, '800', sansFamily);
   ctx.fillText(headerBannerText, w / 2, 44);
   ctx.restore();
 
@@ -242,10 +304,10 @@ export function drawRoastFrame(
   ctx.save();
   ctx.beginPath();
   ctx.arc(avatarX, avatarY + bounceY, 31, 0, Math.PI * 2);
-  ctx.fillStyle = '#2d0e16';
+  ctx.fillStyle = themeStyle.bgDefault;
   ctx.fill();
   ctx.lineWidth = 2.5;
-  ctx.strokeStyle = isFlash ? '#fbbf24' : '#ef4444';
+  ctx.strokeStyle = isFlash ? themeStyle.primaryMain : themeStyle.secondaryMain;
   ctx.stroke();
 
   ctx.font = '30px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
@@ -254,29 +316,29 @@ export function drawRoastFrame(
   ctx.fillText(payload.avatarEmoji || '😈', avatarX, avatarY + 2 + bounceY);
   ctx.restore();
 
-  // Persona Title (right of avatar, guaranteed to fit inside width & height)
+  // Persona Title (right of avatar)
   const titleX = padX + 80;
   const titleMaxW = w - padX - titleX - 4;
   ctx.save();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.font = `800 11px ${sansFamily}`;
-  ctx.fillStyle = '#fbbf24';
+  ctx.fillStyle = themeStyle.primaryMain;
   ctx.fillText('OFFICIAL HABIT DIAGNOSIS:', titleX, 88);
 
   const nameLayout = layoutFittedParagraph(
     ctx,
-    payload.crazyName.toUpperCase(),
+    payload.crazyName,
     titleMaxW,
     54,
     20,
     13,
     1.18,
-    '900',
-    displayFamily
+    '800',
+    sansFamily
   );
-  ctx.font = `900 ${nameLayout.fontSize}px ${displayFamily}`;
-  ctx.fillStyle = '#ffffff';
+  ctx.font = `800 ${nameLayout.fontSize}px ${sansFamily}`;
+  ctx.fillStyle = themeStyle.textPrimary;
   nameLayout.lines.forEach((line, idx) => {
     ctx.fillText(line, titleX, 112 + idx * nameLayout.lineHeight);
   });
@@ -286,15 +348,24 @@ export function drawRoastFrame(
   const boxY = 162;
   const boxH = 130;
   ctx.save();
-  drawRoundedRect(ctx, padX, boxY, innerW, boxH, 14);
-  ctx.fillStyle = '#0d0407';
+  drawRoundedRect(ctx, padX, boxY, innerW, boxH, cardRadius);
+  ctx.fillStyle = themeStyle.bgDefault;
   ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = isAlt ? '#ef4444' : '#f97316';
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = themeStyle.divider;
   ctx.stroke();
 
-  // Giant shaking/pulsing dollar amount (auto-fitted to box width)
-  const scaleJitter = 1 + Math.sin(phase * 2) * 0.03;
+  // Top accent bar inside amount box
+  ctx.save();
+  ctx.beginPath();
+  drawRoundedRect(ctx, padX, boxY, innerW, boxH, cardRadius);
+  ctx.clip();
+  ctx.fillStyle = isFlash ? themeStyle.errorMain : themeStyle.primaryMain;
+  ctx.fillRect(padX, boxY, innerW, 4);
+  ctx.restore();
+
+  // Giant pulsing dollar amount
+  const scaleJitter = 1 + Math.sin(phase * 2) * 0.028;
   ctx.save();
   ctx.translate(w / 2, boxY + 54);
   ctx.scale(scaleJitter, scaleJitter);
@@ -305,19 +376,19 @@ export function drawRoastFrame(
     50,
     28,
     '900',
-    displayFamily
+    sansFamily
   );
-  ctx.fillStyle = isFlash ? '#ff4d4d' : '#fbbf24';
+  ctx.fillStyle = isFlash ? themeStyle.errorMain : themeStyle.primaryMain;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(payload.totalAmountFormatted, 0, 0);
   ctx.restore();
 
-  // Subtitle line inside amount box (auto-fitted so it NEVER overflows horizontally)
+  // Subtitle line inside amount box
   ctx.save();
   const subText = payload.subtitleLine.toUpperCase();
-  setFittedSingleLineFont(ctx, subText, innerW - 32, 12.5, 9.5, '800', sansFamily);
-  ctx.fillStyle = '#fca5a5';
+  setFittedSingleLineFont(ctx, subText, innerW - 32, 12, 9.5, '700', sansFamily);
+  ctx.fillStyle = themeStyle.textSecondary;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(subText, w / 2, boxY + 104);
@@ -327,28 +398,35 @@ export function drawRoastFrame(
   // 9. Roast & Statistical Assumption Card (y: 306..508, height: 202)
   const cardY = 306;
   const cardH = 202;
-  const cardInnerPadX = 20;
+  const cardInnerPadX = 22;
   const cardTextW = innerW - cardInnerPadX * 2;
 
   ctx.save();
-  drawRoundedRect(ctx, padX, cardY, innerW, cardH, 14);
-  ctx.fillStyle = '#1e1017';
+  drawRoundedRect(ctx, padX, cardY, innerW, cardH, cardRadius);
+  ctx.fillStyle = themeStyle.bgDefault;
   ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#5c1d27';
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = themeStyle.divider;
   ctx.stroke();
+
+  // Left accent bar matching app's verdict callout style
+  ctx.save();
+  drawRoundedRect(ctx, padX, cardY, innerW, cardH, cardRadius);
+  ctx.clip();
+  ctx.fillStyle = themeStyle.primaryMain;
+  ctx.fillRect(padX, cardY, 5, cardH);
+  ctx.restore();
 
   // Card Top Header Row (Left label + Right non-overlapping stamp pill)
   const headerRowCenterY = cardY + 24;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.font = `800 11.5px ${sansFamily}`;
-  ctx.fillStyle = '#fbbf24';
-  ctx.fillText('🕵️ FORENSIC HABIT ASSUMPTION:', padX + cardInnerPadX, headerRowCenterY);
+  ctx.fillStyle = themeStyle.primaryMain;
+  ctx.fillText('🕵️ FORENSIC HABIT ASSUMPTION', padX + cardInnerPadX, headerRowCenterY);
 
-  // Stamp badge neatly aligned in top-right of header row
   const stampLabel = payload.stampText || (isFlash ? 'CAUGHT IN 4K 📸' : 'STATISTICALLY COOKED 💀');
-  ctx.font = `900 10.5px ${sansFamily}`;
+  ctx.font = `800 10.5px ${sansFamily}`;
   const stampTextW = ctx.measureText(stampLabel).width;
   const pillW = stampTextW + 18;
   const pillH = 22;
@@ -356,37 +434,36 @@ export function drawRoastFrame(
   const pillY = headerRowCenterY - pillH / 2;
 
   drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
-  ctx.fillStyle = isFlash ? '#dc2626' : '#d97706';
+  ctx.fillStyle = isFlash ? themeStyle.errorMain : themeStyle.secondaryMain;
   ctx.fill();
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(stampLabel, pillX + pillW / 2, headerRowCenterY + 0.5);
 
-  // Subtle horizontal divider under card header row
+  // Divider under card header row
   ctx.beginPath();
   ctx.moveTo(padX + cardInnerPadX, cardY + 42);
   ctx.lineTo(padX + innerW - cardInnerPadX, cardY + 42);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+  ctx.strokeStyle = themeStyle.divider;
   ctx.lineWidth = 1;
   ctx.stroke();
 
   // Auto-fitted roast quote body inside [cardY + 52 .. cardY + cardH - 14]
   const bodyTopY = cardY + 52;
-  const bodyAvailH = cardH - 66; // 136px height budget
+  const bodyAvailH = cardH - 66;
   const quoteLayout = layoutFittedParagraph(
     ctx,
     payload.roastQuote,
     cardTextW,
     bodyAvailH,
-    16.5,
+    16,
     12.5,
-    1.38,
-    '700',
+    1.4,
+    '600',
     sansFamily
   );
 
-  ctx.font = `700 ${quoteLayout.fontSize}px ${sansFamily}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   const totalTextH = quoteLayout.lines.length * quoteLayout.lineHeight;
@@ -394,7 +471,8 @@ export function drawRoastFrame(
 
   quoteLayout.lines.forEach((line, idx) => {
     const isLastLine = idx === quoteLayout.lines.length - 1;
-    ctx.fillStyle = isLastLine ? '#fde047' : '#f8fafc';
+    ctx.font = `${isLastLine ? '800' : '600'} ${quoteLayout.fontSize}px ${sansFamily}`;
+    ctx.fillStyle = isLastLine ? themeStyle.primaryMain : themeStyle.textPrimary;
     ctx.fillText(line, padX + cardInnerPadX, startTextY + idx * quoteLayout.lineHeight);
   });
   ctx.restore();
@@ -403,8 +481,8 @@ export function drawRoastFrame(
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `700 11.5px ${sansFamily}`;
-  ctx.fillStyle = '#cbd5e1';
+  ctx.font = `700 11px ${sansFamily}`;
+  ctx.fillStyle = themeStyle.textSecondary;
   ctx.fillText(
     '😈 Strictly Spending · 100% Offline All-Time Habit Roast',
     w / 2,
@@ -413,57 +491,83 @@ export function drawRoastFrame(
   ctx.restore();
 }
 
-function drawBottomFlames(
+function drawThemeWaves(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   phase: number,
-  frame: number
+  frame: number,
+  themeStyle: RoastThemeStyle
 ) {
   ctx.save();
-  const tongues = 18;
+  const tongues = 16;
   const step = w / tongues;
 
   ctx.beginPath();
   ctx.moveTo(0, h);
   for (let i = 0; i <= tongues; i++) {
     const x = i * step;
-    const peakH = 24 + Math.sin(phase + i * 0.9) * 12 + ((i + frame) % 3) * 5;
+    const peakH = 20 + Math.sin(phase + i * 0.9) * 10 + ((i + frame) % 3) * 4;
     const midX = x - step / 2;
     if (i > 0) {
-      ctx.quadraticCurveTo(midX, h - peakH - 14, x, h - 8);
+      ctx.quadraticCurveTo(midX, h - peakH - 10, x, h - 6);
     } else {
-      ctx.lineTo(x, h - 10);
+      ctx.lineTo(x, h - 8);
     }
   }
   ctx.lineTo(w, h);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(239, 68, 68, 0.32)';
+  ctx.fillStyle = withAlpha(themeStyle.primaryMain, themeStyle.mode === 'dark' ? 0.18 : 0.10);
   ctx.fill();
 
   ctx.beginPath();
   ctx.moveTo(0, h);
   for (let i = 0; i <= tongues; i++) {
     const x = i * step;
-    const peakH = 14 + Math.cos(phase + i * 1.1) * 9;
+    const peakH = 12 + Math.cos(phase + i * 1.1) * 7;
     const midX = x - step / 2;
     if (i > 0) {
-      ctx.quadraticCurveTo(midX, h - peakH - 6, x, h - 4);
+      ctx.quadraticCurveTo(midX, h - peakH - 5, x, h - 3);
     } else {
-      ctx.lineTo(x, h - 6);
+      ctx.lineTo(x, h - 5);
     }
   }
   ctx.lineTo(w, h);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+  ctx.fillStyle = withAlpha(themeStyle.secondaryMain, themeStyle.mode === 'dark' ? 0.15 : 0.08);
   ctx.fill();
   ctx.restore();
 }
 
-function buildFixedPalette(): Uint8Array {
+/**
+ * Builds a 256-color palette where indices 0..15 are exact theme colors + blends,
+ * indices 16..231 are the 6x6x6 RGB web cube (216 colors), and 232..255 are a 24-step grayscale ramp.
+ */
+function buildThemeAwarePalette(themeStyle: RoastThemeStyle): Uint8Array {
   const pal = new Uint8Array(256 * 3);
-  const levels = [0, 51, 102, 153, 204, 255];
+  const exactColors = [
+    parseColorToRgb(themeStyle.bgPaper),
+    parseColorToRgb(themeStyle.bgDefault),
+    parseColorToRgb(themeStyle.primaryMain),
+    parseColorToRgb(themeStyle.primaryContrast),
+    parseColorToRgb(themeStyle.secondaryMain),
+    parseColorToRgb(themeStyle.errorMain),
+    parseColorToRgb(themeStyle.warningMain),
+    parseColorToRgb(themeStyle.textPrimary),
+    parseColorToRgb(themeStyle.textSecondary),
+    parseColorToRgb(themeStyle.divider),
+  ];
+
   let idx = 0;
+  for (let i = 0; i < 16; i++) {
+    const c = exactColors[i % exactColors.length];
+    pal[idx * 3] = c[0];
+    pal[idx * 3 + 1] = c[1];
+    pal[idx * 3 + 2] = c[2];
+    idx++;
+  }
+
+  const levels = [0, 51, 102, 153, 204, 255];
   for (let r = 0; r < 6; r++) {
     for (let g = 0; g < 6; g++) {
       for (let b = 0; b < 6; b++) {
@@ -474,8 +578,9 @@ function buildFixedPalette(): Uint8Array {
       }
     }
   }
-  for (let i = 0; i < 40; i++) {
-    const v = Math.round((i / 39) * 255);
+
+  for (let i = 0; i < 24; i++) {
+    const v = Math.round((i / 23) * 255);
     pal[idx * 3] = v;
     pal[idx * 3 + 1] = v;
     pal[idx * 3 + 2] = v;
@@ -484,7 +589,11 @@ function buildFixedPalette(): Uint8Array {
   return pal;
 }
 
-function mapRgbaToPaletteIndices(rgba: Uint8ClampedArray, pixelCount: number): Uint8Array {
+function mapRgbaToPaletteIndices(
+  rgba: Uint8ClampedArray,
+  pixelCount: number,
+  palette: Uint8Array
+): Uint8Array {
   const out = new Uint8Array(pixelCount);
   for (let i = 0; i < pixelCount; i++) {
     const offset = i * 4;
@@ -492,15 +601,33 @@ function mapRgbaToPaletteIndices(rgba: Uint8ClampedArray, pixelCount: number): U
     const g = rgba[offset + 1];
     const b = rgba[offset + 2];
 
+    // Check exact/near match against the 10 theme slots first for crisp theme surfaces
+    let bestThemeIdx = -1;
+    let bestThemeDist = 140; // threshold for snapping to exact theme color
+    for (let t = 0; t < 10; t++) {
+      const dr = r - palette[t * 3];
+      const dg = g - palette[t * 3 + 1];
+      const db = b - palette[t * 3 + 2];
+      const dist = dr * dr + dg * dg + db * db;
+      if (dist < bestThemeDist) {
+        bestThemeDist = dist;
+        bestThemeIdx = t;
+      }
+    }
+    if (bestThemeIdx !== -1) {
+      out[i] = bestThemeIdx;
+      continue;
+    }
+
     const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
-    if (maxDiff <= 10) {
-      const lum = Math.round(((r + g + b) / (3 * 255)) * 39);
-      out[i] = 216 + lum;
+    if (maxDiff <= 8) {
+      const lum = Math.round(((r + g + b) / (3 * 255)) * 23);
+      out[i] = 232 + lum;
     } else {
       const ri = Math.round((r / 255) * 5);
       const gi = Math.round((g / 255) * 5);
       const bi = Math.round((b / 255) * 5);
-      out[i] = ri * 36 + gi * 6 + bi;
+      out[i] = 16 + ri * 36 + gi * 6 + bi;
     }
   }
   return out;
@@ -546,7 +673,7 @@ function encodeGif89a(
     writeByte(0x21);
     writeByte(0xf9);
     writeByte(0x04);
-    writeByte(0x00);
+    writeByte(0x04); // Disposal method 1: Do not dispose (prevents any blanking between frames)
     writeShort(delayHundredths);
     writeByte(0x00);
     writeByte(0x00);
@@ -634,7 +761,7 @@ function lzwCompressFrame(indices: Uint8Array): Uint8Array {
     } else {
       emitCode(prefix, codeSize);
 
-      if (nextCode < 4096) {
+      if (nextCode < 4094) {
         if (nextCode === 1 << codeSize && codeSize < 12) {
           codeSize++;
         }
@@ -651,6 +778,9 @@ function lzwCompressFrame(indices: Uint8Array): Uint8Array {
   }
 
   emitCode(prefix, codeSize);
+  if (nextCode === 1 << codeSize && codeSize < 12) {
+    codeSize++;
+  }
   emitCode(endCode, codeSize);
 
   if (bitCount > 0) {

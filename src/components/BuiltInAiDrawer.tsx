@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Drawer,
   Box,
@@ -13,6 +13,7 @@ import {
   Collapse,
   Tooltip,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import SendIcon from '@mui/icons-material/Send';
@@ -28,6 +29,7 @@ import {
   generateRoastAnimatedGif,
   drawRoastFrame,
   type RoastGifPayload,
+  type RoastThemeStyle,
 } from '../utils/roastGifGenerator';
 
 interface ChatMessage {
@@ -1137,8 +1139,28 @@ function AiLedgerScanner({ prompt, stage }: { prompt: string; stage: number }) {
 }
 
 function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
+  const muiTheme = useTheme();
   const [cardIdx, setCardIdx] = useState(0);
   const payload = cards[cardIdx % cards.length] || cards[0];
+
+  const themeStyle = useMemo<RoastThemeStyle>(
+    () => ({
+      mode: muiTheme.palette.mode,
+      bgDefault: muiTheme.palette.background.default,
+      bgPaper: muiTheme.palette.background.paper,
+      primaryMain: muiTheme.palette.primary.main,
+      primaryContrast: muiTheme.palette.primary.contrastText || '#ffffff',
+      secondaryMain: muiTheme.palette.secondary.main,
+      errorMain: muiTheme.palette.error.main,
+      warningMain: muiTheme.palette.warning.main,
+      textPrimary: muiTheme.palette.text.primary,
+      textSecondary: muiTheme.palette.text.secondary,
+      divider: muiTheme.palette.divider,
+      fontFamily: muiTheme.typography.fontFamily || '"Inter", "Segoe UI", sans-serif',
+      borderRadius: Number(muiTheme.shape.borderRadius) || 8,
+    }),
+    [muiTheme]
+  );
 
   const [gifUrl, setGifUrl] = useState<string | null>(null);
   const [pngBlob, setPngBlob] = useState<Blob | null>(null);
@@ -1151,7 +1173,7 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
     setGifUrl(null);
     setPngBlob(null);
 
-    generateRoastAnimatedGif(payload)
+    generateRoastAnimatedGif(payload, themeStyle)
       .then(({ gifUrl: url, pngBlob: pBlob }) => {
         if (!cancelled) {
           createdUrl = url;
@@ -1171,10 +1193,9 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
         URL.revokeObjectURL(createdUrl);
       }
     };
-  }, [payload]);
+  }, [payload, themeStyle]);
 
   useEffect(() => {
-    if (gifUrl) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -1182,14 +1203,14 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
 
     let frame = 0;
     const totalFrames = 12;
-    drawRoastFrame(ctx, canvas.width, canvas.height, payload, 0, totalFrames);
+    drawRoastFrame(ctx, canvas.width, canvas.height, payload, 0, totalFrames, themeStyle);
     const timer = window.setInterval(() => {
       frame = (frame + 1) % totalFrames;
-      drawRoastFrame(ctx, canvas.width, canvas.height, payload, frame, totalFrames);
+      drawRoastFrame(ctx, canvas.width, canvas.height, payload, frame, totalFrames, themeStyle);
     }, 90);
 
     return () => window.clearInterval(timer);
-  }, [gifUrl, payload]);
+  }, [payload, themeStyle]);
 
   const handleCopyImage = async () => {
     try {
@@ -1244,37 +1265,24 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
           maxWidth: 460,
           borderRadius: 2.5,
           overflow: 'hidden',
-          border: '2px solid',
-          borderColor: 'error.main',
-          boxShadow: '0 14px 34px -8px rgba(239, 68, 68, 0.42)',
-          bgcolor: '#13070c',
+          border: '1.5px solid',
+          borderColor: 'divider',
+          boxShadow: 3,
+          bgcolor: 'background.paper',
           lineHeight: 0,
         }}
       >
-        {gifUrl ? (
-          <Box
-            component="img"
-            src={gifUrl}
-            alt={`Animated Financial Roast: ${payload.crazyName}`}
-            sx={{
-              width: '100%',
-              height: 'auto',
-              display: 'block',
-            }}
-          />
-        ) : (
-          <Box
-            component="canvas"
-            ref={canvasRef}
-            width={540}
-            height={560}
-            sx={{
-              width: '100%',
-              height: 'auto',
-              display: 'block',
-            }}
-          />
-        )}
+        <Box
+          component="canvas"
+          ref={canvasRef}
+          width={540}
+          height={560}
+          sx={{
+            width: '100%',
+            height: 'auto',
+            display: 'block',
+          }}
+        />
       </Box>
 
       <Stack
