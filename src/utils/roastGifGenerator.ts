@@ -17,8 +17,8 @@ export async function generateRoastAnimatedGif(payload: RoastGifPayload): Promis
   gifUrl: string;
   pngBlob: Blob | null;
 }> {
-  const width = 520;
-  const height = 540;
+  const width = 540;
+  const height = 560;
   const frameCount = 12;
   const delayHundredths = 9; // 90ms per frame (~11 fps)
 
@@ -74,6 +74,62 @@ function wrapTextLines(
   return lines;
 }
 
+/**
+ * Automatically steps down font size until a single-line string fits within maxWidth.
+ */
+function setFittedSingleLineFont(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxFontPx: number,
+  minFontPx: number,
+  fontWeight: string,
+  fontFamily: string
+): number {
+  let size = maxFontPx;
+  while (size > minFontPx) {
+    ctx.font = `${fontWeight} ${size}px ${fontFamily}`;
+    if (ctx.measureText(text).width <= maxWidth) {
+      return size;
+    }
+    size -= 0.5;
+  }
+  ctx.font = `${fontWeight} ${minFontPx}px ${fontFamily}`;
+  return minFontPx;
+}
+
+/**
+ * Automatically selects the largest font size where the wrapped paragraph fits both
+ * maxWidth and maxHeight cleanly.
+ */
+function layoutFittedParagraph(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxHeight: number,
+  maxFontPx: number,
+  minFontPx: number,
+  lineHeightMultiplier: number,
+  fontWeight: string,
+  fontFamily: string
+): { lines: string[]; fontSize: number; lineHeight: number } {
+  let size = maxFontPx;
+  while (size >= minFontPx) {
+    ctx.font = `${fontWeight} ${size}px ${fontFamily}`;
+    const lines = wrapTextLines(ctx, text, maxWidth);
+    const lineHeight = Math.round(size * lineHeightMultiplier);
+    if (lines.length * lineHeight <= maxHeight) {
+      return { lines, fontSize: size, lineHeight };
+    }
+    size -= 0.5;
+  }
+  ctx.font = `${fontWeight} ${minFontPx}px ${fontFamily}`;
+  const lineHeight = Math.round(minFontPx * lineHeightMultiplier);
+  const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+  const lines = wrapTextLines(ctx, text, maxWidth).slice(0, maxLines);
+  return { lines, fontSize: minFontPx, lineHeight };
+}
+
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -106,19 +162,21 @@ export function drawRoastFrame(
   const phase = (frame / totalFrames) * Math.PI * 2;
   const isAlt = frame % 2 === 0;
   const isFlash = frame % 4 < 2;
+  const sansFamily = '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
+  const displayFamily = '"Inter", "Segoe UI", "Arial Black", sans-serif';
 
-  // 1. Dark dramatic arcade poster background
+  // 1. Dark dramatic poster background
   const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
   bgGrad.addColorStop(0, '#13070c');
   bgGrad.addColorStop(0.55, '#1d0b14');
-  bgGrad.addColorStop(1, '#350910');
+  bgGrad.addColorStop(1, '#320810');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, w, h);
 
   // 2. Pulsing radial spotlight
-  const glowRadius = 230 + Math.sin(phase) * 28;
+  const glowRadius = 230 + Math.sin(phase) * 26;
   const radGrad = ctx.createRadialGradient(w / 2, 230, 12, w / 2, 230, glowRadius);
-  radGrad.addColorStop(0, 'rgba(239, 68, 68, 0.30)');
+  radGrad.addColorStop(0, 'rgba(239, 68, 68, 0.28)');
   radGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
   ctx.fillStyle = radGrad;
   ctx.fillRect(0, 0, w, h);
@@ -129,22 +187,22 @@ export function drawRoastFrame(
       ? payload.floatingEmojis
       : ['🍺', '☕', '🚬', '💸', '🔥', '😈'];
   const emberSeeds = [
-    { x: 44, baseY: 500, label: floaters[0 % floaters.length] },
-    { x: 112, baseY: 520, label: floaters[1 % floaters.length] },
-    { x: 416, baseY: 495, label: floaters[2 % floaters.length] },
-    { x: 474, baseY: 515, label: floaters[3 % floaters.length] },
-    { x: 68, baseY: 310, label: floaters[4 % floaters.length] },
-    { x: 452, baseY: 300, label: floaters[5 % floaters.length] },
+    { x: 42, baseY: 515, label: floaters[0 % floaters.length] },
+    { x: 110, baseY: 530, label: floaters[1 % floaters.length] },
+    { x: 430, baseY: 510, label: floaters[2 % floaters.length] },
+    { x: 494, baseY: 525, label: floaters[3 % floaters.length] },
+    { x: 64, baseY: 315, label: floaters[4 % floaters.length] },
+    { x: 476, baseY: 305, label: floaters[5 % floaters.length] },
   ];
   ctx.save();
-  ctx.font = '22px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+  ctx.font = '21px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
   ctx.textAlign = 'center';
   for (let i = 0; i < emberSeeds.length; i++) {
     const e = emberSeeds[i];
     const progress = ((frame / totalFrames) + i * 0.17) % 1;
-    const yPos = e.baseY - progress * 210;
-    const xWobble = e.x + Math.sin(phase + i * 1.4) * 11;
-    ctx.globalAlpha = Math.max(0.18, 1 - progress * 0.8);
+    const yPos = e.baseY - progress * 200;
+    const xWobble = e.x + Math.sin(phase + i * 1.4) * 10;
+    ctx.globalAlpha = Math.max(0.16, 1 - progress * 0.8);
     ctx.fillText(e.label, xWobble, yPos);
   }
   ctx.restore();
@@ -156,131 +214,201 @@ export function drawRoastFrame(
   ctx.save();
   ctx.strokeStyle = isFlash ? '#ef4444' : '#f59e0b';
   ctx.lineWidth = 4;
-  drawRoundedRect(ctx, 10, 10, w - 20, h - 20, 18);
+  drawRoundedRect(ctx, 12, 12, w - 24, h - 24, 18);
   ctx.stroke();
   ctx.restore();
 
-  // 6. Flashing Siren Top Banner
+  // 6. Top Siren Header Banner (y: 26..62)
+  const padX = 28;
+  const innerW = w - padX * 2;
   ctx.save();
-  drawRoundedRect(ctx, 24, 22, w - 48, 36, 9);
+  drawRoundedRect(ctx, padX, 26, innerW, 36, 9);
   ctx.fillStyle = isFlash ? '#dc2626' : '#b91c1c';
   ctx.fill();
-  ctx.font = 'bold 13px "Inter", "Segoe UI", system-ui, sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   const sirenLeft = isAlt ? '🚨' : '😈';
   const sirenRight = isAlt ? '😈' : '🚨';
-  ctx.fillText(
-    `${sirenLeft}  SUSPICIOUS SPENDING HABIT DETECTED  ${sirenRight}`,
-    w / 2,
-    45
-  );
+  const headerBannerText = `${sirenLeft}  ALL-TIME HABITUAL SPENDING ROAST  ${sirenRight}`;
+  setFittedSingleLineFont(ctx, headerBannerText, innerW - 24, 13, 10, '800', sansFamily);
+  ctx.fillText(headerBannerText, w / 2, 44);
   ctx.restore();
 
-  // 7. Bouncing Avatar + Crazy Nickname
-  const bounceY = Math.sin(phase) * 4.5;
+  // 7. Persona Header Row (y: 74..152)
+  const bounceY = Math.sin(phase) * 3.5;
+  const avatarX = padX + 34;
+  const avatarY = 113;
   ctx.save();
   ctx.beginPath();
-  ctx.arc(68, 108 + bounceY, 32, 0, Math.PI * 2);
+  ctx.arc(avatarX, avatarY + bounceY, 31, 0, Math.PI * 2);
   ctx.fillStyle = '#2d0e16';
   ctx.fill();
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
   ctx.strokeStyle = isFlash ? '#fbbf24' : '#ef4444';
   ctx.stroke();
 
-  ctx.font = '32px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+  ctx.font = '30px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(payload.avatarEmoji || '😈', 68, 120 + bounceY);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(payload.avatarEmoji || '😈', avatarX, avatarY + 2 + bounceY);
   ctx.restore();
 
+  // Persona Title (right of avatar, guaranteed to fit inside width & height)
+  const titleX = padX + 80;
+  const titleMaxW = w - padX - titleX - 4;
   ctx.save();
   ctx.textAlign = 'left';
-  ctx.font = 'bold 11.5px "Inter", "Segoe UI", sans-serif';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `800 11px ${sansFamily}`;
   ctx.fillStyle = '#fbbf24';
-  ctx.fillText('OFFICIAL SPENDING DIAGNOSIS:', 114, 85);
+  ctx.fillText('OFFICIAL HABIT DIAGNOSIS:', titleX, 88);
 
-  ctx.font = '900 21px "Inter", "Segoe UI", Arial Black, sans-serif';
+  const nameLayout = layoutFittedParagraph(
+    ctx,
+    payload.crazyName.toUpperCase(),
+    titleMaxW,
+    54,
+    20,
+    13,
+    1.18,
+    '900',
+    displayFamily
+  );
+  ctx.font = `900 ${nameLayout.fontSize}px ${displayFamily}`;
   ctx.fillStyle = '#ffffff';
-  const nameLines = wrapTextLines(ctx, payload.crazyName.toUpperCase(), w - 140).slice(0, 2);
-  nameLines.forEach((line, idx) => {
-    ctx.fillText(line, 114, 111 + idx * 24);
+  nameLayout.lines.forEach((line, idx) => {
+    ctx.fillText(line, titleX, 112 + idx * nameLayout.lineHeight);
   });
   ctx.restore();
 
-  // 8. Giant Pulsing Amount Centerpiece
-  const boxY = 154;
-  const boxH = 126;
+  // 8. Giant All-Time Amount Box (y: 162..292, height: 130)
+  const boxY = 162;
+  const boxH = 130;
   ctx.save();
-  drawRoundedRect(ctx, 24, boxY, w - 48, boxH, 14);
-  ctx.fillStyle = '#0c0407';
+  drawRoundedRect(ctx, padX, boxY, innerW, boxH, 14);
+  ctx.fillStyle = '#0d0407';
   ctx.fill();
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2;
   ctx.strokeStyle = isAlt ? '#ef4444' : '#f97316';
   ctx.stroke();
 
-  const scaleJitter = 1 + Math.sin(phase * 2) * 0.04;
+  // Giant shaking/pulsing dollar amount (auto-fitted to box width)
+  const scaleJitter = 1 + Math.sin(phase * 2) * 0.03;
   ctx.save();
-  ctx.translate(w / 2, boxY + 64);
+  ctx.translate(w / 2, boxY + 54);
   ctx.scale(scaleJitter, scaleJitter);
-  ctx.font = '900 54px "Inter", "Segoe UI", Arial Black, monospace';
+  setFittedSingleLineFont(
+    ctx,
+    payload.totalAmountFormatted,
+    innerW - 48,
+    50,
+    28,
+    '900',
+    displayFamily
+  );
   ctx.fillStyle = isFlash ? '#ff4d4d' : '#fbbf24';
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   ctx.fillText(payload.totalAmountFormatted, 0, 0);
   ctx.restore();
 
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 13px "Inter", "Segoe UI", sans-serif';
+  // Subtitle line inside amount box (auto-fitted so it NEVER overflows horizontally)
+  ctx.save();
+  const subText = payload.subtitleLine.toUpperCase();
+  setFittedSingleLineFont(ctx, subText, innerW - 32, 12.5, 9.5, '800', sansFamily);
   ctx.fillStyle = '#fca5a5';
-  ctx.fillText(payload.subtitleLine.toUpperCase(), w / 2, boxY + 104);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(subText, w / 2, boxY + 104);
+  ctx.restore();
   ctx.restore();
 
-  // 9. Big Punchy Roast + Assumption Box
-  const cardY = 298;
-  const cardH = 192;
+  // 9. Roast & Statistical Assumption Card (y: 306..508, height: 202)
+  const cardY = 306;
+  const cardH = 202;
+  const cardInnerPadX = 20;
+  const cardTextW = innerW - cardInnerPadX * 2;
+
   ctx.save();
-  drawRoundedRect(ctx, 24, cardY, w - 48, cardH, 14);
+  drawRoundedRect(ctx, padX, cardY, innerW, cardH, 14);
   ctx.fillStyle = '#1e1017';
   ctx.fill();
   ctx.lineWidth = 2;
   ctx.strokeStyle = '#5c1d27';
   ctx.stroke();
 
-  // Tilted flashing rubber stamp in top-right corner
-  ctx.save();
-  ctx.translate(w - 94, cardY + 26);
-  ctx.rotate(-0.12 + Math.sin(phase) * 0.035);
-  drawRoundedRect(ctx, -62, -15, 124, 28, 6);
-  ctx.fillStyle = isFlash ? 'rgba(220, 38, 38, 0.95)' : 'rgba(245, 158, 11, 0.95)';
+  // Card Top Header Row (Left label + Right non-overlapping stamp pill)
+  const headerRowCenterY = cardY + 24;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = `800 11.5px ${sansFamily}`;
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillText('🕵️ FORENSIC HABIT ASSUMPTION:', padX + cardInnerPadX, headerRowCenterY);
+
+  // Stamp badge neatly aligned in top-right of header row
+  const stampLabel = payload.stampText || (isFlash ? 'CAUGHT IN 4K 📸' : 'STATISTICALLY COOKED 💀');
+  ctx.font = `900 10.5px ${sansFamily}`;
+  const stampTextW = ctx.measureText(stampLabel).width;
+  const pillW = stampTextW + 18;
+  const pillH = 22;
+  const pillX = padX + innerW - cardInnerPadX - pillW;
+  const pillY = headerRowCenterY - pillH / 2;
+
+  drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
+  ctx.fillStyle = isFlash ? '#dc2626' : '#d97706';
   ctx.fill();
-  ctx.font = '900 11px "Inter", "Segoe UI", sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
-  ctx.fillText(payload.stampText || (isFlash ? 'CAUGHT IN 4K 📸' : 'EXPOSED 💀'), 0, 3);
-  ctx.restore();
+  ctx.textBaseline = 'middle';
+  ctx.fillText(stampLabel, pillX + pillW / 2, headerRowCenterY + 0.5);
 
+  // Subtle horizontal divider under card header row
+  ctx.beginPath();
+  ctx.moveTo(padX + cardInnerPadX, cardY + 42);
+  ctx.lineTo(padX + innerW - cardInnerPadX, cardY + 42);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Auto-fitted roast quote body inside [cardY + 52 .. cardY + cardH - 14]
+  const bodyTopY = cardY + 52;
+  const bodyAvailH = cardH - 66; // 136px height budget
+  const quoteLayout = layoutFittedParagraph(
+    ctx,
+    payload.roastQuote,
+    cardTextW,
+    bodyAvailH,
+    16.5,
+    12.5,
+    1.38,
+    '700',
+    sansFamily
+  );
+
+  ctx.font = `700 ${quoteLayout.fontSize}px ${sansFamily}`;
   ctx.textAlign = 'left';
-  ctx.font = 'bold 12px "Inter", "Segoe UI", sans-serif';
-  ctx.fillStyle = '#fbbf24';
-  ctx.fillText('🕵️ THE ROAST:', 42, cardY + 32);
+  ctx.textBaseline = 'top';
+  const totalTextH = quoteLayout.lines.length * quoteLayout.lineHeight;
+  const startTextY = bodyTopY + Math.max(0, Math.floor((bodyAvailH - totalTextH) / 2));
 
-  ctx.font = '700 16.5px "Inter", "Segoe UI", sans-serif';
-  ctx.fillStyle = '#ffffff';
-  const quoteLines = wrapTextLines(ctx, payload.roastQuote, w - 84).slice(0, 5);
-  quoteLines.forEach((line, idx) => {
-    ctx.fillStyle = idx === quoteLines.length - 1 ? '#fde047' : '#f8fafc';
-    ctx.fillText(line, 42, cardY + 64 + idx * 25);
+  quoteLayout.lines.forEach((line, idx) => {
+    const isLastLine = idx === quoteLayout.lines.length - 1;
+    ctx.fillStyle = isLastLine ? '#fde047' : '#f8fafc';
+    ctx.fillText(line, padX + cardInnerPadX, startTextY + idx * quoteLayout.lineHeight);
   });
   ctx.restore();
 
-  // 10. Footer watermark
+  // 10. Footer watermark (y: h - 24)
   ctx.save();
   ctx.textAlign = 'center';
-  ctx.font = 'bold 11.5px "Inter", "Segoe UI", sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.font = `700 11.5px ${sansFamily}`;
   ctx.fillStyle = '#cbd5e1';
   ctx.fillText(
-    '😈 Strictly Spending · 100% Offline Financial Roast',
+    '😈 Strictly Spending · 100% Offline All-Time Habit Roast',
     w / 2,
-    h - 20
+    h - 24
   );
   ctx.restore();
 }
@@ -300,34 +428,34 @@ function drawBottomFlames(
   ctx.moveTo(0, h);
   for (let i = 0; i <= tongues; i++) {
     const x = i * step;
-    const peakH = 26 + Math.sin(phase + i * 0.9) * 14 + ((i + frame) % 3) * 6;
+    const peakH = 24 + Math.sin(phase + i * 0.9) * 12 + ((i + frame) % 3) * 5;
     const midX = x - step / 2;
     if (i > 0) {
-      ctx.quadraticCurveTo(midX, h - peakH - 16, x, h - 10);
+      ctx.quadraticCurveTo(midX, h - peakH - 14, x, h - 8);
     } else {
-      ctx.lineTo(x, h - 12);
+      ctx.lineTo(x, h - 10);
     }
   }
   ctx.lineTo(w, h);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
+  ctx.fillStyle = 'rgba(239, 68, 68, 0.32)';
   ctx.fill();
 
   ctx.beginPath();
   ctx.moveTo(0, h);
   for (let i = 0; i <= tongues; i++) {
     const x = i * step;
-    const peakH = 15 + Math.cos(phase + i * 1.1) * 10;
+    const peakH = 14 + Math.cos(phase + i * 1.1) * 9;
     const midX = x - step / 2;
     if (i > 0) {
-      ctx.quadraticCurveTo(midX, h - peakH - 8, x, h - 4);
+      ctx.quadraticCurveTo(midX, h - peakH - 6, x, h - 4);
     } else {
       ctx.lineTo(x, h - 6);
     }
   }
   ctx.lineTo(w, h);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(245, 158, 11, 0.28)';
+  ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
   ctx.fill();
   ctx.restore();
 }

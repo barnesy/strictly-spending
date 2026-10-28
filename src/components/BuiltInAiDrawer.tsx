@@ -1266,8 +1266,8 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
           <Box
             component="canvas"
             ref={canvasRef}
-            width={520}
-            height={540}
+            width={540}
+            height={560}
             sx={{
               width: '100%',
               height: 'auto',
