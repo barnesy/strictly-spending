@@ -315,188 +315,6 @@ export default function Settings() {
     <Stack spacing={{ xs: 2, sm: 3 }}>
       <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700 }}>Settings</Typography>
 
-      {/* Model Context Protocol (MCP) Server & Mobile AI Bridge Card */}
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-        <Stack spacing={2}>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1.5}>
-            <Box sx={{ flex: 1, minWidth: 240 }}>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                <HubIcon fontSize="small" color="primary" />
-                <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
-                  Claude / ChatGPT &amp; MCP Integration
-                </Typography>
-                <Chip label="Phone + Desktop MCP" size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }} />
-              </Stack>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                <strong>On your phone:</strong> Mobile AI apps (Claude iOS/Android, ChatGPT) run in the cloud and cannot launch a local PC <code>stdio</code> MCP server directly. Tap <strong>Copy Financial Snapshot for Claude / ChatGPT</strong> below to copy a complete, privacy-safe summary of your live accounts, budgets, loans, and recent transactions to paste into the Claude mobile app—or tap the built-in <strong>✨ AI</strong> button in the top bar.
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Button
-                size="small"
-                variant="contained"
-                color={copiedMobileAiContext ? 'success' : 'primary'}
-                startIcon={copiedMobileAiContext ? <CheckIcon /> : <SmartphoneIcon />}
-                disabled={copyingMobileAiBusy}
-                onClick={handleCopyMobileAiContext}
-                sx={UNIFORM_TOOLBAR_BUTTON_SX}
-              >
-                {copiedMobileAiContext
-                  ? 'Copied! Paste into Claude App'
-                  : 'Copy Snapshot for Claude Mobile'}
-              </Button>
-              <Button
-                size="small"
-                variant={copiedMcp ? 'contained' : 'outlined'}
-                color={copiedMcp ? 'success' : 'primary'}
-                startIcon={copiedMcp ? <CheckIcon /> : <ContentCopyIcon />}
-                onClick={handleCopyMcpConfig}
-                sx={UNIFORM_TOOLBAR_BUTTON_SX}
-              >
-                {copiedMcp ? 'Copied Desktop MCP JSON' : 'Copy Desktop MCP JSON'}
-              </Button>
-            </Stack>
-          </Stack>
-
-          <Box
-            component="pre"
-            sx={{
-              m: 0,
-              p: 1.5,
-              borderRadius: 1,
-              bgcolor: 'action.hover',
-              border: '1px solid',
-              borderColor: 'divider',
-              fontSize: '0.78rem',
-              fontFamily: 'monospace',
-              overflowX: 'auto',
-            }}
-          >
-            {displayMcpJson}
-          </Box>
-
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Chip size="small" color="secondary" variant="outlined" label="generate_tax_documents" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }} />
-            <Chip size="small" color="secondary" variant="outlined" label="update_tax_classification" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }} />
-            <Chip size="small" color="primary" variant="outlined" label="get_account_cashflow" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }} />
-            <Chip size="small" color="primary" variant="outlined" label="control_app_ui" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }} />
-            <Chip size="small" label="query_transactions" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="get_spending_summary" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="categorize_transactions" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="manage_rule" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="manage_budget" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="manage_loan" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="get_financial_insights" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="run_cashflow_projection" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-            <Chip size="small" label="sync_bank_accounts" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-          </Stack>
-        </Stack>
-      </Paper>
-
-      {/* Phone & Foldable Access (Pixel 10 Fold) Card */}
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-        <Stack spacing={2}>
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                <SmartphoneIcon fontSize="small" color="primary" />
-                <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
-                  Phone &amp; Foldable Access (Pixel 10 Fold)
-                </Typography>
-                <Chip
-                  label={isStandalone ? 'Installed Standalone App' : 'Live Wi-Fi Bridge + Native APK'}
-                  size="small"
-                  color="success"
-                  variant={isStandalone ? 'filled' : 'outlined'}
-                  sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }}
-                />
-              </Stack>
-              {canInstall && (
-                <Button
-                  size="small"
-                  variant="contained"
-                  color="primary"
-                  startIcon={<InstallMobileIcon fontSize="small" />}
-                  onClick={() => {
-                    void promptInstall();
-                  }}
-                  sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontWeight: 700 }}
-                >
-                  Install App to Home Screen
-                </Button>
-              )}
-            </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Use Strictly Spending on your Pixel 10 Fold in two ways: connect directly to your PC&apos;s live SQLite database over Wi-Fi / Tailscale (with full-screen Android Home Screen PWA support), or build a standalone native Android APK / Google Play App Bundle.
-            </Typography>
-          </Box>
-
-          <Box sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
-              Option A: Live Wi-Fi / Tailscale Bridge (Shared PC Database)
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-              Run <code>npm run phone</code> (or <code>npm run tauri dev</code>) on your PC, then open one of the URLs below in Chrome on your Pixel 10 Fold and tap <strong>Install App to Home Screen</strong> (or <strong>⋮ &rarr; Add to Home screen &rarr; Install app</strong>):
-            </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              {(mcpInfo?.localUrls && mcpInfo.localUrls.length > 0
-                ? mcpInfo.localUrls
-                : ['http://<your-pc-ip>:5173']
-              ).map((url) => {
-                const isCopied = copiedPhoneUrl === url;
-                const isTailscale = url.includes('://100.');
-                return (
-                  <Button
-                    key={url}
-                    size="small"
-                    variant={isCopied ? 'contained' : 'outlined'}
-                    color={isCopied ? 'success' : isTailscale ? 'secondary' : 'primary'}
-                    startIcon={isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(url);
-                        setCopiedPhoneUrl(url);
-                        setTimeout(() => setCopiedPhoneUrl(null), 2000);
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}
-                  >
-                    {isTailscale ? `Tailscale: ${url}` : url}
-                  </Button>
-                );
-              })}
-            </Stack>
-          </Box>
-
-          <Box sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
-              Option B: Standalone Native Android APK &amp; Play Store Bundle (Tauri v2 Mobile)
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Compiles the Rust SQLite engine and React UI into a native <code>aarch64</code> Android APK or Google Play Store AAB for your Pixel 10 Fold (requires Android Studio + NDK + <code>rustup target add aarch64-linux-android</code>):
-            </Typography>
-            <Box
-              component="pre"
-              sx={{
-                m: 0,
-                p: 1.25,
-                borderRadius: 1,
-                bgcolor: 'background.paper',
-                border: '1px solid',
-                borderColor: 'divider',
-                fontSize: '0.75rem',
-                fontFamily: 'monospace',
-                overflowX: 'auto',
-              }}
-            >
-              {`npm run android:init\nnpm run android:apk   # Standalone APK for direct sideloading\nnpm run android:aab   # Signed Android App Bundle for Google Play`}
-            </Box>
-          </Box>
-        </Stack>
-      </Paper>
-
       <SimpleFinBankSyncCard />
 
       <Paper sx={{ p: { xs: 2, sm: 3 } }}>
@@ -585,7 +403,7 @@ export default function Settings() {
               />
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Export or restore your entire financial workspace in a single <code>.json</code> file — including all accounts, transactions, categorization rules, budgets, loans, merchant overrides, and forecast settings. Ideal for transferring data between your PC and Pixel 10 Fold or keeping an offline backup.
+              Export or restore your entire financial workspace in a single <code>.json</code> file — including all accounts, transactions, categorization rules, budgets, loans, merchant overrides, and forecast settings. Ideal for transferring data between devices or keeping an offline backup.
             </Typography>
           </Box>
 
@@ -759,6 +577,135 @@ export default function Settings() {
               sx={UNIFORM_TOOLBAR_BUTTON_SX}
             >
               View Privacy Policy
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {/* Mobile Browser Access Card (Compact) */}
+      <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          flexWrap="wrap"
+          gap={1.5}
+        >
+          <Box sx={{ flex: 1, minWidth: 240 }}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <SmartphoneIcon fontSize="small" color="primary" />
+              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+                Mobile Web &amp; Home Screen Access
+              </Typography>
+              <Chip
+                label={isStandalone ? 'Installed Web App' : 'Any Phone Browser'}
+                size="small"
+                color="success"
+                variant={isStandalone ? 'filled' : 'outlined'}
+                sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }}
+              />
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Open Strictly Spending in any mobile browser (iOS Safari, Android Chrome, etc.) and add it to your Home Screen, or connect over local Wi-Fi when running on your PC.
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {canInstall && (
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                startIcon={<InstallMobileIcon fontSize="small" />}
+                onClick={() => {
+                  void promptInstall();
+                }}
+                sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontWeight: 700 }}
+              >
+                Install to Home Screen
+              </Button>
+            )}
+            {(mcpInfo?.localUrls && mcpInfo.localUrls.length > 0
+              ? mcpInfo.localUrls
+              : []
+            ).map((url) => {
+              const isCopied = copiedPhoneUrl === url;
+              const isTailscale = url.includes('://100.');
+              return (
+                <Button
+                  key={url}
+                  size="small"
+                  variant={isCopied ? 'contained' : 'outlined'}
+                  color={isCopied ? 'success' : isTailscale ? 'secondary' : 'primary'}
+                  startIcon={isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(url);
+                      setCopiedPhoneUrl(url);
+                      setTimeout(() => setCopiedPhoneUrl(null), 2000);
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}
+                >
+                  {isTailscale ? `Tailscale: ${url}` : url}
+                </Button>
+              );
+            })}
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {/* Model Context Protocol (MCP) & Mobile AI Snapshot Card (Compact) */}
+      <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          flexWrap="wrap"
+          gap={1.5}
+        >
+          <Box sx={{ flex: 1, minWidth: 240 }}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <HubIcon fontSize="small" color="primary" />
+              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+                Claude / ChatGPT &amp; MCP Integration
+              </Typography>
+              <Chip
+                label="Mobile Snapshot + Desktop MCP"
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }}
+              />
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Copy a live financial summary to paste into Claude or ChatGPT on any phone, or copy the local MCP config JSON for Claude Desktop / Cursor on PC &amp; Mac.
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Button
+              size="small"
+              variant="contained"
+              color={copiedMobileAiContext ? 'success' : 'primary'}
+              startIcon={copiedMobileAiContext ? <CheckIcon /> : <SmartphoneIcon />}
+              disabled={copyingMobileAiBusy}
+              onClick={handleCopyMobileAiContext}
+              sx={UNIFORM_TOOLBAR_BUTTON_SX}
+            >
+              {copiedMobileAiContext ? 'Copied Snapshot!' : 'Copy Mobile AI Snapshot'}
+            </Button>
+            <Button
+              size="small"
+              variant={copiedMcp ? 'contained' : 'outlined'}
+              color={copiedMcp ? 'success' : 'primary'}
+              startIcon={copiedMcp ? <CheckIcon /> : <ContentCopyIcon />}
+              onClick={handleCopyMcpConfig}
+              sx={UNIFORM_TOOLBAR_BUTTON_SX}
+            >
+              {copiedMcp ? 'Copied MCP JSON' : 'Copy Desktop MCP JSON'}
             </Button>
           </Stack>
         </Stack>
