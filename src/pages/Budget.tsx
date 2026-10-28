@@ -49,9 +49,15 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import SavingsIcon from '@mui/icons-material/Savings';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 
 import { usd, usdCents, monthLabel } from '../lib';
 import { type ConsolidatedMerchant } from '../domain/budgets';
+import {
+  checkAndNotifyBudgetAlerts,
+  requestSyncNotificationPermission,
+} from '../domain/syncImpactNotification';
 import { useBudgetStore } from '../stores/budgetStore';
 import { useSimpleFinStore } from '../stores/simplefinStore';
 import PageLoader from '../components/PageLoader';
@@ -1289,6 +1295,15 @@ function BudgetCard({
   const putBudget = usePutBudget();
   const clearBudgets = useClearBudgets();
   const bulkPutBudgets = useBulkPutBudgets();
+  const { alertCategories, toggleAlertCategory } = useBudgetStore();
+
+  const handleToggleAlert = (category: string) => {
+    const enabled = toggleAlertCategory(category);
+    if (enabled) {
+      void requestSyncNotificationPermission();
+      void checkAndNotifyBudgetAlerts(category);
+    }
+  };
 
   const subtotal = budgets
     .filter((b) => !excluded.has(b.category))
@@ -1333,6 +1348,7 @@ function BudgetCard({
     });
     // 2. Persist to DB & invalidate
     await putBudget.mutateAsync({ category, monthlyAmount: amount, userSet: true });
+    void checkAndNotifyBudgetAlerts(category);
   };
 
   const onResetRow = async (category: string) => {
@@ -1461,6 +1477,7 @@ function BudgetCard({
         <Stack spacing={0} sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
           {sorted.map((b) => {
             const isExcluded = excluded.has(b.category);
+            const isAlertEnabled = alertCategories.has(b.category);
             const avg = trailingAvgByCategory.get(b.category) || 0;
             const diff = b.monthlyAmount - avg;
             const diffPct = avg > 0 ? Math.abs(diff / avg) * 100 : 0;
@@ -1469,6 +1486,7 @@ function BudgetCard({
             const actualThisMonth = proj?.actualToDate ?? 0;
             const projectedFinish = actualThisMonth + (proj?.remaining ?? 0);
             const isOverBudget = b.monthlyAmount > 0 && projectedFinish > b.monthlyAmount * 1.05;
+            const isActualOverBudget = b.monthlyAmount > 0 && actualThisMonth > b.monthlyAmount;
             const progressPct = b.monthlyAmount > 0 ? Math.min(100, (actualThisMonth / b.monthlyAmount) * 100) : 0;
 
             return (
@@ -1527,7 +1545,7 @@ function BudgetCard({
                       )}
                     </Stack>
 
-                    {/* Mobile-only Reset + Switch in top row */}
+                    {/* Mobile-only Reset + Bell + Switch in top row */}
                     <Stack
                       direction="row"
                       spacing={0.5}
@@ -1544,6 +1562,26 @@ function BudgetCard({
                           </IconButton>
                         </Tooltip>
                       )}
+                      <Tooltip
+                        title={
+                          isAlertEnabled
+                            ? `Alert active: notify when ${b.category} crosses ${usd.format(b.monthlyAmount)}`
+                            : `Enable alert when ${b.category} crosses ${usd.format(b.monthlyAmount)}`
+                        }
+                      >
+                        <IconButton
+                          size="small"
+                          color={isAlertEnabled ? (isActualOverBudget ? 'error' : 'primary') : 'default'}
+                          aria-label={`Toggle budget alert for ${b.category}`}
+                          onClick={() => handleToggleAlert(b.category)}
+                        >
+                          {isAlertEnabled ? (
+                            <NotificationsActiveIcon fontSize="small" />
+                          ) : (
+                            <NotificationsNoneIcon fontSize="small" sx={{ opacity: 0.65 }} />
+                          )}
+                        </IconButton>
+                      </Tooltip>
                       <Switch
                         size="small"
                         checked={!isExcluded}
@@ -1661,15 +1699,15 @@ function BudgetCard({
                     )}
                   </Stack>
 
-                  {/* Desktop-only Reset + Switch */}
+                  {/* Desktop-only Reset + Bell + Switch */}
                   <Stack
                     direction="row"
-                    spacing={1}
+                    spacing={0.5}
                     alignItems="center"
                     justifyContent="flex-end"
-                    sx={{ display: { xs: 'none', md: 'flex' }, width: 96, flexShrink: 0 }}
+                    sx={{ display: { xs: 'none', md: 'flex' }, width: 120, flexShrink: 0 }}
                   >
-                    <Box sx={{ width: 32, display: 'flex', justifyContent: 'center' }}>
+                    <Box sx={{ width: 28, display: 'flex', justifyContent: 'center' }}>
                       {b.userSet && (
                         <Tooltip title="Reset to trailing avg">
                           <IconButton
@@ -1681,6 +1719,26 @@ function BudgetCard({
                         </Tooltip>
                       )}
                     </Box>
+                    <Tooltip
+                      title={
+                        isAlertEnabled
+                          ? `Alert active: notify when ${b.category} crosses ${usd.format(b.monthlyAmount)}`
+                          : `Enable alert when ${b.category} crosses ${usd.format(b.monthlyAmount)}`
+                      }
+                    >
+                      <IconButton
+                        size="small"
+                        color={isAlertEnabled ? (isActualOverBudget ? 'error' : 'primary') : 'default'}
+                        aria-label={`Toggle budget alert for ${b.category}`}
+                        onClick={() => handleToggleAlert(b.category)}
+                      >
+                        {isAlertEnabled ? (
+                          <NotificationsActiveIcon fontSize="small" />
+                        ) : (
+                          <NotificationsNoneIcon fontSize="small" sx={{ opacity: 0.65 }} />
+                        )}
+                      </IconButton>
+                    </Tooltip>
                     <Switch
                       size="small"
                       checked={!isExcluded}

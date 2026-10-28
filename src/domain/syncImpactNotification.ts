@@ -2,6 +2,7 @@ import { api } from '../api';
 import { usd, monthLabel } from '../lib';
 import { useFilters } from '../stores/store';
 import { useForecastStore, computeTotalNetIncome } from '../stores/forecastStore';
+import { useBudgetStore } from '../stores/budgetStore';
 import { loadForecastBaselineData } from './incomeStreams';
 
 function cleanMerchantLabel(raw: string): string {
@@ -372,4 +373,167 @@ export function maybeSendNativeSyncNotification(
     return true;
   }
 }
+
+export interface CategoryBudgetBreachAlert {
+  category: string;
+  monthLabel: string;
+  actualSpend: number;
+  budgetAmount: number;
+  overBy: number;
+  pctUsed: number;
+  aiPrompt: string;
+}
+
+const NOTIFIED_BUDGET_BREACHES_KEY = 'strictly_notified_budget_breaches';
+
+function readNotifiedBreaches(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(NOTIFIED_BUDGET_BREACHES_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeNotifiedBreaches(map: Record<string, boolean>): void {
+  try {
+    localStorage.setItem(NOTIFIED_BUDGET_BREACHES_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export async function checkAndNotifyBudgetAlerts(
+  forceCategory?: string
+): Promise<CategoryBudgetBreachAlert[]> {
+  const alertCategories = useBudgetStore.getState().alertCategories;
+  if (!alertCategories || alertCategories.size === 0) return [];
+
+  const demoMode = useFilters.getState().demoMode;
+  const now = new Date();
+  const curMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthStart = `${curMonthKey}-01`;
+  const monthEnd = `${curMonthKey}-31`;
+
+  const [txns, budgets, trailingAverages] = await Promise.all([
+    api.getTransactions(monthStart, monthEnd),
+    api.getBudgets().catch(() => []),
+    api.getCategoryTrailingAverages(demoMode, undefined).catch(() => []),
+  ]);
+
+  const actualByCat = new Map<string, number>();
+  for (const t of txns) {
+    if (demoMode ? t.source !== 'demo' : t.source === 'demo') continue;
+    if (t.amount >= 0) continue;
+    const cat = t.category || 'Uncategorized';
+    actualByCat.set(cat, (actualByCat.get(cat) || 0) + Math.abs(t.amount));
+  }
+
+  const budgetByCat = new Map(budgets.map((b) => [b.category, b] as const));
+  const avgByCat = new Map(trailingAverages.map((a) => [a.category, a.average] as const));
+
+  const notifiedMap = readNotifiedBreaches();
+  const triggered: CategoryBudgetBreachAlert[] = [];
+
+  for (const category of alertCategories) {
+    if (forceCategory && category !== forceCategory) continue;
+    const b = budgetByCat.get(category);
+    const targetBudget =
+      b && b.userSet
+        ? b.monthlyAmount
+        : Math.round((avgByCat.get(category) ?? b?.monthlyAmount ?? 0) * 100) / 100;
+    if (targetBudget <= 0) continue;
+
+    const actual = Math.round((actualByCat.get(category) || 0) * 100) / 100;
+    if (actual <= targetBudget) continue;
+
+    const dedupeKey = `${curMonthKey}:::${category}:::${Math.round(targetBudget)}`;
+    if (!forceCategory && notifiedMap[dedupeKey]) continue;
+
+    notifiedMap[dedupeKey] = true;
+    const overBy = Math.round((actual - targetBudget) * 100) / 100;
+    const pctUsed = Math.round((actual / targetBudget) * 100);
+    const alertItem: CategoryBudgetBreachAlert = {
+      category,
+      monthLabel: monthLabel(curMonthKey),
+      actualSpend: actual,
+      budgetAmount: targetBudget,
+      overBy,
+      pctUsed,
+      aiPrompt: `How much did I spend on ${category} this month and how do I get back under my ${usd.format(targetBudget)} budget?`,
+    };
+    triggered.push(alertItem);
+  }
+
+  if (triggered.length > 0) {
+    writeNotifiedBreaches(notifiedMap);
+    for (const item of triggered) {
+      dispatchBudgetBreachNotifications(item);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('budget-breach-alert', { detail: triggered[0] }));
+    }
+  }
+
+  return triggered;
+}
+
+function dispatchBudgetBreachNotifications(item: CategoryBudgetBreachAlert): void {
+  const title = `🚨 ${item.category} Crossed Budget (${usd.format(item.actualSpend)} / ${usd.format(item.budgetAmount)})`;
+  const body = `${item.monthLabel}: You are ${usd.format(item.overBy)} over your ${usd.format(item.budgetAmount)}/mo ${item.category} budget (${item.pctUsed}% used).`;
+  const targetUrl = getDeepLinkOpenSpendImpactUrl();
+
+  const topic = getPhonePushTopic();
+  if (topic) {
+    void fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
+      method: 'POST',
+      headers: {
+        Title: `${item.category} Crossed Budget (${usd.format(item.actualSpend)} / ${usd.format(item.budgetAmount)})`,
+        Click: targetUrl,
+        Tags: 'rotating_light,money_with_wings',
+        Priority: 'high',
+      },
+      body: `${body}\nTap to open Strictly Spending and review with Ask AI.`,
+    }).catch(() => {});
+  }
+
+  if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+    return;
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        if (reg && 'showNotification' in reg) {
+          return reg.showNotification(title, {
+            body,
+            tag: `strictly-budget-breach-${item.category}`,
+            icon: './icon-192.png',
+            badge: './icon-192.png',
+            data: { url: targetUrl, prompt: item.aiPrompt },
+          });
+        }
+        return undefined;
+      })
+      .catch(() => {});
+  }
+
+  try {
+    const notif = new Notification(title, {
+      body,
+      tag: `strictly-budget-breach-${item.category}`,
+    });
+    notif.onclick = () => {
+      window.focus();
+      window.dispatchEvent(
+        new CustomEvent('open-ai-with-prompt', { detail: { prompt: item.aiPrompt } })
+      );
+      notif.close();
+    };
+  } catch {
+    // ignore on platforms that require ServiceWorker notifications
+  }
+}
+
 

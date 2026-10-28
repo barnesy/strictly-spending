@@ -27,7 +27,9 @@ import { monthsBetween, usd } from './lib';
 import {
   buildSyncSpendImpactSummary,
   maybeSendNativeSyncNotification,
+  checkAndNotifyBudgetAlerts,
   type SyncSpendImpactSummary,
+  type CategoryBudgetBreachAlert,
 } from './domain/syncImpactNotification';
 
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
@@ -105,6 +107,7 @@ export default function App() {
   const [aiToastMessage, setAiToastMessage] = useState<string | null>(null);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
   const [syncImpactSummary, setSyncImpactSummary] = useState<SyncSpendImpactSummary | null>(null);
+  const [budgetBreachAlert, setBudgetBreachAlert] = useState<CategoryBudgetBreachAlert | null>(null);
   const [iosGuideOpen, setIosGuideOpen] = useState<boolean>(false);
   const [iosBannerDismissed, setIosBannerDismissed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -350,6 +353,7 @@ export default function App() {
   useEffect(() => {
     const handleDbUpdate = () => {
       queryClient.invalidateQueries();
+      void checkAndNotifyBudgetAlerts();
     };
     const handleWindowUiCmd = (e: Event) => {
       const detail = (e as CustomEvent<McpUiCommand>).detail;
@@ -416,6 +420,7 @@ export default function App() {
           window.dispatchEvent(new Event('db-update'));
         }
         if (resp.added > 0) {
+          void checkAndNotifyBudgetAlerts();
           const impact = await buildSyncSpendImpactSummary(resp.added);
           if (impact) {
             setSyncImpactSummary(impact);
@@ -461,6 +466,13 @@ export default function App() {
       }
     };
 
+    const handleBudgetBreachAlert = (ev: Event) => {
+      const customEv = ev as CustomEvent<CategoryBudgetBreachAlert>;
+      if (customEv.detail) {
+        setBudgetBreachAlert(customEv.detail);
+      }
+    };
+
     const handleSwMessage = (ev: MessageEvent) => {
       if (ev.data && ev.data.type === 'OPEN_SPEND_IMPACT') {
         window.dispatchEvent(
@@ -490,6 +502,7 @@ export default function App() {
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener('show-sync-impact', handleShowSyncImpact);
+    window.addEventListener('budget-breach-alert', handleBudgetBreachAlert);
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', handleSwMessage);
     }
@@ -500,6 +513,7 @@ export default function App() {
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('show-sync-impact', handleShowSyncImpact);
+      window.removeEventListener('budget-breach-alert', handleBudgetBreachAlert);
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
       }
@@ -852,6 +866,83 @@ export default function App() {
                     sx={{ fontWeight: 700, fontSize: '0.75rem', borderRadius: 1, textTransform: 'none' }}
                   >
                     Analyze in Ask AI
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
+          </Paper>
+        </Snackbar>
+        <Snackbar
+          open={Boolean(budgetBreachAlert)}
+          autoHideDuration={16000}
+          onClose={(_e, reason) => {
+            if (reason === 'clickaway') return;
+            setBudgetBreachAlert(null);
+          }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        >
+          <Paper
+            elevation={6}
+            sx={{
+              p: 2,
+              maxWidth: { xs: 'calc(100vw - 32px)', sm: 380 },
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'error.main',
+              bgcolor: 'background.paper',
+              color: 'text.primary',
+            }}
+          >
+            {budgetBreachAlert && (
+              <Stack spacing={1.25}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <NotificationsActiveIcon color="error" fontSize="small" />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+                      Budget Crossed: {budgetBreachAlert.category}
+                    </Typography>
+                  </Stack>
+                  <IconButton
+                    size="small"
+                    onClick={() => setBudgetBreachAlert(null)}
+                    sx={{ p: 0.25, mt: -0.25, mr: -0.25 }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>
+                  Current month spend in <strong style={{ color: 'inherit' }}>{budgetBreachAlert.category}</strong> is{' '}
+                  <strong style={{ color: 'inherit' }}>{usd.format(budgetBreachAlert.actualSpend)}</strong>, crossing your{' '}
+                  <strong style={{ color: 'inherit' }}>{usd.format(budgetBreachAlert.budgetAmount)}</strong> target by{' '}
+                  <Box component="span" sx={{ color: 'error.main', fontWeight: 800 }}>
+                    {usd.format(budgetBreachAlert.overBy)} ({budgetBreachAlert.pctUsed}% used)
+                  </Box>
+                  .
+                </Typography>
+
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setBudgetBreachAlert(null)}
+                    sx={{ fontWeight: 700, fontSize: '0.75rem', borderRadius: 1 }}
+                  >
+                    Dismiss
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="error"
+                    startIcon={<AutoAwesomeIcon sx={{ fontSize: 15 }} />}
+                    onClick={() => {
+                      const prompt = budgetBreachAlert.aiPrompt;
+                      setBudgetBreachAlert(null);
+                      window.dispatchEvent(new CustomEvent('open-ai-with-prompt', { detail: { prompt } }));
+                    }}
+                    sx={{ fontWeight: 700, fontSize: '0.75rem', borderRadius: 1, textTransform: 'none' }}
+                  >
+                    Review in Ask AI
                   </Button>
                 </Stack>
               </Stack>
