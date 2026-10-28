@@ -28,6 +28,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import HistoryIcon from '@mui/icons-material/History';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 
 import { useNavigate } from 'react-router-dom';
 import { useSimpleFinStore } from '../stores/simplefinStore';
@@ -36,6 +37,10 @@ import { queryClient } from '../queryClient';
 import { api } from '../api';
 import { useFilters } from '../stores/store';
 import { UNIFORM_TOOLBAR_BUTTON_SX } from './AccountFilterDropdown';
+import {
+  getNotificationPermissionState,
+  requestSyncNotificationPermission,
+} from '../domain/syncImpactNotification';
 
 export const SimpleFinBankSyncCard: React.FC = () => {
   const navigate = useNavigate();
@@ -58,6 +63,7 @@ export const SimpleFinBankSyncCard: React.FC = () => {
   const [tokenInput, setTokenInput] = useState('');
   const [mapperOpen, setMapperOpen] = useState(false);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
+  const [notifPermission, setNotifPermission] = useState(getNotificationPermissionState());
 
   useEffect(() => {
     fetchConfig();
@@ -98,8 +104,11 @@ export const SimpleFinBankSyncCard: React.FC = () => {
   const handleSync = async (startDate?: string) => {
     clearMessages();
     try {
-      await syncTransactions(startDate);
+      const resp = await syncTransactions(startDate);
       await activateRealAccountsAndTurnOffDemo();
+      if (resp.added > 0) {
+        window.dispatchEvent(new CustomEvent('show-sync-impact', { detail: { added: resp.added } }));
+      }
     } catch {
       // Error handled by store
     }
@@ -383,6 +392,64 @@ export const SimpleFinBankSyncCard: React.FC = () => {
                           <DeleteOutlineIcon fontSize="small" />
                         </Button>
                       </Tooltip>
+                    </Stack>
+                  </Stack>
+
+                  <Divider sx={{ my: 1.5 }} />
+
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: 'flex-start', sm: 'center' }}
+                    spacing={1.5}
+                  >
+                    <Box>
+                      <Stack direction="row" spacing={0.75} alignItems="center">
+                        <NotificationsActiveIcon color="primary" sx={{ fontSize: 18 }} />
+                        <Typography variant="body2" fontWeight={700}>
+                          Daily Sync Spend Impact Digest
+                        </Typography>
+                        {notifPermission === 'granted' && (
+                          <Chip
+                            label="Alerts Active"
+                            color="success"
+                            size="small"
+                            variant="outlined"
+                            sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, borderRadius: 1 }}
+                          />
+                        )}
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Auto-sync checks every 4h (SimpleFIN refreshes bank feeds daily) and shows your Month & Full-Year spend impact whenever new transactions arrive.
+                      </Typography>
+                    </Box>
+
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                      {notifPermission === 'default' && (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<NotificationsActiveIcon />}
+                          onClick={async () => {
+                            const next = await requestSyncNotificationPermission();
+                            setNotifPermission(next);
+                          }}
+                          sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                        >
+                          Enable Browser Alerts
+                        </Button>
+                      )}
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<NotificationsActiveIcon />}
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent('show-sync-impact', { detail: { added: 0 } }));
+                        }}
+                        sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                      >
+                        Preview Spend Impact
+                      </Button>
                     </Stack>
                   </Stack>
                 </Box>

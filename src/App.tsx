@@ -2,9 +2,11 @@ import { useSettings, useAccounts } from './hooks/queries';
 import { useEffect, useMemo, useRef, useState, useCallback, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { queryClient } from './queryClient';
-import { ThemeProvider, CssBaseline, Snackbar, Alert, Button, Box, Typography, IconButton } from '@mui/material';
+import { ThemeProvider, CssBaseline, Snackbar, Alert, Button, Box, Typography, IconButton, Paper, Stack, Chip } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
 import { getAppTheme } from './theme';
@@ -21,7 +23,12 @@ import {
 import { useForecastStore } from './stores/forecastStore';
 import { useSimpleFinStore } from './stores/simplefinStore';
 import { simplefinGetConfig, simplefinGetAccounts } from './api/simplefin';
-import { monthsBetween } from './lib';
+import { monthsBetween, usd } from './lib';
+import {
+  buildSyncSpendImpactSummary,
+  maybeSendNativeSyncNotification,
+  type SyncSpendImpactSummary,
+} from './domain/syncImpactNotification';
 
 import DynamicAnimationStyles from './components/DynamicAnimationStyles';
 import IphoneInstallModal from './components/IphoneInstallModal';
@@ -97,6 +104,7 @@ export default function App() {
   const undoSnapshotRef = useRef<UiUndoSnapshot | null>(null);
   const [aiToastMessage, setAiToastMessage] = useState<string | null>(null);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+  const [syncImpactSummary, setSyncImpactSummary] = useState<SyncSpendImpactSummary | null>(null);
   const [iosGuideOpen, setIosGuideOpen] = useState<boolean>(false);
   const [iosBannerDismissed, setIosBannerDismissed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -408,9 +416,15 @@ export default function App() {
           window.dispatchEvent(new Event('db-update'));
         }
         if (resp.added > 0) {
-          setSyncToastMessage(
-            `Synced ${resp.added} new bank transaction${resp.added === 1 ? '' : 's'} via SimpleFIN`
-          );
+          const impact = await buildSyncSpendImpactSummary(resp.added);
+          if (impact) {
+            setSyncImpactSummary(impact);
+            void maybeSendNativeSyncNotification(impact);
+          } else {
+            setSyncToastMessage(
+              `Synced ${resp.added} new bank transaction${resp.added === 1 ? '' : 's'} via SimpleFIN`
+            );
+          }
         }
       } catch {
         // Silent background check: ignore network/bridge errors on startup
@@ -423,18 +437,34 @@ export default function App() {
       void maybeAutoSync();
     }, 1200);
 
+    const periodicTimer = setInterval(() => {
+      void maybeAutoSync();
+    }, 30 * 60 * 1000);
+
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         void maybeAutoSync();
       }
     };
+    const handleShowSyncImpact = async (ev: Event) => {
+      const customEv = ev as CustomEvent<{ added?: number }>;
+      const addedCount = customEv.detail?.added ?? 0;
+      const impact = await buildSyncSpendImpactSummary(addedCount);
+      if (impact) {
+        setSyncImpactSummary(impact);
+        void maybeSendNativeSyncNotification(impact);
+      }
+    };
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('show-sync-impact', handleShowSyncImpact);
 
     return () => {
       clearTimeout(timer);
+      clearInterval(periodicTimer);
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('show-sync-impact', handleShowSyncImpact);
     };
   }, []);
 
@@ -659,6 +689,136 @@ export default function App() {
           >
             {syncToastMessage}
           </Alert>
+        </Snackbar>
+        <Snackbar
+          open={Boolean(syncImpactSummary)}
+          autoHideDuration={20000}
+          onClose={(_e, reason) => {
+            if (reason === 'clickaway') return;
+            setSyncImpactSummary(null);
+          }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Paper
+            elevation={6}
+            sx={{
+              p: 2,
+              maxWidth: { xs: 'calc(100vw - 32px)', sm: 400 },
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'primary.main',
+              bgcolor: 'background.paper',
+              color: 'text.primary',
+            }}
+          >
+            {syncImpactSummary && (
+              <Stack spacing={1.25}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <NotificationsActiveIcon color="primary" fontSize="small" />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+                      {syncImpactSummary.addedCount > 0
+                        ? `${syncImpactSummary.addedCount} New Synced Transaction${syncImpactSummary.addedCount === 1 ? '' : 's'}`
+                        : `Daily Spend Impact (${syncImpactSummary.recentWindowLabel})`}
+                    </Typography>
+                  </Stack>
+                  <IconButton
+                    size="small"
+                    onClick={() => setSyncImpactSummary(null)}
+                    sx={{ p: 0.25, mt: -0.25, mr: -0.25 }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>
+                  Recent charges total{' '}
+                  <strong style={{ color: 'inherit' }}>{usd.format(syncImpactSummary.recentSpendDollars)}</strong>
+                  {syncImpactSummary.topCharges.length > 0 && (
+                    <>
+                      {' '}(including{' '}
+                      {syncImpactSummary.topCharges
+                        .slice(0, 2)
+                        .map((item) => `${item.merchant} ${usd.format(item.amount)}`)
+                        .join(', ')}
+                      )
+                    </>
+                  )}
+                  .
+                </Typography>
+
+                <Box
+                  sx={{
+                    p: 1.25,
+                    borderRadius: 1,
+                    bgcolor: (t) => (t.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(25,118,210,0.05)'),
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Stack spacing={0.5}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                        MONTH IMPACT ({syncImpactSummary.currentMonthLabel})
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={
+                          syncImpactSummary.monthCashRemainder >= 0
+                            ? `${usd.format(syncImpactSummary.monthCashRemainder)} cash left`
+                            : `${usd.format(Math.abs(syncImpactSummary.monthCashRemainder))} over income`
+                        }
+                        color={syncImpactSummary.monthCashRemainder < 0 ? 'error' : 'primary'}
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, borderRadius: 1 }}
+                      />
+                    </Stack>
+                    <Typography variant="caption" sx={{ color: 'text.primary', fontSize: '0.78rem' }}>
+                      MTD Spend: <strong>{usd.format(syncImpactSummary.monthSpendToDate)}</strong> • Projected EOM:{' '}
+                      <strong>{usd.format(syncImpactSummary.projectedMonthEndSpend)}</strong>
+                    </Typography>
+
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ pt: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                        FULL-YEAR PACE IMPACT
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: 'warning.main' }}>
+                        {usd.format(syncImpactSummary.projectedAnnualSpend)}/yr
+                      </Typography>
+                    </Stack>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+                      10-yr invested opportunity cost of this pace:{' '}
+                      <strong>{usd.format(syncImpactSummary.tenYearInvestedOpportunity)}</strong>
+                    </Typography>
+                  </Stack>
+                </Box>
+
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setSyncImpactSummary(null)}
+                    sx={{ fontWeight: 700, fontSize: '0.75rem', borderRadius: 1 }}
+                  >
+                    Dismiss
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<AutoAwesomeIcon sx={{ fontSize: 15 }} />}
+                    onClick={() => {
+                      const prompt = syncImpactSummary.aiPrompt;
+                      setSyncImpactSummary(null);
+                      window.dispatchEvent(new CustomEvent('open-ai-with-prompt', { detail: { prompt } }));
+                    }}
+                    sx={{ fontWeight: 700, fontSize: '0.75rem', borderRadius: 1, textTransform: 'none' }}
+                  >
+                    Analyze in Ask AI
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
+          </Paper>
         </Snackbar>
       </LocalizationProvider>
     </ThemeProvider>

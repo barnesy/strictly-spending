@@ -202,9 +202,16 @@ const STARTER_PROMPTS: StarterPromptOption[] = [
 interface BuiltInAiDrawerProps {
   open: boolean;
   onClose: () => void;
+  initialPrompt?: string | null;
+  onConsumeInitialPrompt?: () => void;
 }
 
-export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps) {
+export default function BuiltInAiDrawer({
+  open,
+  onClose,
+  initialPrompt,
+  onConsumeInitialPrompt,
+}: BuiltInAiDrawerProps) {
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
   const { data: budgets = [] } = useBudgets();
@@ -325,6 +332,14 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
       setDownloadProgress(null);
     }
   };
+
+  useEffect(() => {
+    if (open && initialPrompt && !isGenerating) {
+      onConsumeInitialPrompt?.();
+      void handleSend(initialPrompt);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPrompt, isGenerating]);
 
   const askedSet = new Set(
     messages.filter((m) => m.role === 'user').map((m) => m.content.trim().toLowerCase())

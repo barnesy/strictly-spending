@@ -172,8 +172,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const [isBalanceSheetOpen, setIsBalanceSheetOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
+  const [pendingAiPrompt, setPendingAiPrompt] = useState<string | null>(null);
   const [isIphoneModalOpen, setIsIphoneModalOpen] = useState(false);
   const { data: loans = [] } = useLoans();
+
+  useEffect(() => {
+    const handleOpenAi = (e: Event) => {
+      const detail = (e as CustomEvent<{ prompt?: string }>).detail;
+      if (detail?.prompt) {
+        setPendingAiPrompt(detail.prompt);
+      }
+      setIsAiDrawerOpen(true);
+    };
+    window.addEventListener('open-ai-with-prompt', handleOpenAi);
+    return () => window.removeEventListener('open-ai-with-prompt', handleOpenAi);
+  }, []);
 
   const activeAccounts = useMemo(() => {
     if (!accountsAll) return [];
@@ -867,6 +880,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <BuiltInAiDrawer
           open={isAiDrawerOpen}
           onClose={() => setIsAiDrawerOpen(false)}
+          initialPrompt={pendingAiPrompt}
+          onConsumeInitialPrompt={() => setPendingAiPrompt(null)}
         />
       </Suspense>
 

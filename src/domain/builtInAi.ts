@@ -1617,7 +1617,7 @@ export async function analyzeQuestionAndFinances(
       .filter(Boolean)
       .join('\n');
   }
-  // 3. Recent Charges ("Has anything big hit my accounts lately?")
+  // 3. Recent Charges & Sync Impact ("Has anything big hit my accounts lately?")
   else if (isRecentHitsAsk) {
     const recentOutflows = recent7DayTxns.filter((t) => t.amount < 0);
     const recentTotal = recentOutflows.reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -1625,11 +1625,17 @@ export async function analyzeQuestionAndFinances(
     const topRecentSum = topRecent.reduce((s, t) => s + Math.abs(t.amount), 0);
     const otherRecentSum = Math.max(0, recentTotal - topRecentSum);
     const biggestHit = topRecent[0];
+    const projectedEomBurn = Math.max(
+      curMonthStats.spendDollars,
+      Math.round((curMonthStats.spendDollars / Math.max(1, curDayOfMonth)) * daysInCurMonth)
+    );
+    const annualizedBurn = projectedEomBurn * 12;
+    const recentAnnualizedIfRepeated = Math.round(recentTotal * 52);
 
     synthesizedMarkdownReport = [
-      `### Last 7 Days Damage Report (Since ${sevenDaysAgoStr})`,
-      `> 🚨 **${recentOutflows.length} charges for -${usd.format(recentTotal)} in just 7 days.** Your card barely had time to cool down${biggestHit ? ` — led by **-${usdCents.format(Math.abs(biggestHit.amount))}** at **${(biggestHit.merchantKey || biggestHit.description).slice(0, 24)}**` : ''}.`,
-      `| Recent Charge | Category · Account | Amount |`,
+      `### Recent Sync Damage Report & Month/Year Impact (Since ${sevenDaysAgoStr})`,
+      `> 🚨 **${recentOutflows.length} charges for -${usd.format(recentTotal)} in the last 7 days**${biggestHit ? ` (led by **-${usdCents.format(Math.abs(biggestHit.amount))}** at **${(biggestHit.merchantKey || biggestHit.description).slice(0, 24)}**)` : ''}. That pushes your **${monthLabel(curMonthKey)} spend to ${usd.format(curMonthStats.spendDollars)}** and puts your full-year pace at **${usd.format(annualizedBurn)}/yr**.`,
+      `| Recent Charge / Impact Metric | Category · Account / Context | Amount |`,
       `| --- | --- | --- |`,
       ...(topRecent.length > 0
         ? topRecent.map((t) => {
@@ -1640,7 +1646,9 @@ export async function analyzeQuestionAndFinances(
       recentOutflows.length > topRecent.length
         ? `| + ${recentOutflows.length - topRecent.length} smaller swipes | Death by a thousand cuts | -${usdCents.format(otherRecentSum)} |`
         : '',
-      `| **= 7-Day Total Burn** | **${recentOutflows.length} charges (${recent7DayBigCharges.length} over $50)** | **-${usdCents.format(recentTotal)}** |`,
+      `| 📅 **${monthLabel(curMonthKey)} Impact (MTD)** |Proj EOM: **${usd.format(projectedEomBurn)}** · Unpaid bills: **-${usd.format(unpaidBillsTotalDollars)}** | **-${usd.format(curMonthStats.spendDollars)}** |`,
+      `| 📆 **Full-Year Pace Impact** | If 7-day pace repeated all year: **-${usd.format(recentAnnualizedIfRepeated)}/yr** | **-${usd.format(annualizedBurn)}/yr** |`,
+      `| **= 7-Day Synced Burn** | **${recentOutflows.length} charges (${recent7DayBigCharges.length} over $50)** | **-${usdCents.format(recentTotal)}** |`,
       ...buildWealthRedirectLines(Math.max(100, Math.round(recentTotal)), 'onetime'),
     ]
       .filter(Boolean)
