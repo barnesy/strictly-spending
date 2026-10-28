@@ -52,9 +52,9 @@ interface StarterPromptOption {
 const STARTER_PROMPTS: StarterPromptOption[] = [
   {
     icon: '😈',
-    title: 'Dare Me: My Most Embarrassing Roast',
+    title: 'Try Your Luck: My Most Embarrassing Roast',
     subtitle: 'Gives you a ridiculous spending nickname, wild assumptions & an animated Roast GIF',
-    prompt: '😈 Cook up the most embarrassing, brutal roast of my spending and dare me to post it',
+    prompt: '😈 Try my luck and cook up the most embarrassing, brutal roast of my spending',
     group: 'roast',
   },
   {
@@ -619,12 +619,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                     {isLoadingBubble ? (
                       <AiLedgerScanner prompt={activePromptText} stage={scanStage} />
                     ) : (
-                      <>
-                        <FormattedAiMessage key={m.content ? 'ready' : 'empty'} content={m.content} isUser={m.role === 'user'} />
-                        {m.role === 'assistant' && m.content && !m.content.includes('[ROAST_GIF_CARD]') && (
-                          <RoastShareBar content={m.content} />
-                        )}
-                      </>
+                      <FormattedAiMessage key={m.content ? 'ready' : 'empty'} content={m.content} isUser={m.role === 'user'} />
                     )}
                   </Paper>
                 </Box>
@@ -898,7 +893,7 @@ function PromptCardGrid({
                           flexShrink: 0,
                         }}
                       >
-                        😈 DARE
+                        🎲 TRY YOUR LUCK
                       </Typography>
                     ) : null}
                   </Stack>
@@ -925,103 +920,16 @@ function PromptCardGrid({
   );
 }
 
-function RoastShareBar({ content }: { content: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const buildRedditText = () => {
-    const clean = content
-      .replace(/^###\s+/gm, '### ')
-      .trim();
-    return `${clean}\n\n---\n*Generated locally on my device by Strictly Spending (100% offline roast).*`;
-  };
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(buildRedditText());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // Fallback
-    }
-  };
-
-  const handleOpenReddit = async () => {
-    try {
-      await navigator.clipboard.writeText(buildRedditText());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    } catch {
-      // ignore clipboard failure
-    }
-    const title = encodeURIComponent('Asked my offline finance app for its most embarrassing roast of my spending 😈');
-    window.open(`https://www.reddit.com/submit?title=${title}`, '_blank', 'noopener,noreferrer');
-  };
-
-  return (
-    <Stack
-      direction="row"
-      spacing={1}
-      alignItems="center"
-      justifyContent="space-between"
-      sx={{
-        mt: 2.25,
-        pt: 1.5,
-        borderTop: '1px dashed',
-        borderColor: 'divider',
-        flexWrap: 'wrap',
-        rowGap: 1,
-      }}
-    >
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, fontSize: '0.73rem' }}>
-        😈 Brave enough to share this receipt?
-      </Typography>
-      <Stack direction="row" spacing={1}>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={handleCopy}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 700,
-            fontSize: '0.74rem',
-            py: 0.4,
-            px: 1.25,
-            borderRadius: 1,
-          }}
-        >
-          {copied ? '✅ Copied Roast!' : '📋 Copy Roast for Reddit'}
-        </Button>
-        <Button
-          size="small"
-          variant="contained"
-          color="error"
-          onClick={handleOpenReddit}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 800,
-            fontSize: '0.74rem',
-            py: 0.4,
-            px: 1.25,
-            borderRadius: 1,
-          }}
-        >
-          🔥 Post to Reddit
-        </Button>
-      </Stack>
-    </Stack>
-  );
-}
-
 function AiLedgerScanner({ prompt, stage }: { prompt: string; stage: number }) {
   const lower = prompt.toLowerCase();
   let steps: [string, string] = [
     'Scanning accounts & posted transactions...',
     'Reconciling recurring bills & math ledger...',
   ];
-  if (lower.includes('embarrassing') || lower.includes('dare me') || lower.includes('😈')) {
+  if (lower.includes('embarrassing') || lower.includes('try my luck') || lower.includes('try your luck') || lower.includes('dare me') || lower.includes('😈')) {
     steps = [
       'Digging up your most embarrassing merchant swipes & binges...',
-      'Preparing your Hall of Shame receipt & Reddit dare...',
+      'Preparing your Hall of Shame receipt & animated Roast GIF...',
     ];
   } else if (lower.includes('mortgage') || lower.includes('threw half')) {
     steps = [

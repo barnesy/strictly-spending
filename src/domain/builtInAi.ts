@@ -914,6 +914,8 @@ export async function analyzeQuestionAndFinances(
 
   const isEmbarrassingDareAsk =
     qLower.includes('embarrassing') ||
+    qLower.includes('try my luck') ||
+    qLower.includes('try your luck') ||
     qLower.includes('dare me') ||
     qLower.includes('dare you') ||
     qLower.includes('😈') ||
