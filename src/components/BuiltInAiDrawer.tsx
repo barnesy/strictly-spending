@@ -328,6 +328,14 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
       anchor="right"
       open={open}
       onClose={onClose}
+      transitionDuration={{ enter: 300, exit: 240 }}
+      SlideProps={{
+        appear: true,
+        easing: {
+          enter: 'cubic-bezier(0.16, 1, 0.3, 1)',
+          exit: 'cubic-bezier(0.4, 0, 1, 1)',
+        },
+      }}
       PaperProps={{
         sx: {
           width: { xs: '100%', sm: 520 },

@@ -863,14 +863,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Chrome / Edge Built-in AI Drawer */}
-      {isAiDrawerOpen && (
-        <Suspense fallback={null}>
-          <BuiltInAiDrawer
-            open={isAiDrawerOpen}
-            onClose={() => setIsAiDrawerOpen(false)}
-          />
-        </Suspense>
-      )}
+      <Suspense fallback={null}>
+        <BuiltInAiDrawer
+          open={isAiDrawerOpen}
+          onClose={() => setIsAiDrawerOpen(false)}
+        />
+      </Suspense>
 
       {/* iPhone / iOS Tester & Home Screen Install Modal */}
       {isIphoneModalOpen && (
