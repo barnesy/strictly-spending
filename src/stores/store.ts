@@ -37,6 +37,8 @@ export type TransactionType = 'all' | 'spend' | 'income';
 
 export type DashboardViewMode = 'chart' | 'timeline' | 'table';
 
+export type TransactionSortBy = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc';
+
 export interface FiltersState {
   preset: DateRangePreset;
   customStart?: string;
@@ -61,6 +63,7 @@ export interface FiltersState {
   latestTransactionDate?: string;
   minPrice?: number;
   maxPrice?: number;
+  sortBy?: TransactionSortBy;
   // version is used as a knob to wipe stale persisted state
   version: number;
   seenAccountIds: number[];
@@ -87,6 +90,7 @@ const initialState: FiltersState = {
   latestTransactionDate: undefined,
   minPrice: undefined,
   maxPrice: undefined,
+  sortBy: 'date_desc',
   version: 1,
   lastViewedArtifactsAt: undefined,
 };
@@ -118,6 +122,7 @@ export interface FiltersActions {
   setTransactionDataBounds: (earliest?: string, latest?: string) => void;
   setMinPrice: (price?: number) => void;
   setMaxPrice: (price?: number) => void;
+  setSortBy: (sortBy?: TransactionSortBy) => void;
   setLastViewedArtifactsAt: (date: string) => void;
   reset: () => void;
 }
@@ -268,6 +273,7 @@ export const useFilters = create<FiltersStore>()(
         set({ earliestTransactionDate: earliest, latestTransactionDate: latest }),
       setMinPrice: (price) => set({ minPrice: price }),
       setMaxPrice: (maxPrice) => set({ maxPrice }),
+      setSortBy: (sortBy) => set({ sortBy: sortBy ?? 'date_desc' }),
       setLastViewedArtifactsAt: (date) => set({ lastViewedArtifactsAt: date }),
       reset: () =>
         set((s) => ({

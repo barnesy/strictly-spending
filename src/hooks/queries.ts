@@ -44,6 +44,7 @@ export const buildDashboardFilters = (state: any) => {
     searchQuery: state.searchQuery,
     minPrice: state.minPrice,
     maxPrice: state.maxPrice,
+    sortBy: state.sortBy,
     demoMode: state.demoMode,
   };
 };

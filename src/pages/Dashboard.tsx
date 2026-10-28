@@ -33,8 +33,6 @@ import {
   Divider,
   Collapse,
   Menu,
-  TextField,
-  InputAdornment,
   Select,
   FormControl,
 } from '@mui/material';
@@ -45,7 +43,6 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import CloseIcon from '@mui/icons-material/Close';
-import SearchIcon from '@mui/icons-material/Search';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import HistoryIcon from '@mui/icons-material/History';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
@@ -67,6 +64,7 @@ import SpendChart from '../components/SpendChart';
 import MonthTimelineView from '../components/MonthTimelineView';
 import FilterPanel from '../components/FilterPanel';
 import RangePicker from '../components/RangePicker';
+import SmartQuickSearch from '../components/SmartQuickSearch';
 import { TopMerchantsCard, DemoModeBanner } from '../components/dashboard/DashboardComponents';
 import RecategorizeDialog from '../components/RecategorizeDialog';
 import FutureMonthBreakdownDialog from '../components/FutureMonthBreakdownDialog';
@@ -175,10 +173,8 @@ export default function Dashboard() {
 
   const spendOnly = useFilters((s) => s.spendOnly);
   const transactionType = useFilters((s) => s.transactionType);
-  const searchQuery = useFilters((s) => s.searchQuery);
-  const setSearchQuery = useFilters((s) => s.setSearchQuery);
-  const minPrice = useFilters((s) => s.minPrice);
-  const maxPrice = useFilters((s) => s.maxPrice);
+  const sortBy = useFilters((s) => s.sortBy ?? 'date_desc');
+  const setSortBy = useFilters((s) => s.setSortBy);
   const demoMode = useFilters((s) => s.demoMode);
 
   const setGroupBy = useFilters((s) => s.setGroupBy);
@@ -361,6 +357,7 @@ export default function Dashboard() {
       s.searchQuery !== '' ||
       s.minPrice !== undefined ||
       s.maxPrice !== undefined ||
+      (s.sortBy !== undefined && s.sortBy !== 'date_desc') ||
       s.drill !== null ||
       Boolean(accountFilterActive)
     );
@@ -745,11 +742,44 @@ export default function Dashboard() {
         >
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: 88, py: 1, px: 0.75 }}>Date</TableCell>
+              <TableCell
+                onClick={() => {
+                  setSortBy(sortBy === 'date_desc' ? 'date_asc' : 'date_desc');
+                  setPage(0);
+                }}
+                sx={{
+                  width: 88,
+                  py: 1,
+                  px: 0.75,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  '&:hover': { color: 'primary.main' },
+                }}
+                title="Click to sort by date"
+              >
+                Date {sortBy === 'date_asc' ? '↑' : sortBy === 'date_desc' ? '↓' : ''}
+              </TableCell>
               <TableCell sx={{ width: 96, py: 1, px: 0.75 }}>Account</TableCell>
               <TableCell sx={{ py: 1, px: 0.75 }}>Description</TableCell>
               <TableCell sx={{ width: 106, py: 1, px: 0.75 }}>Category</TableCell>
-              <TableCell align="right" sx={{ width: 84, py: 1, px: 0.75 }}>Amount</TableCell>
+              <TableCell
+                align="right"
+                onClick={() => {
+                  setSortBy(sortBy === 'amount_desc' ? 'amount_asc' : 'amount_desc');
+                  setPage(0);
+                }}
+                sx={{
+                  width: 92,
+                  py: 1,
+                  px: 0.75,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  '&:hover': { color: 'primary.main' },
+                }}
+                title="Click to sort by amount"
+              >
+                Amount {sortBy === 'amount_desc' ? '↓' : sortBy === 'amount_asc' ? '↑' : ''}
+              </TableCell>
               <TableCell sx={{ width: 32, p: 0.25 }}></TableCell>
             </TableRow>
           </TableHead>
@@ -1703,67 +1733,31 @@ export default function Dashboard() {
           </ToggleButtonGroup>
         </Stack>
 
+        {/* Smart Plain-Language Quick Search (Desktop & Mobile) */}
+        <SmartQuickSearch
+          accounts={accounts || []}
+          categories={categories || []}
+          currentViewMode={viewMode}
+          onApplyViewChanges={({ viewMode: nextViewMode, compareWithPriorYear }) => {
+            if (nextViewMode) {
+              setViewMode(nextViewMode);
+            }
+            if (compareWithPriorYear !== undefined) {
+              if (compareWithPriorYear) {
+                const targetSingle =
+                  currentSingleMonth || monthList[monthList.length - 1] || currentCalMonth;
+                setComparisonMonth(targetSingle ? getPriorYearMonth(targetSingle) : null);
+              } else {
+                setComparisonMonth(null);
+              }
+            }
+          }}
+          onResetPage={() => setPage(0)}
+        />
+
         {/* Resizable content panel */}
         {!isDesktop ? (
           <>
-            <TextField
-              variant="outlined"
-              size="small"
-              fullWidth
-              placeholder="Quick search merchants, descriptions, or notes..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setPage(0);
-              }}
-              sx={{
-                '& .MuiInputBase-root': {
-                  height: 38,
-                  pl: 1.5,
-                  pr: 1,
-                  fontSize: '0.84rem',
-                  bgcolor: 'background.paper',
-                  borderRadius: (theme) => `${theme.shape.borderRadius}px`,
-                  display: 'flex',
-                  alignItems: 'center',
-                },
-                '& .MuiInputBase-input': {
-                  py: 0,
-                  px: 0.5,
-                  height: '100%',
-                  boxSizing: 'border-box',
-                },
-                '& .MuiInputAdornment-root': {
-                  my: 0,
-                  height: 'auto',
-                  display: 'flex',
-                  alignItems: 'center',
-                },
-              }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: searchQuery ? (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setSearchQuery('');
-                          setPage(0);
-                        }}
-                        aria-label="Clear search"
-                      >
-                        <CloseIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                },
-              }}
-            />
             <Drawer
               anchor="left"
               open={filterVisible}

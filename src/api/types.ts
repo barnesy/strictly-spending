@@ -9,6 +9,7 @@ export interface DashboardFilters {
   searchQuery?: string;
   minPrice?: number;
   maxPrice?: number;
+  sortBy?: 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc';
   demoMode?: boolean;
 }
 

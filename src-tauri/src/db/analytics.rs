@@ -13,6 +13,7 @@ pub struct DashboardFilters {
     pub search_query: Option<String>,
     pub min_price: Option<f64>,
     pub max_price: Option<f64>,
+    pub sort_by: Option<String>,
     pub demo_mode: Option<bool>,
 }
 
@@ -125,13 +126,20 @@ pub fn get_transactions_paginated(
     let mut params = Vec::new();
     let where_clause = build_dashboard_where_clause(&filters, &mut params);
     
+    let order_clause = match filters.sort_by.as_deref() {
+        Some("date_asc") => "date ASC, id ASC",
+        Some("amount_desc") => "ABS(amount) DESC, date DESC",
+        Some("amount_asc") => "ABS(amount) ASC, date DESC",
+        _ => "date DESC, id DESC",
+    };
+
     let query = format!(
         "SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status, is_pending 
          FROM transactions 
          WHERE {} 
-         ORDER BY date DESC 
+         ORDER BY {} 
          LIMIT {} OFFSET {}",
-        where_clause, limit, offset
+        where_clause, order_clause, limit, offset
     );
 
     let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;

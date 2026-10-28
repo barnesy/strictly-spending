@@ -1499,7 +1499,17 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       });
     }
     case 'get_transactions_paginated': {
-      const filtered = filterTransactions(s.transactions, args.filters || {});
+      const filtered = [...filterTransactions(s.transactions, args.filters || {})];
+      const sortBy = args.filters?.sortBy;
+      if (sortBy === 'date_asc') {
+        filtered.sort((a, b) => a.date.localeCompare(b.date) || (a.id ?? 0) - (b.id ?? 0));
+      } else if (sortBy === 'amount_desc') {
+        filtered.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount) || b.date.localeCompare(a.date));
+      } else if (sortBy === 'amount_asc') {
+        filtered.sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount) || b.date.localeCompare(a.date));
+      } else {
+        filtered.sort((a, b) => b.date.localeCompare(a.date) || (b.id ?? 0) - (a.id ?? 0));
+      }
       const limit = args.limit || 50;
       const offset = args.offset || 0;
       return filtered.slice(offset, offset + limit);
