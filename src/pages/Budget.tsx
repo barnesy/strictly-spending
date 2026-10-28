@@ -842,15 +842,23 @@ export default function Budget() {
                     Reserved for bills before {safeToSpendUntilPaydayInfo.nextPaydayLabel}:
                   </Typography>
                   {safeToSpendUntilPaydayInfo.billsDueBeforePayday.slice(0, 6).map((b) => (
-                    <Chip
+                    <Tooltip
                       key={b.merchantKey}
-                      size="small"
-                      variant="outlined"
-                      color="warning"
-                      onClick={() => toggleMerchant(b.merchantKey)}
-                      label={`${formatCleanMerchantName(b.merchantKey)} · ${usd.format(b.monthlyAverage)}${b.status.expectedShortLabel ? ` (${b.status.expectedShortLabel})` : ''}`}
-                      sx={{ height: 20, fontSize: '0.66rem', fontWeight: 600 }}
-                    />
+                      title={
+                        b.status.expectedDate
+                          ? `Expected around ${b.status.expectedDate}${b.status.lastDate ? ` (last paid ${b.status.lastDate})` : ''}`
+                          : 'Upcoming recurring bill before next payday'
+                      }
+                      arrow
+                    >
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color="warning"
+                        label={`${formatCleanMerchantName(b.merchantKey)} · ${usd.format(b.monthlyAverage)}${b.status.expectedShortLabel ? ` (${b.status.expectedShortLabel})` : ''}`}
+                        sx={{ height: 20, fontSize: '0.66rem', fontWeight: 600 }}
+                      />
+                    </Tooltip>
                   ))}
                   {safeToSpendUntilPaydayInfo.billsDueBeforePayday.length > 6 && (
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.66rem' }}>

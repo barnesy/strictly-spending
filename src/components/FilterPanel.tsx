@@ -865,17 +865,50 @@ export default function FilterPanel({
                               />
                             )}
                           </Box>
-                          <Typography
-                            variant="caption"
-                            color={isSolo ? 'primary.main' : 'text.secondary'}
-                            sx={{ flexShrink: 0, fontWeight: isSolo ? 600 : 400 }}
-                          >
-                            {total !== 0
-                              ? usd.format(total)
-                              : a.currentBalance !== undefined && a.currentBalance !== null
-                              ? 'Bal: ' + usd.format(a.currentBalance)
-                              : '$0.00'}
-                          </Typography>
+                          <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                            <Tooltip
+                              title={
+                                total !== 0
+                                  ? `Current account balance: ${usd.format(a.currentBalance ?? 0)} • Activity in selected date range: ${usd.format(total)}`
+                                  : `Current account balance: ${usd.format(a.currentBalance ?? 0)}`
+                              }
+                              arrow
+                              placement="left"
+                            >
+                              <Typography
+                                variant="caption"
+                                color={
+                                  isSolo
+                                    ? 'primary.main'
+                                    : (a.currentBalance ?? 0) < 0
+                                    ? 'error.main'
+                                    : 'text.primary'
+                                }
+                                sx={{
+                                  display: 'block',
+                                  fontWeight: isSolo ? 700 : 600,
+                                  fontVariantNumeric: 'tabular-nums',
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                {usd.format(a.currentBalance ?? 0)}
+                              </Typography>
+                            </Tooltip>
+                            {total !== 0 && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{
+                                  display: 'block',
+                                  fontSize: '0.64rem',
+                                  fontVariantNumeric: 'tabular-nums',
+                                  lineHeight: 1.15,
+                                }}
+                              >
+                                Range: {usd.format(total)}
+                              </Typography>
+                            )}
+                          </Box>
                         </Stack>
                       </Box>
                     );
