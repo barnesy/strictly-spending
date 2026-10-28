@@ -37,7 +37,7 @@ export const DEFAULT_ROAST_THEME: RoastThemeStyle = {
   textSecondary: '#94a3b8',
   divider: '#334155',
   fontFamily: '"Atkinson Hyperlegible", "Inter", "Segoe UI", system-ui, sans-serif',
-  borderRadius: 12,
+  borderRadius: 8,
 };
 
 function parseColorToRgb(color: string): [number, number, number] {
@@ -223,7 +223,7 @@ export function drawRoastFrame(
   const isAlt = frame % 2 === 0;
   const isFlash = frame % 4 < 2;
   const sansFamily = themeStyle.fontFamily || DEFAULT_ROAST_THEME.fontFamily;
-  const cardRadius = Math.max(8, Math.min(20, themeStyle.borderRadius * 1.4));
+  const cardRadius = Math.max(0, themeStyle.borderRadius ?? 8);
 
   // 1. Solid theme background (never transparent, never hardcoded black)
   ctx.fillStyle = themeStyle.bgPaper;
@@ -276,7 +276,7 @@ export function drawRoastFrame(
   ctx.save();
   ctx.strokeStyle = isFlash ? themeStyle.primaryMain : themeStyle.secondaryMain;
   ctx.lineWidth = 3;
-  drawRoundedRect(ctx, 10, 10, w - 20, h - 20, cardRadius + 4);
+  drawRoundedRect(ctx, 10, 10, w - 20, h - 20, cardRadius);
   ctx.stroke();
   ctx.restore();
 
@@ -284,7 +284,7 @@ export function drawRoastFrame(
   const padX = 26;
   const innerW = w - padX * 2;
   ctx.save();
-  drawRoundedRect(ctx, padX, 26, innerW, 36, Math.max(6, cardRadius - 2));
+  drawRoundedRect(ctx, padX, 26, innerW, 36, cardRadius);
   ctx.fillStyle = themeStyle.primaryMain;
   ctx.fill();
   ctx.fillStyle = themeStyle.primaryContrast;
@@ -445,7 +445,7 @@ export function drawRoastFrame(
   const pillX = padX + innerW - cardInnerPadX - pillW;
   const pillY = headerRowCenterY - pillH / 2;
 
-  drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 6);
+  drawRoundedRect(ctx, pillX, pillY, pillW, pillH, cardRadius);
   ctx.fillStyle = isFlash ? themeStyle.errorMain : themeStyle.secondaryMain;
   ctx.fill();
   ctx.fillStyle = '#ffffff';

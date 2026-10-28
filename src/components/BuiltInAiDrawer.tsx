@@ -473,7 +473,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                         ? 'On-Device Ready'
                         : 'Local Analyst'
                 }
-                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }}
+                sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }}
               />
             </Stack>
             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
@@ -485,19 +485,19 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
         <Stack direction="row" spacing={0.5} alignItems="center">
           {availability === 'unavailable' && (
             <Tooltip title="How to enable Chrome / Edge Built-in AI (Gemini Nano)">
-              <IconButton size="small" onClick={() => setShowBrowserHint((v) => !v)}>
+              <IconButton size="small" onClick={() => setShowBrowserHint((v) => !v)} sx={{ borderRadius: 1 }}>
                 <InfoOutlinedIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
           {messages.length > 0 && (
             <Tooltip title="Reset & show full prompt board">
-              <IconButton size="small" onClick={() => setMessages([])} disabled={isGenerating}>
+              <IconButton size="small" onClick={() => setMessages([])} disabled={isGenerating} sx={{ borderRadius: 1 }}>
                 <DeleteOutlineIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
-          <IconButton size="small" onClick={onClose} aria-label="Close AI drawer">
+          <IconButton size="small" onClick={onClose} aria-label="Close AI drawer" sx={{ borderRadius: 1 }}>
             <CloseIcon fontSize="small" />
           </IconButton>
         </Stack>
@@ -508,7 +508,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
             Initializing browser on-device AI model ({downloadProgress}%)...
           </Typography>
-          <LinearProgress variant="determinate" value={downloadProgress} sx={{ height: 5, borderRadius: 2 }} />
+          <LinearProgress variant="determinate" value={downloadProgress} sx={{ height: 5, borderRadius: 1 }} />
         </Box>
       )}
 
@@ -552,8 +552,8 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                 sx={{
                   width: 48,
                   height: 48,
-                  borderRadius: '50%',
-                   mx: 'auto',
+                  borderRadius: 1,
+                  mx: 'auto',
                   mb: 1,
                   display: 'flex',
                   alignItems: 'center',
@@ -603,7 +603,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                     elevation={0}
                     sx={{
                       p: m.role === 'assistant' ? { xs: 2, sm: 2.5 } : 1.5,
-                      borderRadius: 2.25,
+                      borderRadius: 1,
                       position: 'relative',
                       overflow: 'hidden',
                       bgcolor: m.role === 'user' ? 'primary.main' : 'action.hover',
@@ -659,7 +659,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
                   <Button
                     size="small"
                     onClick={() => setMessages([])}
-                    sx={{ textTransform: 'none', fontSize: '0.72rem', py: 0, minHeight: 22 }}
+                    sx={{ textTransform: 'none', fontSize: '0.72rem', py: 0, minHeight: 22, borderRadius: 1 }}
                   >
                     Clear chat
                   </Button>
@@ -707,6 +707,7 @@ export default function BuiltInAiDrawer({ open, onClose }: BuiltInAiDrawerProps)
           color="primary"
           disabled={!input.trim() || isGenerating}
           sx={{
+            borderRadius: 1,
             bgcolor: 'primary.main',
             color: 'primary.contrastText',
             '&:hover': { bgcolor: 'primary.dark' },
@@ -777,6 +778,7 @@ function PromptCardGrid({
                 fontWeight: 700,
                 fontSize: '0.74rem',
                 height: 28,
+                borderRadius: 1,
               }}
             />
           );
@@ -805,7 +807,7 @@ function PromptCardGrid({
                 overflow: 'visible',
                 py: compact ? 1.25 : 1.5,
                 px: 1.75,
-                borderRadius: 2.25,
+                borderRadius: 1,
                 borderWidth: '1.5px',
                 borderColor: alreadyAsked
                   ? 'divider'
@@ -837,7 +839,7 @@ function PromptCardGrid({
                   sx={{
                     width: 40,
                     height: 40,
-                    borderRadius: 2,
+                    borderRadius: 1,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -959,7 +961,7 @@ function RoastShareBar({ content }: { content: string }) {
     <Stack
       direction="row"
       spacing={1}
-       alignItems="center"
+      alignItems="center"
       justifyContent="space-between"
       sx={{
         mt: 2.25,
@@ -984,7 +986,7 @@ function RoastShareBar({ content }: { content: string }) {
             fontSize: '0.74rem',
             py: 0.4,
             px: 1.25,
-            borderRadius: 1.5,
+            borderRadius: 1,
           }}
         >
           {copied ? '✅ Copied Roast!' : '📋 Copy Roast for Reddit'}
@@ -1000,7 +1002,7 @@ function RoastShareBar({ content }: { content: string }) {
             fontSize: '0.74rem',
             py: 0.4,
             px: 1.25,
-            borderRadius: 1.5,
+            borderRadius: 1,
           }}
         >
           🔥 Post to Reddit
@@ -1116,7 +1118,7 @@ function AiLedgerScanner({ prompt, stage }: { prompt: string; stage: number }) {
         spacing={0.6}
         sx={{
           p: 1,
-          borderRadius: 1.25,
+          borderRadius: 1,
           bgcolor: 'background.paper',
           border: '1px solid',
           borderColor: 'divider',
@@ -1172,7 +1174,7 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
       textSecondary: muiTheme.palette.text.secondary,
       divider: muiTheme.palette.divider,
       fontFamily: muiTheme.typography.fontFamily || '"Inter", "Segoe UI", sans-serif',
-      borderRadius: Number(muiTheme.shape.borderRadius) || 8,
+      borderRadius: Number(muiTheme.shape.borderRadius) ?? 8,
     }),
     [muiTheme]
   );
@@ -1291,7 +1293,7 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
         sx={{
           width: '100%',
           maxWidth: 460,
-          borderRadius: 2.5,
+          borderRadius: 1,
           overflow: 'hidden',
           border: '1.5px solid',
           borderColor: 'divider',
@@ -1330,7 +1332,7 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
             fontSize: '0.78rem',
             py: 0.65,
             px: 1.5,
-            borderRadius: 1.75,
+            borderRadius: 1,
           }}
         >
           {copiedImg ? '✅ Copied Roast Image!' : '📋 Copy Roast Image'}
@@ -1346,7 +1348,7 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
             fontSize: '0.76rem',
             py: 0.65,
             px: 1.35,
-            borderRadius: 1.75,
+            borderRadius: 1,
           }}
         >
           ⬇️ Download .GIF
@@ -1363,7 +1365,7 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
               fontSize: '0.76rem',
               py: 0.65,
               px: 1.35,
-              borderRadius: 1.75,
+              borderRadius: 1,
             }}
           >
             🎲 Next Suspicious Habit ({(cardIdx % cards.length) + 1}/{cards.length})
@@ -1487,7 +1489,7 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
           sx={{
             px: 1.6,
             py: 1.3,
-            borderRadius: 1.5,
+            borderRadius: 1,
             bgcolor: 'background.paper',
             borderLeft: '4px solid',
             borderColor: isPositiveVerdict
@@ -1518,7 +1520,7 @@ function FormattedAiMessage({ content, isUser }: { content: string; isUser: bool
           sx={{
             px: 1.35,
             py: 1.05,
-            borderRadius: 1.5,
+            borderRadius: 1,
             bgcolor: 'background.paper',
             border: '1px solid',
             borderColor: 'divider',
@@ -1593,7 +1595,7 @@ function MathLedgerTable({ rawRows, baseDelayMs = 0 }: { rawRows: string[]; base
     <Box
       sx={{
         my: 0.25,
-        borderRadius: 1.75,
+        borderRadius: 1,
         border: '1px solid',
         borderColor: 'divider',
         bgcolor: 'background.paper',
