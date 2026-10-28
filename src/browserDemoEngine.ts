@@ -2055,12 +2055,12 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return false;
     case 'get_mcp_server_info': {
       const executablePath = 'strictly-spending';
-      const dbPath = '%APPDATA%\\com.strictlyspending.finance\\spending-viz.sqlite';
+      const dbPath = '';
       const configObj = {
         mcpServers: {
           'strictly-spending': {
             command: executablePath,
-            args: ['--mcp', '--db-path', dbPath],
+            args: ['--mcp'],
           },
         },
       };

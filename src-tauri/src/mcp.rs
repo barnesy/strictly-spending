@@ -40,6 +40,24 @@ fn detect_local_urls(port: u16) -> Vec<String> {
 /// Resolves the path to `spending-viz.sqlite` when running outside the Tauri window lifecycle.
 pub fn resolve_mcp_db_path(custom_path: Option<PathBuf>) -> PathBuf {
     if let Some(p) = custom_path {
+        let raw = p.to_string_lossy();
+        #[cfg(target_os = "windows")]
+        {
+            if raw.to_ascii_uppercase().starts_with("%APPDATA%") {
+                if let Ok(appdata) = std::env::var("APPDATA") {
+                    let suffix = raw["%APPDATA%".len()..].trim_start_matches(['\\', '/']);
+                    let expanded = PathBuf::from(&appdata).join(suffix);
+                    if expanded.exists() {
+                        return expanded;
+                    }
+                    let legacy = PathBuf::from(&appdata).join("com.strictlyspending.app").join("spending-viz.sqlite");
+                    if legacy.exists() {
+                        return legacy;
+                    }
+                    return expanded;
+                }
+            }
+        }
         return p;
     }
     if let Ok(env_path) = std::env::var("STRICTLY_SPENDING_DB_PATH") {

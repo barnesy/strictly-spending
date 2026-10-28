@@ -138,6 +138,9 @@ export default function Settings() {
     setConfirmOpen(true);
   };
 
+  const [copiedMobileAiContext, setCopiedMobileAiContext] = useState(false);
+  const [copyingMobileAiBusy, setCopyingMobileAiBusy] = useState(false);
+
   const fallbackMcpJson = JSON.stringify(
     {
       mcpServers: {
@@ -164,11 +167,155 @@ export default function Settings() {
     }
   };
 
+  const handleCopyMobileAiContext = async () => {
+    setCopyingMobileAiBusy(true);
+    try {
+      const [allAccounts, allTxns, allBudgets, allLoans, allCategories] = await Promise.all([
+        api.getAccounts(),
+        api.getTransactions(),
+        api.getBudgets(),
+        api.getLoans(),
+        api.getCategories(),
+      ]);
+
+      const hasReal = allAccounts.some((a) => a.source !== 'demo');
+      const activeAccs = hasReal ? allAccounts.filter((a) => a.source !== 'demo') : allAccounts;
+      const activeTxns = (hasReal ? allTxns.filter((t) => t.source !== 'demo') : allTxns).sort((a, b) =>
+        b.date.localeCompare(a.date)
+      );
+      const transferCats = new Set(
+        allCategories.filter((c) => c.type === 'transfer').map((c) => c.name)
+      );
+      const incomeCats = new Set(
+        allCategories.filter((c) => c.type === 'income').map((c) => c.name)
+      );
+
+      const accNameById = new Map<number, string>();
+      for (const a of activeAccs) {
+        if (a.id !== undefined) accNameById.set(a.id, a.name);
+      }
+
+      const nowIso = new Date().toISOString().slice(0, 10);
+      const currentYm = nowIso.slice(0, 7);
+      const prevDate = new Date();
+      prevDate.setMonth(prevDate.getMonth() - 1);
+      const lastYm = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+      const spendByCatThisMonth = new Map<string, number>();
+      const spendByCatLastMonth = new Map<string, number>();
+      const merchantStats = new Map<string, { count: number; total: number; category: string }>();
+
+      let thisMonthIncome = 0;
+      let thisMonthSpend = 0;
+      let lastMonthIncome = 0;
+      let lastMonthSpend = 0;
+
+      for (const t of activeTxns) {
+        if (transferCats.has(t.category)) continue;
+        const ym = t.date.slice(0, 7);
+        const isInc = incomeCats.has(t.category) || t.amount > 0;
+        if (isInc && t.amount > 0) {
+          if (ym === currentYm) thisMonthIncome += t.amount;
+          else if (ym === lastYm) lastMonthIncome += t.amount;
+        } else if (t.amount < 0) {
+          const abs = Math.abs(t.amount);
+          if (ym === currentYm) {
+            thisMonthSpend += abs;
+            spendByCatThisMonth.set(t.category, (spendByCatThisMonth.get(t.category) || 0) + abs);
+          } else if (ym === lastYm) {
+            lastMonthSpend += abs;
+            spendByCatLastMonth.set(t.category, (spendByCatLastMonth.get(t.category) || 0) + abs);
+          }
+          const mKey = (t.merchantKey || t.description || 'Unknown').trim();
+          const cur = merchantStats.get(mKey) || { count: 0, total: 0, category: t.category };
+          cur.count += 1;
+          cur.total += abs;
+          merchantStats.set(mKey, cur);
+        }
+      }
+
+      const fmt = (n: number) =>
+        `$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+      const lines: string[] = [
+        `# Strictly Spending — Live Financial Snapshot (${nowIso})`,
+        `You are analyzing my personal financial data exported from Strictly Spending. Use the exact numbers below to answer my questions.`,
+        ``,
+        `## 1. Accounts & Current Balances`,
+        ...activeAccs.map(
+          (a) =>
+            `- **${a.name}** (${a.type}${a.institution ? ` · ${a.institution}` : ''}): ${
+              (a.currentBalance ?? 0) < 0 ? '-' : ''
+            }${fmt(a.currentBalance ?? 0)}`
+        ),
+        ``,
+        `## 2. Loans & Liabilities`,
+        ...(allLoans.filter((l) => l.enabled !== false).length > 0
+          ? allLoans
+              .filter((l) => l.enabled !== false)
+              .map(
+                (l) =>
+                  `- **${l.name}** (${l.type}): Principal ${fmt(l.principal)}, Rate ${l.rate}% APR, Payment ${fmt(
+                    l.monthlyPayment || 0
+                  )}/mo${l.propertyValue ? `, Asset Value ${fmt(l.propertyValue)}` : ''}`
+              )
+          : ['- None configured']),
+        ``,
+        `## 3. Cashflow & Category Spending (${currentYm} vs ${lastYm})`,
+        `- **${currentYm} Month-to-Date**: Income ${fmt(thisMonthIncome)} | Spend ${fmt(thisMonthSpend)} | Net ${
+          thisMonthIncome - thisMonthSpend >= 0 ? '+' : '-'
+        }${fmt(thisMonthIncome - thisMonthSpend)}`,
+        `- **${lastYm} Full Month**: Income ${fmt(lastMonthIncome)} | Spend ${fmt(lastMonthSpend)} | Net ${
+          lastMonthIncome - lastMonthSpend >= 0 ? '+' : '-'
+        }${fmt(lastMonthIncome - lastMonthSpend)}`,
+        ``,
+        `| Category | Monthly Budget | ${currentYm} Spend | ${lastYm} Spend |`,
+        `| :--- | ---: | ---: | ---: |`,
+        ...allCategories
+          .filter((c) => c.type === 'spend')
+          .map((c) => {
+            const b = allBudgets.find((x) => x.category === c.name)?.monthlyAmount || 0;
+            const curS = spendByCatThisMonth.get(c.name) || 0;
+            const lastS = spendByCatLastMonth.get(c.name) || 0;
+            if (b === 0 && curS === 0 && lastS === 0) return null;
+            return `| ${c.name} | ${fmt(b)} | ${fmt(curS)} | ${fmt(lastS)} |`;
+          })
+          .filter((x): x is string => Boolean(x)),
+        ``,
+        `## 4. Top 15 All-Time Merchants by Spend`,
+        ...Array.from(merchantStats.entries())
+          .sort((a, b) => b[1].total - a[1].total)
+          .slice(0, 15)
+          .map(
+            ([m, info], idx) =>
+              `${idx + 1}. **${m}** (${info.category}): ${fmt(info.total)} across ${info.count} transactions`
+          ),
+        ``,
+        `## 5. Most Recent 60 Transactions`,
+        ...activeTxns.slice(0, 60).map((t) => {
+          const accLabel = accNameById.get(t.accountId) || `Acct #${t.accountId}`;
+          const sign = t.amount < 0 ? '-' : '+';
+          return `- \`${t.date}\` | **${sign}${fmt(t.amount)}** | ${t.description} (${t.category} · ${accLabel}${
+            t.isPending ? ' · PENDING' : ''
+          })`;
+        }),
+      ];
+
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedMobileAiContext(true);
+      setTimeout(() => setCopiedMobileAiContext(false), 3000);
+    } catch {
+      // ignore clipboard errors
+    } finally {
+      setCopyingMobileAiBusy(false);
+    }
+  };
+
   return (
     <Stack spacing={{ xs: 2, sm: 3 }}>
       <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700 }}>Settings</Typography>
 
-      {/* Model Context Protocol (MCP) Server Card */}
+      {/* Model Context Protocol (MCP) Server & Mobile AI Bridge Card */}
       <Paper sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2}>
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1.5}>
@@ -176,24 +323,39 @@ export default function Settings() {
               <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                 <HubIcon fontSize="small" color="primary" />
                 <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
-                  Model Context Protocol (MCP) Server
+                  Claude / ChatGPT &amp; MCP Integration
                 </Typography>
-                <Chip label="stdio + HTTP /api/mcp" size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }} />
+                <Chip label="Phone + Desktop MCP" size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }} />
               </Stack>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                Connect Claude Desktop, Antigravity, Cursor, or any MCP client directly to your Strictly Spending SQLite database. Ask your AI to audit deductions, compile Schedule C &amp; personal tax documents (CSV &amp; Markdown), analyze single-account cashflow, or control the live app UI.
+                <strong>On your phone:</strong> Mobile AI apps (Claude iOS/Android, ChatGPT) run in the cloud and cannot launch a local PC <code>stdio</code> MCP server directly. Tap <strong>Copy Financial Snapshot for Claude / ChatGPT</strong> below to copy a complete, privacy-safe summary of your live accounts, budgets, loans, and recent transactions to paste into the Claude mobile app—or tap the built-in <strong>✨ AI</strong> button in the top bar.
               </Typography>
             </Box>
-            <Button
-              size="small"
-              variant={copiedMcp ? 'contained' : 'outlined'}
-              color={copiedMcp ? 'success' : 'primary'}
-              startIcon={copiedMcp ? <CheckIcon /> : <ContentCopyIcon />}
-              onClick={handleCopyMcpConfig}
-              sx={UNIFORM_TOOLBAR_BUTTON_SX}
-            >
-              {copiedMcp ? 'Copied MCP Config' : 'Copy MCP Config'}
-            </Button>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Button
+                size="small"
+                variant="contained"
+                color={copiedMobileAiContext ? 'success' : 'primary'}
+                startIcon={copiedMobileAiContext ? <CheckIcon /> : <SmartphoneIcon />}
+                disabled={copyingMobileAiBusy}
+                onClick={handleCopyMobileAiContext}
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
+              >
+                {copiedMobileAiContext
+                  ? 'Copied! Paste into Claude App'
+                  : 'Copy Snapshot for Claude Mobile'}
+              </Button>
+              <Button
+                size="small"
+                variant={copiedMcp ? 'contained' : 'outlined'}
+                color={copiedMcp ? 'success' : 'primary'}
+                startIcon={copiedMcp ? <CheckIcon /> : <ContentCopyIcon />}
+                onClick={handleCopyMcpConfig}
+                sx={UNIFORM_TOOLBAR_BUTTON_SX}
+              >
+                {copiedMcp ? 'Copied Desktop MCP JSON' : 'Copy Desktop MCP JSON'}
+              </Button>
+            </Stack>
           </Stack>
 
           <Box
