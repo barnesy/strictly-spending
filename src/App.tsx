@@ -391,7 +391,7 @@ export default function App() {
   }, [applyMcpUiCommand]);
 
   useEffect(() => {
-    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
     let isRunning = false;
 
     const maybeAutoSync = async () => {
@@ -403,7 +403,7 @@ export default function App() {
 
         if (config.last_synced_at) {
           const lastSyncMs = new Date(config.last_synced_at).getTime();
-          if (!Number.isNaN(lastSyncMs) && Date.now() - lastSyncMs < FOUR_HOURS_MS) {
+          if (!Number.isNaN(lastSyncMs) && Date.now() - lastSyncMs < TWELVE_HOURS_MS) {
             return;
           }
         }

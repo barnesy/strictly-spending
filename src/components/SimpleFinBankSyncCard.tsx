@@ -330,7 +330,8 @@ export const SimpleFinBankSyncCard: React.FC = () => {
                         Last Synced:{' '}
                         {config.last_synced_at
                           ? new Date(config.last_synced_at).toLocaleString()
-                          : 'Never'}
+                          : 'Never'}{' '}
+                        • Auto-syncs 2×/day (every 12h)
                       </Typography>
                     </Box>
 
