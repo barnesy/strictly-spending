@@ -1313,7 +1313,7 @@ export default function SpendChart({
         axisLabel: { color: textSecondary },
         axisLine: { lineStyle: { color: theme.palette.divider } },
         axisTick: { alignWithLabel: true },
-        inverse: true // Flip so the earliest month is at the top on mobile
+        inverse: false // Earliest month (Jan) at the bottom, latest month (Dec) at the top on mobile
       } : {
         type: 'value',
         axisLabel: { color: textSecondary, formatter: (v: number) => usd.format(v) },
