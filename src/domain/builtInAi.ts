@@ -1036,7 +1036,8 @@ export async function analyzeQuestionAndFinances(
 
   const isRecentHitsAsk =
     !isEmbarrassingDareAsk &&
-    (/\bhit\b/.test(qLower) ||
+    (qLower.includes('damage report') ||
+      /\bhit\b/.test(qLower) ||
       qLower.includes('has anything') ||
       qLower.includes('recent') ||
       qLower.includes('lately') ||

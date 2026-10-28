@@ -58,6 +58,13 @@ const STARTER_PROMPTS: StarterPromptOption[] = [
     group: 'roast',
   },
   {
+    icon: '🚨',
+    title: 'Daily Sync Damage Report (Month & Year Impact)',
+    subtitle: 'Recent charges & how they impact your month-end buffer & full-year burn pace',
+    prompt: 'Show my Damage Report: recent charges and their impact on my month and full year',
+    group: 'bills',
+  },
+  {
     icon: '📈',
     title: 'Invest it vs. pay off car & loans early',
     subtitle: 'Roth IRA / S&P 500 growth vs. killing my car loan & mortgage early',
@@ -132,13 +139,6 @@ const STARTER_PROMPTS: StarterPromptOption[] = [
     title: 'Big bills still coming up?',
     subtitle: 'Unpaid month-end bills waiting to hit my checking cash',
     prompt: 'Are there any big payments coming up this month?',
-    group: 'bills',
-  },
-  {
-    icon: '🚨',
-    title: 'What hit my accounts this week?',
-    subtitle: '7-day damage report & largest recent charges',
-    prompt: 'Has anything big hit my accounts recently?',
     group: 'bills',
   },
   {

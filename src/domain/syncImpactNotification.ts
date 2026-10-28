@@ -190,7 +190,7 @@ export async function buildSyncSpendImpactSummary(
     projectedAnnualSpend,
     annualizedRecentHabitCost,
     tenYearInvestedOpportunity,
-    aiPrompt: 'Has anything big hit my accounts recently and how does it impact my month and year?',
+    aiPrompt: 'Show my Damage Report: recent charges and their impact on my month and full year',
   };
 }
 
