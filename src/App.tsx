@@ -447,17 +447,52 @@ export default function App() {
       }
     };
     const handleShowSyncImpact = async (ev: Event) => {
-      const customEv = ev as CustomEvent<{ added?: number }>;
+      const customEv = ev as CustomEvent<{ added?: number; openAi?: boolean }>;
       const addedCount = customEv.detail?.added ?? 0;
       const impact = await buildSyncSpendImpactSummary(addedCount);
       if (impact) {
         setSyncImpactSummary(impact);
         void maybeSendNativeSyncNotification(impact);
+        if (customEv.detail?.openAi) {
+          window.dispatchEvent(
+            new CustomEvent('open-ai-with-prompt', { detail: { prompt: impact.aiPrompt } })
+          );
+        }
       }
     };
+
+    const handleSwMessage = (ev: MessageEvent) => {
+      if (ev.data && ev.data.type === 'OPEN_SPEND_IMPACT') {
+        window.dispatchEvent(
+          new CustomEvent('show-sync-impact', { detail: { added: 0, openAi: true } })
+        );
+      }
+    };
+
+    // Check if the user tapped a phone push notification (?openSpendImpact=1)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('openSpendImpact') === '1') {
+        params.delete('openSpendImpact');
+        const nextQuery = params.toString();
+        const cleanUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', cleanUrl);
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('show-sync-impact', { detail: { added: 0, openAi: true } })
+          );
+        }, 900);
+      }
+    } catch {
+      // ignore URL parsing errors
+    }
+
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener('show-sync-impact', handleShowSyncImpact);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
 
     return () => {
       clearTimeout(timer);
@@ -465,6 +500,9 @@ export default function App() {
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('show-sync-impact', handleShowSyncImpact);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
     };
   }, []);
 

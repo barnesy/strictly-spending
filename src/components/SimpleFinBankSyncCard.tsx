@@ -29,6 +29,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import HistoryIcon from '@mui/icons-material/History';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import SmartphoneIcon from '@mui/icons-material/Smartphone';
 
 import { useNavigate } from 'react-router-dom';
 import { useSimpleFinStore } from '../stores/simplefinStore';
@@ -40,6 +41,11 @@ import { UNIFORM_TOOLBAR_BUTTON_SX } from './AccountFilterDropdown';
 import {
   getNotificationPermissionState,
   requestSyncNotificationPermission,
+  getPhonePushTopic,
+  setPhonePushTopic,
+  generatePhonePushTopic,
+  buildSyncSpendImpactSummary,
+  sendPhonePushNotification,
 } from '../domain/syncImpactNotification';
 
 export const SimpleFinBankSyncCard: React.FC = () => {
@@ -64,6 +70,8 @@ export const SimpleFinBankSyncCard: React.FC = () => {
   const [mapperOpen, setMapperOpen] = useState(false);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const [notifPermission, setNotifPermission] = useState(getNotificationPermissionState());
+  const [phoneTopic, setPhoneTopicState] = useState(() => getPhonePushTopic());
+  const [phonePushStatus, setPhonePushStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetchConfig();
@@ -397,60 +405,133 @@ export const SimpleFinBankSyncCard: React.FC = () => {
 
                   <Divider sx={{ my: 1.5 }} />
 
-                  <Stack
-                    direction={{ xs: 'column', sm: 'row' }}
-                    justifyContent="space-between"
-                    alignItems={{ xs: 'flex-start', sm: 'center' }}
-                    spacing={1.5}
-                  >
-                    <Box>
-                      <Stack direction="row" spacing={0.75} alignItems="center">
-                        <NotificationsActiveIcon color="primary" sx={{ fontSize: 18 }} />
-                        <Typography variant="body2" fontWeight={700}>
-                          Daily Sync Spend Impact Digest
+                  <Stack spacing={1.5}>
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      justifyContent="space-between"
+                      alignItems={{ xs: 'flex-start', sm: 'center' }}
+                      spacing={1.5}
+                    >
+                      <Box>
+                        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <NotificationsActiveIcon color="primary" sx={{ fontSize: 18 }} />
+                          <Typography variant="body2" fontWeight={700}>
+                            Daily Sync Spend Impact Digest &amp; Phone Push
+                          </Typography>
+                          {notifPermission === 'granted' && (
+                            <Chip
+                              label="Browser/PWA Alerts On"
+                              color="success"
+                              size="small"
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, borderRadius: 1 }}
+                            />
+                          )}
+                          {phoneTopic.trim() && (
+                            <Chip
+                              label={`Phone Push: ${phoneTopic.trim()}`}
+                              color="primary"
+                              size="small"
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, borderRadius: 1 }}
+                            />
+                          )}
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Get a daily notification on your phone after sync showing your new charges, Month Impact, and Full-Year Pace Impact. Tap the notification to open Strictly Spending straight to the breakdown.
                         </Typography>
-                        {notifPermission === 'granted' && (
-                          <Chip
-                            label="Alerts Active"
-                            color="success"
-                            size="small"
-                            variant="outlined"
-                            sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, borderRadius: 1 }}
-                          />
-                        )}
-                      </Stack>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Auto-sync checks every 4h (SimpleFIN refreshes bank feeds daily) and shows your Month & Full-Year spend impact whenever new transactions arrive.
-                      </Typography>
-                    </Box>
+                      </Box>
 
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                      {notifPermission === 'default' && (
+                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                        {notifPermission === 'default' && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<NotificationsActiveIcon />}
+                            onClick={async () => {
+                              const next = await requestSyncNotificationPermission();
+                              setNotifPermission(next);
+                            }}
+                            sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                          >
+                            Enable Browser Alerts
+                          </Button>
+                        )}
                         <Button
                           variant="outlined"
                           size="small"
                           startIcon={<NotificationsActiveIcon />}
-                          onClick={async () => {
-                            const next = await requestSyncNotificationPermission();
-                            setNotifPermission(next);
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent('show-sync-impact', { detail: { added: 0 } }));
                           }}
                           sx={UNIFORM_TOOLBAR_BUTTON_SX}
                         >
-                          Enable Browser Alerts
+                          Preview Spend Impact
                         </Button>
-                      )}
+                      </Stack>
+                    </Stack>
+
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1}
+                      alignItems={{ xs: 'stretch', sm: 'center' }}
+                    >
+                      <TextField
+                        size="small"
+                        fullWidth
+                        label="Phone Push Topic (free ntfy app on iOS / Android)"
+                        placeholder="e.g. strictly-spend-9f8a2b1c"
+                        value={phoneTopic}
+                        onChange={(e) => {
+                          setPhoneTopicState(e.target.value);
+                          setPhonePushTopic(e.target.value);
+                          setPhonePushStatus(null);
+                        }}
+                        sx={{ flex: 1 }}
+                      />
                       <Button
                         variant="outlined"
                         size="small"
-                        startIcon={<NotificationsActiveIcon />}
+                        startIcon={<SmartphoneIcon />}
                         onClick={() => {
-                          window.dispatchEvent(new CustomEvent('show-sync-impact', { detail: { added: 0 } }));
+                          const generated = generatePhonePushTopic();
+                          setPhoneTopicState(generated);
+                          setPhonePushTopic(generated);
+                          setPhonePushStatus(`Subscribed topic set to "${generated}". Add this topic in the free ntfy app on your phone!`);
                         }}
                         sx={UNIFORM_TOOLBAR_BUTTON_SX}
                       >
-                        Preview Spend Impact
+                        Generate Topic
+                      </Button>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        disabled={!phoneTopic.trim()}
+                        startIcon={<SmartphoneIcon />}
+                        onClick={async () => {
+                          setPhonePushStatus('Sending push to phone...');
+                          const impact = await buildSyncSpendImpactSummary(0);
+                          if (!impact) {
+                            setPhonePushStatus('No transactions available to summarize yet.');
+                            return;
+                          }
+                          const ok = await sendPhonePushNotification(impact, phoneTopic.trim());
+                          setPhonePushStatus(
+                            ok
+                              ? `Sent! Check your phone's ntfy notification ("${phoneTopic.trim()}") and tap it to open Strictly Spending.`
+                              : 'Could not reach ntfy.sh. Check your internet connection.'
+                          );
+                        }}
+                        sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                      >
+                        Send Test Phone Push
                       </Button>
                     </Stack>
+                    {phonePushStatus && (
+                      <Typography variant="caption" color="primary" sx={{ fontWeight: 600 }}>
+                        {phonePushStatus}
+                      </Typography>
+                    )}
                   </Stack>
                 </Box>
 

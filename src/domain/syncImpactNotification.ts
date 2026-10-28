@@ -194,12 +194,106 @@ export async function buildSyncSpendImpactSummary(
   };
 }
 
+export const PHONE_PUSH_TOPIC_KEY = 'strictly_phone_push_ntfy_topic';
+
+export function getPhonePushTopic(): string {
+  try {
+    return (localStorage.getItem(PHONE_PUSH_TOPIC_KEY) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+export function setPhonePushTopic(topic: string): void {
+  try {
+    const cleaned = topic.trim();
+    if (cleaned) {
+      localStorage.setItem(PHONE_PUSH_TOPIC_KEY, cleaned);
+    } else {
+      localStorage.removeItem(PHONE_PUSH_TOPIC_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function generatePhonePushTopic(): string {
+  const bytes = new Uint8Array(6);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `strictly-spend-${hex}`;
+}
+
+export function getDeepLinkOpenSpendImpactUrl(overrideBaseUrl?: string): string {
+  if (overrideBaseUrl && overrideBaseUrl.trim()) {
+    const base = overrideBaseUrl.trim().replace(/\/+$/, '');
+    return `${base}/?openSpendImpact=1`;
+  }
+  if (typeof window !== 'undefined') {
+    const { origin, pathname, hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'https://barnesy.github.io/strictly-spending/?openSpendImpact=1';
+    }
+    return `${origin}${pathname}?openSpendImpact=1`;
+  }
+  return 'https://barnesy.github.io/strictly-spending/?openSpendImpact=1';
+}
+
+export async function sendPhonePushNotification(
+  summary: SyncSpendImpactSummary,
+  customTopic?: string,
+  clickUrl?: string
+): Promise<boolean> {
+  const topic = (customTopic ?? getPhonePushTopic()).trim();
+  if (!topic) return false;
+
+  const topStr =
+    summary.topCharges.length > 0
+      ? summary.topCharges.map((c) => `${c.merchant} (${usd.format(c.amount)})`).join(', ')
+      : `${summary.addedCount} new transaction(s)`;
+
+  const title =
+    summary.recentSpendDollars > 0
+      ? `${usd.format(summary.recentSpendDollars)} New Spend · ${summary.currentMonthLabel} at ${usd.format(summary.monthSpendToDate)}`
+      : `${summary.addedCount} New Bank Transaction${summary.addedCount === 1 ? '' : 's'} Synced`;
+
+  const body = [
+    `Recent: ${topStr}`,
+    `Month (${summary.currentMonthLabel}): ${usd.format(summary.monthSpendToDate)} spent (${summary.monthCashRemainder >= 0 ? `+${usd.format(summary.monthCashRemainder)} cash left` : `${usd.format(Math.abs(summary.monthCashRemainder))} over income`}) · Est. EOM ${usd.format(summary.projectedMonthEndSpend)}`,
+    `Full-Year Pace: ${usd.format(summary.projectedAnnualSpend)}/yr (10-yr invested cost: ${usd.format(summary.tenYearInvestedOpportunity)})`,
+    `Tap to open Strictly Spending and analyze with Ask AI.`,
+  ].join('\n');
+
+  const targetUrl = getDeepLinkOpenSpendImpactUrl(clickUrl);
+
+  try {
+    const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
+      method: 'POST',
+      headers: {
+        Title: title,
+        Click: targetUrl,
+        Tags: 'money_with_wings,chart_with_upwards_trend',
+        Priority: 'default',
+      },
+      body,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function maybeSendNativeSyncNotification(
   summary: SyncSpendImpactSummary,
   force = false
 ): boolean {
-  if (typeof window === 'undefined' || !('Notification' in window)) return false;
-  if (Notification.permission !== 'granted') return false;
+  if (typeof window === 'undefined') return false;
 
   const todayKey = new Date().toISOString().slice(0, 10);
   if (!force) {
@@ -212,6 +306,15 @@ export function maybeSendNativeSyncNotification(
     } catch {
       // ignore storage errors
     }
+  }
+
+  // Also dispatch to ntfy.sh phone push if the user configured a phone topic
+  if (getPhonePushTopic()) {
+    void sendPhonePushNotification(summary);
+  }
+
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    return false;
   }
 
   const topStr =
@@ -230,6 +333,28 @@ export function maybeSendNativeSyncNotification(
     `Year Pace: ${usd.format(summary.projectedAnnualSpend)}/yr`,
   ].join(' · ');
 
+  const targetUrl = getDeepLinkOpenSpendImpactUrl();
+
+  // Prefer ServiceWorker registration on mobile PWAs (Android Chrome / iOS Home Screen)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        if (reg && 'showNotification' in reg) {
+          return reg.showNotification(title, {
+            body,
+            tag: 'strictly-daily-sync-impact',
+            icon: './icon-192.png',
+            badge: './icon-192.png',
+            data: { url: targetUrl, prompt: summary.aiPrompt },
+          });
+        }
+        return undefined;
+      })
+      .catch(() => {
+        // Fallback below if ServiceWorker notification fails
+      });
+  }
+
   try {
     const notif = new Notification(title, {
       body,
@@ -244,6 +369,7 @@ export function maybeSendNativeSyncNotification(
     };
     return true;
   } catch {
-    return false;
+    return true;
   }
 }
+
