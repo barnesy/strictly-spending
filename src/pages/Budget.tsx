@@ -71,6 +71,7 @@ import { useDeferredRender } from '../hooks/useDeferredRender';
 export default function Budget() {
   const { data: accounts = [] } = useAccounts();
   const incomeStreams = useForecastStore((s) => s.incomeStreams);
+  const simplefinAccounts = useSimpleFinStore((s) => s.accounts);
   const checkingAccounts = useMemo(
     () => getOperatingCashAccounts(accounts, incomeStreams),
     [accounts, incomeStreams]
@@ -364,7 +365,6 @@ export default function Budget() {
     savingsTransferOut -
     trailingVariableAvg;
 
-  const simplefinAccounts = useSimpleFinStore((s) => s.accounts);
   const activeScopedAccounts = isAllSelected ? checkingAccounts : selectedAccounts;
 
   const currentAccountBalance = activeScopedAccounts.reduce(
@@ -373,26 +373,24 @@ export default function Budget() {
   );
 
   // Use SimpleFIN available_balance when lower than posted currentBalance (captures pending debit holds)
-  const availableCheckingBalance = useMemo(() => {
-    return activeScopedAccounts.reduce((sum, a) => {
-      const posted = Number(a.currentBalance || 0);
-      const sfMatch = simplefinAccounts.find(
-        (sf) =>
-          sf.strictly_account_id === a.id ||
-          (a.last4 && sf.name.includes(a.last4)) ||
-          sf.name.toLowerCase() === a.name.toLowerCase()
-      );
-      if (
-        sfMatch &&
-        typeof sfMatch.available_balance === 'number' &&
-        sfMatch.available_balance >= 0 &&
-        sfMatch.available_balance < posted
-      ) {
-        return sum + sfMatch.available_balance;
-      }
-      return sum + posted;
-    }, 0);
-  }, [activeScopedAccounts, simplefinAccounts]);
+  const availableCheckingBalance = activeScopedAccounts.reduce((sum, a) => {
+    const posted = Number(a.currentBalance || 0);
+    const sfMatch = simplefinAccounts.find(
+      (sf) =>
+        sf.strictly_account_id === a.id ||
+        (a.last4 && sf.name.includes(a.last4)) ||
+        sf.name.toLowerCase() === a.name.toLowerCase()
+    );
+    if (
+      sfMatch &&
+      typeof sfMatch.available_balance === 'number' &&
+      sfMatch.available_balance >= 0 &&
+      sfMatch.available_balance < posted
+    ) {
+      return sum + sfMatch.available_balance;
+    }
+    return sum + posted;
+  }, 0);
 
   const pendingHoldAmount = Math.max(0, currentAccountBalance - availableCheckingBalance);
   const projectedEndOfMonthBalance = currentAccountBalance + thisMonthAccountCashRemainder;
@@ -404,7 +402,7 @@ export default function Budget() {
     .sort((a, b) => a - b)[0];
 
   // Compute Safe-to-Spend Until Next Payday (Available Cash - Unpaid Bills Due Before Next Payday)
-  const safeToSpendUntilPaydayInfo = useMemo(() => {
+  const safeToSpendUntilPaydayInfo = (() => {
     const todayDay = currentMonthForecastSummary.dayOfMonth;
     const daysInMonth = currentMonthForecastSummary.daysInMonth;
     const [calY, calM] = currentCalMonth.split('-').map(Number);
@@ -489,18 +487,7 @@ export default function Budget() {
       safeToSpend,
       dailyAllowance,
     };
-  }, [
-    currentMonthForecastSummary.dayOfMonth,
-    currentMonthForecastSummary.daysInMonth,
-    currentCalMonth,
-    currentMonthIncomeProjections,
-    scopedIncomeInfo.scopedStreams,
-    consolidatedMerchants,
-    excludedMerchants,
-    excludedBudgetCategories,
-    recurrenceMap,
-    availableCheckingBalance,
-  ]);
+  })();
 
   const recurringPctOfIncome =
     expectedMonthlyIncome > 0 ? Math.min(100, (recurringProjected / expectedMonthlyIncome) * 100) : 0;
