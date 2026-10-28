@@ -637,7 +637,7 @@ export default function Budget() {
               }}
             >
               {/* 1. Inflow */}
-              <Box sx={{ p: 1.25, borderRadius: 1.5, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', minWidth: 0 }}>
+              <Box sx={{ p: 1.25, borderRadius: 1, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', minWidth: 0 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', fontSize: { xs: '0.68rem', sm: '0.75rem' } }}>
                   Account Inflow
                 </Typography>
@@ -652,7 +652,7 @@ export default function Budget() {
               </Box>
 
               {/* 2. Recurring & Savings (Actual Featured) */}
-              <Box sx={{ p: 1.25, borderRadius: 1.5, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', minWidth: 0 }}>
+              <Box sx={{ p: 1.25, borderRadius: 1, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', minWidth: 0 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', fontSize: { xs: '0.68rem', sm: '0.75rem' } }}>
                   Recurring &amp; Savings (Actual)
                 </Typography>
@@ -670,7 +670,7 @@ export default function Budget() {
               <Box
                 sx={{
                   p: 1.25,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   bgcolor: 'background.paper',
                   border: '1.5px solid',
                   borderColor: 'primary.main',
@@ -692,7 +692,7 @@ export default function Budget() {
               <Box
                 sx={{
                   p: 1.25,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   bgcolor: 'background.paper',
                   border: '1.5px solid',
                   borderColor: actualCashRemainderThisMonth >= 0 ? 'success.main' : 'error.main',
@@ -729,7 +729,7 @@ export default function Budget() {
                 sx={{
                   gridColumn: { xs: '1 / -1', sm: 'span 2', md: 'auto' },
                   p: { xs: 1, sm: 1.25 },
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   bgcolor: 'background.paper',
                   border: '1px solid',
                   borderColor: 'divider',
@@ -760,7 +760,7 @@ export default function Budget() {
             <Box
               sx={{
                 p: { xs: 1.25, sm: 1.5 },
-                borderRadius: 1.5,
+                borderRadius: 1,
                 bgcolor: 'background.paper',
                 border: '1px solid',
                 borderColor:

@@ -355,7 +355,7 @@ export function FinancialInsightsCard() {
                 <Box
                   sx={{
                     p: 1.75,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     border: '1px solid',
                     borderColor: alpha(theme.palette.error.main, 0.35),
                     bgcolor: 'background.paper',
@@ -427,7 +427,7 @@ export function FinancialInsightsCard() {
                 <Box
                   sx={{
                     p: 1.75,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     border: '1px solid',
                     borderColor: 'divider',
                     bgcolor: 'background.paper',
@@ -508,7 +508,7 @@ export function FinancialInsightsCard() {
                 <Box
                   sx={{
                     p: 1.75,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     border: '1px solid',
                     borderColor: 'divider',
                     bgcolor: 'background.paper',
@@ -565,7 +565,7 @@ export function FinancialInsightsCard() {
                 <Box
                   sx={{
                     p: 1.75,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     border: '1px solid',
                     borderColor: 'divider',
                     bgcolor: 'background.paper',
@@ -622,7 +622,7 @@ export function FinancialInsightsCard() {
                 <Box
                   sx={{
                     p: 1.75,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     border: '1px solid',
                     borderColor: 'divider',
                     bgcolor: 'background.paper',
