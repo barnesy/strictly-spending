@@ -25,6 +25,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { parseISO, format, lastDayOfMonth } from 'date-fns';
 
 const PRESETS: { value: DateRangePreset; label: string }[] = [
+  { value: 'thisMonth', label: 'This Month' },
   { value: 'ytd', label: 'YTD' },
   { value: 'last30', label: '30D' },
   { value: 'last90', label: '90D' },
@@ -53,6 +54,8 @@ function getCompactMobileLabel(
   start: Date,
   end: Date
 ): string {
+  if (preset === 'thisMonth') return 'This Month';
+  if (preset === 'lastMonth') return 'Last Month';
   if (preset === 'ytd') return 'YTD';
   if (preset === 'last30') return '30D';
   if (preset === 'last90') return '90D';
@@ -206,6 +209,8 @@ export default function RangePicker() {
                   fontWeight: 600,
                 }}
               >
+                <MenuItem value="thisMonth">This Month</MenuItem>
+                <MenuItem value="lastMonth">Last Month</MenuItem>
                 <MenuItem value="ytd">Year to Date (YTD)</MenuItem>
                 <MenuItem value="last30">Last 30 Days</MenuItem>
                 <MenuItem value="last90">Last 90 Days</MenuItem>

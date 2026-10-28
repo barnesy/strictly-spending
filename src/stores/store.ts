@@ -131,6 +131,7 @@ export const useFilters = create<FiltersStore>()(
       setPreset: (p) =>
         set((s) => ({
           preset: p,
+          drill: null,
           customEnd: p === 'custom' && !s.customEnd ? formatLocalDate(new Date()) : s.customEnd,
         })),
       setCustomRange: (customStart, customEnd) =>
@@ -213,6 +214,40 @@ export const useFilters = create<FiltersStore>()(
         set((s) => {
           // Compute current effective range
           const range = resolveDateRange(s);
+          if (
+            s.preset === 'thisMonth' ||
+            s.preset === 'lastMonth' ||
+            (range.start.getFullYear() === range.end.getFullYear() &&
+              range.start.getMonth() === range.end.getMonth() &&
+              range.start.getDate() === 1)
+          ) {
+            const targetMonthStart = new Date(
+              range.start.getFullYear(),
+              range.start.getMonth() + direction,
+              1
+            );
+            const targetMonthEnd = new Date(
+              targetMonthStart.getFullYear(),
+              targetMonthStart.getMonth() + 1,
+              0
+            );
+            const now = new Date();
+            if (
+              targetMonthStart.getFullYear() === now.getFullYear() &&
+              targetMonthStart.getMonth() === now.getMonth()
+            ) {
+              return {
+                preset: 'thisMonth',
+                drill: null,
+              };
+            }
+            return {
+              preset: 'custom',
+              customStart: formatLocalDate(targetMonthStart),
+              customEnd: formatLocalDate(targetMonthEnd),
+              drill: null,
+            };
+          }
           const lenMs = range.end.getTime() - range.start.getTime();
           // Shift by the length of the current window (so "Last 30D" → next/prev 30 days).
           const newStart = new Date(range.start.getTime() + direction * lenMs);
