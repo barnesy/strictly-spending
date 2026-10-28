@@ -355,19 +355,17 @@ export function drawRoastFrame(
   ctx.strokeStyle = themeStyle.divider;
   ctx.stroke();
 
-  // Top accent bar inside amount box
+  // Top accent bar + clipped interior inside amount box
   ctx.save();
-  ctx.beginPath();
   drawRoundedRect(ctx, padX, boxY, innerW, boxH, cardRadius);
   ctx.clip();
   ctx.fillStyle = isFlash ? themeStyle.errorMain : themeStyle.primaryMain;
   ctx.fillRect(padX, boxY, innerW, 4);
-  ctx.restore();
 
   // Giant pulsing dollar amount
   const scaleJitter = 1 + Math.sin(phase * 2) * 0.028;
   ctx.save();
-  ctx.translate(w / 2, boxY + 54);
+  ctx.translate(w / 2, boxY + 50);
   ctx.scale(scaleJitter, scaleJitter);
   setFittedSingleLineFont(
     ctx,
@@ -384,14 +382,30 @@ export function drawRoastFrame(
   ctx.fillText(payload.totalAmountFormatted, 0, 0);
   ctx.restore();
 
-  // Subtitle line inside amount box
+  // Subtitle line inside amount box (auto-wraps to 2 lines if merchant name is long)
   ctx.save();
   const subText = payload.subtitleLine.toUpperCase();
-  setFittedSingleLineFont(ctx, subText, innerW - 32, 12, 9.5, '700', sansFamily);
+  const subLayout = layoutFittedParagraph(
+    ctx,
+    subText,
+    innerW - 36,
+    36,
+    12,
+    9.5,
+    1.25,
+    '700',
+    sansFamily
+  );
+  ctx.font = `700 ${subLayout.fontSize}px ${sansFamily}`;
   ctx.fillStyle = themeStyle.textSecondary;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(subText, w / 2, boxY + 104);
+  const subStartY =
+    subLayout.lines.length > 1 ? boxY + 95 : boxY + 102;
+  subLayout.lines.forEach((line, idx) => {
+    ctx.fillText(line, w / 2, subStartY + idx * subLayout.lineHeight);
+  });
+  ctx.restore();
   ctx.restore();
   ctx.restore();
 
@@ -409,13 +423,11 @@ export function drawRoastFrame(
   ctx.strokeStyle = themeStyle.divider;
   ctx.stroke();
 
-  // Left accent bar matching app's verdict callout style
-  ctx.save();
+  // Left accent bar + clip card interior
   drawRoundedRect(ctx, padX, cardY, innerW, cardH, cardRadius);
   ctx.clip();
   ctx.fillStyle = themeStyle.primaryMain;
   ctx.fillRect(padX, cardY, 5, cardH);
-  ctx.restore();
 
   // Card Top Header Row (Left label + Right non-overlapping stamp pill)
   const headerRowCenterY = cardY + 24;
@@ -458,8 +470,8 @@ export function drawRoastFrame(
     cardTextW,
     bodyAvailH,
     16,
-    12.5,
-    1.4,
+    11,
+    1.38,
     '600',
     sansFamily
   );

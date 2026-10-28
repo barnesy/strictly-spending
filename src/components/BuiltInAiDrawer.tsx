@@ -1201,12 +1201,25 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const logicalW = 540;
+    const logicalH = 560;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = logicalW * dpr;
+    canvas.height = logicalH * dpr;
+
+    const renderFrame = (f: number, total: number) => {
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawRoastFrame(ctx, logicalW, logicalH, payload, f, total, themeStyle);
+      ctx.restore();
+    };
+
     let frame = 0;
     const totalFrames = 12;
-    drawRoastFrame(ctx, canvas.width, canvas.height, payload, 0, totalFrames, themeStyle);
+    renderFrame(0, totalFrames);
     const timer = window.setInterval(() => {
       frame = (frame + 1) % totalFrames;
-      drawRoastFrame(ctx, canvas.width, canvas.height, payload, frame, totalFrames, themeStyle);
+      renderFrame(frame, totalFrames);
     }, 90);
 
     return () => window.clearInterval(timer);
@@ -1272,14 +1285,14 @@ function RoastAnimatedGifWidget({ cards }: { cards: RoastGifPayload[] }) {
           lineHeight: 0,
         }}
       >
-        <Box
-          component="canvas"
+        <canvas
           ref={canvasRef}
           width={540}
           height={560}
-          sx={{
+          style={{
             width: '100%',
             height: 'auto',
+            aspectRatio: '540 / 560',
             display: 'block',
           }}
         />
