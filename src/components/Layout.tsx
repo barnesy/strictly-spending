@@ -36,13 +36,17 @@ import RealEstateAgentOutlinedIcon from '@mui/icons-material/RealEstateAgentOutl
 import StyleOutlinedIcon from '@mui/icons-material/StyleOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
+import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 
 import AnimatedLogo from './AnimatedLogo';
 import { useFilters } from '../stores/store';
+import { useNotificationStore } from '../stores/notificationStore';
 import { useAccounts, useTransactionBounds, useUncategorizedCount, useLoans } from '../hooks/queries';
 
 const BalanceSheetModal = lazy(() => import('./BalanceSheetModal'));
 const BuiltInAiDrawer = lazy(() => import('./BuiltInAiDrawer'));
+const NotificationDrawer = lazy(() => import('./NotificationDrawer'));
 const IphoneInstallModal = lazy(() => import('./IphoneInstallModal'));
 
 type NavItem = {
@@ -172,9 +176,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const [isBalanceSheetOpen, setIsBalanceSheetOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
+  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
   const [pendingAiPrompt, setPendingAiPrompt] = useState<string | null>(null);
   const [isIphoneModalOpen, setIsIphoneModalOpen] = useState(false);
   const { data: loans = [] } = useLoans();
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadNotificationsCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  );
 
   useEffect(() => {
     const handleOpenAi = (e: Event) => {
@@ -184,8 +194,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
       }
       setIsAiDrawerOpen(true);
     };
+    const handleOpenNotifications = () => {
+      setIsNotificationDrawerOpen(true);
+    };
     window.addEventListener('open-ai-with-prompt', handleOpenAi);
-    return () => window.removeEventListener('open-ai-with-prompt', handleOpenAi);
+    window.addEventListener('open-notification-panel', handleOpenNotifications);
+    return () => {
+      window.removeEventListener('open-ai-with-prompt', handleOpenAi);
+      window.removeEventListener('open-notification-panel', handleOpenNotifications);
+    };
   }, []);
 
   const activeAccounts = useMemo(() => {
@@ -469,6 +486,46 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   Ask AI
                 </Button>
               </Tooltip>
+
+              <Tooltip title="Notifications (Spend Impact & Budget Alerts)">
+                <IconButton
+                  onClick={() => setIsNotificationDrawerOpen(true)}
+                  size="small"
+                  aria-label="Open notifications panel"
+                  sx={{
+                    width: { xs: 36, sm: 34 },
+                    height: { xs: 36, sm: 34 },
+                    border: '1px solid',
+                    borderColor: unreadNotificationsCount > 0 ? 'primary.main' : 'divider',
+                    borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+                    color: unreadNotificationsCount > 0 ? 'primary.main' : 'text.secondary',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: 'action.hover',
+                    },
+                  }}
+                >
+                  <Badge
+                    badgeContent={unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                    color="error"
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        fontSize: '0.62rem',
+                        height: 16,
+                        minWidth: 16,
+                        px: 0.4,
+                        fontWeight: 700,
+                      },
+                    }}
+                  >
+                    {unreadNotificationsCount > 0 ? (
+                      <NotificationsActiveIcon sx={{ fontSize: 18 }} />
+                    ) : (
+                      <NotificationsNoneOutlinedIcon sx={{ fontSize: 18 }} />
+                    )}
+                  </Badge>
+                </IconButton>
+              </Tooltip>
             </Box>
 
             {mem && (
@@ -618,6 +675,40 @@ export function Layout({ children }: { children: React.ReactNode }) {
               }}
             >
               Ask Strictly AI
+            </Button>
+            <Button
+              fullWidth
+              variant="outlined"
+              size="small"
+              startIcon={
+                unreadNotificationsCount > 0 ? (
+                  <NotificationsActiveIcon fontSize="small" color="primary" />
+                ) : (
+                  <NotificationsNoneOutlinedIcon fontSize="small" />
+                )
+              }
+              onClick={() => {
+                setIsMobileNavOpen(false);
+                setIsNotificationDrawerOpen(true);
+              }}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                justifyContent: 'space-between',
+                borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+                borderColor: 'divider',
+                color: 'text.primary',
+              }}
+            >
+              <span>Notifications</span>
+              {unreadNotificationsCount > 0 && (
+                <Chip
+                  size="small"
+                  color="error"
+                  label={unreadNotificationsCount}
+                  sx={{ height: 18, fontSize: '0.68rem', fontWeight: 700, borderRadius: 1 }}
+                />
+              )}
             </Button>
             <Button
               fullWidth
@@ -882,6 +973,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
           onClose={() => setIsAiDrawerOpen(false)}
           initialPrompt={pendingAiPrompt}
           onConsumeInitialPrompt={() => setPendingAiPrompt(null)}
+        />
+      </Suspense>
+
+      {/* Triggered Notifications Panel */}
+      <Suspense fallback={null}>
+        <NotificationDrawer
+          open={isNotificationDrawerOpen}
+          onClose={() => setIsNotificationDrawerOpen(false)}
         />
       </Suspense>
 

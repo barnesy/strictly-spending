@@ -3,6 +3,7 @@ import { usd, monthLabel } from '../lib';
 import { useFilters } from '../stores/store';
 import { useForecastStore, computeTotalNetIncome } from '../stores/forecastStore';
 import { useBudgetStore } from '../stores/budgetStore';
+import { useNotificationStore } from '../stores/notificationStore';
 import { loadForecastBaselineData } from './incomeStreams';
 
 function cleanMerchantLabel(raw: string): string {
@@ -290,11 +291,47 @@ export async function sendPhonePushNotification(
   }
 }
 
+export function recordSyncImpactNotification(summary: SyncSpendImpactSummary): void {
+  const topStr =
+    summary.topCharges.length > 0
+      ? summary.topCharges.map((c) => `${c.merchant} (${usd.format(c.amount)})`).join(', ')
+      : `${summary.addedCount} new transaction(s)`;
+
+  const title =
+    summary.recentSpendDollars > 0
+      ? `${usd.format(summary.recentSpendDollars)} New Spend · ${summary.currentMonthLabel} at ${usd.format(summary.monthSpendToDate)}`
+      : `${summary.addedCount} New Bank Transaction${summary.addedCount === 1 ? '' : 's'} Synced`;
+
+  const body = [
+    `Recent: ${topStr}`,
+    `Month: ${usd.format(summary.monthSpendToDate)} spent (${summary.monthCashRemainder >= 0 ? `+${usd.format(summary.monthCashRemainder)} cash left` : `${usd.format(Math.abs(summary.monthCashRemainder))} over income`}) · Est. EOM ${usd.format(summary.projectedMonthEndSpend)}`,
+    `Full-Year Pace: ${usd.format(summary.projectedAnnualSpend)}/yr (10-yr invested cost: ${usd.format(summary.tenYearInvestedOpportunity)})`,
+  ].join(' • ');
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  useNotificationStore.getState().addNotification({
+    id: `sync-impact-${todayKey}-${Math.round(summary.monthSpendToDate)}`,
+    type: 'sync_impact',
+    title,
+    body,
+    aiPrompt: summary.aiPrompt,
+    navigateTo: '/',
+    meta: {
+      recentSpendDollars: summary.recentSpendDollars,
+      monthSpendToDate: summary.monthSpendToDate,
+      projectedAnnualSpend: summary.projectedAnnualSpend,
+      monthCashRemainder: summary.monthCashRemainder,
+    },
+  });
+}
+
 export function maybeSendNativeSyncNotification(
   summary: SyncSpendImpactSummary,
   force = false
 ): boolean {
   if (typeof window === 'undefined') return false;
+
+  recordSyncImpactNotification(summary);
 
   const todayKey = new Date().toISOString().slice(0, 10);
   if (!force) {
@@ -480,16 +517,32 @@ export async function checkAndNotifyBudgetAlerts(
 }
 
 function dispatchBudgetBreachNotifications(item: CategoryBudgetBreachAlert): void {
-  const title = `🚨 ${item.category} Crossed Budget (${usd.format(item.actualSpend)} / ${usd.format(item.budgetAmount)})`;
+  const title = `${item.category} Crossed Budget (${usd.format(item.actualSpend)} / ${usd.format(item.budgetAmount)})`;
   const body = `${item.monthLabel}: You are ${usd.format(item.overBy)} over your ${usd.format(item.budgetAmount)}/mo ${item.category} budget (${item.pctUsed}% used).`;
   const targetUrl = getDeepLinkOpenSpendImpactUrl();
+
+  useNotificationStore.getState().addNotification({
+    id: `budget-breach-${item.monthLabel}-${item.category}-${Math.round(item.budgetAmount)}`,
+    type: 'budget_breach',
+    title,
+    body,
+    aiPrompt: item.aiPrompt,
+    navigateTo: '/budget',
+    meta: {
+      category: item.category,
+      actualSpend: item.actualSpend,
+      budgetAmount: item.budgetAmount,
+      overBy: item.overBy,
+      pctUsed: item.pctUsed,
+    },
+  });
 
   const topic = getPhonePushTopic();
   if (topic) {
     void fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
       method: 'POST',
       headers: {
-        Title: `${item.category} Crossed Budget (${usd.format(item.actualSpend)} / ${usd.format(item.budgetAmount)})`,
+        Title: title,
         Click: targetUrl,
         Tags: 'rotating_light,money_with_wings',
         Priority: 'high',
@@ -506,7 +559,7 @@ function dispatchBudgetBreachNotifications(item: CategoryBudgetBreachAlert): voi
     navigator.serviceWorker.ready
       .then((reg) => {
         if (reg && 'showNotification' in reg) {
-          return reg.showNotification(title, {
+          return reg.showNotification(`🚨 ${title}`, {
             body,
             tag: `strictly-budget-breach-${item.category}`,
             icon: './icon-192.png',
@@ -520,7 +573,7 @@ function dispatchBudgetBreachNotifications(item: CategoryBudgetBreachAlert): voi
   }
 
   try {
-    const notif = new Notification(title, {
+    const notif = new Notification(`🚨 ${title}`, {
       body,
       tag: `strictly-budget-breach-${item.category}`,
     });
