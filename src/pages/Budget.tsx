@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useAccounts,
@@ -172,7 +172,7 @@ export default function Budget() {
 
   // Auto-seed and sync non-userSet budgets with latest trailing actuals (only when viewing all accounts).
   useEffect(() => {
-    if (!budgets || !categories || isDataLoading || !isAllSelected) return;
+    if (!budgets || !categories || isDataLoading || !isAllSelected || bulkPutBudgets.isPending) return;
     const existingByCat = new Map(budgets.map((b) => [b.category, b]));
     const toAdd: BudgetType[] = [];
     for (const cat of spendCategories) {
@@ -195,7 +195,8 @@ export default function Budget() {
     if (toAdd.length > 0) {
       bulkPutBudgets.mutate(toAdd);
     }
-  }, [budgets, categories, spendCategories, trailingAvgByCategory, isDataLoading, bulkPutBudgets, isAllSelected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budgets, categories, spendCategories, trailingAvgByCategory, isDataLoading, isAllSelected]);
 
   const isLoading = isDataLoading || !categories || !overrides || !budgets;
   const recurringCategoryNames = useMemo(() => new Set(
@@ -222,23 +223,18 @@ export default function Budget() {
     return map;
   }, [merchantsByCategory, excludedMerchants]);
 
-  // Ensure every spend category has an effective budget entry, and scope to selected accounts when filtered
+  // Ensure every spend category has an effective budget entry; always respect userSet target budgets
   const effectiveBudgets = useMemo(() => {
     const budgetMap = new Map((budgets || []).map((b) => [b.category, b]));
     const result: BudgetType[] = [];
     for (const cat of spendCategories) {
       const existing = budgetMap.get(cat.name);
       const trailingAvg = Math.round((trailingAvgByCategory.get(cat.name) || 0) * 100) / 100;
-      if (!isAllSelected) {
-        result.push({
-          category: cat.name,
-          monthlyAmount: trailingAvg,
-          userSet: existing?.userSet ?? false,
-        });
-      } else if (existing) {
+      if (existing && existing.userSet) {
         result.push({
           ...existing,
-          monthlyAmount: !existing.userSet ? trailingAvg : existing.monthlyAmount,
+          monthlyAmount: existing.monthlyAmount,
+          userSet: true,
         });
       } else {
         result.push({
@@ -249,7 +245,7 @@ export default function Budget() {
       }
     }
     return result;
-  }, [budgets, spendCategories, isAllSelected, trailingAvgByCategory]);
+  }, [budgets, spendCategories, trailingAvgByCategory]);
 
   const shouldRender = useDeferredRender();
 
@@ -1199,28 +1195,29 @@ function BudgetAmountInput({
   onSave: (amount: number) => Promise<void>;
 }) {
   const [value, setValue] = useState(() => initialAmount.toFixed(2));
-  const [isFocused, setIsFocused] = useState(false);
+  const focusedRef = useRef(false);
+  const skipNextBlurRef = useRef(false);
 
   useEffect(() => {
-    if (!isFocused) {
+    if (!focusedRef.current) {
       setValue(initialAmount.toFixed(2));
     }
-  }, [initialAmount, category, isFocused]);
+  }, [initialAmount, category]);
 
   const handleSave = async (val: string) => {
     const cleaned = val.replace(/[^0-9.]/g, '');
     const amount = Number(cleaned) || 0;
     setValue(amount.toFixed(2));
-    if (Math.abs(amount - initialAmount) > 0.001 || saveOnChange) {
-      await onSave(amount);
-    }
+    await onSave(amount);
   };
 
   return (
     <TextField
       size="small"
       value={value}
-      onFocus={() => setIsFocused(true)}
+      onFocus={() => {
+        focusedRef.current = true;
+      }}
       onChange={(e) => {
         const nextVal = e.target.value;
         setValue(nextVal);
@@ -1231,13 +1228,20 @@ function BudgetAmountInput({
         }
       }}
       onBlur={() => {
-        setIsFocused(false);
+        focusedRef.current = false;
+        if (skipNextBlurRef.current) {
+          skipNextBlurRef.current = false;
+          return;
+        }
         void handleSave(value);
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
-          setIsFocused(false);
-          void handleSave(value);
+          e.preventDefault();
+          focusedRef.current = false;
+          skipNextBlurRef.current = true;
+          const currentInputVal = (e.target as HTMLInputElement).value ?? value;
+          void handleSave(currentInputVal);
           (e.target as HTMLInputElement).blur();
         }
       }}
@@ -1302,15 +1306,16 @@ function BudgetCard({
   const sorted = useMemo(
     () =>
       budgets.slice().sort((a, b) => {
-        if (b.monthlyAmount !== a.monthlyAmount) return b.monthlyAmount - a.monthlyAmount;
-        const actualDiff =
-          (currentMonthProjections.get(b.category)?.actualToDate ?? 0) -
-          (currentMonthProjections.get(a.category)?.actualToDate ?? 0);
-        if (actualDiff !== 0) return actualDiff;
         const avgDiff =
           (trailingAvgByCategory.get(b.category) ?? 0) -
           (trailingAvgByCategory.get(a.category) ?? 0);
-        return avgDiff;
+        if (Math.abs(avgDiff) > 0.01) return avgDiff;
+        const actualDiff =
+          (currentMonthProjections.get(b.category)?.actualToDate ?? 0) -
+          (currentMonthProjections.get(a.category)?.actualToDate ?? 0);
+        if (Math.abs(actualDiff) > 0.01) return actualDiff;
+        if (b.monthlyAmount !== a.monthlyAmount) return b.monthlyAmount - a.monthlyAmount;
+        return a.category.localeCompare(b.category);
       }),
     [budgets, currentMonthProjections, trailingAvgByCategory]
   );
