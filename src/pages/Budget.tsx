@@ -53,6 +53,7 @@ import SavingsIcon from '@mui/icons-material/Savings';
 import { usd, usdCents, monthLabel } from '../lib';
 import { type ConsolidatedMerchant } from '../domain/budgets';
 import { useBudgetStore } from '../stores/budgetStore';
+import { useSimpleFinStore } from '../stores/simplefinStore';
 import PageLoader from '../components/PageLoader';
 import { FinancialInsightsCard } from '../components/FinancialInsightsCard';
 import {
@@ -363,9 +364,37 @@ export default function Budget() {
     savingsTransferOut -
     trailingVariableAvg;
 
-  const currentAccountBalance = isAllSelected
-    ? checkingAccounts.reduce((sum, a) => sum + Number(a.currentBalance || 0), 0)
-    : selectedAccounts.reduce((sum, a) => sum + Number(a.currentBalance || 0), 0);
+  const simplefinAccounts = useSimpleFinStore((s) => s.accounts);
+  const activeScopedAccounts = isAllSelected ? checkingAccounts : selectedAccounts;
+
+  const currentAccountBalance = activeScopedAccounts.reduce(
+    (sum, a) => sum + Number(a.currentBalance || 0),
+    0
+  );
+
+  // Use SimpleFIN available_balance when lower than posted currentBalance (captures pending debit holds)
+  const availableCheckingBalance = useMemo(() => {
+    return activeScopedAccounts.reduce((sum, a) => {
+      const posted = Number(a.currentBalance || 0);
+      const sfMatch = simplefinAccounts.find(
+        (sf) =>
+          sf.strictly_account_id === a.id ||
+          (a.last4 && sf.name.includes(a.last4)) ||
+          sf.name.toLowerCase() === a.name.toLowerCase()
+      );
+      if (
+        sfMatch &&
+        typeof sfMatch.available_balance === 'number' &&
+        sfMatch.available_balance >= 0 &&
+        sfMatch.available_balance < posted
+      ) {
+        return sum + sfMatch.available_balance;
+      }
+      return sum + posted;
+    }, 0);
+  }, [activeScopedAccounts, simplefinAccounts]);
+
+  const pendingHoldAmount = Math.max(0, currentAccountBalance - availableCheckingBalance);
   const projectedEndOfMonthBalance = currentAccountBalance + thisMonthAccountCashRemainder;
   const projected6MoBalance = currentAccountBalance + thisMonthAccountCashRemainder + monthlyAccountCashRemainder * 5;
 
@@ -373,6 +402,105 @@ export default function Budget() {
     .map((p) => p.nextExpectedDay)
     .filter((d): d is number => typeof d === 'number')
     .sort((a, b) => a - b)[0];
+
+  // Compute Safe-to-Spend Until Next Payday (Available Cash - Unpaid Bills Due Before Next Payday)
+  const safeToSpendUntilPaydayInfo = useMemo(() => {
+    const todayDay = currentMonthForecastSummary.dayOfMonth;
+    const daysInMonth = currentMonthForecastSummary.daysInMonth;
+    const [calY, calM] = currentCalMonth.split('-').map(Number);
+    const shortCurMonth = new Date(calY, (calM || 1) - 1, 1).toLocaleString('en-US', { month: 'short' });
+    const shortNextMonth = new Date(calY, calM || 1, 1).toLocaleString('en-US', { month: 'short' });
+
+    let daysUntilPayday = Math.max(1, daysInMonth - todayDay);
+    let nextPaydayLabel = `End of ${shortCurMonth}`;
+    let nextPaycheckAmount = 0;
+    let isPaydayInCurrentMonth = false;
+    let nextPaydayDayNumber = daysInMonth;
+
+    const upcomingInMonth = currentMonthIncomeProjections
+      .filter((p) => typeof p.nextExpectedDay === 'number' && p.nextExpectedDay >= todayDay)
+      .sort((a, b) => (a.nextExpectedDay || 99) - (b.nextExpectedDay || 99));
+
+    if (upcomingInMonth.length > 0) {
+      const targetDay = upcomingInMonth[0].nextExpectedDay!;
+      nextPaydayDayNumber = targetDay;
+      isPaydayInCurrentMonth = true;
+      daysUntilPayday = Math.max(1, targetDay - todayDay);
+      nextPaydayLabel = targetDay === todayDay ? `Today (${shortCurMonth} ${targetDay})` : `${shortCurMonth} ${targetDay}`;
+      nextPaycheckAmount = upcomingInMonth
+        .filter((p) => p.nextExpectedDay === targetDay)
+        .reduce((s, p) => s + (p.paycheckAmount || 0), 0);
+    } else if (scopedIncomeInfo.scopedStreams.length > 0) {
+      // All paychecks for this month have landed; estimate first paycheck of next month
+      const streams = scopedIncomeInfo.scopedStreams;
+      let nextMonthDay = 15;
+      for (const s of streams) {
+        if (s.frequency === 'biweekly') {
+          nextMonthDay = Math.min(nextMonthDay, 7);
+        } else if (s.frequency === 'weekly') {
+          nextMonthDay = Math.min(nextMonthDay, 4);
+        } else if (s.frequency === 'monthly') {
+          nextMonthDay = Math.min(nextMonthDay, 1);
+        } else if (s.frequency === 'semimonthly') {
+          nextMonthDay = Math.min(nextMonthDay, 15);
+        }
+      }
+      daysUntilPayday = Math.max(1, daysInMonth - todayDay + nextMonthDay);
+      nextPaydayLabel = `${shortNextMonth} ${nextMonthDay}`;
+      nextPaycheckAmount =
+        currentMonthIncomeProjections.reduce((s, p) => s + (p.paycheckAmount || 0), 0) /
+        Math.max(1, currentMonthIncomeProjections.length);
+    }
+
+    // Collect unpaid recurring bills due on or before the next payday
+    const billsDueBeforePayday = consolidatedMerchants
+      .filter(
+        (m) =>
+          !excludedMerchants.has(m.merchantKey) &&
+          !excludedBudgetCategories.has(m.category)
+      )
+      .map((m) => ({
+        ...m,
+        status: getMerchantBillStatus(m.merchantKey, currentCalMonth, recurrenceMap),
+      }))
+      .filter((m) => {
+        if (m.status.isPaidThisMonth || !m.status.isExpectedThisMonth) return false;
+        if (!isPaydayInCurrentMonth) {
+          // Next payday is next month -> all remaining unpaid bills in this month hit before next payday
+          return true;
+        }
+        if (typeof m.status.expectedDay === 'number') {
+          return m.status.expectedDay <= nextPaydayDayNumber;
+        }
+        return true;
+      })
+      .sort((a, b) => (a.status.expectedDay || 99) - (b.status.expectedDay || 99) || b.monthlyAverage - a.monthlyAverage);
+
+    const billsDueBeforePaydayTotal = billsDueBeforePayday.reduce((s, b) => s + b.monthlyAverage, 0);
+    const safeToSpend = availableCheckingBalance - billsDueBeforePaydayTotal;
+    const dailyAllowance = Math.max(0, safeToSpend) / Math.max(1, daysUntilPayday);
+
+    return {
+      daysUntilPayday,
+      nextPaydayLabel,
+      nextPaycheckAmount,
+      billsDueBeforePayday,
+      billsDueBeforePaydayTotal,
+      safeToSpend,
+      dailyAllowance,
+    };
+  }, [
+    currentMonthForecastSummary.dayOfMonth,
+    currentMonthForecastSummary.daysInMonth,
+    currentCalMonth,
+    currentMonthIncomeProjections,
+    scopedIncomeInfo.scopedStreams,
+    consolidatedMerchants,
+    excludedMerchants,
+    excludedBudgetCategories,
+    recurrenceMap,
+    availableCheckingBalance,
+  ]);
 
   const recurringPctOfIncome =
     expectedMonthlyIncome > 0 ? Math.min(100, (recurringProjected / expectedMonthlyIncome) * 100) : 0;
@@ -627,16 +755,121 @@ export default function Budget() {
               >
                 <Box>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', fontSize: { xs: '0.68rem', sm: '0.75rem' } }}>
-                    Current Cash Balance
+                    {pendingHoldAmount > 0.5 ? 'Available Checking Cash' : 'Current Cash Balance'}
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: { xs: '0.92rem', sm: '1rem' } }}>
-                    {usd.format(currentAccountBalance)}
+                    {usd.format(availableCheckingBalance)}
                   </Typography>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.68rem', textAlign: { xs: 'right', md: 'left' } }}>
-                  Proj EOM: {usd.format(projectedEndOfMonthBalance)} · 6m: {usd.format(projected6MoBalance)}
+                  {pendingHoldAmount > 0.5
+                    ? `Posted: ${usd.format(currentAccountBalance)} (-${usd.format(pendingHoldAmount)} pending)`
+                    : `Proj EOM: ${usd.format(projectedEndOfMonthBalance)} · 6m: ${usd.format(projected6MoBalance)}`}
                 </Typography>
               </Box>
+            </Box>
+
+            {/* Safe-to-Spend Until Next Payday Bar */}
+            <Box
+              sx={{
+                p: { xs: 1.25, sm: 1.5 },
+                borderRadius: 1.5,
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor:
+                  safeToSpendUntilPaydayInfo.safeToSpend >= 0
+                    ? alpha('#2e7d32', 0.35)
+                    : alpha('#d32f2f', 0.45),
+              }}
+            >
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                justifyContent="space-between"
+                alignItems={{ xs: 'flex-start', md: 'center' }}
+                spacing={{ xs: 1, md: 2 }}
+              >
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: { xs: '0.84rem', sm: '0.9rem' } }}>
+                      💸 Safe-to-Spend Until Next Payday ({safeToSpendUntilPaydayInfo.nextPaydayLabel})
+                    </Typography>
+                    <Chip
+                      size="small"
+                      color={safeToSpendUntilPaydayInfo.safeToSpend >= 0 ? 'success' : 'error'}
+                      label={`${usd.format(safeToSpendUntilPaydayInfo.dailyAllowance)}/day safe · ${safeToSpendUntilPaydayInfo.daysUntilPayday}d left`}
+                      sx={{ height: 21, fontSize: '0.68rem', fontWeight: 700 }}
+                    />
+                    {safeToSpendUntilPaydayInfo.nextPaycheckAmount > 0 && (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color="success"
+                        label={`Next paycheck: +${usd.format(safeToSpendUntilPaydayInfo.nextPaycheckAmount)}`}
+                        sx={{ height: 21, fontSize: '0.68rem', fontWeight: 600 }}
+                      />
+                    )}
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35, lineHeight: 1.4 }}>
+                    Available Cash (<strong>{usd.format(availableCheckingBalance)}</strong>
+                    {pendingHoldAmount > 0.5 ? ` after ${usd.format(pendingHoldAmount)} pending holds` : ''})
+                    {' − '}
+                    <strong>{safeToSpendUntilPaydayInfo.billsDueBeforePayday.length}</strong> Unpaid Bill
+                    {safeToSpendUntilPaydayInfo.billsDueBeforePayday.length === 1 ? '' : 's'} Due Before{' '}
+                    {safeToSpendUntilPaydayInfo.nextPaydayLabel} (
+                    <strong>-{usd.format(safeToSpendUntilPaydayInfo.billsDueBeforePaydayTotal)}</strong>)
+                  </Typography>
+                </Box>
+
+                <Box sx={{ textAlign: { xs: 'left', md: 'right' }, flexShrink: 0 }}>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 800,
+                      fontVariantNumeric: 'tabular-nums',
+                      color: safeToSpendUntilPaydayInfo.safeToSpend >= 0 ? 'success.main' : 'error.main',
+                      lineHeight: 1.15,
+                      fontSize: { xs: '1.25rem', sm: '1.45rem' },
+                    }}
+                  >
+                    {safeToSpendUntilPaydayInfo.safeToSpend >= 0 ? '' : '-'}
+                    {usd.format(Math.abs(safeToSpendUntilPaydayInfo.safeToSpend))}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', fontWeight: 600 }}>
+                    Uncommitted cash before payday
+                  </Typography>
+                </Box>
+              </Stack>
+
+              {safeToSpendUntilPaydayInfo.billsDueBeforePayday.length > 0 && (
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  alignItems="center"
+                  flexWrap="wrap"
+                  useFlexGap
+                  sx={{ mt: 1, pt: 1, borderTop: '1px dashed', borderColor: 'divider' }}
+                >
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, fontSize: '0.68rem', mr: 0.25 }}>
+                    Reserved for bills before {safeToSpendUntilPaydayInfo.nextPaydayLabel}:
+                  </Typography>
+                  {safeToSpendUntilPaydayInfo.billsDueBeforePayday.slice(0, 6).map((b) => (
+                    <Chip
+                      key={b.merchantKey}
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      onClick={() => toggleMerchant(b.merchantKey)}
+                      label={`${formatCleanMerchantName(b.merchantKey)} · ${usd.format(b.monthlyAverage)}${b.status.expectedShortLabel ? ` (${b.status.expectedShortLabel})` : ''}`}
+                      sx={{ height: 20, fontSize: '0.66rem', fontWeight: 600 }}
+                    />
+                  ))}
+                  {safeToSpendUntilPaydayInfo.billsDueBeforePayday.length > 6 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.66rem' }}>
+                      +{safeToSpendUntilPaydayInfo.billsDueBeforePayday.length - 6} more
+                    </Typography>
+                  )}
+                </Stack>
+              )}
             </Box>
           </Stack>
         </Paper>

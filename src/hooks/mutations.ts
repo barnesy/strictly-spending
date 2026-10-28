@@ -15,9 +15,12 @@ const TRANSACTION_DERIVED_QUERY_KEYS = [
   'dashboard_aggregates',
   'top_merchants',
   'spend_chart_data',
+  'comparison_month_spend_chart_data',
   'income_chart_data',
+  'comparison_month_income_chart_data',
   'historical_spend_by_category',
   'historical_monthly_income',
+  'recurrenceMap',
   'recurrence_map',
   'last_month_actual_spend',
   'budgets',
@@ -25,12 +28,12 @@ const TRANSACTION_DERIVED_QUERY_KEYS = [
   'category_transaction_counts',
   'rule_match_counts',
   'merchant_groups',
+  'sortQueue',
   'sort_queue',
   'consolidated_recurring_merchants',
   'category_trailing_averages',
   'unique_merchants',
   'transaction_bounds',
-  'tax_transactions',
 ] as const;
 
 export function invalidateTransactionDerivedQueries(queryClient: QueryClient) {
@@ -201,6 +204,7 @@ export const useClearRules = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] });
       queryClient.invalidateQueries({ queryKey: ['rule_match_counts'] });
+      invalidateTransactionDerivedQueries(queryClient);
     },
   });
 };
@@ -328,7 +332,10 @@ export const useDeleteArtifact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.deleteArtifact(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artifacts'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artifacts'] });
+      queryClient.invalidateQueries({ queryKey: ['artifacts_count'] });
+    },
   });
 };
 
@@ -336,7 +343,10 @@ export const usePutArtifact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (item: ChatArtifact) => api.putArtifact(item),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artifacts'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artifacts'] });
+      queryClient.invalidateQueries({ queryKey: ['artifacts_count'] });
+    },
   });
 };
 

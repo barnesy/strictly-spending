@@ -43,7 +43,16 @@ function loadDismissedInsights(): Set<string> {
 export function FinancialInsightsCard() {
   const theme = useTheme();
   const demoMode = useFilters((s) => s.demoMode);
-  const { data: allTransactions = [] } = useTransactions();
+  const sixMonthRange = useMemo(() => {
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(end.getDate() - 185);
+    return {
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
+    };
+  }, []);
+  const { data: allTransactions = [] } = useTransactions(undefined, sixMonthRange);
   const { data: overrides = [] } = useMerchantOverrides();
   const { data: budgets = [] } = useBudgets();
 
@@ -77,6 +86,10 @@ export function FinancialInsightsCard() {
     priceSpikes,
     duplicateCharges,
     overlappingSubscriptions,
+    activeSubscriptions,
+    totalSubMonthly,
+    totalSubAnnual,
+    totalHikeAnnualImpact,
     categorySpikes,
     outliers,
     allActiveInsightIds,
@@ -87,6 +100,10 @@ export function FinancialInsightsCard() {
         priceSpikes: [],
         duplicateCharges: [],
         overlappingSubscriptions: [],
+        activeSubscriptions: [],
+        totalSubMonthly: 0,
+        totalSubAnnual: 0,
+        totalHikeAnnualImpact: 0,
         categorySpikes: [],
         outliers: [],
         allActiveInsightIds: [] as string[],
@@ -100,6 +117,10 @@ export function FinancialInsightsCard() {
     start30.setDate(now.getDate() - 30);
     const startDateStr = start30.toISOString().slice(0, 10);
 
+    const start90 = new Date(now);
+    start90.setDate(now.getDate() - 90);
+    const start90Str = start90.toISOString().slice(0, 10);
+
     const subAlerts = detectSubscriptionAlerts(activeTransactions, overrides);
     const anomalies = detectSpendingAnomalies(
       activeTransactions,
@@ -109,9 +130,9 @@ export function FinancialInsightsCard() {
       budgets
     );
 
-    // Scope price spikes & duplicate charges to the last 30 days and attach stable IDs
+    // Scope price spikes ("Bill Creep") to the last 90 days so monthly/quarterly hikes stay visible
     const rawSpikes = subAlerts.priceSpikes
-      .filter((s) => s.date >= startDateStr)
+      .filter((s) => s.date >= start90Str)
       .map((s) => ({ ...s, insightId: `spike:${s.merchantKey}:${s.date}` }));
 
     const rawDups = subAlerts.duplicateCharges
@@ -122,6 +143,13 @@ export function FinancialInsightsCard() {
       ...g,
       insightId: `overlap:${g.groupName}`,
     }));
+
+    const rawSubs = subAlerts.activeSubscriptions
+      .filter((s) => s.lastDate >= start90Str)
+      .map((s) => ({
+        ...s,
+        insightId: `sub:${s.merchantKey}`,
+      }));
 
     const rawCatSpikes = anomalies.categorySpikes.map((cs) => ({
       ...cs,
@@ -143,6 +171,7 @@ export function FinancialInsightsCard() {
     const filteredSpikes = rawSpikes.filter((x) => !dismissedIds.has(x.insightId));
     const filteredDups = rawDups.filter((x) => !dismissedIds.has(x.insightId));
     const filteredOverlaps = rawOverlaps.filter((x) => !dismissedIds.has(x.insightId));
+    const filteredSubs = rawSubs.filter((x) => !dismissedIds.has(x.insightId));
     const filteredCatSpikes = rawCatSpikes.filter((x) => !dismissedIds.has(x.insightId));
     const filteredOutliers = rawOutliers.filter((x) => !dismissedIds.has(x.insightId));
 
@@ -154,10 +183,17 @@ export function FinancialInsightsCard() {
       ...filteredOutliers.map((x) => x.insightId),
     ];
 
+    const subMonthly = filteredSubs.reduce((sum, s) => sum + s.estMonthlyCost, 0);
+    const hikeAnnual = filteredSpikes.reduce((sum, s) => sum + (s.annualImpact || (s.newPrice - s.oldPrice) * 12), 0);
+
     return {
       priceSpikes: filteredSpikes,
       duplicateCharges: filteredDups,
       overlappingSubscriptions: filteredOverlaps,
+      activeSubscriptions: filteredSubs,
+      totalSubMonthly: subMonthly,
+      totalSubAnnual: subMonthly * 12,
+      totalHikeAnnualImpact: hikeAnnual,
       categorySpikes: filteredCatSpikes,
       outliers: filteredOutliers,
       allActiveInsightIds: activeIds,
@@ -215,7 +251,7 @@ export function FinancialInsightsCard() {
             fontWeight={600}
             sx={{ fontSize: { xs: '0.92rem', sm: '1rem' }, lineHeight: 1.35, flex: 1, minWidth: 0 }}
           >
-            Automated Subscription &amp; Anomaly Audit (Last 30 Days)
+            Subscription, Bill Creep &amp; Anomaly Radar
           </Typography>
         </Stack>
 
@@ -229,11 +265,29 @@ export function FinancialInsightsCard() {
           sx={{ width: { xs: '100%', md: 'auto' }, flexShrink: 0 }}
         >
           <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            {activeSubscriptions.length > 0 && (
+              <Chip
+                size="small"
+                variant="outlined"
+                color="primary"
+                label={`${activeSubscriptions.length} recurring · ${usd.format(totalSubMonthly)}/mo`}
+                sx={{ height: 24, fontSize: '0.72rem', fontWeight: 700 }}
+              />
+            )}
+            {priceSpikes.length > 0 && (
+              <Chip
+                size="small"
+                color="error"
+                variant="outlined"
+                label={`${priceSpikes.length} price hike${priceSpikes.length === 1 ? '' : 's'} (+${usd.format(totalHikeAnnualImpact)}/yr)`}
+                sx={{ height: 24, fontSize: '0.72rem', fontWeight: 700 }}
+              />
+            )}
             {totalFindings > 0 ? (
               <Chip
                 size="small"
                 color="warning"
-                label={`${totalFindings} insight${totalFindings === 1 ? '' : 's'} detected`}
+                label={`${totalFindings} alert${totalFindings === 1 ? '' : 's'}`}
                 sx={{ height: 24, fontSize: '0.73rem', fontWeight: 700 }}
               />
             ) : (
@@ -288,14 +342,14 @@ export function FinancialInsightsCard() {
       </Stack>
 
       <Collapse in={expanded} timeout="auto" unmountOnExit>
-        {totalFindings === 0 ? (
+        {totalFindings === 0 && activeSubscriptions.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
             All recurring bills, category pace, and recent charges are within normal ranges
             {dismissedCount > 0 ? ` (${dismissedCount} dismissed insight${dismissedCount === 1 ? '' : 's'} hidden).` : '.'}
           </Typography>
         ) : (
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            {/* 1. Subscription Price Spikes */}
+            {/* 1. Subscription & Bill Price Increases ("Bill Creep") */}
             {priceSpikes.length > 0 && (
               <Grid size={{ xs: 12, md: 6 }}>
                 <Box
@@ -303,19 +357,27 @@ export function FinancialInsightsCard() {
                     p: 1.75,
                     borderRadius: 1.5,
                     border: '1px solid',
-                    borderColor: 'divider',
+                    borderColor: alpha(theme.palette.error.main, 0.35),
                     bgcolor: 'background.paper',
                     height: '100%',
                   }}
                 >
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                    <TrendingUpIcon fontSize="small" color="error" />
-                    <Typography variant="subtitle2" fontWeight={700}>
-                      Recurring Price Increases ({priceSpikes.length})
-                    </Typography>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TrendingUpIcon fontSize="small" color="error" />
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        Bill Creep &amp; Price Hikes ({priceSpikes.length})
+                      </Typography>
+                    </Stack>
+                    <Chip
+                      size="small"
+                      color="error"
+                      label={`+${usd.format(totalHikeAnnualImpact)}/yr impact`}
+                      sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+                    />
                   </Stack>
                   <Stack spacing={1}>
-                    {priceSpikes.slice(0, 5).map((spike) => (
+                    {priceSpikes.slice(0, 6).map((spike) => (
                       <Stack
                         key={spike.insightId}
                         direction="row"
@@ -328,7 +390,7 @@ export function FinancialInsightsCard() {
                             {spike.merchantName}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {spike.date} · Was {usdCents.format(spike.oldPrice)}
+                            {spike.date} · Was {usdCents.format(spike.oldPrice)} (+{usd.format(spike.annualImpact)}/yr)
                           </Typography>
                         </Box>
                         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
@@ -359,7 +421,88 @@ export function FinancialInsightsCard() {
               </Grid>
             )}
 
-            {/* 2. Potential Duplicate Charges */}
+            {/* 2. Active Subscriptions & Gray-Charge Radar */}
+            {activeSubscriptions.length > 0 && (
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box
+                  sx={{
+                    p: 1.75,
+                    borderRadius: 1.5,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                    height: '100%',
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <LayersIcon fontSize="small" color="primary" />
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        Recurring Subscriptions &amp; Autopays ({activeSubscriptions.length})
+                      </Typography>
+                    </Stack>
+                    <Chip
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      label={`${usd.format(totalSubMonthly)}/mo · ${usd.format(totalSubAnnual)}/yr`}
+                      sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+                    />
+                  </Stack>
+                  <Stack spacing={0.85}>
+                    {activeSubscriptions.slice(0, 6).map((sub) => (
+                      <Stack
+                        key={sub.insightId}
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        spacing={1}
+                      >
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Stack direction="row" spacing={0.75} alignItems="center">
+                            <Typography variant="body2" fontWeight={600} noWrap>
+                              {sub.name}
+                            </Typography>
+                            {sub.isGrayCharge && (
+                              <Chip
+                                size="small"
+                                label="Gray charge"
+                                sx={{
+                                  height: 17,
+                                  fontSize: '0.62rem',
+                                  fontWeight: 600,
+                                  bgcolor: alpha(theme.palette.info.main, 0.12),
+                                  color: 'info.main',
+                                }}
+                              />
+                            )}
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary" noWrap display="block">
+                            {sub.cat} · Last: {sub.lastDate} ({usd.format(sub.annualCost)}/yr)
+                          </Typography>
+                        </Box>
+                        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
+                          <Typography variant="body2" fontWeight={700} sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {usdCents.format(sub.estMonthlyCost)}/mo
+                          </Typography>
+                          <Tooltip title="Hide from radar">
+                            <IconButton
+                              size="small"
+                              onClick={() => dismissInsight(sub.insightId)}
+                              sx={{ p: 0.25 }}
+                            >
+                              <CloseIcon sx={{ fontSize: 15 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Box>
+              </Grid>
+            )}
+
+            {/* 3. Potential Duplicate Charges */}
             {duplicateCharges.length > 0 && (
               <Grid size={{ xs: 12, md: 6 }}>
                 <Box
@@ -416,7 +559,7 @@ export function FinancialInsightsCard() {
               </Grid>
             )}
 
-            {/* 3. Overlapping Subscriptions */}
+            {/* 4. Overlapping Subscriptions */}
             {overlappingSubscriptions.length > 0 && (
               <Grid size={{ xs: 12, md: 6 }}>
                 <Box

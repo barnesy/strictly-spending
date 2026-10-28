@@ -121,6 +121,13 @@ const STARTER_PROMPTS: StarterPromptOption[] = [
     group: 'wealth',
   },
   {
+    icon: '💸',
+    title: 'Safe to spend until next payday',
+    subtitle: 'Available cash minus unpaid bills due before your next paycheck ($/day)',
+    prompt: 'How much is safe to spend until my next payday after unpaid bills?',
+    group: 'bills',
+  },
+  {
     icon: '⏳',
     title: 'Big bills still coming up?',
     subtitle: 'Unpaid month-end bills waiting to hit my checking cash',
@@ -157,9 +164,9 @@ const STARTER_PROMPTS: StarterPromptOption[] = [
   },
   {
     icon: '🧛',
-    title: 'Audit my subscription drains',
-    subtitle: 'Recurring autopays quietly bleeding me every month',
-    prompt: 'Which subscriptions and recurring bills are draining me?',
+    title: 'Subscription & Bill Creep Radar',
+    subtitle: 'Recurring autopays, price hikes & gray charges quietly bleeding you',
+    prompt: 'Which subscriptions, recurring bills, and price hikes are draining me?',
     group: 'bills',
   },
   {

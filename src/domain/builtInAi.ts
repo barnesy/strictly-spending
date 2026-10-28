@@ -9,6 +9,7 @@ import {
   getStreamPaycheckSchedule,
 } from './forecastSpending';
 import { buildRecurrenceMap } from './recurrence';
+import { detectSubscriptionAlerts } from './insights';
 import type { Account, Budget, Category, Loan, RecurrenceInfo, Transaction } from '../types';
 
 export type BuiltInAiAvailability =
@@ -1017,7 +1018,11 @@ export async function analyzeQuestionAndFinances(
 
   const isUpcomingBillsAsk =
     !isEmbarrassingDareAsk &&
-    (qLower.includes('coming up') ||
+    (qLower.includes('safe to spend') ||
+      qLower.includes('until my next payday') ||
+      qLower.includes('next payday') ||
+      qLower.includes('until payday') ||
+      qLower.includes('coming up') ||
       qLower.includes('upcoming') ||
       qLower.includes('still due') ||
       qLower.includes('left to pay') ||
@@ -1039,6 +1044,8 @@ export async function analyzeQuestionAndFinances(
   const isSubscriptionAsk =
     !isEmbarrassingDareAsk &&
     (qLower.includes('subscription') ||
+      qLower.includes('bill creep') ||
+      qLower.includes('price hike') ||
       qLower.includes('recurring') ||
       qLower.includes('autopay') ||
       qLower.includes('draining') ||
@@ -1558,36 +1565,51 @@ export async function analyzeQuestionAndFinances(
       ...buildWealthRedirectLines(amountToTest, isRecurringAsk ? 'monthly' : 'onetime'),
     ].join('\n');
   }
-  // 2. Upcoming Bills ("Are there any big bills coming up?")
+  // 2. Upcoming Bills & Safe-to-Spend Until Next Payday
   else if (isUpcomingBillsAsk) {
+    const upcomingSchedule = streamSchedules
+      .filter((s) => typeof s.schedule.nextExpectedDay === 'number' && s.schedule.nextExpectedDay >= curDayOfMonth)
+      .sort((a, b) => (a.schedule.nextExpectedDay || 99) - (b.schedule.nextExpectedDay || 99));
+
+    const nextPaydayDay = upcomingSchedule[0]?.schedule.nextExpectedDay ?? daysInCurMonth;
+    const daysToPayday = Math.max(
+      1,
+      upcomingSchedule.length > 0 ? nextPaydayDay - curDayOfMonth : daysRemainingInMonth + 7
+    );
+    const nextPaycheckDollars =
+      upcomingSchedule.length > 0
+        ? upcomingSchedule[0].schedule.netPerPaycheck
+        : streamSchedules[0]?.schedule.netPerPaycheck || 0;
+
     const topUnpaid = unpaidBills.slice(0, 5);
     const topUnpaidSum = topUnpaid.reduce((s, b) => s + b.monthlyAverage, 0);
     const otherUnpaidSum = Math.max(0, unpaidBillsTotalDollars - topUnpaidSum);
     const freeCheckingAfterBills = checkingCashDollars - unpaidBillsTotalDollars;
+    const dailySafeAllowance = Math.max(0, freeCheckingAfterBills) / Math.max(1, daysToPayday);
 
     const roastLine =
       unpaidBills.length > 0
-        ? `⏳ **Hands off your checking balance — ${usd.format(unpaidBillsTotalDollars)} of it already belongs to your bills.** You have **${unpaidBills.length} unpaid bills** waiting to hit in the next **${daysRemainingInMonth} days**.`
-        : `✅ **All ${paidBills.length} bills (${usd.format(paidBillsTotalDollars)}) cleared — which is NOT an invitation to go shopping.** Sweep your surplus into investments or loan principal before you invent a way to spend it.`;
+        ? `⏳ **Hands off your checking balance — ${usd.format(unpaidBillsTotalDollars)} of it already belongs to ${unpaidBills.length} unpaid bills.** After reserving those bills, your true **Safe-to-Spend is ${usd.format(freeCheckingAfterBills)}** (**${usd.format(dailySafeAllowance)}/day** over the next **${daysToPayday} days** until payday).`
+        : `✅ **All ${paidBills.length} bills (${usd.format(paidBillsTotalDollars)}) cleared — leaving ${usd.format(freeCheckingAfterBills)} uncommitted (${usd.format(dailySafeAllowance)}/day until next payday).** Sweep your surplus into investments or loan principal before you invent a way to spend it.`;
 
     synthesizedMarkdownReport = [
-      `### Upcoming Bill Reality Check (${daysRemainingInMonth}d left in ${monthLabel(curMonthKey)})`,
+      `### Safe-to-Spend Until Next Payday & Upcoming Bills (${daysToPayday}d window)`,
       `> ${roastLine}`,
-      `| Unpaid Bill | Expected · Status | Amount |`,
+      `| Cash & Unpaid Bill Math | Expected · Status | Amount |`,
       `| --- | --- | --- |`,
+      `| 🏦 **Checking Cash Today** | Next paycheck: ${nextPaycheckDollars > 0 ? `+${usd.format(nextPaycheckDollars)} in ~${daysToPayday}d` : `${daysRemainingInMonth}d left in mo`} | **+${usd.format(checkingCashDollars)}** |`,
       ...(topUnpaid.length > 0
         ? topUnpaid.map(
             (b) =>
-              `| **${b.merchantKey}** | ${b.status.expectedShortLabel || 'This mo'} · ${b.status.countdownText || 'upcoming'} | -${usd.format(b.monthlyAverage)} |`
+              `| ⏳ **${b.merchantKey}** | ${b.status.expectedShortLabel || 'This mo'} · ${b.status.countdownText || 'upcoming'} | -${usd.format(b.monthlyAverage)} |`
           )
         : paidBills.slice(0, 4).map(
-            (b) => `| **${b.merchantKey}** | ✅ Paid this month | -${usd.format(b.monthlyAverage)} |`
+            (b) => `| ✅ **${b.merchantKey}** | Paid this month | -${usd.format(b.monthlyAverage)} |`
           )),
       unpaidBills.length > topUnpaid.length
         ? `| + ${unpaidBills.length - topUnpaid.length} more unpaid bills | Due before month-end | -${usd.format(otherUnpaidSum)} |`
         : '',
-      `| **= Total Unpaid Bills Left** | **${paidBills.length} paid (${usd.format(paidBillsTotalDollars)}), ${unpaidBills.length} left** | **-${usd.format(unpaidBillsTotalDollars)}** |`,
-      `- 💡 **True Uncommitted Cash:** Checking (**${usd.format(checkingCashDollars)}**) − Unpaid Bills (**${usd.format(unpaidBillsTotalDollars)}**) = **${usd.format(freeCheckingAfterBills)}**.`,
+      `| **= Safe-to-Spend Until Payday** | **${usd.format(dailySafeAllowance)}/day safe allowance (${daysToPayday}d)** | **${freeCheckingAfterBills >= 0 ? '+' : ''}${usd.format(freeCheckingAfterBills)}** |`,
       ...buildWealthRedirectLines(Math.max(150, Math.round(Math.max(200, freeCheckingAfterBills) * 0.25)), 'monthly'),
     ]
       .filter(Boolean)
@@ -1700,8 +1722,12 @@ export async function analyzeQuestionAndFinances(
         .join('\n');
     }
   }
-  // 5. Subscriptions & Recurring Drains
+  // 5. Subscriptions, Recurring Drains & Bill Creep Radar
   else if (isSubscriptionAsk) {
+    const subRadar = detectSubscriptionAlerts(scopedAllTimeTxns, []);
+    const recentHikes = subRadar.priceSpikes.slice(0, 3);
+    const totalHikeAnnual = recentHikes.reduce((s, h) => s + h.annualImpact, 0);
+
     const nonLoanRec = recurringWithStatus.filter(
       (m) => !/mortgage|loan|rent/i.test(`${m.category} ${m.merchantKey}`)
     );
@@ -1711,10 +1737,14 @@ export async function analyzeQuestionAndFinances(
     const otherRec = Math.max(0, totalRecMonthly - listSum);
 
     synthesizedMarkdownReport = [
-      `### Subscription & Autopay Drain Audit`,
-      `> 🧛 **${recurringWithStatus.length} recurring charges quietly siphon -${usd.format(totalRecMonthly)}/mo (-${usd.format(totalRecMonthly * 12)}/yr) before you even buy coffee.** Cancel two things you barely use and redirect that autopay into your own wealth.`,
-      `| Recurring Drain | Category · ${monthLabel(curMonthKey)} Status | Monthly |`,
+      `### Subscription, Autopay & Bill Creep Audit`,
+      `> 🧛 **${recurringWithStatus.length} recurring charges quietly siphon -${usd.format(totalRecMonthly)}/mo (-${usd.format(totalRecMonthly * 12)}/yr) before you even buy coffee${recentHikes.length > 0 ? ` — plus ${recentHikes.length} recent price hike${recentHikes.length === 1 ? '' : 's'} costing you +${usd.format(totalHikeAnnual)}/yr extra` : ''}.** Cancel two things you barely use and redirect that autopay into your own wealth.`,
+      `| Recurring Drain / Bill Creep | Category · ${monthLabel(curMonthKey)} Status | Monthly |`,
       `| --- | --- | --- |`,
+      ...recentHikes.map(
+        (h) =>
+          `| 📈 **${h.merchantName}** (Price Hike) | Was ${usdCents.format(h.oldPrice)} → **${usdCents.format(h.newPrice)}** (+${h.percentageChange.toFixed(0)}%) | **+${usd.format(h.annualImpact)}/yr** |`
+      ),
       ...listToShow.map(
         (m) =>
           `| **${m.merchantKey}** | ${m.category} · ${m.status.isPaidThisMonth ? '✅ Paid' : `⏳ ${m.status.expectedShortLabel || 'Due'}`} | -${usd.format(m.monthlyAverage)}/mo |`
