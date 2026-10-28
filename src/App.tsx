@@ -379,24 +379,27 @@ export default function App() {
   }, [applyMcpUiCommand]);
 
   useEffect(() => {
-    if ((LANDING_ONLY_BUILD && !isInstalledPwa) || autoSyncAttemptedRef.current) return;
-    autoSyncAttemptedRef.current = true;
+    const THIRTY_MIN_MS = 30 * 60 * 1000;
+    let isRunning = false;
 
-    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-    const timer = setTimeout(async () => {
+    const maybeAutoSync = async () => {
+      if (isRunning) return;
+      isRunning = true;
       try {
         const config = await simplefinGetConfig();
         if (!config?.access_url || !config.access_url.trim()) return;
 
         if (config.last_synced_at) {
           const lastSyncMs = new Date(config.last_synced_at).getTime();
-          if (!Number.isNaN(lastSyncMs) && Date.now() - lastSyncMs < SIX_HOURS_MS) {
+          if (!Number.isNaN(lastSyncMs) && Date.now() - lastSyncMs < THIRTY_MIN_MS) {
             return;
           }
         }
 
         const sfAccounts = await simplefinGetAccounts();
-        const hasMapped = sfAccounts.some((a) => a.strictly_account_id !== null && a.strictly_account_id !== undefined);
+        const hasMapped = sfAccounts.some(
+          (a) => a.strictly_account_id !== null && a.strictly_account_id !== undefined
+        );
         if (!hasMapped) return;
 
         const resp = await useSimpleFinStore.getState().syncTransactions();
@@ -411,10 +414,28 @@ export default function App() {
         }
       } catch {
         // Silent background check: ignore network/bridge errors on startup
+      } finally {
+        isRunning = false;
       }
-    }, 1500);
+    };
 
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      void maybeAutoSync();
+    }, 1200);
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void maybeAutoSync();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
   }, []);
 
   const dynamicTheme = useMemo(() => {

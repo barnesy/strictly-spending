@@ -209,9 +209,9 @@ function syncConnectedAccountsAndLoans(s: BrowserDemoState): boolean {
     const nextName = inferred.name;
     const nextLast4 = acc.last4 || inferred.last4;
     const nextBalance =
-      acc.currentBalance !== undefined && acc.currentBalance !== null
-        ? acc.currentBalance
-        : linkedSf?.balance ?? undefined;
+      linkedSf?.balance !== undefined && linkedSf?.balance !== null
+        ? linkedSf.balance
+        : acc.currentBalance;
 
     if (
       nextName !== acc.name ||
@@ -2247,6 +2247,17 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
           );
         }
 
+        let latestFromTxns: string | null = prev?.latest_transaction_date ?? null;
+        if (mappedAccountId !== null) {
+          for (const t of s.transactions) {
+            if (t.accountId === mappedAccountId && t.source !== 'demo') {
+              if (!latestFromTxns || t.date > latestFromTxns) {
+                latestFromTxns = t.date;
+              }
+            }
+          }
+        }
+
         results.push({
           id: prev?.id || nextSfRowId++,
           account_id: sfAccId,
@@ -2257,7 +2268,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
           available_balance: availableBalance,
           balance_date: balanceDateEpoch,
           strictly_account_id: mappedAccountId,
-          latest_transaction_date: prev?.latest_transaction_date ?? null,
+          latest_transaction_date: latestFromTxns,
         });
       }
 
@@ -2283,13 +2294,21 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
 
       const parsed = parseSimpleFinUrl(cfg.access_url);
       let startEpoch = Math.floor(Date.now() / 1000) - 60 * 86400;
-      if (args.startDate) {
-        const parsedMs = new Date(String(args.startDate)).getTime();
+      const rawStartArg = args.startDate !== undefined && args.startDate !== null ? String(args.startDate).trim() : '';
+      if (rawStartArg === '0' || /^all|full$/i.test(rawStartArg)) {
+        startEpoch = 0;
+      } else if (rawStartArg) {
+        const parsedMs = new Date(rawStartArg).getTime();
         if (!Number.isNaN(parsedMs) && parsedMs > 0) {
           startEpoch = Math.floor(parsedMs / 1000);
         }
+      } else if (cfg.last_synced_at) {
+        const lastSyncMs = new Date(cfg.last_synced_at).getTime();
+        if (!Number.isNaN(lastSyncMs) && lastSyncMs > 0) {
+          startEpoch = Math.max(0, Math.floor(lastSyncMs / 1000) - 14 * 86400);
+        }
       }
-      const syncStartDateStr = new Date(startEpoch * 1000).toISOString().slice(0, 10);
+      const syncStartDateStr = startEpoch > 0 ? new Date(startEpoch * 1000).toISOString().slice(0, 10) : undefined;
       const endpoint = `${parsed.cleanUrl}/accounts?version=2&pending=1&start-date=${startEpoch}`;
       const headers: Record<string, string> = {
         Authorization: 'Basic ' + btoa(`${parsed.username}:${parsed.password}`),
@@ -2364,7 +2383,10 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
             (a) =>
               a.source !== 'demo' &&
               (a.name.toLowerCase() === accountName.toLowerCase() ||
-                stripGenericInstitutionPrefix(a.name).toLowerCase() === rawAccName.toLowerCase())
+                stripGenericInstitutionPrefix(a.name).toLowerCase() === rawAccName.toLowerCase() ||
+                (Boolean(last4) &&
+                  a.last4 === last4 &&
+                  (a.institution || '').toLowerCase() === institution.toLowerCase()))
           );
           if (match?.id) {
             mappedAccountId = match.id;
@@ -2429,7 +2451,23 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
                 : rawDesc || 'SimpleFIN Transaction';
 
             const dedupKey = `simplefin_${sfAccId}_${tx.id}`;
-            if (existingKeys.has(dedupKey)) {
+            const legacyDedupKey = `simplefin_${tx.id}`;
+            const isPendingTx = Boolean(tx?.pending || !tx?.posted || tx?.posted === 0);
+            if (existingKeys.has(dedupKey) || existingKeys.has(legacyDedupKey)) {
+              const existingIdx = s.transactions.findIndex(
+                (et) => et.dedupKey === dedupKey || et.dedupKey === legacyDedupKey
+              );
+              if (existingIdx !== -1) {
+                const et = s.transactions[existingIdx];
+                if (et.isPending !== isPendingTx || et.date !== dateStr) {
+                  s.transactions[existingIdx] = {
+                    ...et,
+                    date: dateStr,
+                    isPending: isPendingTx,
+                    amount: Math.round(amountNum * 100) / 100,
+                  };
+                }
+              }
               continue;
             }
             existingKeys.add(dedupKey);
