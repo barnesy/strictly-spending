@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
 } from '@mui/material';
 import ScienceIcon from '@mui/icons-material/Science';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -26,6 +27,10 @@ import InstallMobileIcon from '@mui/icons-material/InstallMobile';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import StorageIcon from '@mui/icons-material/Storage';
+import SyncIcon from '@mui/icons-material/Sync';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import LinkIcon from '@mui/icons-material/Link';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { clearImportedData, seedDemoData, clearDemoData } from '../demoData';
@@ -36,6 +41,14 @@ import AnimatedLogo from '../components/AnimatedLogo';
 import { SimpleFinBankSyncCard } from '../components/SimpleFinBankSyncCard';
 import { UNIFORM_TOOLBAR_BUTTON_SX } from '../components/AccountFilterDropdown';
 import { usePwaInstall } from '../utils/pwaInstall';
+import {
+  getStorageEngineStatus,
+  getRemoteSqliteServerUrl,
+  setRemoteSqliteServerUrl,
+  testPcSqliteConnection,
+  syncFromPcSqliteToBrowserStorage,
+  type StorageEngineStatus,
+} from '../testBridge';
 
 export default function Settings() {
   // Custom confirmation dialog states
@@ -63,13 +76,127 @@ export default function Settings() {
   const [copiedPhoneUrl, setCopiedPhoneUrl] = useState<string | null>(null);
   const { canInstall, isStandalone, promptInstall } = usePwaInstall();
 
+  const [engineStatus, setEngineStatus] = useState<StorageEngineStatus>(() => getStorageEngineStatus());
+  const [remoteUrlInput, setRemoteUrlInput] = useState<string>(() => getRemoteSqliteServerUrl() || '');
+  const [sqliteConnBusy, setSqliteConnBusy] = useState(false);
+  const [sqliteConnMsg, setSqliteConnMsg] = useState<{
+    severity: 'success' | 'info' | 'warning' | 'error';
+    text: string;
+    directPwaUrl?: string;
+  } | null>(null);
+
   useEffect(() => {
+    const refreshStatus = () => {
+      setEngineStatus(getStorageEngineStatus());
+    };
+    window.addEventListener('storage-engine-status-change', refreshStatus);
+
     api.getTransactions().then((rows) => {
       setHasImportedData(rows.some((t) => t.source !== 'demo'));
+      refreshStatus();
     });
     api.isSafeMode().then(setSafeMode).catch(() => setSafeMode(false));
-    api.getMcpServerInfo().then(setMcpInfo).catch(() => {});
+    api
+      .getMcpServerInfo()
+      .then((info) => {
+        setMcpInfo(info);
+        if (info?.localUrls && info.localUrls.length > 0 && !remoteUrlInput) {
+          const preferred = info.localUrls.find((u) => u.includes('://100.')) || info.localUrls[0];
+          if (preferred) setRemoteUrlInput(preferred);
+        }
+        refreshStatus();
+      })
+      .catch(() => {
+        refreshStatus();
+      });
+
+    return () => {
+      window.removeEventListener('storage-engine-status-change', refreshStatus);
+    };
   }, []);
+
+  const handleConnectRemoteSqlite = async () => {
+    const trimmed = remoteUrlInput.trim();
+    if (!trimmed) {
+      setSqliteConnMsg({
+        severity: 'warning',
+        text: 'Enter your PC Server URL first (for example http://192.168.1.247:5173 or http://100.x.x.x:5173).',
+      });
+      return;
+    }
+    setSqliteConnBusy(true);
+    setSqliteConnMsg(null);
+    try {
+      const check = await testPcSqliteConnection(trimmed);
+      if (check.ok && check.serverOrigin) {
+        setRemoteSqliteServerUrl(check.serverOrigin);
+        setRemoteUrlInput(check.serverOrigin);
+        const info = await api.getMcpServerInfo().catch(() => null);
+        if (info) setMcpInfo(info);
+        await queryClient.invalidateQueries();
+        window.dispatchEvent(new Event('db-update'));
+        setEngineStatus(getStorageEngineStatus());
+        setSqliteConnMsg({
+          severity: 'success',
+          text: `Connected live to PC SQLite database (${check.dbPath || 'spending-viz.sqlite'}) via ${check.serverOrigin}!`,
+        });
+      } else if (check.mixedContentBlocked && check.serverOrigin) {
+        const directUrl = `${check.serverOrigin.replace(/\/+$/, '')}/?pwa=1`;
+        setSqliteConnMsg({
+          severity: 'warning',
+          text:
+            check.error ||
+            `Browser security blocks HTTPS pages from fetching HTTP LAN servers directly. Open ${directUrl} and add that page to your Home Screen to use PC SQLite directly.`,
+          directPwaUrl: directUrl,
+        });
+      } else {
+        setSqliteConnMsg({
+          severity: 'error',
+          text: `Could not reach PC SQLite server at ${trimmed} (${check.error || 'Unreachable'}). Make sure Strictly Spending / Vite is running on your PC and your phone is on the same Wi-Fi or Tailscale network.`,
+        });
+      }
+    } finally {
+      setSqliteConnBusy(false);
+    }
+  };
+
+  const handleDisconnectRemoteSqlite = async () => {
+    setRemoteSqliteServerUrl(null);
+    await queryClient.invalidateQueries();
+    window.dispatchEvent(new Event('db-update'));
+    setEngineStatus(getStorageEngineStatus());
+    setSqliteConnMsg({
+      severity: 'info',
+      text: 'Cleared custom remote server override.',
+    });
+  };
+
+  const handlePullSqliteToPhoneStorage = async () => {
+    setSqliteConnBusy(true);
+    setSqliteConnMsg(null);
+    try {
+      const targetUrl =
+        remoteUrlInput.trim() ||
+        engineStatus.serverOrigin ||
+        (mcpInfo?.localUrls && mcpInfo.localUrls[0]) ||
+        null;
+      const counts = await syncFromPcSqliteToBrowserStorage(targetUrl);
+      await queryClient.invalidateQueries();
+      window.dispatchEvent(new Event('db-update'));
+      setHasImportedData(counts.transactions > 0 || counts.accounts > 0);
+      setSqliteConnMsg({
+        severity: 'success',
+        text: `Synced PC SQLite snapshot into phone offline storage: ${counts.accounts} accounts, ${counts.transactions.toLocaleString()} transactions, ${counts.rules} rules, ${counts.budgets} budgets, and ${counts.loans} loans.`,
+      });
+    } catch (err) {
+      setSqliteConnMsg({
+        severity: 'error',
+        text: `Failed to pull from PC SQLite server: ${(err as Error).message}. If you are on HTTPS (github.io), open the direct LAN/Tailscale URL or use Export/Restore Full Backup (.json) below.`,
+      });
+    } finally {
+      setSqliteConnBusy(false);
+    }
+  };
 
   const handleEnableDemoMode = async () => {
     setDemoBusy(true);
@@ -311,9 +438,277 @@ export default function Settings() {
     }
   };
 
+  const isUsingPcSqlite =
+    engineStatus.engine === 'tauri-native' ||
+    engineStatus.engine === 'pc-sqlite-server' ||
+    Boolean(mcpInfo?.dbPath);
+
+  const engineBadgeLabel =
+    engineStatus.engine === 'tauri-native'
+      ? 'Engine: Desktop Native SQLite'
+      : isUsingPcSqlite
+        ? 'Engine: PC SQLite Database (Live)'
+        : 'Engine: Phone Browser LocalStorage';
+
+  const runtimeModeLabel =
+    engineStatus.engine === 'tauri-native'
+      ? 'Desktop App (Tauri)'
+      : isStandalone
+        ? 'Installed Home Screen PWA'
+        : 'Web Browser Tab';
+
   return (
     <Stack spacing={{ xs: 2, sm: 3 }}>
       <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700 }}>Settings</Typography>
+
+      {/* Mobile Browser Access & Active Database Engine Card */}
+      <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Stack spacing={2}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            flexWrap="wrap"
+            gap={1.5}
+          >
+            <Box sx={{ flex: 1, minWidth: 240 }}>
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <SmartphoneIcon fontSize="small" color="primary" />
+                <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+                  Mobile Web &amp; Active Database Engine
+                </Typography>
+                <Chip
+                  label={engineBadgeLabel}
+                  size="small"
+                  color={isUsingPcSqlite ? 'success' : 'warning'}
+                  variant="filled"
+                  sx={{ height: 22, fontSize: '0.72rem', fontWeight: 700 }}
+                />
+                <Chip
+                  label={runtimeModeLabel}
+                  size="small"
+                  color={isStandalone ? 'primary' : 'default'}
+                  variant="outlined"
+                  sx={{ height: 22, fontSize: '0.7rem', fontWeight: 700 }}
+                />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                {isUsingPcSqlite ? (
+                  <>
+                    <strong>Connected to PC SQLite:</strong> Every read and write on this device goes directly to{' '}
+                    <code>{mcpInfo?.dbPath || 'spending-viz.sqlite'}</code> on your PC
+                    {engineStatus.serverOrigin ? ` via ${engineStatus.serverOrigin}` : ''}.
+                  </>
+                ) : (
+                  <>
+                    <strong>Running on Browser LocalStorage:</strong> This session is loaded from{' '}
+                    <code>{engineStatus.currentOrigin}</code> and uses isolated on-device browser storage (
+                    <code>localStorage[&quot;strictly_browser_db_v1&quot;]</code>). To use your PC&apos;s SQLite database directly from your phone, open your PC&apos;s Wi-Fi / Tailscale URL below and add that to your Home Screen, or connect a PC server URL below.
+                  </>
+                )}
+              </Typography>
+            </Box>
+
+            {canInstall && (
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                startIcon={<InstallMobileIcon fontSize="small" />}
+                onClick={() => {
+                  void promptInstall();
+                }}
+                sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontWeight: 700 }}
+              >
+                Install to Home Screen
+              </Button>
+            )}
+          </Stack>
+
+          {/* Live Diagnostic Pill Strip */}
+          <Box
+            sx={{
+              p: 1.25,
+              borderRadius: 1.5,
+              bgcolor: (t) =>
+                isUsingPcSqlite
+                  ? t.palette.mode === 'dark'
+                    ? 'rgba(16, 185, 129, 0.08)'
+                    : 'rgba(16, 185, 129, 0.06)'
+                  : t.palette.mode === 'dark'
+                    ? 'rgba(245, 158, 11, 0.08)'
+                    : 'rgba(245, 158, 11, 0.06)',
+              border: '1px solid',
+              borderColor: isUsingPcSqlite ? 'success.main' : 'warning.main',
+            }}
+          >
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={{ xs: 0.5, sm: 2.5 }}
+              flexWrap="wrap"
+              useFlexGap
+            >
+              <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                <strong>Active Storage:</strong>{' '}
+                {isUsingPcSqlite ? 'PC SQLite (spending-viz.sqlite)' : 'Browser LocalStorage'}
+              </Typography>
+              <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                <strong>App Origin:</strong> {engineStatus.currentOrigin || 'local'}
+              </Typography>
+              {engineStatus.serverOrigin && (
+                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                  <strong>SQLite Server:</strong> {engineStatus.serverOrigin}
+                </Typography>
+              )}
+              <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                <strong>Display Mode:</strong> {isStandalone ? 'Standalone PWA' : 'Browser Tab'}
+              </Typography>
+            </Stack>
+          </Box>
+
+          {/* Direct PC SQLite Home Screen Links (when known) */}
+          {mcpInfo?.localUrls && mcpInfo.localUrls.length > 0 && (
+            <Box>
+              <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.75 }}>
+                Direct PC SQLite Home Screen Links (Open on Phone → Share → Add to Home Screen):
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {mcpInfo.localUrls.map((url) => {
+                  const pwaUrl = `${url.replace(/\/+$/, '')}/?pwa=1`;
+                  const isCopied = copiedPhoneUrl === pwaUrl;
+                  const isTailscale = url.includes('://100.');
+                  return (
+                    <Button
+                      key={pwaUrl}
+                      size="small"
+                      variant={isCopied ? 'contained' : 'outlined'}
+                      color={isCopied ? 'success' : isTailscale ? 'secondary' : 'primary'}
+                      startIcon={isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(pwaUrl);
+                          setCopiedPhoneUrl(pwaUrl);
+                          setTimeout(() => setCopiedPhoneUrl(null), 2000);
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.76rem' }}
+                    >
+                      {isTailscale ? `Tailscale PWA: ${pwaUrl}` : `Wi-Fi PWA: ${pwaUrl}`}
+                    </Button>
+                  );
+                })}
+              </Stack>
+            </Box>
+          )}
+
+          {/* Remote PC SQLite Server Bridge Controls */}
+          <Divider />
+          <Box>
+            <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
+              Connect Phone PWA to PC SQLite Server (Wi-Fi or Tailscale):
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.25 }}>
+              Enter your PC&apos;s address (e.g. <code>http://192.168.1.247:5173</code> or <code>http://100.x.x.x:5173</code>) to route queries directly to your PC&apos;s SQLite database, or pull a snapshot of your PC SQLite database into phone storage.
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+              <TextField
+                size="small"
+                placeholder="http://192.168.1.247:5173"
+                value={remoteUrlInput}
+                onChange={(e) => setRemoteUrlInput(e.target.value)}
+                sx={{
+                  flex: 1,
+                  minWidth: { xs: '100%', sm: 240 },
+                  '& .MuiInputBase-input': {
+                    fontFamily: 'monospace',
+                    fontSize: '0.82rem',
+                    py: 0.85,
+                  },
+                }}
+              />
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="primary"
+                  disabled={sqliteConnBusy}
+                  startIcon={<LinkIcon fontSize="small" />}
+                  onClick={handleConnectRemoteSqlite}
+                  sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                >
+                  Connect to PC SQLite
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  disabled={sqliteConnBusy}
+                  startIcon={<SyncIcon fontSize="small" />}
+                  onClick={handlePullSqliteToPhoneStorage}
+                  sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                >
+                  Pull SQLite → Phone Storage
+                </Button>
+                {remoteUrlInput.trim() && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="success"
+                    startIcon={<OpenInNewIcon fontSize="small" />}
+                    onClick={() => {
+                      const base = remoteUrlInput.trim().replace(/\/+$/, '');
+                      const full = /^https?:\/\//i.test(base) ? `${base}/?pwa=1` : `http://${base}/?pwa=1`;
+                      window.location.href = full;
+                    }}
+                    sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                  >
+                    Open Direct PC App
+                  </Button>
+                )}
+                {engineStatus.remoteServerUrl && (
+                  <Button
+                    size="small"
+                    variant="text"
+                    color="inherit"
+                    startIcon={<LinkOffIcon fontSize="small" />}
+                    onClick={handleDisconnectRemoteSqlite}
+                    sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                  >
+                    Disconnect
+                  </Button>
+                )}
+              </Stack>
+            </Stack>
+
+            {sqliteConnMsg && (
+              <Alert
+                severity={sqliteConnMsg.severity}
+                onClose={() => setSqliteConnMsg(null)}
+                sx={{ mt: 1.5 }}
+                action={
+                  sqliteConnMsg.directPwaUrl ? (
+                    <Button
+                      color="inherit"
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        window.location.href = sqliteConnMsg.directPwaUrl!;
+                      }}
+                      sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
+                    >
+                      Open PC App
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {sqliteConnMsg.text}
+              </Alert>
+            )}
+          </Box>
+        </Stack>
+      </Paper>
 
       <SimpleFinBankSyncCard />
 
@@ -578,81 +973,6 @@ export default function Settings() {
             >
               View Privacy Policy
             </Button>
-          </Stack>
-        </Stack>
-      </Paper>
-
-      {/* Mobile Browser Access Card (Compact) */}
-      <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          flexWrap="wrap"
-          gap={1.5}
-        >
-          <Box sx={{ flex: 1, minWidth: 240 }}>
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-              <SmartphoneIcon fontSize="small" color="primary" />
-              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
-                Mobile Web &amp; Home Screen Access
-              </Typography>
-              <Chip
-                label={isStandalone ? 'Installed Web App' : 'Any Phone Browser'}
-                size="small"
-                color="success"
-                variant={isStandalone ? 'filled' : 'outlined'}
-                sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700 }}
-              />
-            </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Open Strictly Spending in any mobile browser (iOS Safari, Android Chrome, etc.) and add it to your Home Screen, or connect over local Wi-Fi when running on your PC.
-            </Typography>
-          </Box>
-
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            {canInstall && (
-              <Button
-                size="small"
-                variant="contained"
-                color="primary"
-                startIcon={<InstallMobileIcon fontSize="small" />}
-                onClick={() => {
-                  void promptInstall();
-                }}
-                sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontWeight: 700 }}
-              >
-                Install to Home Screen
-              </Button>
-            )}
-            {(mcpInfo?.localUrls && mcpInfo.localUrls.length > 0
-              ? mcpInfo.localUrls
-              : []
-            ).map((url) => {
-              const isCopied = copiedPhoneUrl === url;
-              const isTailscale = url.includes('://100.');
-              return (
-                <Button
-                  key={url}
-                  size="small"
-                  variant={isCopied ? 'contained' : 'outlined'}
-                  color={isCopied ? 'success' : isTailscale ? 'secondary' : 'primary'}
-                  startIcon={isCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(url);
-                      setCopiedPhoneUrl(url);
-                      setTimeout(() => setCopiedPhoneUrl(null), 2000);
-                    } catch {
-                      // ignore
-                    }
-                  }}
-                  sx={{ ...UNIFORM_TOOLBAR_BUTTON_SX, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}
-                >
-                  {isTailscale ? `Tailscale: ${url}` : url}
-                </Button>
-              );
-            })}
           </Stack>
         </Stack>
       </Paper>

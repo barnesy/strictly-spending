@@ -21,11 +21,25 @@ function getLocalNetworkUrls(port: number = 5173): { label: string; url: string;
   return urls;
 }
 
+function setCorsHeaders(req: any, res: any): boolean {
+  res.setHeader('Access-Control-Allow-Origin', req.headers?.origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.end();
+    return true;
+  }
+  return false;
+}
+
 function devIpcPlugin() {
   return {
     name: 'dev-ipc-plugin',
     configureServer(server: any) {
       server.middlewares.use('/api/mobile-info', (req: any, res: any) => {
+        if (setCorsHeaders(req, res)) return;
         if (req.method !== 'GET') {
           res.statusCode = 405;
           res.end('Method Not Allowed');
@@ -40,6 +54,7 @@ function devIpcPlugin() {
       });
 
       server.middlewares.use('/api/tauri-ipc', async (req: any, res: any) => {
+        if (setCorsHeaders(req, res)) return;
         if (req.method !== 'POST') {
           res.statusCode = 405;
           res.end('Method Not Allowed');
@@ -72,6 +87,7 @@ function devIpcPlugin() {
       });
 
       server.middlewares.use('/api/mcp', async (req: any, res: any) => {
+        if (setCorsHeaders(req, res)) return;
         if (req.method !== 'POST') {
           res.statusCode = 405;
           res.end('Method Not Allowed');
@@ -129,6 +145,7 @@ export default defineConfig(() => {
     server: {
       host: true,
       port: 5173,
+      allowedHosts: true,
       watch: {
         ignored: ['**/src-tauri/**', '**/dist/**', '**/dist-landing/**'],
       },

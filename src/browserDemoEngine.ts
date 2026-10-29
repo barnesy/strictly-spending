@@ -2703,3 +2703,22 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
       return [];
   }
 }
+
+export function replaceBrowserDemoStateFromRemote(remoteData: Partial<BrowserDemoState>): void {
+  const current = getState();
+  state = {
+    accounts: remoteData.accounts ?? current.accounts,
+    categories: remoteData.categories ?? current.categories,
+    rules: remoteData.rules ?? current.rules,
+    transactions: remoteData.transactions ?? current.transactions,
+    budgets: remoteData.budgets ?? current.budgets,
+    loans: remoteData.loans ?? current.loans,
+    scenarios: remoteData.scenarios ?? current.scenarios,
+    settings: remoteData.settings ?? current.settings,
+    simplefinAccounts: remoteData.simplefinAccounts ?? current.simplefinAccounts,
+    merchantOverrides: remoteData.merchantOverrides ?? current.merchantOverrides,
+    csvMappings: remoteData.csvMappings ?? current.csvMappings,
+    imports: remoteData.imports ?? current.imports,
+  };
+  persistState();
+}
