@@ -565,8 +565,17 @@ async function handleIpc(cmd, args = {}) {
         const limit = args.limit || 50;
         const offset = args.offset || 0;
         const { where, params } = buildWhereClause(args.filters);
+        const sortBy = args.filters?.sortBy;
+        const orderClause =
+          sortBy === 'date_asc'
+            ? 'date ASC, id ASC'
+            : sortBy === 'amount_desc'
+            ? 'ABS(amount) DESC, date DESC'
+            : sortBy === 'amount_asc'
+            ? 'ABS(amount) ASC, date DESC'
+            : 'date DESC, id DESC';
 
-        const sql = `SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status, COALESCE(is_pending, 0) as is_pending FROM transactions WHERE ${where} ORDER BY date DESC LIMIT ? OFFSET ?`;
+        const sql = `SELECT id, account_id, date, description, amount, raw_category, category, source, merchant_key, user_overridden, dedup_key, import_batch_id, recurrence, recurrence_override, is_business, tax_category, deduction_status, COALESCE(is_pending, 0) as is_pending FROM transactions WHERE ${where} ORDER BY ${orderClause} LIMIT ? OFFSET ?`;
         const rows = db.prepare(sql).all(...params, limit, offset);
         return rows.map(r => ({
           id: r.id,
