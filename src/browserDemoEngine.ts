@@ -2705,7 +2705,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
 }
 
 export function replaceBrowserDemoStateFromRemote(remoteData: Partial<BrowserDemoState>): void {
-  const current = getState();
+  const current = ensureInitialized();
   state = {
     accounts: remoteData.accounts ?? current.accounts,
     categories: remoteData.categories ?? current.categories,
