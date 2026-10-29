@@ -1,9 +1,12 @@
 import { api } from './api';
 
 export type StorageEngineKind = 'tauri-native' | 'pc-sqlite-server' | 'browser-localstorage';
+export type AppRuntimeKind = 'tauri-native' | 'installed-pwa' | 'web-browser';
 
 export interface StorageEngineStatus {
   engine: StorageEngineKind;
+  appRuntime: AppRuntimeKind;
+  isNativeTauri: boolean;
   serverOrigin: string | null;
   remoteServerUrl: string | null;
   isStandalonePwa: boolean;
@@ -16,6 +19,7 @@ const REMOTE_SQLITE_URL_KEY = 'strictly_remote_sqlite_url';
 let activeEngine: StorageEngineKind = 'browser-localstorage';
 let activeServerOrigin: string | null = null;
 let lastVerifiedAt: string | null = null;
+let detectedNativeTauri = false;
 
 export function normalizeServerUrl(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -68,9 +72,24 @@ export function getStorageEngineStatus(): StorageEngineStatus {
   const isStandalone =
     typeof window !== 'undefined' &&
     (window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true);
+  const isNative =
+    detectedNativeTauri ||
+    (typeof window !== 'undefined' &&
+      Boolean(
+        (window as any).__TAURI_INTERNALS__ &&
+          !(window as any).__TAURI_INTERNALS__.__isBrowserPolyfill
+      ));
+  const appRuntime: AppRuntimeKind = isNative
+    ? 'tauri-native'
+    : isStandalone
+      ? 'installed-pwa'
+      : 'web-browser';
   return {
-    engine: activeEngine,
+    engine: isNative ? 'tauri-native' : activeEngine,
+    appRuntime,
+    isNativeTauri: isNative,
     serverOrigin: activeServerOrigin,
     remoteServerUrl: getRemoteSqliteServerUrl(),
     isStandalonePwa: isStandalone,
@@ -305,12 +324,14 @@ if (typeof window !== 'undefined') {
 
   // Connect Tauri IPC invoke to Vite dev server SQLite endpoint when running in a standard web browser
   if ((window as any).__TAURI_INTERNALS__) {
+    detectedNativeTauri = true;
     updateEngineState('tauri-native', 'tauri://localhost');
   } else {
     const isLandingBuild = import.meta.env.VITE_LANDING_ONLY === 'true';
     const isTestMode = import.meta.env.MODE === 'test';
 
     (window as any).__TAURI_INTERNALS__ = {
+      __isBrowserPolyfill: true,
       invoke: async (cmd: string, args?: any) => {
         if (cmd === 'plugin:shell|open' || cmd === 'open_document') {
           const targetUrl = args?.path || args?.url;
