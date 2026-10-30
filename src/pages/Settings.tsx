@@ -461,7 +461,7 @@ export default function Settings() {
       <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700 }}>Settings</Typography>
 
       {/* Dedicated App Runtime (Native Tauri vs PWA) & Active Database Section */}
-      <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
+      <Paper sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 1 }}>
         <Stack spacing={2}>
           <Stack
             direction="row"
@@ -529,7 +529,7 @@ export default function Settings() {
             <Box
               sx={{
                 p: 1.5,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 border: '1px solid',
                 borderColor: isNativeTauri ? 'primary.main' : isStandalone ? 'secondary.main' : 'divider',
                 bgcolor: (t) =>
@@ -563,7 +563,7 @@ export default function Settings() {
             <Box
               sx={{
                 p: 1.5,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 border: '1px solid',
                 borderColor: isUsingPcSqlite ? 'success.main' : 'warning.main',
                 bgcolor: (t) =>
@@ -725,7 +725,7 @@ export default function Settings() {
                   <Alert
                     severity={sqliteConnMsg.severity}
                     onClose={() => setSqliteConnMsg(null)}
-                    sx={{ mt: 1.5 }}
+                    sx={{ mt: 1.5, borderRadius: 1 }}
                     action={
                       sqliteConnMsg.directPwaUrl ? (
                         <Button
@@ -751,7 +751,7 @@ export default function Settings() {
         </Stack>
       </Paper>
 
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 1 }}>
         <Stack spacing={2}>
           <Box>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -812,6 +812,7 @@ export default function Settings() {
             <Alert
               severity={demoMsg.startsWith('Error') ? 'error' : 'info'}
               onClose={() => setDemoMsg(null)}
+              sx={{ borderRadius: 1 }}
             >
               {demoMsg}
             </Alert>
@@ -820,7 +821,7 @@ export default function Settings() {
       </Paper>
 
       {/* Full Workspace Backup & Restore Card */}
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 1 }}>
         <Stack spacing={2}>
           <Box>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -907,6 +908,7 @@ export default function Settings() {
             <Alert
               severity={backupMsg.startsWith('Error') ? 'error' : 'success'}
               onClose={() => setBackupMsg(null)}
+              sx={{ borderRadius: 1 }}
             >
               {backupMsg}
             </Alert>
@@ -914,7 +916,7 @@ export default function Settings() {
         </Stack>
       </Paper>
 
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 1 }}>
         <Stack spacing={2}>
           <Box>
             <Stack direction="row" spacing={1} alignItems="center">
@@ -945,6 +947,7 @@ export default function Settings() {
             <Alert
               severity={clearImportedMsg.startsWith('Error') ? 'error' : 'success'}
               onClose={() => setClearImportedMsg(null)}
+              sx={{ borderRadius: 1 }}
             >
               {clearImportedMsg}
             </Alert>
@@ -952,7 +955,7 @@ export default function Settings() {
         </Stack>
       </Paper>
 
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 1 }}>
         <Stack spacing={2}>
           <Box>
             <Stack direction="row" spacing={1} alignItems="center">
@@ -1017,7 +1020,7 @@ export default function Settings() {
       </Paper>
 
       {/* Model Context Protocol (MCP) & Mobile AI Snapshot Card (Compact) */}
-      <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
+      <Paper sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 1 }}>
         <Stack
           direction="row"
           justifyContent="space-between"
