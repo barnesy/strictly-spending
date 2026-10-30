@@ -122,9 +122,9 @@ export default function RangePicker() {
             height: { xs: 42, sm: 36 },
             '& .MuiToggleButton-root': {
               height: { xs: 42, sm: 36 },
-              px: { xs: 1.35, sm: 1.2 },
-              gap: 0.5,
-              fontSize: { xs: '0.84rem', sm: '0.8125rem' },
+              px: { xs: 1.15, sm: 1.2 },
+              gap: 0.4,
+              fontSize: { xs: '0.82rem', sm: '0.8125rem' },
               fontWeight: 600,
               textTransform: 'none',
               whiteSpace: 'nowrap',
@@ -133,13 +133,33 @@ export default function RangePicker() {
           }}
         >
           <ToggleButton
+            value="__prev_mobile__"
+            selected={false}
+            onClick={() => shiftRange(-1)}
+            aria-label="Shift date range earlier"
+            title="Previous month / range"
+            sx={{ px: '7px !important', minWidth: 32 }}
+          >
+            <ChevronLeftIcon fontSize="small" />
+          </ToggleButton>
+          <ToggleButton
             value="mobile-date-range"
             selected={preset === 'custom'}
             onClick={(e) => setMobileAnchorEl(e.currentTarget)}
           >
-            <CalendarTodayIcon sx={{ fontSize: 15 }} />
+            <CalendarTodayIcon sx={{ fontSize: 14 }} />
             {mobileLabel}
             <ArrowDropDownIcon sx={{ fontSize: 18, ml: -0.25, mr: -0.5, opacity: 0.75 }} />
+          </ToggleButton>
+          <ToggleButton
+            value="__next_mobile__"
+            selected={false}
+            onClick={() => shiftRange(1)}
+            aria-label="Shift date range later"
+            title="Next month / range"
+            sx={{ px: '7px !important', minWidth: 32 }}
+          >
+            <ChevronRightIcon fontSize="small" />
           </ToggleButton>
         </ToggleButtonGroup>
 
@@ -364,6 +384,26 @@ export default function RangePicker() {
         )}
         {preset === 'custom' && (
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <ToggleButtonGroup size="small" sx={{ height: 32 }}>
+              <ToggleButton
+                value="prev"
+                selected={false}
+                onClick={() => shiftRange(-1)}
+                title="Previous month / range"
+                sx={{ height: 32, px: 0.85 }}
+              >
+                <ChevronLeftIcon fontSize="small" />
+              </ToggleButton>
+              <ToggleButton
+                value="next"
+                selected={false}
+                onClick={() => shiftRange(1)}
+                title="Next month / range"
+                sx={{ height: 32, px: 0.85 }}
+              >
+                <ChevronRightIcon fontSize="small" />
+              </ToggleButton>
+            </ToggleButtonGroup>
             <DatePicker
               value={customStart ? parseISO(customStart) : null}
               onChange={(newVal) => {
@@ -408,12 +448,20 @@ export default function RangePicker() {
             />
             <ToggleButtonGroup size="small" sx={{ height: 32 }}>
               <ToggleButton
+                value="thisMonth"
+                selected={false}
+                onClick={() => setPreset('thisMonth')}
+                sx={{ height: 32, px: 1.15, fontSize: '0.75rem', textTransform: 'none' }}
+              >
+                This Month
+              </ToggleButton>
+              <ToggleButton
                 value="cancel"
                 selected={false}
                 onClick={() => setPreset('ytd')}
-                sx={{ height: 32, px: 1.25, fontSize: '0.75rem' }}
+                sx={{ height: 32, px: 1.15, fontSize: '0.75rem', textTransform: 'none' }}
               >
-                Cancel
+                YTD
               </ToggleButton>
             </ToggleButtonGroup>
           </Stack>

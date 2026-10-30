@@ -1431,8 +1431,8 @@ export default function Dashboard() {
       )}
 
       {/* Content */}
-      <Box sx={{ flex: 1, minHeight: 0, overflow: { xs: 'visible', md: dbTxnCount === 0 ? 'auto' : 'hidden' }, ...subtleScrollSx }}>
-        {dbTxnCount === 0 ? (
+      <Box sx={{ flex: 1, minHeight: 0, overflow: { xs: 'visible', md: dbTxnCount === 0 && viewMode !== 'timeline' ? 'auto' : 'hidden' }, ...subtleScrollSx }}>
+        {dbTxnCount === 0 && (viewMode !== 'timeline' || (!demoMode && (!accounts || accounts.length === 0))) ? (
           !demoMode && (!accounts || accounts.length === 0) ? (
             <Box
               sx={{

@@ -220,15 +220,17 @@ export const useFilters = create<FiltersStore>()(
           // Compute current effective range
           const range = resolveDateRange(s);
           if (
+            s.dashboardViewMode === 'timeline' ||
             s.preset === 'thisMonth' ||
             s.preset === 'lastMonth' ||
             (range.start.getFullYear() === range.end.getFullYear() &&
               range.start.getMonth() === range.end.getMonth() &&
               range.start.getDate() === 1)
           ) {
+            const baseDate = s.dashboardViewMode === 'timeline' ? range.end : range.start;
             const targetMonthStart = new Date(
-              range.start.getFullYear(),
-              range.start.getMonth() + direction,
+              baseDate.getFullYear(),
+              baseDate.getMonth() + direction,
               1
             );
             const targetMonthEnd = new Date(

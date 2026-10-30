@@ -7,9 +7,13 @@ import {
   ToggleButtonGroup,
   Chip,
   Divider,
+  IconButton,
+  Tooltip,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import * as echarts from '../utils/echarts';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
@@ -80,10 +84,33 @@ export default function MonthTimelineView({
   const daysInMonth = new Date(currentYear, monthNum, 0).getDate();
 
   const currentCalMonth = useMemo(() => getMonthKey(new Date()), []);
+  const [calYearStr, calMonthNumStr] = currentCalMonth.split('-');
+  const calYear = Number(calYearStr);
+  const calMonthNum = Number(calMonthNumStr);
   const isCurrentCalMonth = currentMonth === currentCalMonth;
+  const isFutureMonth = currentMonth > currentCalMonth;
+  const monthsAhead = (currentYear - calYear) * 12 + (monthNum - calMonthNum);
   const isActiveOrCurrentMonth =
-    isCurrentCalMonth || (availableMonths.length > 0 && currentMonth >= availableMonths[0]);
+    isCurrentCalMonth || isFutureMonth || (availableMonths.length > 0 && currentMonth >= availableMonths[0]);
   const todayDay = useMemo(() => (isCurrentCalMonth ? new Date().getDate() : null), [isCurrentCalMonth]);
+
+  const drillToMonth = useFilters((s) => s.drillToMonth);
+  const setPreset = useFilters((s) => s.setPreset);
+
+  const stepTimelineMonth = (delta: -1 | 1) => {
+    const targetDate = new Date(currentYear, monthIndex + delta, 1);
+    const targetKey = getMonthKey(targetDate);
+    if (targetKey === currentCalMonth) {
+      setPreset('thisMonth');
+    } else {
+      drillToMonth(targetKey);
+    }
+  };
+
+  const prevMonthDate = new Date(currentYear, monthIndex - 1, 1);
+  const nextMonthDate = new Date(currentYear, monthIndex + 1, 1);
+  const prevMonthShort = `${MONTH_NAMES[prevMonthDate.getMonth()]?.slice(0, 3)} ${prevMonthDate.getFullYear()}`;
+  const nextMonthShort = `${MONTH_NAMES[nextMonthDate.getMonth()]?.slice(0, 3)} ${nextMonthDate.getFullYear()}`;
 
   // Chart Mode: Daily Bars vs Cash Balance vs Cumulative Line
   const [chartMode, setChartMode] = useState<'daily' | 'balance' | 'cumulative'>(() => {
@@ -129,10 +156,15 @@ export default function MonthTimelineView({
     setSelectedDay(todayDay || 1);
   }, [currentMonth, todayDay]);
 
-  // Driven by the global Filter Panel (Expenses / Income / All)
+  // Driven by the global Filter Panel (Expenses / Income / All), plus automatic income/payday display when forecasting future months or viewing Cash Balance
   const showSpend = filters.transactionType !== 'income';
-  const showIncome = filters.transactionType === 'income' || filters.transactionType === 'all';
-  const showExpectedRecurring = filters.recurrenceFilter !== 'onetime';
+  const showIncome =
+    filters.transactionType === 'income' ||
+    filters.transactionType === 'all' ||
+    isFutureMonth ||
+    showCashLineOverlay ||
+    chartMode === 'balance';
+  const showExpectedRecurring = filters.recurrenceFilter !== 'onetime' || isFutureMonth;
 
   // Set of transfer categories so we exclude internal account transfers while keeping both spend and income
   const transferCategoryNames = useMemo(() => {
@@ -159,6 +191,29 @@ export default function MonthTimelineView({
         0
       );
     },
+    staleTime: 30_000,
+  });
+
+  // When viewing a future month, also fetch currentCalMonth transactions so we can roll cash balance forward from today
+  const calDaysInMonth = useMemo(() => new Date(calYear, calMonthNum, 0).getDate(), [calYear, calMonthNum]);
+  const { data: rawCalMonthTransactions = [] } = useQuery({
+    queryKey: ['month_timeline_txns_all', currentCalMonth, filters],
+    queryFn: async () => {
+      const startDate = `${currentCalMonth}-01`;
+      const endDate = `${currentCalMonth}-${String(calDaysInMonth).padStart(2, '0')}`;
+      return api.getTransactionsPaginated(
+        {
+          ...filters,
+          spendOnly: false,
+          transactionType: 'all',
+          startDate,
+          endDate,
+        },
+        3000,
+        0
+      );
+    },
+    enabled: isFutureMonth,
     staleTime: 30_000,
   });
 
@@ -250,6 +305,81 @@ export default function MonthTimelineView({
       cashAccountsLabel: label,
     };
   }, [accounts, filters.demoMode, filters.enabledAccountIds]);
+
+  // Roll cash balance forward across remaining days of currentCalMonth + any intermediate future months before currentMonth
+  const startingFutureCashBalance = useMemo(() => {
+    if (!isFutureMonth || monthsAhead <= 0) return currentCashBalance;
+    let running = currentCashBalance;
+    const realTodayDay = new Date().getDate();
+
+    // 1. Remaining unpaid bills & expected paydays in currentCalMonth (from today through end of currentCalMonth)
+    const calRec = reconcileMonthTimeline({
+      monthKey: currentCalMonth,
+      daysInMonth: calDaysInMonth,
+      transactions: rawCalMonthTransactions.filter(
+        (t) => !transferCategoryNames.has((t.category || '').toLowerCase())
+      ),
+      consolidatedMerchants,
+      recurrenceMap,
+      incomeStreams,
+      taxRate: forecastTaxRate,
+      disabledCategories: filters.disabledCategories || [],
+      enabledAccountIds: filters.enabledAccountIds || [],
+      isCurrentMonth: true,
+      todayDay: realTodayDay,
+    });
+    for (let d = realTodayDay; d <= calDaysInMonth; d++) {
+      const incSum = (calRec.upcomingIncomeByDay.get(d) || []).reduce((s, inc) => s + inc.amount, 0);
+      const billSum = (calRec.upcomingBillsByDay.get(d) || []).reduce((s, b) => s + b.amount, 0);
+      running += incSum - billSum;
+    }
+
+    // 2. Full monthly net flow for each intermediate future month strictly between currentCalMonth and currentMonth
+    const cappedSteps = Math.min(monthsAhead - 1, 36);
+    for (let step = 1; step <= cappedSteps; step++) {
+      const mDate = new Date(calYear, calMonthNum - 1 + step, 1);
+      const mYear = mDate.getFullYear();
+      const mMonth = mDate.getMonth() + 1;
+      const mKey = `${mYear}-${String(mMonth).padStart(2, '0')}`;
+      const mDays = new Date(mYear, mMonth, 0).getDate();
+      const interRec = reconcileMonthTimeline({
+        monthKey: mKey,
+        daysInMonth: mDays,
+        transactions: [],
+        consolidatedMerchants,
+        recurrenceMap,
+        incomeStreams,
+        taxRate: forecastTaxRate,
+        disabledCategories: filters.disabledCategories || [],
+        enabledAccountIds: filters.enabledAccountIds || [],
+        isCurrentMonth: true,
+        todayDay: null,
+      });
+      for (let d = 1; d <= mDays; d++) {
+        const incSum = (interRec.upcomingIncomeByDay.get(d) || []).reduce((s, inc) => s + inc.amount, 0);
+        const billSum = (interRec.upcomingBillsByDay.get(d) || []).reduce((s, b) => s + b.amount, 0);
+        running += incSum - billSum;
+      }
+    }
+
+    return Math.round(running * 100) / 100;
+  }, [
+    isFutureMonth,
+    monthsAhead,
+    currentCashBalance,
+    currentCalMonth,
+    calYear,
+    calMonthNum,
+    calDaysInMonth,
+    rawCalMonthTransactions,
+    transferCategoryNames,
+    consolidatedMerchants,
+    recurrenceMap,
+    incomeStreams,
+    forecastTaxRate,
+    filters.disabledCategories,
+    filters.enabledAccountIds,
+  ]);
 
   // Group transactions of the current month by day of month (1 to daysInMonth)
   const currentMonthDays = useMemo(() => {
@@ -389,10 +519,10 @@ export default function MonthTimelineView({
       });
     }
 
-    // Reconstruct daily Cash Balance anchored at today's real cash balance (or end/start of month)
+    // Reconstruct daily Cash Balance anchored at today's real cash balance (or rolled-forward start of future month)
     if (days.length > 0) {
       if (currentMonth > currentCalMonth) {
-        let running = currentCashBalance;
+        let running = startingFutureCashBalance;
         for (let i = 0; i < days.length; i++) {
           running += days[i].rawProjectedNetFlow;
           const rounded = Math.round(running * 100) / 100;
@@ -453,6 +583,7 @@ export default function MonthTimelineView({
     reconciledByTxnId,
     showExpectedRecurring,
     currentCashBalance,
+    startingFutureCashBalance,
     currentMonth,
     currentCalMonth,
     isCurrentCalMonth,
@@ -460,8 +591,14 @@ export default function MonthTimelineView({
   ]);
 
   const cashFlowStats = useMemo(() => {
+    const startBal = isFutureMonth
+      ? startingFutureCashBalance
+      : currentMonthDays.length > 0
+        ? currentMonthDays[0].effectiveCashBalance - currentMonthDays[0].rawProjectedNetFlow
+        : currentCashBalance;
     if (currentMonthDays.length === 0) {
       return {
+        startBalance: startBal,
         lowDay: 1,
         lowBalance: currentCashBalance,
         highDay: 1,
@@ -476,13 +613,14 @@ export default function MonthTimelineView({
       if (d.effectiveCashBalance > high.effectiveCashBalance) high = d;
     }
     return {
+      startBalance: Math.round(startBal * 100) / 100,
       lowDay: low.day,
       lowBalance: low.effectiveCashBalance,
       highDay: high.day,
       highBalance: high.effectiveCashBalance,
       endBalance: currentMonthDays[currentMonthDays.length - 1].effectiveCashBalance,
     };
-  }, [currentMonthDays, currentCashBalance]);
+  }, [currentMonthDays, currentCashBalance, isFutureMonth, startingFutureCashBalance]);
 
   const totalUpcomingBillsSpend = useMemo(
     () => currentMonthDays.reduce((s, d) => s + d.upcomingSpendTotal, 0),
@@ -699,6 +837,25 @@ export default function MonthTimelineView({
             type: 'bar',
             stack: 'income',
             barMaxWidth: barMaxW,
+            label: {
+              show: !isMobile,
+              position: 'top' as const,
+              distance: 4,
+              hideOverlap: true,
+              color: '#10b981',
+              fontSize: 10,
+              fontWeight: 700,
+              formatter: (p: any) => {
+                const val = Number(p.value || 0);
+                if (!val) return '';
+                const incs = currentMonthDays[p.dataIndex]?.upcomingIncome || [];
+                if (incs.length === 1) {
+                  const shortName = incs[0].streamName.slice(0, 10);
+                  return `${shortName}\n+${formatCompactUsd(val)}`;
+                }
+                return `+${formatCompactUsd(val)}`;
+              },
+            },
             data: currentMonthDays.map((d) =>
               d.upcomingIncomeTotal > 0 ? d.upcomingIncomeTotal : null
             ),
@@ -1229,13 +1386,88 @@ export default function MonthTimelineView({
         sx={{ flexShrink: 0 }}
       >
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-          <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.01em', fontSize: { xs: '1.05rem', sm: '1.25rem' } }}>
-            {monthName} {currentYear}
-          </Typography>
+          <Stack
+            direction="row"
+            spacing={0.25}
+            alignItems="center"
+            sx={{
+              bgcolor: (t) => (t.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'),
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              px: 0.5,
+              py: 0.25,
+            }}
+          >
+            <Tooltip title={`Previous month (${prevMonthShort})`}>
+              <IconButton
+                size="small"
+                onClick={() => stepTimelineMonth(-1)}
+                aria-label={`Previous month (${prevMonthShort})`}
+                sx={{ p: 0.35 }}
+              >
+                <ChevronLeftIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                lineHeight: 1.2,
+                letterSpacing: '-0.01em',
+                fontSize: { xs: '1.0rem', sm: '1.15rem' },
+                px: 0.75,
+                minWidth: { xs: 118, sm: 140 },
+                textAlign: 'center',
+              }}
+            >
+              {monthName} {currentYear}
+            </Typography>
+            <Tooltip title={`Next month forecast (${nextMonthShort})`}>
+              <IconButton
+                size="small"
+                onClick={() => stepTimelineMonth(1)}
+                aria-label={`Next month forecast (${nextMonthShort})`}
+                sx={{ p: 0.35 }}
+              >
+                <ChevronRightIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+
           {isCurrentCalMonth && todayDay && (
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
               Day {todayDay}/{daysInMonth}
             </Typography>
+          )}
+          {isFutureMonth && (
+            <Chip
+              size="small"
+              label={`🔮 Forecast (+${monthsAhead} mo)`}
+              color="secondary"
+              variant="filled"
+              sx={{
+                height: 24,
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                borderRadius: 1,
+              }}
+            />
+          )}
+          {!isCurrentCalMonth && (
+            <Chip
+              size="small"
+              label="This Month"
+              variant="outlined"
+              onClick={() => setPreset('thisMonth')}
+              sx={{
+                height: 24,
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                borderRadius: 1,
+                cursor: 'pointer',
+              }}
+            />
           )}
           <Chip
             size="small"
@@ -1254,19 +1486,35 @@ export default function MonthTimelineView({
               cursor: 'pointer',
             }}
           />
-          <Chip
-            size="small"
-            label={`Current Cash (${cashAccountsLabel}): ${currentCashBalance < 0 ? '-' : ''}${usd.format(Math.abs(currentCashBalance))}`}
-            color="info"
-            variant="outlined"
-            sx={{
-              display: { xs: 'none', sm: 'inline-flex' },
-              height: 24,
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              borderRadius: 1,
-            }}
-          />
+          {isFutureMonth ? (
+            <Chip
+              size="small"
+              label={`Start: ${cashFlowStats.startBalance < 0 ? '-' : ''}${usd.format(Math.abs(cashFlowStats.startBalance))} → End: ${cashFlowStats.endBalance < 0 ? '-' : ''}${usd.format(Math.abs(cashFlowStats.endBalance))}`}
+              color="info"
+              variant="outlined"
+              sx={{
+                display: { xs: 'none', sm: 'inline-flex' },
+                height: 24,
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                borderRadius: 1,
+              }}
+            />
+          ) : (
+            <Chip
+              size="small"
+              label={`Current Cash (${cashAccountsLabel}): ${currentCashBalance < 0 ? '-' : ''}${usd.format(Math.abs(currentCashBalance))}`}
+              color="info"
+              variant="outlined"
+              sx={{
+                display: { xs: 'none', sm: 'inline-flex' },
+                height: 24,
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                borderRadius: 1,
+              }}
+            />
+          )}
         </Stack>
 
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -1329,11 +1577,19 @@ export default function MonthTimelineView({
                 color="text.secondary"
                 sx={{ fontWeight: 700, letterSpacing: '0.05em', lineHeight: 1.1, fontSize: { xs: '0.68rem', sm: '0.75rem' } }}
               >
-                Spending Reconciliation
+                {isFutureMonth ? 'Forecasted Bills Schedule' : 'Spending Reconciliation'}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
-                <strong>{reconciliation.reconciledBillsCount}/{reconciliation.totalExpectedBillsCount}</strong> bills paid ·{' '}
-                <strong>{remainingBillsCount}</strong> left
+                {isFutureMonth ? (
+                  <>
+                    <strong>{remainingBillsCount}</strong> recurring bills scheduled
+                  </>
+                ) : (
+                  <>
+                    <strong>{reconciliation.reconciledBillsCount}/{reconciliation.totalExpectedBillsCount}</strong> bills paid ·{' '}
+                    <strong>{remainingBillsCount}</strong> left
+                  </>
+                )}
               </Typography>
             </Stack>
 
@@ -1454,11 +1710,19 @@ export default function MonthTimelineView({
                 color="text.secondary"
                 sx={{ fontWeight: 700, letterSpacing: '0.05em', lineHeight: 1.1, fontSize: { xs: '0.68rem', sm: '0.75rem' } }}
               >
-                Income Reconciliation
+                {isFutureMonth ? 'Forecasted Income Schedule' : 'Income Reconciliation'}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
-                <strong>{reconciliation.reconciledPaydaysCount}/{reconciliation.totalExpectedPaydaysCount}</strong> paydays received ·{' '}
-                <strong>{remainingIncomeCount}</strong> left
+                {isFutureMonth ? (
+                  <>
+                    <strong>{remainingIncomeCount}</strong> paydays scheduled
+                  </>
+                ) : (
+                  <>
+                    <strong>{reconciliation.reconciledPaydaysCount}/{reconciliation.totalExpectedPaydaysCount}</strong> paydays received ·{' '}
+                    <strong>{remainingIncomeCount}</strong> left
+                  </>
+                )}
               </Typography>
             </Stack>
 
