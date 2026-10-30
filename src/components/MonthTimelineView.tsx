@@ -54,6 +54,7 @@ interface MonthTimelineViewProps {
 export default function MonthTimelineView({
   currentMonth,
   availableMonths,
+  accounts,
   categories,
   recurrenceMap,
   onEditTransaction,
@@ -84,12 +85,19 @@ export default function MonthTimelineView({
     isCurrentCalMonth || (availableMonths.length > 0 && currentMonth >= availableMonths[0]);
   const todayDay = useMemo(() => (isCurrentCalMonth ? new Date().getDate() : null), [isCurrentCalMonth]);
 
-  // Chart Mode: Daily Bars vs Cumulative Line
-  const [chartMode, setChartMode] = useState<'daily' | 'cumulative'>(() => {
-    if (typeof window !== 'undefined' && localStorage.getItem('dashboard:timelineChartMode') === 'cumulative') {
-      return 'cumulative';
+  // Chart Mode: Daily Bars vs Cash Balance vs Cumulative Line
+  const [chartMode, setChartMode] = useState<'daily' | 'balance' | 'cumulative'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dashboard:timelineChartMode');
+      if (saved === 'cumulative' || saved === 'balance') return saved;
     }
     return 'daily';
+  });
+  const [showCashLineOverlay, setShowCashLineOverlay] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('dashboard:timelineShowCashLine') !== 'false';
+    }
+    return true;
   });
   const [selectedDay, setSelectedDay] = useState<number>(() => todayDay || 1);
   const [mobileListTab, setMobileListTab] = useState<'upcoming' | 'day'>(() => {
@@ -104,6 +112,12 @@ export default function MonthTimelineView({
       localStorage.setItem('dashboard:timelineChartMode', chartMode);
     }
   }, [chartMode]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboard:timelineShowCashLine', String(showCashLineOverlay));
+    }
+  }, [showCashLineOverlay]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -204,6 +218,39 @@ export default function MonthTimelineView({
     reconciledByTxnId,
   } = reconciliation;
 
+  // Current Cash Balance across enabled checking accounts (fallback to checking+savings or all enabled)
+  const { currentCashBalance, cashAccountsLabel } = useMemo(() => {
+    const modeAccs = accounts.filter((a) =>
+      filters.demoMode ? a.source === 'demo' : a.source !== 'demo'
+    );
+    const enabledSet =
+      filters.enabledAccountIds && filters.enabledAccountIds.length > 0
+        ? new Set(filters.enabledAccountIds)
+        : null;
+    const scoped = enabledSet
+      ? modeAccs.filter((a) => a.id !== undefined && enabledSet.has(a.id))
+      : modeAccs;
+    const active = scoped.length > 0 ? scoped : modeAccs;
+
+    const checkingOnly = active.filter((a) => a.type === 'checking');
+    const cashAccs =
+      checkingOnly.length > 0
+        ? checkingOnly
+        : active.filter((a) => a.type === 'checking' || a.type === 'savings');
+    const targetAccs = cashAccs.length > 0 ? cashAccs : active;
+    const sum = targetAccs.reduce((acc, a) => acc + (a.currentBalance ?? 0), 0);
+    const label =
+      targetAccs.length === 1
+        ? targetAccs[0].name
+        : checkingOnly.length > 0
+          ? `${checkingOnly.length} checking accts`
+          : `${targetAccs.length} accts`;
+    return {
+      currentCashBalance: Math.round(sum * 100) / 100,
+      cashAccountsLabel: label,
+    };
+  }, [accounts, filters.demoMode, filters.enabledAccountIds]);
+
   // Group transactions of the current month by day of month (1 to daysInMonth)
   const currentMonthDays = useMemo(() => {
     const days: Array<{
@@ -231,6 +278,11 @@ export default function MonthTimelineView({
       projectedCumulativeSpend: number;
       cumulativeIncome: number;
       projectedCumulativeIncome: number;
+      rawActualNetFlow: number;
+      rawProjectedNetFlow: number;
+      actualCashBalance: number | null;
+      projectedCashBalance: number;
+      effectiveCashBalance: number;
     }> = [];
 
     let cumSpend = 0;
@@ -244,9 +296,24 @@ export default function MonthTimelineView({
       const weekday = WEEKDAY_NAMES[dateObj.getDay()];
 
       const dayTxns = currentMonthTransactions.filter((t) => t.date === dayDateStr);
-      const upcomingBills = showExpectedRecurring ? upcomingBillsByDay.get(d) || [] : [];
+      const rawDayTxns = rawMonthTransactions.filter(
+        (t) => t.date === dayDateStr && !transferCategoryNames.has((t.category || '').toLowerCase())
+      );
+      const rawDayActualIncome = rawDayTxns
+        .filter((t) => t.amount > 0)
+        .reduce((s, t) => s + t.amount, 0);
+      const rawDayActualSpend = rawDayTxns
+        .filter((t) => t.amount < 0)
+        .reduce((s, t) => s + Math.abs(t.amount), 0);
+
+      const rawUpcomingBills = upcomingBillsByDay.get(d) || [];
+      const rawUpcomingSpend = rawUpcomingBills.reduce((s, b) => s + b.amount, 0);
+      const rawUpcomingIncomeList = upcomingIncomeByDay.get(d) || [];
+      const rawUpcomingIncome = rawUpcomingIncomeList.reduce((s, inc) => s + inc.amount, 0);
+
+      const upcomingBills = showExpectedRecurring ? rawUpcomingBills : [];
       const upcomingSpendTotal = upcomingBills.reduce((s, b) => s + b.amount, 0);
-      const upcomingIncome = showExpectedRecurring ? upcomingIncomeByDay.get(d) || [] : [];
+      const upcomingIncome = showExpectedRecurring ? rawUpcomingIncomeList : [];
       const upcomingIncomeTotal = upcomingIncome.reduce((s, inc) => s + inc.amount, 0);
 
       const dayAllExpectedBills = showExpectedRecurring ? allExpectedBillsByDay.get(d) || [] : [];
@@ -285,6 +352,10 @@ export default function MonthTimelineView({
       cumIncome += dayIncome;
       projCumIncome += dayIncome + upcomingIncomeTotal;
 
+      const rawActualNetFlow = rawDayActualIncome - rawDayActualSpend;
+      const rawProjectedNetFlow =
+        rawDayActualIncome + rawUpcomingIncome - (rawDayActualSpend + rawUpcomingSpend);
+
       days.push({
         day: d,
         dateStr: dayDateStr,
@@ -310,7 +381,60 @@ export default function MonthTimelineView({
         projectedCumulativeSpend: Math.round(projCumSpend * 100) / 100,
         cumulativeIncome: Math.round(cumIncome * 100) / 100,
         projectedCumulativeIncome: Math.round(projCumIncome * 100) / 100,
+        rawActualNetFlow: Math.round(rawActualNetFlow * 100) / 100,
+        rawProjectedNetFlow: Math.round(rawProjectedNetFlow * 100) / 100,
+        actualCashBalance: null,
+        projectedCashBalance: 0,
+        effectiveCashBalance: 0,
       });
+    }
+
+    // Reconstruct daily Cash Balance anchored at today's real cash balance (or end/start of month)
+    if (days.length > 0) {
+      if (currentMonth > currentCalMonth) {
+        let running = currentCashBalance;
+        for (let i = 0; i < days.length; i++) {
+          running += days[i].rawProjectedNetFlow;
+          const rounded = Math.round(running * 100) / 100;
+          days[i].actualCashBalance = null;
+          days[i].projectedCashBalance = rounded;
+          days[i].effectiveCashBalance = rounded;
+        }
+      } else {
+        const anchorIdx =
+          isCurrentCalMonth && todayDay
+            ? Math.min(days.length - 1, Math.max(0, todayDay - 1))
+            : days.length - 1;
+
+        days[anchorIdx].actualCashBalance = Math.round(currentCashBalance * 100) / 100;
+        for (let i = anchorIdx - 1; i >= 0; i--) {
+          const prevBal = days[i + 1].actualCashBalance! - days[i + 1].rawActualNetFlow;
+          days[i].actualCashBalance = Math.round(prevBal * 100) / 100;
+        }
+
+        for (let i = 0; i <= anchorIdx; i++) {
+          days[i].projectedCashBalance = days[i].actualCashBalance!;
+          days[i].effectiveCashBalance = days[i].actualCashBalance!;
+        }
+
+        // Include any still-unpaid expected bills/income on today + future days
+        const anchorRemainingDelta =
+          (upcomingIncomeByDay.get(anchorIdx + 1) || []).reduce((s, inc) => s + inc.amount, 0) -
+          (upcomingBillsByDay.get(anchorIdx + 1) || []).reduce((s, b) => s + b.amount, 0);
+        let projRunning = days[anchorIdx].actualCashBalance! + anchorRemainingDelta;
+        if (anchorRemainingDelta !== 0) {
+          days[anchorIdx].projectedCashBalance = Math.round(projRunning * 100) / 100;
+          days[anchorIdx].effectiveCashBalance = days[anchorIdx].projectedCashBalance;
+        }
+
+        for (let i = anchorIdx + 1; i < days.length; i++) {
+          days[i].actualCashBalance = null;
+          projRunning += days[i].rawProjectedNetFlow;
+          const rounded = Math.round(projRunning * 100) / 100;
+          days[i].projectedCashBalance = rounded;
+          days[i].effectiveCashBalance = rounded;
+        }
+      }
     }
 
     return days;
@@ -320,13 +444,45 @@ export default function MonthTimelineView({
     monthIndex,
     daysInMonth,
     currentMonthTransactions,
+    rawMonthTransactions,
+    transferCategoryNames,
     upcomingBillsByDay,
     upcomingIncomeByDay,
     allExpectedBillsByDay,
     allExpectedIncomeByDay,
     reconciledByTxnId,
     showExpectedRecurring,
+    currentCashBalance,
+    currentMonth,
+    currentCalMonth,
+    isCurrentCalMonth,
+    todayDay,
   ]);
+
+  const cashFlowStats = useMemo(() => {
+    if (currentMonthDays.length === 0) {
+      return {
+        lowDay: 1,
+        lowBalance: currentCashBalance,
+        highDay: 1,
+        highBalance: currentCashBalance,
+        endBalance: currentCashBalance,
+      };
+    }
+    let low = currentMonthDays[0];
+    let high = currentMonthDays[0];
+    for (const d of currentMonthDays) {
+      if (d.effectiveCashBalance < low.effectiveCashBalance) low = d;
+      if (d.effectiveCashBalance > high.effectiveCashBalance) high = d;
+    }
+    return {
+      lowDay: low.day,
+      lowBalance: low.effectiveCashBalance,
+      highDay: high.day,
+      highBalance: high.effectiveCashBalance,
+      endBalance: currentMonthDays[currentMonthDays.length - 1].effectiveCashBalance,
+    };
+  }, [currentMonthDays, currentCashBalance]);
 
   const totalUpcomingBillsSpend = useMemo(
     () => currentMonthDays.reduce((s, d) => s + d.upcomingSpendTotal, 0),
@@ -556,7 +712,7 @@ export default function MonthTimelineView({
           });
         }
       }
-    } else {
+    } else if (chartMode === 'cumulative') {
       // Cumulative Burn-Up Mode
       const actualCumLabel = isIncomeOnly ? 'Actual Earned (Cum.)' : 'Actual Spend (Cum.)';
       const projectedCumLabel = isIncomeOnly ? 'Projected Income (+ Expected)' : 'Projected Spend (+ Expected Bills)';
@@ -601,6 +757,153 @@ export default function MonthTimelineView({
       }
     }
 
+    // Add Cash Balance Line Graph (in dedicated 'balance' mode OR overlaid on 'daily' bars when showCashLineOverlay is enabled)
+    const includeCashBalanceSeries =
+      chartMode === 'balance' || (chartMode === 'daily' && showCashLineOverlay);
+    const useSecondaryYAxis = chartMode === 'daily' && showCashLineOverlay;
+    const cashLineColor = isDark ? '#38bdf8' : '#0284c7';
+    const lowPointColor = cashFlowStats.lowBalance < 0 ? '#ef4444' : '#f59e0b';
+
+    if (includeCashBalanceSeries && currentMonthDays.length > 0) {
+      const lowIdx = Math.max(0, cashFlowStats.lowDay - 1);
+      const lowCoordLabel = `${monthNum}/${cashFlowStats.lowDay}`;
+      const lowValue = cashFlowStats.lowBalance;
+      const lowSign = lowValue < 0 ? '-' : '';
+
+      const lowMarkPointData: any[] = [
+        {
+          name: 'Cash Low Point',
+          coord: [lowCoordLabel, lowValue],
+          value: lowValue,
+          symbol: 'pin',
+          symbolSize: isMobile ? 38 : 44,
+          itemStyle: {
+            color: lowPointColor,
+            borderColor: isDark ? '#0f172a' : '#ffffff',
+            borderWidth: 1.5,
+          },
+          label: {
+            show: true,
+            position: 'top',
+            distance: 4,
+            formatter: () => `Low: ${lowSign}${formatCompactUsd(Math.abs(lowValue))} (${lowCoordLabel})`,
+            color: isDark ? '#fef3c7' : '#ffffff',
+            backgroundColor: lowPointColor,
+            padding: [3, 6],
+            borderRadius: 4,
+            fontSize: isMobile ? 9.5 : 10.5,
+            fontWeight: 700,
+          },
+        },
+      ];
+
+      if (chartMode === 'balance' && cashFlowStats.highDay !== cashFlowStats.lowDay) {
+        const highCoordLabel = `${monthNum}/${cashFlowStats.highDay}`;
+        const highVal = cashFlowStats.highBalance;
+        lowMarkPointData.push({
+          name: 'Cash High Point',
+          coord: [highCoordLabel, highVal],
+          value: highVal,
+          symbol: 'circle',
+          symbolSize: 9,
+          itemStyle: {
+            color: '#10b981',
+            borderColor: isDark ? '#0f172a' : '#ffffff',
+            borderWidth: 2,
+          },
+          label: {
+            show: !isMobile,
+            position: 'top',
+            distance: 6,
+            formatter: () => `High: ${formatCompactUsd(Math.abs(highVal))} (${highCoordLabel})`,
+            color: '#10b981',
+            fontSize: 10,
+            fontWeight: 700,
+          },
+        });
+      }
+
+      const hasFutureProjection =
+        currentMonth > currentCalMonth ||
+        (isCurrentCalMonth && todayDay !== null && todayDay < daysInMonth);
+
+      // Solid Actual Cash Balance line (Day 1 -> Today / End of past month)
+      seriesList.push({
+        name: 'Cash Balance',
+        type: 'line',
+        yAxisIndex: useSecondaryYAxis ? 1 : 0,
+        z: 12,
+        smooth: 0.25,
+        smoothMonotone: 'x',
+        showSymbol: false,
+        symbol: 'circle',
+        symbolSize: 6,
+        markLine: chartMode === 'balance' ? todayMarkLine : undefined,
+        markPoint: !hasFutureProjection || (todayDay !== null && lowIdx < todayDay)
+          ? { data: lowMarkPointData, animation: false }
+          : undefined,
+        lineStyle: {
+          width: chartMode === 'balance' ? 3.5 : 2.75,
+          color: cashLineColor,
+          cap: 'round',
+          join: 'round',
+        },
+        itemStyle: { color: cashLineColor },
+        areaStyle:
+          chartMode === 'balance'
+            ? {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(2, 132, 199, 0.20)' },
+                  { offset: 1, color: 'rgba(56, 189, 248, 0.01)' },
+                ]),
+              }
+            : undefined,
+        data: currentMonthDays.map((d) => d.actualCashBalance),
+      });
+
+      // Dashed Projected Cash Balance line (Today -> End of Month)
+      if (hasFutureProjection) {
+        const startProjDay = isCurrentCalMonth && todayDay ? todayDay : 1;
+        seriesList.push({
+          name: 'Projected Cash Balance',
+          type: 'line',
+          yAxisIndex: useSecondaryYAxis ? 1 : 0,
+          z: 11,
+          smooth: 0.25,
+          smoothMonotone: 'x',
+          showSymbol: false,
+          symbol: 'circle',
+          symbolSize: 6,
+          markPoint:
+            todayDay === null || lowIdx >= todayDay
+              ? { data: lowMarkPointData, animation: false }
+              : undefined,
+          lineStyle: {
+            width: chartMode === 'balance' ? 3 : 2.5,
+            type: 'dashed',
+            color: cashLineColor,
+            cap: 'round',
+            join: 'round',
+          },
+          itemStyle: { color: cashLineColor },
+          data: currentMonthDays.map((d) =>
+            d.day >= startProjDay ? d.effectiveCashBalance : null
+          ),
+        });
+      }
+    }
+
+    // Calculate clean bounds for the Cash Balance Y-axis so peaks and low points are clearly visible
+    const cashRangeSpan = Math.max(200, cashFlowStats.highBalance - cashFlowStats.lowBalance);
+    const rawCashMin = cashFlowStats.lowBalance - cashRangeSpan * 0.18;
+    const rawCashMax = cashFlowStats.highBalance + cashRangeSpan * 0.18;
+    const stepUnit = cashRangeSpan > 5000 ? 500 : cashRangeSpan > 1000 ? 100 : 50;
+    const cashAxisMin =
+      cashFlowStats.lowBalance >= 0 && rawCashMin < 0
+        ? 0
+        : Math.floor(rawCashMin / stepUnit) * stepUnit;
+    const cashAxisMax = Math.ceil(rawCashMax / stepUnit) * stepUnit;
+
     const option: any = {
       textStyle: {
         fontFamily: theme.typography.fontFamily,
@@ -625,6 +928,7 @@ export default function MonthTimelineView({
           if (!dayEntry) return '';
 
           const isToday = isCurrentCalMonth && todayDay === dayIdx;
+          const isLowDay = dayIdx === cashFlowStats.lowDay;
           const borderMuted = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)';
           const subText = isDark ? '#94a3b8' : '#64748b';
           const totalExpectedCountOnDay =
@@ -636,6 +940,16 @@ export default function MonthTimelineView({
           out += `<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid ${borderMuted};">`;
           out += `<div style="font-weight: 600; font-size: ${isMobile ? '12px' : '13px'};">Day ${dayIdx} · ${dayEntry.weekday}, ${monthName.slice(0, 3)} ${dayIdx}${isToday ? ' <span style="color:#f59e0b;">(Today)</span>' : ''}</div>`;
           out += `<div style="font-size: 10.5px; color: ${subText}; font-weight: 500;">${dayEntry.transactions.length} actual · ${totalExpectedCountOnDay} expected</div>`;
+          out += `</div>`;
+
+          // Cash Balance Banner Row inside Tooltip
+          const isProjBal = dayEntry.actualCashBalance === null || (isToday && dayEntry.projectedCashBalance !== dayEntry.actualCashBalance);
+          const balVal = dayEntry.effectiveCashBalance;
+          const balFormatted = `${balVal < 0 ? '-' : ''}${usd.format(Math.abs(balVal))}`;
+          const balColor = balVal < 0 ? '#ef4444' : isLowDay ? '#f59e0b' : cashLineColor;
+          out += `<div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 4px 8px; margin-bottom: 6px; border-radius: 5px; background: ${isDark ? 'rgba(56, 189, 248, 0.10)' : 'rgba(2, 132, 199, 0.07)'}; border: 1px solid ${isLowDay ? lowPointColor : isDark ? 'rgba(56, 189, 248, 0.28)' : 'rgba(2, 132, 199, 0.22)'};">`;
+          out += `<span style="font-size: 10.5px; font-weight: 700; color: ${balColor};">${isProjBal ? 'Proj. Cash Balance' : 'Cash Balance'}${isLowDay ? ' · ⚠️ Month Low' : ''}</span>`;
+          out += `<span style="font-size: 11.5px; font-weight: 800; color: ${balColor}; font-variant-numeric: tabular-nums;">${balFormatted}</span>`;
           out += `</div>`;
 
           // Summary Pills Row (Actual vs Expected Totals on this day)
@@ -753,7 +1067,13 @@ export default function MonthTimelineView({
       legend: {
         show: false,
       },
-      grid: { left: isMobile ? '1%' : '2.5%', right: '1.5%', top: 20, bottom: 22, containLabel: true },
+      grid: {
+        left: isMobile ? '1%' : '2.5%',
+        right: useSecondaryYAxis ? (isMobile ? '2%' : '2.5%') : '1.5%',
+        top: 28,
+        bottom: 22,
+        containLabel: true,
+      },
       xAxis: {
         type: 'category',
         data: xLabels,
@@ -765,16 +1085,49 @@ export default function MonthTimelineView({
         },
         axisLine: { lineStyle: { color: theme.palette.divider } },
       },
-      yAxis: {
-        type: 'value',
-        axisLabel: {
-          color: theme.palette.text.secondary,
-          fontSize: isMobile ? 10 : 11,
-          fontFamily: theme.typography.fontFamily,
-          formatter: (v: number) => formatCompactUsd(v),
-        },
-        splitLine: { lineStyle: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' } },
-      },
+      yAxis: useSecondaryYAxis
+        ? [
+            {
+              type: 'value',
+              axisLabel: {
+                color: theme.palette.text.secondary,
+                fontSize: isMobile ? 10 : 11,
+                fontFamily: theme.typography.fontFamily,
+                formatter: (v: number) => formatCompactUsd(v),
+              },
+              splitLine: {
+                lineStyle: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
+              },
+            },
+            {
+              type: 'value',
+              position: 'right',
+              min: cashAxisMin,
+              max: cashAxisMax,
+              axisLabel: {
+                color: cashLineColor,
+                fontSize: isMobile ? 9.5 : 10.5,
+                fontWeight: 600,
+                fontFamily: theme.typography.fontFamily,
+                formatter: (v: number) => `${v < 0 ? '-' : ''}${formatCompactUsd(Math.abs(v))}`,
+              },
+              splitLine: { show: false },
+            },
+          ]
+        : {
+            type: 'value',
+            min: chartMode === 'balance' ? cashAxisMin : undefined,
+            max: chartMode === 'balance' ? cashAxisMax : undefined,
+            axisLabel: {
+              color: chartMode === 'balance' ? cashLineColor : theme.palette.text.secondary,
+              fontSize: isMobile ? 10 : 11,
+              fontFamily: theme.typography.fontFamily,
+              formatter: (v: number) => `${v < 0 ? '-' : ''}${formatCompactUsd(Math.abs(v))}`,
+            },
+            splitLine: {
+              lineStyle: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
+            },
+          },
       series: seriesList,
     };
 
@@ -800,9 +1153,13 @@ export default function MonthTimelineView({
     monthNum,
     monthIndex,
     monthName,
+    currentMonth,
+    currentCalMonth,
     currentMonthDays,
     currentMonthTransactions,
     chartMode,
+    showCashLineOverlay,
+    cashFlowStats,
     showSpend,
     showIncome,
     showExpectedRecurring,
@@ -867,9 +1224,11 @@ export default function MonthTimelineView({
         spacing={1}
         justifyContent="space-between"
         alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
         sx={{ flexShrink: 0 }}
       >
-        <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap">
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.01em', fontSize: { xs: '1.05rem', sm: '1.25rem' } }}>
             {monthName} {currentYear}
           </Typography>
@@ -878,18 +1237,67 @@ export default function MonthTimelineView({
               Day {todayDay}/{daysInMonth}
             </Typography>
           )}
+          <Chip
+            size="small"
+            label={`Cash Low: ${cashFlowStats.lowBalance < 0 ? '-' : ''}${usd.format(Math.abs(cashFlowStats.lowBalance))} on ${monthNum}/${cashFlowStats.lowDay}`}
+            color={cashFlowStats.lowBalance < 0 ? 'error' : 'warning'}
+            variant="outlined"
+            onClick={() => {
+              setSelectedDay(cashFlowStats.lowDay);
+              setMobileListTab('day');
+            }}
+            sx={{
+              height: 24,
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              borderRadius: 1,
+              cursor: 'pointer',
+            }}
+          />
+          <Chip
+            size="small"
+            label={`Current Cash (${cashAccountsLabel}): ${currentCashBalance < 0 ? '-' : ''}${usd.format(Math.abs(currentCashBalance))}`}
+            color="info"
+            variant="outlined"
+            sx={{
+              display: { xs: 'none', sm: 'inline-flex' },
+              height: 24,
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              borderRadius: 1,
+            }}
+          />
         </Stack>
 
-        <ToggleButtonGroup
-          size="small"
-          value={chartMode}
-          exclusive
-          onChange={(_, val) => val && setChartMode(val)}
-          sx={compactToggleGroupSx}
-        >
-          <ToggleButton value="daily">Bars</ToggleButton>
-          <ToggleButton value="cumulative">Cumulative</ToggleButton>
-        </ToggleButtonGroup>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          {chartMode === 'daily' && (
+            <Chip
+              size="small"
+              label={showCashLineOverlay ? 'Cash Line: ON' : 'Cash Line: OFF'}
+              color={showCashLineOverlay ? 'info' : 'default'}
+              variant={showCashLineOverlay ? 'filled' : 'outlined'}
+              onClick={() => setShowCashLineOverlay((v) => !v)}
+              sx={{
+                height: 28,
+                fontSize: '0.73rem',
+                fontWeight: 700,
+                borderRadius: 1,
+                cursor: 'pointer',
+              }}
+            />
+          )}
+          <ToggleButtonGroup
+            size="small"
+            value={chartMode}
+            exclusive
+            onChange={(_, val) => val && setChartMode(val)}
+            sx={compactToggleGroupSx}
+          >
+            <ToggleButton value="daily">Bars</ToggleButton>
+            <ToggleButton value="balance">Cash Balance</ToggleButton>
+            <ToggleButton value="cumulative">Cumulative</ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
       </Stack>
 
       {/* 2. Prominent Spend & Income Reconciliation Cards */}
