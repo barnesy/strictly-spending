@@ -274,7 +274,7 @@ export default function MonthTimelineView({
   } = reconciliation;
 
   // Current Cash Balance across enabled checking accounts (fallback to checking+savings or all enabled)
-  const { currentCashBalance, cashAccountsLabel } = useMemo(() => {
+  const { currentCashBalance, cashAccountsLabel, cashAccountIds } = useMemo(() => {
     const modeAccs = accounts.filter((a) =>
       filters.demoMode ? a.source === 'demo' : a.source !== 'demo'
     );
@@ -294,6 +294,9 @@ export default function MonthTimelineView({
         : active.filter((a) => a.type === 'checking' || a.type === 'savings');
     const targetAccs = cashAccs.length > 0 ? cashAccs : active;
     const sum = targetAccs.reduce((acc, a) => acc + (a.currentBalance ?? 0), 0);
+    const ids = targetAccs
+      .map((a) => a.id)
+      .filter((id): id is number => id !== undefined);
     const label =
       targetAccs.length === 1
         ? targetAccs[0].name
@@ -303,8 +306,37 @@ export default function MonthTimelineView({
     return {
       currentCashBalance: Math.round(sum * 100) / 100,
       cashAccountsLabel: label,
+      cashAccountIds: ids,
     };
   }, [accounts, filters.demoMode, filters.enabledAccountIds]);
+
+  // Fetch all checking/cash account transactions (including transfers) from min(currentMonth, currentCalMonth) to currentCalMonth end
+  // so historical daily cash balance reconstruction reflects real checking inflows/outflows (including transfers to/from savings).
+  const { data: cashAccountTransactions = [] } = useQuery({
+    queryKey: ['month_timeline_cash_acct_txns', currentMonth, currentCalMonth, cashAccountIds, filters.demoMode],
+    queryFn: async () => {
+      const startMonth = currentMonth < currentCalMonth ? currentMonth : currentCalMonth;
+      const startDate = `${startMonth}-01`;
+      const endDate = `${currentCalMonth}-${String(calDaysInMonth).padStart(2, '0')}`;
+      return api.getTransactionsPaginated(
+        {
+          startDate,
+          endDate,
+          enabledAccountIds: cashAccountIds,
+          disabledCategories: [],
+          spendOnly: false,
+          transactionType: 'all',
+          recurrenceFilter: 'all',
+          searchQuery: '',
+          demoMode: filters.demoMode,
+        },
+        10000,
+        0
+      );
+    },
+    enabled: cashAccountIds.length > 0 && currentMonth <= currentCalMonth,
+    staleTime: 30_000,
+  });
 
   // Roll cash balance forward across remaining days of currentCalMonth + any intermediate future months before currentMonth
   const startingFutureCashBalance = useMemo(() => {
@@ -426,6 +458,10 @@ export default function MonthTimelineView({
       const weekday = WEEKDAY_NAMES[dateObj.getDay()];
 
       const dayTxns = currentMonthTransactions.filter((t) => t.date === dayDateStr);
+      // Actual cash flow on checking accounts includes all debits/credits (including transfers to/from savings)
+      const cashDayTxns = cashAccountTransactions.filter((t) => t.date === dayDateStr);
+      const rawActualNetFlow = cashDayTxns.reduce((s, t) => s + t.amount, 0);
+
       const rawDayTxns = rawMonthTransactions.filter(
         (t) => t.date === dayDateStr && !transferCategoryNames.has((t.category || '').toLowerCase())
       );
@@ -482,7 +518,6 @@ export default function MonthTimelineView({
       cumIncome += dayIncome;
       projCumIncome += dayIncome + upcomingIncomeTotal;
 
-      const rawActualNetFlow = rawDayActualIncome - rawDayActualSpend;
       const rawProjectedNetFlow =
         rawDayActualIncome + rawUpcomingIncome - (rawDayActualSpend + rawUpcomingSpend);
 
@@ -536,7 +571,17 @@ export default function MonthTimelineView({
             ? Math.min(days.length - 1, Math.max(0, todayDay - 1))
             : days.length - 1;
 
-        days[anchorIdx].actualCashBalance = Math.round(currentCashBalance * 100) / 100;
+        // If viewing a past month, roll currentCashBalance backward across all checking transactions after that month's end date
+        const monthEndDateStr = `${currentYear}-${monthNumStr}-${String(daysInMonth).padStart(2, '0')}`;
+        const postMonthNetFlow =
+          currentMonth < currentCalMonth
+            ? cashAccountTransactions
+                .filter((t) => t.date > monthEndDateStr)
+                .reduce((s, t) => s + t.amount, 0)
+            : 0;
+        const anchorCashBalance = currentCashBalance - postMonthNetFlow;
+
+        days[anchorIdx].actualCashBalance = Math.round(anchorCashBalance * 100) / 100;
         for (let i = anchorIdx - 1; i >= 0; i--) {
           const prevBal = days[i + 1].actualCashBalance! - days[i + 1].rawActualNetFlow;
           days[i].actualCashBalance = Math.round(prevBal * 100) / 100;
@@ -575,6 +620,7 @@ export default function MonthTimelineView({
     daysInMonth,
     currentMonthTransactions,
     rawMonthTransactions,
+    cashAccountTransactions,
     transferCategoryNames,
     upcomingBillsByDay,
     upcomingIncomeByDay,
