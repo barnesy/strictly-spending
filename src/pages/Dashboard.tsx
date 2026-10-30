@@ -1643,95 +1643,113 @@ export default function Dashboard() {
     <PageLoader isLoading={isLoading}>
       <Box className={isTransitioning ? 'transitioning-panels' : ''} sx={{ height: isDesktop ? '100%' : 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <DemoModeBanner />
-        {/* Combined Unified Toolbar */}
-        <Stack
-          direction="row"
-          spacing={1}
-          justifyContent="space-between"
-          alignItems="center"
-          sx={{ width: '100%' }}
+        {/* Combined Unified Toolbar (Sticky to top when page scrolls) */}
+        <Box
+          sx={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 30,
+            bgcolor: (theme) => alpha(theme.palette.background.default, 0.92),
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            mx: { xs: -1.5, sm: -3 },
+            px: { xs: 1.5, sm: 3 },
+            py: 1,
+            mt: -1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            flexShrink: 0,
+          }}
         >
-          {/* Left Side: Filters & Reset group */}
-          <ToggleButtonGroup
-            size="small"
-            sx={{
-              height: { xs: 42, sm: 36 },
-              flexShrink: 0,
-              '& .MuiToggleButton-root': {
-                height: { xs: 42, sm: 36 },
-                px: { xs: 1.35, sm: 1.25 },
-                gap: 0.5,
-                fontSize: { xs: '0.84rem', sm: '0.8125rem' },
-                fontWeight: 600,
-                textTransform: 'none',
-                '&.Mui-selected': { fontWeight: 700 },
-              },
-            }}
-          >
-            <ToggleButton
-              value="filters"
-              selected={filterVisible}
-              onClick={toggleFilters}
-              title="Toggle Filters Panel"
-            >
-              <FilterListIcon sx={{ fontSize: 16 }} />
-              Filters
-            </ToggleButton>
-            {hasActiveFilters && (
-              <ToggleButton
-                value="reset"
-                selected={false}
-                onClick={() => useFilters.getState().reset()}
-                title="Reset Active Filters"
-                sx={{ color: 'warning.main', px: { xs: '10px !important', sm: '10px !important' } }}
-              >
-                <RestartAltIcon sx={{ fontSize: 16 }} />
-                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
-                  Reset
-                </Box>
-              </ToggleButton>
-            )}
-          </ToggleButtonGroup>
-
-          {/* Center: RangePicker (Compact Dropdown on Mobile, Full Bar on Desktop) */}
           <Stack
             direction="row"
             spacing={1}
+            justifyContent="space-between"
             alignItems="center"
-            justifyContent="center"
-            sx={{ flexGrow: 1, minWidth: 0 }}
+            sx={{ width: '100%' }}
           >
-            <RangePicker />
-          </Stack>
-
-          {/* Right Side: Merchants button */}
-          <ToggleButtonGroup
-            size="small"
-            sx={{
-              height: { xs: 42, sm: 36 },
-              flexShrink: 0,
-              '& .MuiToggleButton-root': {
+            {/* Left Side: Filters & Reset group */}
+            <ToggleButtonGroup
+              size="small"
+              sx={{
                 height: { xs: 42, sm: 36 },
-                px: { xs: 1.35, sm: 1.25 },
-                gap: 0.5,
-                fontSize: { xs: '0.84rem', sm: '0.8125rem' },
-                fontWeight: 600,
-                textTransform: 'none',
-                '&.Mui-selected': { fontWeight: 700 },
-              },
-            }}
-          >
-            <ToggleButton
-              value="merchants"
-              selected={sidebarVisible}
-              onClick={toggleSidebar}
-              title="Toggle Top Merchants Panel"
+                flexShrink: 0,
+                '& .MuiToggleButton-root': {
+                  height: { xs: 42, sm: 36 },
+                  px: { xs: 1.35, sm: 1.25 },
+                  gap: 0.5,
+                  fontSize: { xs: '0.84rem', sm: '0.8125rem' },
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  '&.Mui-selected': { fontWeight: 700 },
+                },
+              }}
             >
-              <StorefrontIcon sx={{ fontSize: 16 }} />
-              {transactionType === 'income' ? 'Sources' : 'Merchants'}
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Stack>
+              <ToggleButton
+                value="filters"
+                selected={filterVisible}
+                onClick={toggleFilters}
+                title="Toggle Filters Panel"
+              >
+                <FilterListIcon sx={{ fontSize: 16 }} />
+                Filters
+              </ToggleButton>
+              {hasActiveFilters && (
+                <ToggleButton
+                  value="reset"
+                  selected={false}
+                  onClick={() => useFilters.getState().reset()}
+                  title="Reset Active Filters"
+                  sx={{ color: 'warning.main', px: { xs: '10px !important', sm: '10px !important' } }}
+                >
+                  <RestartAltIcon sx={{ fontSize: 16 }} />
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                    Reset
+                  </Box>
+                </ToggleButton>
+              )}
+            </ToggleButtonGroup>
+
+            {/* Center: RangePicker (Compact Dropdown on Mobile, Full Bar on Desktop) */}
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              justifyContent="center"
+              sx={{ flexGrow: 1, minWidth: 0 }}
+            >
+              <RangePicker />
+            </Stack>
+
+            {/* Right Side: Merchants button */}
+            <ToggleButtonGroup
+              size="small"
+              sx={{
+                height: { xs: 42, sm: 36 },
+                flexShrink: 0,
+                '& .MuiToggleButton-root': {
+                  height: { xs: 42, sm: 36 },
+                  px: { xs: 1.35, sm: 1.25 },
+                  gap: 0.5,
+                  fontSize: { xs: '0.84rem', sm: '0.8125rem' },
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  '&.Mui-selected': { fontWeight: 700 },
+                },
+              }}
+            >
+              <ToggleButton
+                value="merchants"
+                selected={sidebarVisible}
+                onClick={toggleSidebar}
+                title="Toggle Top Merchants Panel"
+              >
+                <StorefrontIcon sx={{ fontSize: 16 }} />
+                {transactionType === 'income' ? 'Sources' : 'Merchants'}
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+        </Box>
 
         {/* Smart Plain-Language Quick Search (Desktop & Mobile) */}
         <SmartQuickSearch
