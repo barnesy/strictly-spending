@@ -500,8 +500,8 @@ export default function SpendChart({
         (cm) =>
           (cm.monthlyAverage || 0) > 0 &&
           !disabledCategories.includes(cm.category) &&
-          !excludedBudgetCategories.includes(cm.category) &&
-          !excludedMerchants.includes(cm.merchantKey) &&
+          !excludedBudgetCategories.has(cm.category) &&
+          !excludedMerchants.has(cm.merchantKey) &&
           (!enabledSet || (cm.accountId !== undefined && enabledSet.has(cm.accountId)))
       );
       const recurAccountIds = new Set(

@@ -1210,7 +1210,7 @@ export function reconcileMonthTimeline({
   accounts = [],
   taxRate = 0,
   disabledCategories = [],
-  enabledAccountIds = [],
+  enabledAccountIds,
   isCurrentMonth = false,
   todayDay = null,
 }: {
@@ -1230,11 +1230,17 @@ export function reconcileMonthTimeline({
   todayDay?: number | null;
 }): MonthTimelineReconciliation {
   const disabledCats = new Set(disabledCategories);
-  const enabledSet = enabledAccountIds !== undefined ? new Set(enabledAccountIds) : null;
   const activeModeAccounts = (accounts || []).filter((a) => a.enabled !== false);
+  const enabledSet =
+    enabledAccountIds !== undefined &&
+    (enabledAccountIds.length > 0 || activeModeAccounts.length > 0)
+      ? new Set(enabledAccountIds)
+      : null;
   const isFilteringAccounts =
     enabledSet !== null &&
-    (activeModeAccounts.length === 0 || enabledSet.size < activeModeAccounts.length);
+    (activeModeAccounts.length > 0
+      ? enabledSet.size < activeModeAccounts.length
+      : enabledSet.size > 0);
   const accountNameById = new Map(
     (accounts || [])
       .filter((a) => a.id !== undefined)
@@ -1262,7 +1268,14 @@ export function reconcileMonthTimeline({
     if (disabledCats.has(m.category) || (m.monthlyAverage || 0) <= 0) continue;
     const rawInfo = recurrenceMap.get(m.merchantKey);
     const billAccountId = m.accountId ?? rawInfo?.accountId;
-    if (enabledSet && (billAccountId === undefined || !enabledSet.has(billAccountId))) continue;
+    if (
+      enabledSet &&
+      (isFilteringAccounts
+        ? billAccountId === undefined || !enabledSet.has(billAccountId)
+        : billAccountId !== undefined && !enabledSet.has(billAccountId))
+    ) {
+      continue;
+    }
     const info =
       rawInfo &&
       (billAccountId === undefined ||
