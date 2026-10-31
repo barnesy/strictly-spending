@@ -27,6 +27,7 @@ import {
 import type { RecurrenceInfo } from '../../types';
 import type { ConsolidatedMerchant } from '../../api';
 import type { IncomeStream } from '../../stores/forecastStore';
+import { useAccounts } from '../../hooks/queries';
 
 export function BreakdownSummaryCards({
   monthKey,
@@ -639,6 +640,10 @@ export function SpendBreakdownTable({
   recurringMerchantsByCategory: Map<string, ConsolidatedMerchant[]>;
   recurrenceMap: Map<string, RecurrenceInfo>;
 }) {
+  const { data: accounts = [] } = useAccounts();
+  const accountNameById = new Map(
+    accounts.filter((a) => a.id !== undefined).map((a) => [a.id!, a.name])
+  );
   return (
     <DataTable
       component={Box}
@@ -800,15 +805,24 @@ export function SpendBreakdownTable({
                           Recurring Commitments ({p.category})
                         </Typography>
                         <Stack spacing={0.5}>
-                          {recMerchants.map((m) => {
+                          {recMerchants.map((m, mIdx) => {
                             const status = isCurrentMonth
                               ? getMerchantBillStatus(m.merchantKey, monthKey, recurrenceMap)
                               : null;
+                            const acctId = m.accountId ?? recurrenceMap.get(m.merchantKey)?.accountId;
+                            const acctName = acctId !== undefined ? accountNameById.get(acctId) : undefined;
                             return (
-                              <Stack key={m.merchantKey} direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
-                                <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 500 }}>
-                                  {m.merchantKey}
-                                </Typography>
+                              <Stack key={`${m.merchantKey}-${m.accountId ?? mIdx}`} direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 500, display: 'block' }}>
+                                    {m.merchantKey}
+                                  </Typography>
+                                  {acctName && (
+                                    <Typography variant="caption" sx={{ fontSize: '0.65rem', opacity: 0.78, display: 'block', lineHeight: 1.15 }}>
+                                      {acctName}
+                                    </Typography>
+                                  )}
+                                </Box>
                                 <Stack direction="row" spacing={1} alignItems="center">
                                   {status && (
                                     <Typography

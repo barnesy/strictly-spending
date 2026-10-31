@@ -184,10 +184,10 @@ export const useConsolidatedRecurringMerchants = (accountScope?: number | number
       if (!ids) return api.getConsolidatedRecurringMerchants(demoMode, undefined);
       if (ids.length === 1) return api.getConsolidatedRecurringMerchants(demoMode, ids[0]);
       const lists = await Promise.all(ids.map((id) => api.getConsolidatedRecurringMerchants(demoMode, id)));
-      const byKey = new Map<string, { merchantKey: string; category: string; monthlyAverage: number }>();
+      const byKey = new Map<string, { merchantKey: string; category: string; monthlyAverage: number; accountId?: number }>();
       for (const list of lists) {
         for (const item of list) {
-          const k = `${item.merchantKey}:::${item.category}`;
+          const k = `${item.merchantKey}:::${item.category}:::${item.accountId ?? ''}`;
           const prev = byKey.get(k);
           if (prev) {
             prev.monthlyAverage += item.monthlyAverage;

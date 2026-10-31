@@ -56,7 +56,11 @@ export default function FilterPanel({
   const totalSpend = Math.abs(dashboardAggregates.totalSpend);
   const totalIncome = dashboardAggregates.totalIncome;
   const netFlow = totalIncome - totalSpend;
-  const { data: consolidatedMerchants = [] } = useConsolidatedRecurringMerchants();
+  const { data: consolidatedMerchants = [] } = useConsolidatedRecurringMerchants(
+    filters.seenAccountIds && filters.seenAccountIds.length > 0 && filters.enabledAccountIds.length < filters.seenAccountIds.length
+      ? filters.enabledAccountIds
+      : undefined
+  );
 
 
   const [searchInput, setSearchInput] = useState(filters.searchQuery);

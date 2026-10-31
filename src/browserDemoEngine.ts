@@ -1814,17 +1814,19 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
           t.amount < 0 &&
           RECURRING_CATEGORIES.has(t.category)
       );
-      const byMerchant = new Map<string, { category: string; amounts: number[]; dates: string[] }>();
+      const byMerchant = new Map<string, { merchantKey: string; category: string; accountId: number; amounts: number[]; dates: string[] }>();
       for (const t of recurring) {
-        const key = t.merchantKey || t.description;
-        const cur = byMerchant.get(key) || { category: t.category, amounts: [], dates: [] };
+        const mKey = t.merchantKey || t.description;
+        const key = `${mKey}:::${t.accountId}`;
+        const cur = byMerchant.get(key) || { merchantKey: mKey, category: t.category, accountId: t.accountId, amounts: [], dates: [] };
         cur.amounts.push(Math.abs(t.amount));
         cur.dates.push(t.date);
         byMerchant.set(key, cur);
       }
-      return Array.from(byMerchant.entries()).map(([merchantKey, info]) => ({
-        merchantKey,
+      return Array.from(byMerchant.values()).map((info) => ({
+        merchantKey: info.merchantKey,
         category: info.category,
+        accountId: info.accountId,
         monthlyAverage: Math.round(info.amounts.reduce((a, b) => a + b, 0) / Math.max(1, info.amounts.length)),
         occurrences: info.amounts.length,
         lastDate: info.dates.sort().reverse()[0] || null,
@@ -1893,6 +1895,7 @@ export async function handleBrowserDemoIpc(cmd: string, args: Record<string, any
             meanAmount: avg,
             estMonthlyCost: avg,
             lastDate: latest.date,
+            accountId: latest.accountId,
             source: 'auto',
             lastAmount: Math.abs(latest.amount),
           };

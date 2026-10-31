@@ -27,6 +27,7 @@ export interface RecurrenceInfo {
   priorAmount?: number;
   priceHikeDelta?: number;
   priceHikePct?: number;
+  accountId?: number;
 }
 
 export interface SortCard {

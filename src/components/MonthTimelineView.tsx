@@ -69,7 +69,12 @@ export default function MonthTimelineView({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTabletOrBelow = useMediaQuery(theme.breakpoints.down('md'));
   const filters = useFilters(useShallow(buildDashboardFilters));
-  const { data: rawConsolidatedMerchants = [] } = useConsolidatedRecurringMerchants();
+  const scopedMerchantAccountIds = useMemo(() => {
+    if (!filters.enabledAccountIds) return undefined;
+    if (accounts.length > 0 && filters.enabledAccountIds.length >= accounts.length) return undefined;
+    return filters.enabledAccountIds;
+  }, [accounts.length, filters.enabledAccountIds]);
+  const { data: rawConsolidatedMerchants = [] } = useConsolidatedRecurringMerchants(scopedMerchantAccountIds);
   const consolidatedMerchants = useMemo(
     () => consolidateRecurringMerchants(rawConsolidatedMerchants, recurrenceMap),
     [rawConsolidatedMerchants, recurrenceMap]
@@ -1368,13 +1373,14 @@ export default function MonthTimelineView({
                 ? `Pending from ${monthNum}/${b.expectedDay}`
                 : `Due ${monthNum}/${b.expectedDay}`;
 
+              const billSubLabel = b.accountName ? `${b.category} · ${b.accountName}` : b.category;
               out += `<div style="margin-bottom: 3px; padding: 4px 6px; border-radius: 5px; background: ${bg};">`;
               out += `<div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 10.5px;">`;
               out += `<span style="font-weight: 600; color: ${statusColor}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${isFilled ? '✓ ' : '⏳ '}${escapeHtml(b.displayName)}</span>`;
               out += `<span style="font-weight: 600; color: ${statusColor}; flex-shrink: 0;">-${usd.format(b.amount)}</span>`;
               out += `</div>`;
               out += `<div style="display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: ${subText}; margin-top: 1px;">`;
-              out += `<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(b.category)}</span>`;
+              out += `<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(billSubLabel)}</span>`;
               out += `<span style="font-weight: 500; flex-shrink: 0;">${subStatus}</span>`;
               out += `</div>`;
               out += `</div>`;
@@ -2292,6 +2298,7 @@ export default function MonthTimelineView({
                         </Stack>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
                           {b.category}
+                          {b.accountName ? ` · ${b.accountName}` : ''}
                           {isFilled && b.actualAmount !== undefined ? ` · Actual: -${usd.format(b.actualAmount)}` : ''}
                         </Typography>
                       </Box>
@@ -2460,9 +2467,16 @@ export default function MonthTimelineView({
                         variant="outlined"
                         sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
                       />
-                      <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                        {b.displayName}
-                      </Typography>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                          {b.displayName}
+                        </Typography>
+                        {b.accountName && (
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', lineHeight: 1.15 }}>
+                            {b.accountName}
+                          </Typography>
+                        )}
+                      </Box>
                     </Stack>
                     <Typography variant="body2" sx={{ fontWeight: 700, color: 'warning.main', fontVariantNumeric: 'tabular-nums' }}>
                       -{usd.format(b.amount)}

@@ -238,6 +238,25 @@ export default function Dashboard() {
     ? Math.round(dashboardAggregates.totalIncome / monthList.length)
     : 0;
 
+  const enabledAccountIds = useFilters((s) => s.enabledAccountIds);
+  const seenAccountIds = useFilters((s) => s.seenAccountIds);
+  const disabledCategories = useFilters((s) => s.disabledCategories);
+
+  const accounts = useMemo(
+    () =>
+      accountsAll && demoMode
+        ? accountsAll.filter((a) => a.source === 'demo')
+        : accountsAll?.filter((a) => a.source !== 'demo'),
+    [accountsAll, demoMode]
+  );
+
+  const scopedForecastAccountIds = useMemo(() => {
+    if (!accounts || accounts.length === 0) return undefined;
+    if (seenAccountIds.length === 0 && enabledAccountIds.length === 0) return undefined;
+    if (enabledAccountIds.length >= accounts.length) return undefined;
+    return enabledAccountIds;
+  }, [accounts, enabledAccountIds, seenAccountIds]);
+
   const {
     recurrenceMap,
     availableMonths: forecastAvailableMonths,
@@ -246,6 +265,8 @@ export default function Dashboard() {
   } = useSpendingForecast({
     categories,
     recentAvgIncome,
+    accountId: scopedForecastAccountIds,
+    disabledCategories,
   });
 
   const persistedViewMode = useFilters((s) => s.dashboardViewMode);
@@ -336,14 +357,6 @@ export default function Dashboard() {
   }, [isBaselineLoaded, setBaselineData]);
 
   const isCurrentMonthInRange = useMemo(() => monthList.includes(currentCalMonth), [monthList, currentCalMonth]);
-
-  const accounts = useMemo(
-    () =>
-      accountsAll && demoMode
-        ? accountsAll.filter((a) => a.source === 'demo')
-        : accountsAll?.filter((a) => a.source !== 'demo'),
-    [accountsAll, demoMode]
-  );
 
   // Account synchronization is handled globally in Layout.tsx
   const hasActiveFilters = useFilters((s) => {

@@ -9,7 +9,7 @@ import type { GroupBy } from '../stores/store';
 import type { RecurrenceInfo } from '../domain/recurrence';
 import { useFilters } from '../stores/store';
 import { useSpendingForecast } from '../hooks/useSpendingForecast';
-import { generateFutureMonths, projectMonthlyIncome, type CategoryProjection, type IncomeStreamProjection } from '../domain/forecastSpending';
+import { generateFutureMonths, getMerchantBillStatus, projectMonthlyIncome, type CategoryProjection, type IncomeStreamProjection } from '../domain/forecastSpending';
 
 function makeFutureBarItem(value: number, color: string) {
   return {
@@ -80,6 +80,14 @@ export default function SpendChart({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const enabledAccountIds = useFilters((s) => s.enabledAccountIds);
+  const seenAccountIds = useFilters((s) => s.seenAccountIds);
+  const filterDisabledCategories = useFilters((s) => s.disabledCategories);
+  const scopedForecastAccountIds = useMemo(() => {
+    if (!accounts || accounts.length === 0) return undefined;
+    if (seenAccountIds.length === 0 && enabledAccountIds.length === 0) return undefined;
+    if (enabledAccountIds.length >= accounts.length) return undefined;
+    return enabledAccountIds;
+  }, [accounts, enabledAccountIds, seenAccountIds]);
   const showRunway = useFilters((s) => s.showRunway);
   const spendOnly = useFilters((s) => s.spendOnly);
   const transactionType = useFilters((s) => s.transactionType);
@@ -113,7 +121,13 @@ export default function SpendChart({
     currentMonthIncomeProjections,
     getProjectionsForMonth,
     getIncomeProjectionsForMonth,
-  } = useSpendingForecast({ categories, recurrenceMap, recentAvgIncome: avgHistoricalIncome });
+  } = useSpendingForecast({
+    categories,
+    recurrenceMap,
+    recentAvgIncome: avgHistoricalIncome,
+    accountId: scopedForecastAccountIds,
+    disabledCategories: filterDisabledCategories,
+  });
 
   const isCurrentMonthInList = useMemo(() => monthList.includes(currentCalMonth), [monthList, currentCalMonth]);
   const isCurrentMonthForecasted = forecastHorizon > 0 && isCurrentMonthInList;
@@ -478,6 +492,20 @@ export default function SpendChart({
     }
 
     if (groupBy === 'account') {
+      const enabledSet = enabledAccountIds.length > 0 ? new Set(enabledAccountIds) : null;
+      const activeRecMerchants = consolidatedMerchants.filter(
+        (cm) =>
+          (cm.monthlyAverage || 0) > 0 &&
+          !disabledCategories.includes(cm.category) &&
+          !excludedBudgetCategories.includes(cm.category) &&
+          !excludedMerchants.includes(cm.merchantKey) &&
+          (!enabledSet || cm.accountId === undefined || enabledSet.has(cm.accountId))
+      );
+      const recurAccountIds = new Set(
+        activeRecMerchants
+          .filter((cm) => cm.accountId !== undefined)
+          .map((cm) => String(cm.accountId))
+      );
       const streamAccountIds = new Set(
         currentMonthIncomeProjections
           .filter((p) => p.accountId !== undefined)
@@ -485,8 +513,9 @@ export default function SpendChart({
       );
       const orderedAccounts = accounts.filter(
         (a) =>
-          presentKeys.has(String(a.id)) ||
-          (transactionType === 'income' && streamAccountIds.has(String(a.id)))
+          (!enabledSet || (a.id !== undefined && enabledSet.has(a.id))) &&
+          (presentKeys.has(String(a.id)) ||
+          (transactionType === 'income' ? streamAccountIds.has(String(a.id)) : recurAccountIds.has(String(a.id))))
       );
       const historicalAccountTotals = new Map<string, number>();
       let totalHistoricalAccountAmount = 0;
@@ -501,6 +530,54 @@ export default function SpendChart({
         historicalAccountTotals.set(String(a.id), sum);
         totalHistoricalAccountAmount += sum;
       }
+
+      const getProjectedAccountSpend = (acctId: number | undefined, m: string, acctShare: number) => {
+        const mProjections = categoryProjectionsByMonth.get(m);
+        const mTotalSpend = mProjections
+          ? Array.from(mProjections.values()).reduce((sum, p) => sum + p.total, 0)
+          : totalProjectedMonthlySpend;
+        const anyAccountSpecific = activeRecMerchants.some((cm) => cm.accountId !== undefined);
+        if (anyAccountSpecific) {
+          const directRec = activeRecMerchants
+            .filter((cm) => cm.accountId !== undefined && cm.accountId === acctId)
+            .reduce((sum, cm) => sum + cm.monthlyAverage, 0);
+          const unattributedRec = activeRecMerchants
+            .filter((cm) => cm.accountId === undefined)
+            .reduce((sum, cm) => sum + cm.monthlyAverage, 0);
+          const mVarSpend = mProjections
+            ? Array.from(mProjections.values()).reduce((sum, p) => sum + p.variable, 0)
+            : 0;
+          return Math.round(directRec + (unattributedRec + mVarSpend) * acctShare);
+        }
+        return Math.round(mTotalSpend * acctShare);
+      };
+
+      const getRemainingAccountSpend = (acctId: number | undefined, acctShare: number) => {
+        const anyAccountSpecific = activeRecMerchants.some((cm) => cm.accountId !== undefined);
+        if (anyAccountSpecific) {
+          const directUnpaidRec = activeRecMerchants
+            .filter(
+              (cm) =>
+                cm.accountId !== undefined &&
+                cm.accountId === acctId &&
+                !getMerchantBillStatus(cm.merchantKey, currentCalMonth, recurrenceMap).isPaidThisMonth
+            )
+            .reduce((sum, cm) => sum + cm.monthlyAverage, 0);
+          const unattributedUnpaidRec = activeRecMerchants
+            .filter(
+              (cm) =>
+                cm.accountId === undefined &&
+                !getMerchantBillStatus(cm.merchantKey, currentCalMonth, recurrenceMap).isPaidThisMonth
+            )
+            .reduce((sum, cm) => sum + cm.monthlyAverage, 0);
+          const remVar = Array.from(currentMonthProjections.values()).reduce(
+            (sum, p) => sum + (p.remainingVariable || 0),
+            0
+          );
+          return Math.round(directUnpaidRec + (unattributedUnpaidRec + remVar) * acctShare);
+        }
+        return Math.round(currentMonthRemainingTotal * acctShare);
+      };
 
       const getProjectedAccountIncome = (acctId: number | undefined, m: string, acctShare: number) => {
         const mStreams = incomeProjectionsByMonth.get(m) || [];
@@ -533,11 +610,11 @@ export default function SpendChart({
               if (transactionType === 'income') {
                 return makeFutureBarItem(getProjectedAccountIncome(a.id, m, acctShare), acctColor);
               }
-              const mProjections = categoryProjectionsByMonth.get(m);
-              const mTotalSpend = mProjections
-                ? Array.from(mProjections.values()).reduce((sum, p) => sum + p.total, 0)
-                : totalProjectedMonthlySpend;
-              return makeFutureBarItem(Math.round(mTotalSpend * acctShare), acctColor);
+
+
+
+
+              return makeFutureBarItem(getProjectedAccountSpend(a.id, m, acctShare), acctColor);
             }
             return mTotals ? (mTotals.get(m) || 0) : 0;
           }),
@@ -565,7 +642,7 @@ export default function SpendChart({
             const acctShare = totalHistoricalAccountAmount > 0
               ? (historicalAccountTotals.get(String(a.id)) || 0) / totalHistoricalAccountAmount
               : (1 / Math.max(1, orderedAccounts.length));
-            const remAcct = Math.round(currentMonthRemainingTotal * acctShare);
+            const remAcct = getRemainingAccountSpend(a.id, acctShare);
             if (remAcct > 0) {
               remSeries.push(makeCurrentRemainingSeries(a.name, acctColor, remAcct, fullMonthList, currentCalMonth));
             }

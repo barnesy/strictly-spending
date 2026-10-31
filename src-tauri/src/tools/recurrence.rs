@@ -26,6 +26,8 @@ pub struct RecurrenceInfo {
     pub price_hike_delta: Option<f64>,
     #[serde(rename = "priceHikePct", skip_serializing_if = "Option::is_none")]
     pub price_hike_pct: Option<f64>,
+    #[serde(rename = "accountId", skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<i64>,
 }
 
 impl Default for RecurrenceInfo {
@@ -42,6 +44,7 @@ impl Default for RecurrenceInfo {
             prior_amount: None,
             price_hike_delta: None,
             price_hike_pct: None,
+            account_id: None,
         }
     }
 }
@@ -81,10 +84,11 @@ pub fn detect_recurrence(txns: &[&Transaction]) -> RecurrenceInfo {
 
     let (last_amount, prior_amount, price_hike_delta, price_hike_pct) = compute_price_hike(&spend);
 
-    if spend.len() < 3 {
+        if spend.len() < 3 {
         return RecurrenceInfo {
             count: spend.len(),
             last_date: spend.last().map(|t| t.date.clone()),
+            account_id: spend.last().map(|t| t.account_id),
             last_amount,
             prior_amount,
             price_hike_delta,
@@ -138,6 +142,7 @@ pub fn detect_recurrence(txns: &[&Transaction]) -> RecurrenceInfo {
         prior_amount,
         price_hike_delta,
         price_hike_pct,
+        account_id: Some(spend.last().unwrap().account_id),
     }
 }
 
@@ -201,10 +206,9 @@ pub fn build_recurrence_map_internal(txns: &[Transaction], overrides: &[Merchant
         }
 
         final_info.count = recurring_txns.len();
-        final_info.last_date = spend_txns
-            .last()
-            .or_else(|| recurring_txns.last())
-            .map(|t| t.date.clone());
+        let last_txn = spend_txns.last().or_else(|| recurring_txns.last());
+        final_info.last_date = last_txn.map(|t| t.date.clone());
+        final_info.account_id = last_txn.map(|t| t.account_id);
 
         result.insert(merchant_key, final_info);
     }

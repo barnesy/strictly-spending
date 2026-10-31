@@ -749,18 +749,19 @@ async function handleIpc(cmd, args = {}) {
         const now = new Date();
         const cutoff = new Date(now.getTime() - 60 * 86400000).toISOString().split('T')[0];
         const sourceCond = isDemo ? "source = 'demo'" : "source != 'demo'";
-        let sql = `SELECT merchant_key, category, SUM(ABS(amount)) as total, COUNT(*) as count FROM transactions WHERE amount < 0 AND date >= ? AND COALESCE(recurrence_override, recurrence, 'recurring') != 'onetime' AND category IN (SELECT name FROM categories WHERE default_recurrence = 'recurring') AND ${sourceCond}`;
+        let sql = `SELECT merchant_key, category, SUM(ABS(amount)) as total, COUNT(*) as count, account_id FROM transactions WHERE amount < 0 AND date >= ? AND COALESCE(recurrence_override, recurrence, 'recurring') != 'onetime' AND category IN (SELECT name FROM categories WHERE default_recurrence = 'recurring') AND ${sourceCond}`;
         const params = [cutoff];
         if (accId != null) {
           sql += ' AND account_id = ?';
           params.push(accId);
         }
-        sql += ' GROUP BY merchant_key, category';
+        sql += ' GROUP BY merchant_key, category, account_id';
         const rows = db.prepare(sql).all(...params);
         const results = rows.map(r => ({
           merchantKey: r.merchant_key,
           category: r.category,
-          monthlyAverage: r.total / (r.count > 0 ? r.count : 1)
+          monthlyAverage: r.total / (r.count > 0 ? r.count : 1),
+          accountId: r.account_id
         }));
         results.sort((a, b) => b.monthlyAverage - a.monthlyAverage);
         return results;
@@ -1851,7 +1852,7 @@ async function handleIpc(cmd, args = {}) {
         const isDemo = Boolean(args.isDemo ?? args.is_demo ?? false);
         const accId = args.accountId ?? args.account_id;
         const sourceCond = isDemo ? "source = 'demo'" : "source != 'demo'";
-        let sql = `SELECT id, date, amount, category, merchant_key, recurrence, recurrence_override FROM transactions WHERE ${sourceCond}`;
+        let sql = `SELECT id, account_id, date, amount, category, merchant_key, recurrence, recurrence_override FROM transactions WHERE ${sourceCond}`;
         const params = [];
         if (accId != null) {
           sql += ' AND account_id = ?';
@@ -1989,6 +1990,9 @@ async function handleIpc(cmd, args = {}) {
           finalInfo.count = recurringTxns.length;
           const lastTxn = spendTxns.length > 0 ? spendTxns[spendTxns.length - 1] : recurringTxns[recurringTxns.length - 1];
           finalInfo.lastDate = lastTxn ? lastTxn.date : null;
+          if (lastTxn && lastTxn.account_id != null) {
+            finalInfo.accountId = lastTxn.account_id;
+          }
 
           result[merchantKey] = finalInfo;
         }

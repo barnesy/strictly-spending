@@ -1010,7 +1010,8 @@ export function consolidateRecurringMerchants(
   for (const m of merchants) {
     if (!m.merchantKey || (m.monthlyAverage || 0) <= 0) continue;
     const canon = normalizeTimelineMerchantKey(m.merchantKey) || m.merchantKey.toLowerCase();
-    const groupKey = `${m.category}::${canon}`;
+    const resolvedAccountId = m.accountId ?? recurrenceMap?.get(m.merchantKey)?.accountId;
+    const groupKey = `${m.category}::${canon}::${resolvedAccountId ?? 'any'}`;
     const status = getMerchantBillStatus(m.merchantKey, undefined, recurrenceMap);
     const ownLastDate = recurrenceMap?.get(m.merchantKey)?.lastDate || status.lastDate || '';
     const expectedDay = status.expectedDay ?? 15;
@@ -1018,7 +1019,7 @@ export function consolidateRecurringMerchants(
     const existing = byCategoryAndCanon.get(groupKey);
     if (!existing) {
       byCategoryAndCanon.set(groupKey, {
-        merchant: { ...m },
+        merchant: { ...m, accountId: resolvedAccountId },
         canon,
         lastDate: ownLastDate,
         expectedDay,
@@ -1029,6 +1030,7 @@ export function consolidateRecurringMerchants(
         byCategoryAndCanon.set(groupKey, {
           merchant: {
             ...m,
+            accountId: resolvedAccountId ?? existing.merchant.accountId,
             monthlyAverage: m.monthlyAverage,
           },
           canon,
@@ -1039,12 +1041,15 @@ export function consolidateRecurringMerchants(
     }
   }
 
-  // Secondary deduplication within the same category for nearly identical amount (±10%) and billing day (±3 days)
+  // Secondary deduplication within the same category and account for nearly identical amount (±10%) and billing day (±3 days)
   const deduped: ConsolidatedEntry[] = [];
   for (const entry of byCategoryAndCanon.values()) {
     const dup = deduped.find(
       (e) =>
         e.merchant.category === entry.merchant.category &&
+        (e.merchant.accountId === entry.merchant.accountId ||
+          e.merchant.accountId === undefined ||
+          entry.merchant.accountId === undefined) &&
         Math.abs(e.expectedDay - entry.expectedDay) <= 3 &&
         e.merchant.monthlyAverage >= 25 &&
         Math.abs(e.merchant.monthlyAverage - entry.merchant.monthlyAverage) /
@@ -1054,10 +1059,15 @@ export function consolidateRecurringMerchants(
     if (!dup) {
       deduped.push(entry);
     } else if (entry.lastDate > dup.lastDate) {
-      dup.merchant = entry.merchant;
+      dup.merchant = {
+        ...entry.merchant,
+        accountId: entry.merchant.accountId ?? dup.merchant.accountId,
+      };
       dup.canon = entry.canon;
       dup.lastDate = entry.lastDate;
       dup.expectedDay = entry.expectedDay;
+    } else if (dup.merchant.accountId === undefined && entry.merchant.accountId !== undefined) {
+      dup.merchant = { ...dup.merchant, accountId: entry.merchant.accountId };
     }
   }
 
@@ -1081,6 +1091,8 @@ export interface TimelineExpectedBill {
   displayName: string;
   canonicalKey: string;
   category: string;
+  accountId?: number;
+  accountName?: string;
   amount: number;
   expectedDay: number;
   isDelayed?: boolean;
@@ -1184,6 +1196,12 @@ export function reconcileMonthTimeline({
   todayDay?: number | null;
 }): MonthTimelineReconciliation {
   const disabledCats = new Set(disabledCategories);
+  const enabledSet = enabledAccountIds.length > 0 ? new Set(enabledAccountIds) : null;
+  const accountNameById = new Map(
+    (accounts || [])
+      .filter((a) => a.id !== undefined)
+      .map((a) => [a.id!, a.name])
+  );
   const reconciledByTxnId = new Map<number, ReconciledTimelineMatch>();
 
   // 1. Deduplicate consolidated recurring merchants into unique expected monthly charges
@@ -1192,6 +1210,8 @@ export function reconcileMonthTimeline({
     displayName: string;
     canonicalKey: string;
     category: string;
+    accountId?: number;
+    accountName?: string;
     amount: number;
     expectedDay: number;
     lastDate: string | null;
@@ -1203,6 +1223,9 @@ export function reconcileMonthTimeline({
   for (const m of consolidatedMerchants) {
     if (disabledCats.has(m.category) || (m.monthlyAverage || 0) <= 0) continue;
     const info = recurrenceMap.get(m.merchantKey);
+    const billAccountId = m.accountId ?? info?.accountId;
+    if (enabledSet && billAccountId !== undefined && !enabledSet.has(billAccountId)) continue;
+    const billAccountName = billAccountId !== undefined ? accountNameById.get(billAccountId) : undefined;
     const status = getMerchantBillStatus(m.merchantKey, monthKey, recurrenceMap);
     const lastDate = status.lastDate || info?.lastDate || null;
     if (!lastDate) continue;
@@ -1216,14 +1239,17 @@ export function reconcileMonthTimeline({
     const expectedDay = Math.min(daysInMonth, Math.max(1, isNaN(rawDay) ? 15 : rawDay));
 
     const canon = normalizeTimelineMerchantKey(m.merchantKey) || m.merchantKey.toLowerCase();
-    const existing = billByCanon.get(canon);
+    const canonKey = `${canon}::${billAccountId ?? 'any'}`;
+    const existing = billByCanon.get(canonKey);
 
     if (!existing) {
-      billByCanon.set(canon, {
+      billByCanon.set(canonKey, {
         merchantKey: m.merchantKey,
         displayName: formatCleanMerchantName(m.merchantKey),
         canonicalKey: canon,
         category: m.category,
+        accountId: billAccountId,
+        accountName: billAccountName,
         amount: Math.round(m.monthlyAverage * 100) / 100,
         expectedDay,
         lastDate,
@@ -1232,10 +1258,12 @@ export function reconcileMonthTimeline({
     } else {
       // Keep the most recent lastDate and average the expected amount if merged
       const isNewer = lastDate > (existing.lastDate || '');
-      billByCanon.set(canon, {
+      billByCanon.set(canonKey, {
         ...existing,
         merchantKey: isNewer ? m.merchantKey : existing.merchantKey,
         displayName: isNewer ? formatCleanMerchantName(m.merchantKey) : existing.displayName,
+        accountId: (isNewer ? billAccountId : existing.accountId) ?? billAccountId ?? existing.accountId,
+        accountName: (isNewer ? billAccountName : existing.accountName) ?? billAccountName ?? existing.accountName,
         amount: isNewer ? Math.round(m.monthlyAverage * 100) / 100 : existing.amount,
         expectedDay: isNewer ? expectedDay : existing.expectedDay,
         lastDate: isNewer ? lastDate : existing.lastDate,
@@ -1243,12 +1271,13 @@ export function reconcileMonthTimeline({
     }
   }
 
-  // Secondary deduplication: merge bills in the same category with nearly identical amount (±10%) and day (±3 days)
+  // Secondary deduplication: merge bills in the same category and account with nearly identical amount (±10%) and day (±3 days)
   const dedupedBills: CandidateBill[] = [];
   for (const bill of billByCanon.values()) {
     const duplicate = dedupedBills.find(
       (b) =>
         b.category === bill.category &&
+        (b.accountId === bill.accountId || b.accountId === undefined || bill.accountId === undefined) &&
         Math.abs(b.expectedDay - bill.expectedDay) <= 3 &&
         b.amount >= 25 &&
         Math.abs(b.amount - bill.amount) / Math.max(1, b.amount) <= 0.1
@@ -1259,9 +1288,14 @@ export function reconcileMonthTimeline({
       duplicate.merchantKey = bill.merchantKey;
       duplicate.displayName = bill.displayName;
       duplicate.canonicalKey = bill.canonicalKey;
+      duplicate.accountId = bill.accountId ?? duplicate.accountId;
+      duplicate.accountName = bill.accountName ?? duplicate.accountName;
       duplicate.amount = bill.amount;
       duplicate.expectedDay = bill.expectedDay;
       duplicate.lastDate = bill.lastDate;
+    } else if (duplicate.accountId === undefined && bill.accountId !== undefined) {
+      duplicate.accountId = bill.accountId;
+      duplicate.accountName = bill.accountName;
     }
   }
 
@@ -1276,6 +1310,9 @@ export function reconcileMonthTimeline({
 
   dedupedBills.forEach((bill, billIdx) => {
     for (const t of actualSpendTxns) {
+      if (bill.accountId !== undefined && t.accountId !== undefined && t.accountId !== bill.accountId) {
+        continue;
+      }
       const absAmt = Math.abs(t.amount);
       const tDay = Number(t.date.split('-')[2]) || 1;
       const dayDiff = Math.abs(tDay - bill.expectedDay);
@@ -1372,6 +1409,8 @@ export function reconcileMonthTimeline({
         displayName: bill.displayName,
         canonicalKey: bill.canonicalKey,
         category: bill.category,
+        accountId: bill.accountId,
+        accountName: bill.accountName,
         amount: bill.amount,
         expectedDay: bill.expectedDay,
         status: 'filled',
@@ -1403,6 +1442,8 @@ export function reconcileMonthTimeline({
       displayName: bill.displayName,
       canonicalKey: bill.canonicalKey,
       category: bill.category,
+      accountId: bill.accountId,
+      accountName: bill.accountName,
       amount: bill.amount,
       expectedDay: bill.expectedDay,
       isDelayed,
@@ -1423,7 +1464,6 @@ export function reconcileMonthTimeline({
   allExpectedBills.sort((a, b) => a.expectedDay - b.expectedDay || b.amount - a.amount);
 
   // 3. Deduplicate & reconcile expected income paydays against actual income transactions
-  const enabledSet = enabledAccountIds.length > 0 ? new Set(enabledAccountIds) : null;
   const rawActiveStreams = incomeStreams.filter(
     (s) => s.enabled && (!enabledSet || s.accountId === undefined || enabledSet.has(s.accountId))
   );

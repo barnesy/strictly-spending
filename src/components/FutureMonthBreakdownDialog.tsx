@@ -83,6 +83,8 @@ export default function FutureMonthBreakdownDialog({
   const navigate = useNavigate();
   const globalTransactionType = useFilters((s) => s.transactionType);
   const enabledAccountIds = useFilters((s) => s.enabledAccountIds);
+  const seenAccountIds = useFilters((s) => s.seenAccountIds);
+  const filterDisabledCategories = useFilters((s) => s.disabledCategories);
   const [breakdownTab, setBreakdownTab] = useState<'spend' | 'income'>(() =>
     globalTransactionType === 'income' ? 'income' : 'spend'
   );
@@ -91,7 +93,16 @@ export default function FutureMonthBreakdownDialog({
     initialComparisonMonth !== undefined ? (initialComparisonMonth || 'none') : (priorYearMonth || 'none')
   );
 
-  const sharedForecast = useSpendingForecast();
+  const scopedForecastAccountIds = useMemo(() => {
+    if (seenAccountIds.length === 0 && enabledAccountIds.length === 0) return undefined;
+    if (seenAccountIds.length > 0 && enabledAccountIds.length >= seenAccountIds.length) return undefined;
+    return enabledAccountIds;
+  }, [enabledAccountIds, seenAccountIds]);
+
+  const sharedForecast = useSpendingForecast({
+    accountId: scopedForecastAccountIds,
+    disabledCategories: propDisabledCategories ?? filterDisabledCategories,
+  });
 
   const categories = propCategories || sharedForecast.categories;
   const budgets = propBudgets || sharedForecast.budgets;

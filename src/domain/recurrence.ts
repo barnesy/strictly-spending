@@ -96,7 +96,7 @@ export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
   const hikeFields = computePriceHike(spend);
 
   if (spend.length < 3) {
-    return { ...NONE, count: spend.length, lastDate: spend.at(-1)?.date ?? null, ...hikeFields };
+    return { ...NONE, count: spend.length, lastDate: spend.at(-1)?.date ?? null, accountId: spend.at(-1)?.accountId, ...hikeFields };
   }
 
   const intervals: number[] = [];
@@ -150,6 +150,7 @@ export function detectRecurrence(txns: Transaction[]): RecurrenceInfo {
     meanAmount,
     estMonthlyCost,
     lastDate: spend[spend.length - 1].date,
+    accountId: spend[spend.length - 1].accountId,
     source: 'auto',
     ...hikeFields,
   };

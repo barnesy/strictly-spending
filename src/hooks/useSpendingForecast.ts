@@ -45,11 +45,12 @@ export function useSpendingForecast(options?: {
   recurrenceMap?: Map<string, RecurrenceInfo>;
   recentAvgIncome?: number;
   accountId?: number | number[] | null;
+  disabledCategories?: string[];
 }) {
   const scopedAccountScope = useMemo(() => {
     if (options?.accountId == null) return undefined;
     if (Array.isArray(options.accountId)) {
-      return options.accountId.length > 0 ? options.accountId : undefined;
+      return options.accountId.length > 0 ? options.accountId : [-1];
     }
     return options.accountId;
   }, [options?.accountId]);
@@ -61,7 +62,10 @@ export function useSpendingForecast(options?: {
   const { data: historicalSpendData = [] } = useHistoricalSpendByCategory(scopedAccountScope);
   const { data: historicalIncomeData = [] } = useHistoricalMonthlyIncome(scopedAccountScope);
   const demoMode = useFilters((s) => s.demoMode);
-  const disabledCategories: string[] = useMemo(() => [], []);
+  const disabledCategories: string[] = useMemo(
+    () => options?.disabledCategories ?? [],
+    [options?.disabledCategories]
+  );
   const enabledAccountIds = useMemo(() => {
     if (scopedAccountScope === undefined) return undefined;
     return Array.isArray(scopedAccountScope) ? scopedAccountScope : [scopedAccountScope];
@@ -108,10 +112,12 @@ export function useSpendingForecast(options?: {
   );
   const recurrenceMap = options?.recurrenceMap || derivedRecurrenceMap;
 
-  const consolidatedMerchants = useMemo(
-    () => consolidateRecurringMerchants(rawConsolidatedMerchants, recurrenceMap),
-    [rawConsolidatedMerchants, recurrenceMap]
-  );
+  const consolidatedMerchants = useMemo(() => {
+    const list = consolidateRecurringMerchants(rawConsolidatedMerchants, recurrenceMap);
+    if (!enabledAccountIds || enabledAccountIds.length === 0) return list;
+    const allowed = new Set(enabledAccountIds);
+    return list.filter((m) => m.accountId === undefined || allowed.has(m.accountId));
+  }, [rawConsolidatedMerchants, recurrenceMap, enabledAccountIds]);
 
   const forecastRecurringIncome = useMemo(() => {
     const enabledSet = enabledAccountIds && enabledAccountIds.length > 0 ? new Set(enabledAccountIds) : null;
