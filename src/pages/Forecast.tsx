@@ -21,6 +21,7 @@ import {
   Drawer,
   Divider,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import {
   Group as PanelGroup,
@@ -1123,13 +1124,31 @@ export default function Forecast() {
 
   return (
     <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: { xs: 'visible', md: 'hidden' } }}>
-      {/* Top Toolbar */}
+      {/* Top Toolbar (Sticky to top when page scrolls) */}
+      <Box
+        sx={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 30,
+          bgcolor: (theme) => alpha(theme.palette.background.default, 0.92),
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          mx: { xs: -1.5, sm: -3 },
+          px: { xs: 1.5, sm: 3 },
+          py: 1,
+          mt: -1,
+          mb: 2,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          flexShrink: 0,
+        }}
+      >
       <Stack
         direction="row"
         spacing={{ xs: 0.75, md: 2 }}
         justifyContent="space-between"
         alignItems="center"
-        sx={{ mb: 2, flexShrink: 0, width: '100%' }}
+        sx={{ width: '100%' }}
       >
         {/* Left Side: Settings toggle, Account selector & Real Data Status */}
         <Stack direction="row" spacing={{ xs: 0.75, sm: 1 }} alignItems="center" flexWrap="nowrap" sx={{ minWidth: 0, flex: { xs: 1, md: 'initial' }, overflow: 'hidden' }}>
@@ -1512,6 +1531,7 @@ export default function Forecast() {
           </MenuItem>
         </Menu>
       </Stack>
+      </Box>
 
       {/* Mobile / Foldable Slide-Over Drawers for Inputs & Money Flow */}
       {isMobile && (

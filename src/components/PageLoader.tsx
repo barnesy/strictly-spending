@@ -64,7 +64,7 @@ export default function PageLoader({ isLoading, children }: PageLoaderProps) {
           flex: 1,
           minHeight: 0,
           opacity: internalLoading ? 0 : 1,
-          transform: internalLoading ? 'translateY(10px)' : 'translateY(0)',
+          transform: internalLoading ? 'translateY(10px)' : 'none',
           transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
           transitionDelay: internalLoading ? '0s' : '0.1s', // Wait for logo to start dropping before fading in
         }}

@@ -512,39 +512,58 @@ export default function Budget() {
   return (
     <PageLoader isLoading={isLoading}>
       <Stack spacing={{ xs: 2, sm: 3 }}>
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          flexWrap="wrap"
-          useFlexGap
-          spacing={1.25}
+        {/* Top Controls Toolbar (Sticky to top when page scrolls) */}
+        <Box
+          sx={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 30,
+            bgcolor: (theme) => alpha(theme.palette.background.default, 0.92),
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            mx: { xs: -1.5, sm: -3 },
+            px: { xs: 1.5, sm: 3 },
+            py: 1,
+            mt: -1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            flexShrink: 0,
+          }}
         >
-          <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontSize: '1.5rem', fontWeight: 700 }}>
-            Budget &amp; Monthly Pace
-          </Typography>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            flexWrap="wrap"
+            useFlexGap
+            spacing={1.25}
+          >
+            <Typography variant="h5" sx={{ display: { xs: 'none', md: 'block' }, fontSize: '1.5rem', fontWeight: 700 }}>
+              Budget &amp; Monthly Pace
+            </Typography>
 
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-            {totalExclusions > 0 && (
-              <Button
-                onClick={reset}
-                size="small"
-                variant="outlined"
-                startIcon={<RestartAltIcon sx={{ fontSize: 16 }} />}
-                sx={UNIFORM_TOOLBAR_BUTTON_SX}
-              >
-                Reset toggles
-              </Button>
-            )}
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              {totalExclusions > 0 && (
+                <Button
+                  onClick={reset}
+                  size="small"
+                  variant="outlined"
+                  startIcon={<RestartAltIcon sx={{ fontSize: 16 }} />}
+                  sx={UNIFORM_TOOLBAR_BUTTON_SX}
+                >
+                  Reset toggles
+                </Button>
+              )}
 
-            <AccountFilterDropdown
-              checkingAccounts={checkingAccounts}
-              selectedAccountIds={selectedAccountIds}
-              isAllSelected={isAllSelected}
-              onChangeSelectedIds={setSelectedAccountIds}
-            />
+              <AccountFilterDropdown
+                checkingAccounts={checkingAccounts}
+                selectedAccountIds={selectedAccountIds}
+                isAllSelected={isAllSelected}
+                onChangeSelectedIds={setSelectedAccountIds}
+              />
+            </Stack>
           </Stack>
-        </Stack>
+        </Box>
 
         {/* Single-Account Cashflow & Safe-to-Spend Predictor Card */}
         <Paper
