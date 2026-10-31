@@ -100,11 +100,25 @@ export function useSpendingForecast(options?: {
     for (const t of trailingAverages) {
       trailingMap.set(t.category, t.average);
     }
-    return rawBudgets.map((b) => ({
-      ...b,
-      monthlyAmount: Math.round((trailingMap.get(b.category) || 0) * 100) / 100,
-    }));
-  }, [rawBudgets, scopedAccountScope, trailingAverages]);
+    const byCat = new Map<string, Budget>();
+    for (const b of rawBudgets) {
+      byCat.set(b.category, {
+        ...b,
+        monthlyAmount: Math.round((trailingMap.get(b.category) || 0) * 100) / 100,
+        userSet: false,
+      });
+    }
+    for (const c of categories) {
+      if (c.type === 'spend' && c.defaultRecurrence !== 'recurring' && !byCat.has(c.name)) {
+        byCat.set(c.name, {
+          category: c.name,
+          monthlyAmount: Math.round((trailingMap.get(c.name) || 0) * 100) / 100,
+          userSet: false,
+        });
+      }
+    }
+    return Array.from(byCat.values());
+  }, [rawBudgets, categories, scopedAccountScope, trailingAverages]);
 
   const derivedRecurrenceMap = useMemo(
     () => new Map<string, RecurrenceInfo>(Object.entries(recurrenceMapObj)),
@@ -114,9 +128,9 @@ export function useSpendingForecast(options?: {
 
   const consolidatedMerchants = useMemo(() => {
     const list = consolidateRecurringMerchants(rawConsolidatedMerchants, recurrenceMap);
-    if (!enabledAccountIds || enabledAccountIds.length === 0) return list;
+    if (!enabledAccountIds) return list;
     const allowed = new Set(enabledAccountIds);
-    return list.filter((m) => m.accountId === undefined || allowed.has(m.accountId));
+    return list.filter((m) => m.accountId !== undefined && allowed.has(m.accountId));
   }, [rawConsolidatedMerchants, recurrenceMap, enabledAccountIds]);
 
   const forecastRecurringIncome = useMemo(() => {
@@ -195,10 +209,7 @@ export function useSpendingForecast(options?: {
     for (const m of historicalMonthlyIncome.keys()) {
       if (m > maxDataMonth) maxDataMonth = m;
     }
-    if (historicalMonthlySpend.has(sysMonth) || historicalMonthlyIncome.has(sysMonth)) {
-      return maxDataMonth > sysMonth ? maxDataMonth : sysMonth;
-    }
-    return maxDataMonth || sysMonth;
+    return maxDataMonth > sysMonth ? maxDataMonth : sysMonth;
   }, [historicalMonthlySpend, historicalMonthlyIncome]);
 
   const incomeCategoryColor = useMemo(() => {

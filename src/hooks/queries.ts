@@ -170,7 +170,7 @@ export const usePriorYearIncomeChartData = useComparisonMonthIncomeChartData;
 
 const normalizeAccountScope = (accountScope?: number | number[]): number[] | undefined => {
   if (Array.isArray(accountScope)) {
-    return accountScope.length > 0 ? [...accountScope].sort((a, b) => a - b) : undefined;
+    return accountScope.length > 0 ? [...accountScope].sort((a, b) => a - b) : [-1];
   }
   return accountScope !== undefined ? [accountScope] : undefined;
 };
@@ -179,24 +179,35 @@ export const useConsolidatedRecurringMerchants = (accountScope?: number | number
   const demoMode = useFilters((state) => state.demoMode);
   const ids = normalizeAccountScope(accountScope);
   return useQuery({
-    queryKey: ['consolidated_recurring_merchants', demoMode, ids ?? 'all'],
+    queryKey: ['consolidated_recurring_merchants_v2', demoMode, ids ?? 'all'],
     queryFn: async () => {
       if (!ids) return api.getConsolidatedRecurringMerchants(demoMode, undefined);
-      if (ids.length === 1) return api.getConsolidatedRecurringMerchants(demoMode, ids[0]);
+      if (ids.length === 1) {
+        if (ids[0] === -1) return [];
+        return api.getConsolidatedRecurringMerchants(demoMode, ids[0]);
+      }
       const lists = await Promise.all(ids.map((id) => api.getConsolidatedRecurringMerchants(demoMode, id)));
-      const byKey = new Map<string, { merchantKey: string; category: string; monthlyAverage: number; accountId?: number }>();
+      const byKey = new Map<string, { merchantKey: string; category: string; monthlyAverage: number; accountId?: number; lastDate?: string | null }>();
       for (const list of lists) {
         for (const item of list) {
           const k = `${item.merchantKey}:::${item.category}:::${item.accountId ?? ''}`;
           const prev = byKey.get(k);
           if (prev) {
             prev.monthlyAverage += item.monthlyAverage;
+            if (item.lastDate && (!prev.lastDate || item.lastDate > prev.lastDate)) {
+              prev.lastDate = item.lastDate;
+            }
           } else {
             byKey.set(k, { ...item });
           }
         }
       }
       return Array.from(byKey.values()).sort((a, b) => b.monthlyAverage - a.monthlyAverage);
+    },
+    select: (data) => {
+      if (!ids) return data;
+      const allowed = new Set(ids);
+      return data.filter((m) => m.accountId !== undefined && allowed.has(m.accountId));
     },
     placeholderData: keepPreviousData,
   });
@@ -361,12 +372,24 @@ export const useCsvMappings = () => {
 export const useRecurrenceMap = (isDemo: boolean = false, accountScope?: number | number[]) => {
   const ids = normalizeAccountScope(accountScope);
   return useQuery({
-    queryKey: ['recurrenceMap', isDemo, ids ?? 'all'],
+    queryKey: ['recurrenceMap_v2', isDemo, ids ?? 'all'],
     queryFn: async () => {
       if (!ids) return buildRecurrenceMap(isDemo, undefined);
-      if (ids.length === 1) return buildRecurrenceMap(isDemo, ids[0]);
+      if (ids.length === 1) {
+        if (ids[0] === -1) return {};
+        return buildRecurrenceMap(isDemo, ids[0]);
+      }
       const maps = await Promise.all(ids.map((id) => buildRecurrenceMap(isDemo, id)));
-      return Object.assign({}, ...maps);
+      const merged: Record<string, any> = {};
+      for (const m of maps) {
+        for (const [k, v] of Object.entries(m)) {
+          const existing = merged[k];
+          if (!existing || (v.lastDate && (!existing.lastDate || v.lastDate > existing.lastDate))) {
+            merged[k] = v;
+          }
+        }
+      }
+      return merged;
     },
   });
 };

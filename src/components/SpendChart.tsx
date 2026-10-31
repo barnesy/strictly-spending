@@ -492,14 +492,17 @@ export default function SpendChart({
     }
 
     if (groupBy === 'account') {
-      const enabledSet = enabledAccountIds.length > 0 ? new Set(enabledAccountIds) : null;
+      const enabledSet =
+        seenAccountIds.length > 0 || enabledAccountIds.length > 0
+          ? new Set(enabledAccountIds)
+          : null;
       const activeRecMerchants = consolidatedMerchants.filter(
         (cm) =>
           (cm.monthlyAverage || 0) > 0 &&
           !disabledCategories.includes(cm.category) &&
           !excludedBudgetCategories.includes(cm.category) &&
           !excludedMerchants.includes(cm.merchantKey) &&
-          (!enabledSet || cm.accountId === undefined || enabledSet.has(cm.accountId))
+          (!enabledSet || (cm.accountId !== undefined && enabledSet.has(cm.accountId)))
       );
       const recurAccountIds = new Set(
         activeRecMerchants
@@ -560,7 +563,14 @@ export default function SpendChart({
               (cm) =>
                 cm.accountId !== undefined &&
                 cm.accountId === acctId &&
-                !getMerchantBillStatus(cm.merchantKey, currentCalMonth, recurrenceMap).isPaidThisMonth
+                !getMerchantBillStatus(
+                  cm.merchantKey,
+                  currentCalMonth,
+                  recurrenceMap,
+                  new Date(),
+                  cm.accountId,
+                  cm.lastDate
+                ).isPaidThisMonth
             )
             .reduce((sum, cm) => sum + cm.monthlyAverage, 0);
           const unattributedUnpaidRec = activeRecMerchants
@@ -571,7 +581,7 @@ export default function SpendChart({
             )
             .reduce((sum, cm) => sum + cm.monthlyAverage, 0);
           const remVar = Array.from(currentMonthProjections.values()).reduce(
-            (sum, p) => sum + (p.remainingVariable || 0),
+            (sum, p) => sum + Math.max(0, (p.remaining || 0) - (p.unpaidRecurring || 0)),
             0
           );
           return Math.round(directUnpaidRec + (unattributedUnpaidRec + remVar) * acctShare);

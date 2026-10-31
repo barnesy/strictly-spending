@@ -382,6 +382,8 @@ pub struct ConsolidatedMerchant {
     pub monthly_average: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_date: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -410,7 +412,7 @@ pub fn get_consolidated_recurring_merchants(
         String::new()
     };
     let query = format!(
-        "SELECT merchant_key, category, SUM(ABS(amount)) as total, COUNT(*) as count, account_id
+        "SELECT merchant_key, category, SUM(ABS(amount)) as total, COUNT(*) as count, account_id, MAX(date) as last_date
          FROM transactions
          WHERE {}
            {}
@@ -430,17 +432,19 @@ pub fn get_consolidated_recurring_merchants(
             row.get::<_, f64>(2)?,
             row.get::<_, i64>(3)?,
             row.get::<_, i64>(4)?,
+            row.get::<_, Option<String>>(5)?,
         ))
     }).map_err(|e| e.to_string())?;
     
     let mut results = Vec::new();
-    for (merchant_key, category, total, count, row_account_id) in rows.flatten() {
+    for (merchant_key, category, total, count, row_account_id, last_date) in rows.flatten() {
         let count_f64 = if count > 0 { count as f64 } else { 1.0 };
         results.push(ConsolidatedMerchant {
             merchant_key,
             category,
             monthly_average: total / count_f64,
             account_id: Some(row_account_id),
+            last_date,
         });
     }
     

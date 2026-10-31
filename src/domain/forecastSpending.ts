@@ -58,17 +58,28 @@ export function getMerchantBillStatus(
   merchantKey: string,
   targetMonthKey?: string,
   recurrenceMap?: Map<string, RecurrenceInfo>,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  accountId?: number,
+  ownLastDate?: string | null
 ): MerchantBillStatus {
-  let info = recurrenceMap?.get(merchantKey);
-  let lastDate = info?.lastDate || null;
+  const rawInfo = recurrenceMap?.get(merchantKey);
+  const infoMatchesAccount =
+    !rawInfo || accountId === undefined || rawInfo.accountId === undefined || rawInfo.accountId === accountId;
+  let info = infoMatchesAccount ? rawInfo : undefined;
+  let lastDate = ownLastDate || (infoMatchesAccount ? rawInfo?.lastDate || null : null);
+  if (infoMatchesAccount && rawInfo?.lastDate && (!lastDate || rawInfo.lastDate > lastDate)) {
+    lastDate = rawInfo.lastDate;
+  }
 
-  // Also check if another merchantKey variant with the same canonical stem has a newer lastDate
+  // Also check if another merchantKey variant with the same canonical stem on the same account has a newer lastDate
   if (recurrenceMap && merchantKey) {
     const targetCanon = normalizeTimelineMerchantKey(merchantKey);
     if (targetCanon.length >= 3) {
       for (const [k, v] of recurrenceMap.entries()) {
         if (!v?.lastDate) continue;
+        if (accountId !== undefined && v.accountId !== undefined && v.accountId !== accountId) {
+          continue;
+        }
         if (k === merchantKey || normalizeTimelineMerchantKey(k) === targetCanon) {
           if (!lastDate || v.lastDate > lastDate) {
             lastDate = v.lastDate;
@@ -222,7 +233,14 @@ export function computeCategoryProjections({
     );
 
     if (actualSpendByCategory !== undefined && targetMonthKey && recurrenceMap) {
-      const status = getMerchantBillStatus(m.merchantKey, targetMonthKey, recurrenceMap);
+      const status = getMerchantBillStatus(
+        m.merchantKey,
+        targetMonthKey,
+        recurrenceMap,
+        new Date(),
+        m.accountId,
+        m.lastDate
+      );
       if (status.isPaidThisMonth) {
         paidRecurringByCat.set(m.category, (paidRecurringByCat.get(m.category) || 0) + amt);
       } else if (status.lastDate) {
@@ -1010,16 +1028,33 @@ export function consolidateRecurringMerchants(
   for (const m of merchants) {
     if (!m.merchantKey || (m.monthlyAverage || 0) <= 0) continue;
     const canon = normalizeTimelineMerchantKey(m.merchantKey) || m.merchantKey.toLowerCase();
-    const resolvedAccountId = m.accountId ?? recurrenceMap?.get(m.merchantKey)?.accountId;
+    const recInfo = recurrenceMap?.get(m.merchantKey);
+    const resolvedAccountId = m.accountId ?? recInfo?.accountId;
     const groupKey = `${m.category}::${canon}::${resolvedAccountId ?? 'any'}`;
-    const status = getMerchantBillStatus(m.merchantKey, undefined, recurrenceMap);
-    const ownLastDate = recurrenceMap?.get(m.merchantKey)?.lastDate || status.lastDate || '';
+    const status = getMerchantBillStatus(
+      m.merchantKey,
+      undefined,
+      recurrenceMap,
+      new Date(),
+      resolvedAccountId,
+      m.lastDate
+    );
+    const ownLastDate =
+      m.lastDate ||
+      (recInfo &&
+      (resolvedAccountId === undefined ||
+        recInfo.accountId === undefined ||
+        recInfo.accountId === resolvedAccountId)
+        ? recInfo.lastDate
+        : undefined) ||
+      status.lastDate ||
+      '';
     const expectedDay = status.expectedDay ?? 15;
 
     const existing = byCategoryAndCanon.get(groupKey);
     if (!existing) {
       byCategoryAndCanon.set(groupKey, {
-        merchant: { ...m, accountId: resolvedAccountId },
+        merchant: { ...m, accountId: resolvedAccountId, lastDate: ownLastDate || m.lastDate },
         canon,
         lastDate: ownLastDate,
         expectedDay,
@@ -1031,6 +1066,7 @@ export function consolidateRecurringMerchants(
           merchant: {
             ...m,
             accountId: resolvedAccountId ?? existing.merchant.accountId,
+            lastDate: ownLastDate || m.lastDate || existing.merchant.lastDate,
             monthlyAverage: m.monthlyAverage,
           },
           canon,
@@ -1047,9 +1083,7 @@ export function consolidateRecurringMerchants(
     const dup = deduped.find(
       (e) =>
         e.merchant.category === entry.merchant.category &&
-        (e.merchant.accountId === entry.merchant.accountId ||
-          e.merchant.accountId === undefined ||
-          entry.merchant.accountId === undefined) &&
+        e.merchant.accountId === entry.merchant.accountId &&
         Math.abs(e.expectedDay - entry.expectedDay) <= 3 &&
         e.merchant.monthlyAverage >= 25 &&
         Math.abs(e.merchant.monthlyAverage - entry.merchant.monthlyAverage) /
@@ -1196,7 +1230,11 @@ export function reconcileMonthTimeline({
   todayDay?: number | null;
 }): MonthTimelineReconciliation {
   const disabledCats = new Set(disabledCategories);
-  const enabledSet = enabledAccountIds.length > 0 ? new Set(enabledAccountIds) : null;
+  const enabledSet = enabledAccountIds !== undefined ? new Set(enabledAccountIds) : null;
+  const activeModeAccounts = (accounts || []).filter((a) => a.enabled !== false);
+  const isFilteringAccounts =
+    enabledSet !== null &&
+    (activeModeAccounts.length === 0 || enabledSet.size < activeModeAccounts.length);
   const accountNameById = new Map(
     (accounts || [])
       .filter((a) => a.id !== undefined)
@@ -1222,12 +1260,26 @@ export function reconcileMonthTimeline({
 
   for (const m of consolidatedMerchants) {
     if (disabledCats.has(m.category) || (m.monthlyAverage || 0) <= 0) continue;
-    const info = recurrenceMap.get(m.merchantKey);
-    const billAccountId = m.accountId ?? info?.accountId;
-    if (enabledSet && billAccountId !== undefined && !enabledSet.has(billAccountId)) continue;
+    const rawInfo = recurrenceMap.get(m.merchantKey);
+    const billAccountId = m.accountId ?? rawInfo?.accountId;
+    if (enabledSet && (billAccountId === undefined || !enabledSet.has(billAccountId))) continue;
+    const info =
+      rawInfo &&
+      (billAccountId === undefined ||
+        rawInfo.accountId === undefined ||
+        rawInfo.accountId === billAccountId)
+        ? rawInfo
+        : undefined;
     const billAccountName = billAccountId !== undefined ? accountNameById.get(billAccountId) : undefined;
-    const status = getMerchantBillStatus(m.merchantKey, monthKey, recurrenceMap);
-    const lastDate = status.lastDate || info?.lastDate || null;
+    const status = getMerchantBillStatus(
+      m.merchantKey,
+      monthKey,
+      recurrenceMap,
+      new Date(),
+      billAccountId,
+      m.lastDate
+    );
+    const lastDate = status.lastDate || m.lastDate || info?.lastDate || null;
     if (!lastDate) continue;
 
     const avgPeriodDays = info?.meanIntervalDays || 30;
@@ -1277,7 +1329,7 @@ export function reconcileMonthTimeline({
     const duplicate = dedupedBills.find(
       (b) =>
         b.category === bill.category &&
-        (b.accountId === bill.accountId || b.accountId === undefined || bill.accountId === undefined) &&
+        b.accountId === bill.accountId &&
         Math.abs(b.expectedDay - bill.expectedDay) <= 3 &&
         b.amount >= 25 &&
         Math.abs(b.amount - bill.amount) / Math.max(1, b.amount) <= 0.1
@@ -1465,7 +1517,12 @@ export function reconcileMonthTimeline({
 
   // 3. Deduplicate & reconcile expected income paydays against actual income transactions
   const rawActiveStreams = incomeStreams.filter(
-    (s) => s.enabled && (!enabledSet || s.accountId === undefined || enabledSet.has(s.accountId))
+    (s) =>
+      s.enabled &&
+      (!enabledSet ||
+        (isFilteringAccounts
+          ? s.accountId !== undefined && enabledSet.has(s.accountId)
+          : s.accountId === undefined || enabledSet.has(s.accountId)))
   );
 
   // Deduplicate streams by canonical name + accountId
@@ -1710,11 +1767,15 @@ export function reconcileMonthTimeline({
     const hasAnyConfiguredSource =
       dest.sourceAllocations &&
       Object.values(dest.sourceAllocations).some((v) => Number(v || 0) > 0);
-    if (!matchedAnyAccount && !hasAnyConfiguredSource && (!enabledSet || scopedOperatingAccounts.length > 0)) {
+    const defaultOperatingAccount = operatingCashAccounts[0];
+    const defaultAccountAllowed =
+      !enabledSet ||
+      (defaultOperatingAccount?.id !== undefined && enabledSet.has(defaultOperatingAccount.id));
+    if (!matchedAnyAccount && !hasAnyConfiguredSource && defaultOperatingAccount && defaultAccountAllowed) {
       allocationGroups.push({
         groupIndex: allocationGroups.length,
         dest,
-        sourceAccount: scopedOperatingAccounts[0],
+        sourceAccount: defaultOperatingAccount,
         monthlyAllocation: dest.monthlyAllocation || 0,
       });
     }

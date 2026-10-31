@@ -789,7 +789,14 @@ export function SpendBreakdownTable({
               const billStatuses = isCurrentMonth
                 ? recMerchants.map((m) => ({
                     merchant: m,
-                    status: getMerchantBillStatus(m.merchantKey, monthKey, recurrenceMap),
+                    status: getMerchantBillStatus(
+                      m.merchantKey,
+                      monthKey,
+                      recurrenceMap,
+                      new Date(),
+                      m.accountId,
+                      m.lastDate
+                    ),
                   }))
                 : null;
               const unpaidCount = billStatuses ? billStatuses.filter((b) => !b.status.isPaidThisMonth).length : 0;
@@ -807,7 +814,14 @@ export function SpendBreakdownTable({
                         <Stack spacing={0.5}>
                           {recMerchants.map((m, mIdx) => {
                             const status = isCurrentMonth
-                              ? getMerchantBillStatus(m.merchantKey, monthKey, recurrenceMap)
+                              ? getMerchantBillStatus(
+                                  m.merchantKey,
+                                  monthKey,
+                                  recurrenceMap,
+                                  new Date(),
+                                  m.accountId,
+                                  m.lastDate
+                                )
                               : null;
                             const acctId = m.accountId ?? recurrenceMap.get(m.merchantKey)?.accountId;
                             const acctName = acctId !== undefined ? accountNameById.get(acctId) : undefined;

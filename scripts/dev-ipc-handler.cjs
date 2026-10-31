@@ -749,7 +749,7 @@ async function handleIpc(cmd, args = {}) {
         const now = new Date();
         const cutoff = new Date(now.getTime() - 60 * 86400000).toISOString().split('T')[0];
         const sourceCond = isDemo ? "source = 'demo'" : "source != 'demo'";
-        let sql = `SELECT merchant_key, category, SUM(ABS(amount)) as total, COUNT(*) as count, account_id FROM transactions WHERE amount < 0 AND date >= ? AND COALESCE(recurrence_override, recurrence, 'recurring') != 'onetime' AND category IN (SELECT name FROM categories WHERE default_recurrence = 'recurring') AND ${sourceCond}`;
+        let sql = `SELECT merchant_key, category, SUM(ABS(amount)) as total, COUNT(*) as count, account_id, MAX(date) as last_date FROM transactions WHERE amount < 0 AND date >= ? AND COALESCE(recurrence_override, recurrence, 'recurring') != 'onetime' AND category IN (SELECT name FROM categories WHERE default_recurrence = 'recurring') AND ${sourceCond}`;
         const params = [cutoff];
         if (accId != null) {
           sql += ' AND account_id = ?';
@@ -761,7 +761,8 @@ async function handleIpc(cmd, args = {}) {
           merchantKey: r.merchant_key,
           category: r.category,
           monthlyAverage: r.total / (r.count > 0 ? r.count : 1),
-          accountId: r.account_id
+          accountId: r.account_id,
+          lastDate: r.last_date || null,
         }));
         results.sort((a, b) => b.monthlyAverage - a.monthlyAverage);
         return results;

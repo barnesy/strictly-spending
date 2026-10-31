@@ -151,9 +151,17 @@ export default function FutureMonthBreakdownDialog({
     staleTime: 60_000,
   });
 
+  const scopedAccountSet = useMemo(
+    () => (scopedForecastAccountIds !== undefined ? new Set(scopedForecastAccountIds) : null),
+    [scopedForecastAccountIds]
+  );
+
   const comparisonTransactions = useMemo(
-    () => (comparisonAllTransactions || []).filter((t) => t.amount < 0),
-    [comparisonAllTransactions]
+    () =>
+      (comparisonAllTransactions || []).filter(
+        (t) => t.amount < 0 && (!scopedAccountSet || (t.accountId !== undefined && scopedAccountSet.has(t.accountId)))
+      ),
+    [comparisonAllTransactions, scopedAccountSet]
   );
 
   const comparisonIncomeTransactions = useMemo(() => {
@@ -161,9 +169,12 @@ export default function FutureMonthBreakdownDialog({
       (categories || []).filter((c) => c.type === 'transfer').map((c) => c.name.toLowerCase())
     );
     return (comparisonAllTransactions || []).filter(
-      (t) => t.amount > 0 && !transferCats.has((t.category || '').toLowerCase())
+      (t) =>
+        t.amount > 0 &&
+        !transferCats.has((t.category || '').toLowerCase()) &&
+        (!scopedAccountSet || (t.accountId !== undefined && scopedAccountSet.has(t.accountId)))
     );
-  }, [comparisonAllTransactions, categories]);
+  }, [comparisonAllTransactions, categories, scopedAccountSet]);
 
   const totalComparisonSpend = useMemo(() => {
     return comparisonTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);

@@ -36,6 +36,7 @@ export interface ConsolidatedMerchant {
   category: string;
   monthlyAverage: number;
   accountId?: number;
+  lastDate?: string | null;
 }
 
 export interface CategoryTrailingAvg {

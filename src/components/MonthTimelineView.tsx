@@ -75,10 +75,12 @@ export default function MonthTimelineView({
     return filters.enabledAccountIds;
   }, [accounts.length, filters.enabledAccountIds]);
   const { data: rawConsolidatedMerchants = [] } = useConsolidatedRecurringMerchants(scopedMerchantAccountIds);
-  const consolidatedMerchants = useMemo(
-    () => consolidateRecurringMerchants(rawConsolidatedMerchants, recurrenceMap),
-    [rawConsolidatedMerchants, recurrenceMap]
-  );
+  const consolidatedMerchants = useMemo(() => {
+    const list = consolidateRecurringMerchants(rawConsolidatedMerchants, recurrenceMap);
+    if (!filters.enabledAccountIds) return list;
+    const allowed = new Set(filters.enabledAccountIds);
+    return list.filter((m) => m.accountId !== undefined && allowed.has(m.accountId));
+  }, [rawConsolidatedMerchants, recurrenceMap, filters.enabledAccountIds]);
   const incomeStreams = useForecastStore((s) => s.incomeStreams);
   const destinations = useForecastStore((s) => s.destinations);
   const forecastTaxRate = useForecastStore((s) => s.taxRate);
@@ -267,7 +269,7 @@ export default function MonthTimelineView({
         accounts,
         taxRate: forecastTaxRate,
         disabledCategories: filters.disabledCategories || [],
-        enabledAccountIds: filters.enabledAccountIds || [],
+        enabledAccountIds: filters.enabledAccountIds,
         isCurrentMonth: isActiveOrCurrentMonth,
         todayDay,
       }),
@@ -305,9 +307,16 @@ export default function MonthTimelineView({
       filters.demoMode ? a.source === 'demo' : a.source !== 'demo'
     );
     const enabledSet =
-      filters.enabledAccountIds && filters.enabledAccountIds.length > 0
+      filters.enabledAccountIds !== undefined
         ? new Set(filters.enabledAccountIds)
         : null;
+    if (enabledSet && enabledSet.size === 0) {
+      return {
+        currentCashBalance: 0,
+        cashAccountsLabel: 'No accounts selected',
+        cashAccountIds: [] as number[],
+      };
+    }
     const scoped = enabledSet
       ? modeAccs.filter((a) => a.id !== undefined && enabledSet.has(a.id))
       : modeAccs;
@@ -385,7 +394,7 @@ export default function MonthTimelineView({
       accounts,
       taxRate: forecastTaxRate,
       disabledCategories: filters.disabledCategories || [],
-      enabledAccountIds: filters.enabledAccountIds || [],
+      enabledAccountIds: filters.enabledAccountIds,
       isCurrentMonth: true,
       todayDay: realTodayDay,
     });
@@ -418,7 +427,7 @@ export default function MonthTimelineView({
         accounts,
         taxRate: forecastTaxRate,
         disabledCategories: filters.disabledCategories || [],
-        enabledAccountIds: filters.enabledAccountIds || [],
+        enabledAccountIds: filters.enabledAccountIds,
         isCurrentMonth: true,
         todayDay: null,
       });
