@@ -2266,7 +2266,7 @@ export default function MonthTimelineView({
                     key={`bill-${b.merchantKey}-${b.day}-${idx}`}
                     sx={{
                       p: 1.25,
-                      borderRadius: 1.5,
+                      borderRadius: (t) => `${t.shape.borderRadius}px`,
                       border: '1px solid',
                       borderColor: isFilled ? 'divider' : 'rgba(245, 158, 11, 0.35)',
                       bgcolor: isFilled
@@ -2319,7 +2319,7 @@ export default function MonthTimelineView({
                     key={`sav-${sv.destinationId}-${sv.day}-${idx}`}
                     sx={{
                       p: 1.25,
-                      borderRadius: 1.5,
+                      borderRadius: (t) => `${t.shape.borderRadius}px`,
                       border: '1px solid',
                       borderColor: isFilled ? 'divider' : 'rgba(139, 92, 246, 0.4)',
                       bgcolor: isFilled
@@ -2372,7 +2372,7 @@ export default function MonthTimelineView({
                     key={`inc-${inc.streamId}-${inc.day}-${idx}`}
                     sx={{
                       p: 1.25,
-                      borderRadius: 1.5,
+                      borderRadius: (t) => `${t.shape.borderRadius}px`,
                       border: '1px solid',
                       borderColor: isFilled ? 'divider' : 'rgba(16, 185, 129, 0.35)',
                       bgcolor: isFilled
@@ -2427,7 +2427,15 @@ export default function MonthTimelineView({
           </Stack>
         ) : (
           selectedDayEntry && (
-            <Stack spacing={1} sx={{ p: 1.25, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+            <Stack
+              spacing={1}
+              sx={{
+                p: 1.25,
+                borderRadius: (t) => `${t.shape.borderRadius}px`,
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                   {selectedDayEntry.weekday}, {monthName.slice(0, 3)} {selectedDayEntry.day}
