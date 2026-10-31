@@ -1,6 +1,6 @@
-import type { Category, Budget, RecurrenceInfo, Transaction } from '../types';
+import type { Account, Category, Budget, RecurrenceInfo, Transaction } from '../types';
 import type { ConsolidatedMerchant, CategoryTrailingAvg } from '../api/types';
-import type { IncomeStream } from '../api/scenarios';
+import type { DestinationAccount, IncomeStream } from '../api/scenarios';
 
 export interface CategoryProjection {
   category: string;
@@ -1067,7 +1067,7 @@ export function consolidateRecurringMerchants(
 }
 
 export interface ReconciledTimelineMatch {
-  kind: 'bill' | 'income';
+  kind: 'bill' | 'income' | 'savings';
   expectedName: string;
   expectedAmount: number;
   expectedDay: number;
@@ -1106,13 +1106,32 @@ export interface TimelineExpectedIncome {
   matchedTxnId?: number;
 }
 
+export interface TimelineExpectedSavings {
+  destinationId: string;
+  destinationName: string;
+  accountType: string;
+  sourceAccountId?: number;
+  sourceAccountName?: string;
+  amount: number;
+  expectedDay: number;
+  isDelayed?: boolean;
+  status?: 'upcoming' | 'filled';
+  actualAmount?: number;
+  actualDay?: number;
+  actualDescription?: string;
+  matchedTxnId?: number;
+}
+
 export interface MonthTimelineReconciliation {
   upcomingBillsByDay: Map<number, TimelineExpectedBill[]>;
   upcomingIncomeByDay: Map<number, TimelineExpectedIncome[]>;
+  upcomingSavingsByDay: Map<number, TimelineExpectedSavings[]>;
   allExpectedBills: TimelineExpectedBill[];
   allExpectedIncome: TimelineExpectedIncome[];
+  allExpectedSavings: TimelineExpectedSavings[];
   allExpectedBillsByDay: Map<number, TimelineExpectedBill[]>;
   allExpectedIncomeByDay: Map<number, TimelineExpectedIncome[]>;
+  allExpectedSavingsByDay: Map<number, TimelineExpectedSavings[]>;
   reconciledByTxnId: Map<number, ReconciledTimelineMatch>;
   reconciledBillsCount: number;
   totalExpectedBillsCount: number;
@@ -1122,6 +1141,10 @@ export interface MonthTimelineReconciliation {
   totalExpectedPaydaysCount: number;
   reconciledIncomeActualTotal: number;
   reconciledIncomeExpectedTotal: number;
+  reconciledSavingsCount: number;
+  totalExpectedSavingsCount: number;
+  reconciledSavingsActualTotal: number;
+  reconciledSavingsExpectedTotal: number;
 }
 
 /**
@@ -1133,9 +1156,12 @@ export function reconcileMonthTimeline({
   monthKey,
   daysInMonth,
   transactions,
+  allMonthTransactions,
   consolidatedMerchants,
   recurrenceMap,
   incomeStreams = [],
+  destinations = [],
+  accounts = [],
   taxRate = 0,
   disabledCategories = [],
   enabledAccountIds = [],
@@ -1145,9 +1171,12 @@ export function reconcileMonthTimeline({
   monthKey: string;
   daysInMonth: number;
   transactions: Transaction[];
+  allMonthTransactions?: Transaction[];
   consolidatedMerchants: ConsolidatedMerchant[];
   recurrenceMap: Map<string, RecurrenceInfo>;
   incomeStreams?: IncomeStream[];
+  destinations?: DestinationAccount[];
+  accounts?: Account[];
   taxRate?: number;
   disabledCategories?: string[];
   enabledAccountIds?: number[];
@@ -1566,13 +1595,347 @@ export function reconcileMonthTimeline({
 
   allExpectedIncome.sort((a, b) => a.expectedDay - b.expectedDay || b.amount - a.amount);
 
+  // 4. Schedule & reconcile Forecasted Savings / Investment Transfers out of operating cash accounts
+  const upcomingSavingsByDay = new Map<number, TimelineExpectedSavings[]>();
+  const allExpectedSavings: TimelineExpectedSavings[] = [];
+  const allExpectedSavingsByDay = new Map<number, TimelineExpectedSavings[]>();
+  let reconciledSavingsCount = 0;
+  let unpaidSavingsIncluded = 0;
+  let reconciledSavingsActualTotal = 0;
+  let reconciledSavingsExpectedTotal = 0;
+
+  const enabledAccounts = (accounts || []).filter((a) => a.enabled !== false);
+  const checkingOnlyAccounts = enabledAccounts.filter((a) => a.type === 'checking');
+  const operatingCashAccounts =
+    checkingOnlyAccounts.length > 0
+      ? checkingOnlyAccounts
+      : enabledAccounts.filter((a) => a.type === 'checking' || a.type === 'savings');
+  const operatingAccountIds = new Set(
+    operatingCashAccounts.map((a) => a.id).filter((id): id is number => id !== undefined)
+  );
+  const scopedOperatingAccounts = enabledSet
+    ? operatingCashAccounts.filter((a) => a.id !== undefined && enabledSet.has(a.id))
+    : operatingCashAccounts;
+
+  const getAccountAllocForDest = (dest: DestinationAccount, acc: Account): number => {
+    const allocs = dest.sourceAllocations || {};
+    if (acc.id !== undefined && allocs[String(acc.id)] !== undefined) {
+      return Math.max(0, Number(allocs[String(acc.id)] || 0));
+    }
+    const combined = `${acc.name || ''} ${acc.institution || ''} ${acc.last4 || ''}`.toLowerCase();
+    const legacyKey = /\b6669\b/.test(combined)
+      ? 'boa'
+      : /\b5463\b/.test(combined)
+      ? 'truist'
+      : !/\b\d{4}\b/.test(combined) && /bank\s*of\s*america|\bboa\b|bofa/.test(combined)
+      ? 'boa'
+      : !/\b\d{4}\b/.test(combined) && /truist/.test(combined)
+      ? 'truist'
+      : null;
+    if (legacyKey && allocs[legacyKey] !== undefined) {
+      return Math.max(0, Number(allocs[legacyKey] || 0));
+    }
+    return 0;
+  };
+
+  interface SavingsAllocationGroup {
+    groupIndex: number;
+    dest: DestinationAccount;
+    sourceAccount?: Account;
+    monthlyAllocation: number;
+  }
+
+  const allocationGroups: SavingsAllocationGroup[] = [];
+  const activeDestinations = (destinations || []).filter(
+    (d) =>
+      d.enabled &&
+      (d.monthlyAllocation || 0) > 0 &&
+      (d.accountId === undefined || !operatingAccountIds.has(d.accountId))
+  );
+
+  for (const dest of activeDestinations) {
+    let matchedAnyAccount = false;
+    for (const acc of scopedOperatingAccounts) {
+      const alloc = getAccountAllocForDest(dest, acc);
+      if (alloc > 0) {
+        matchedAnyAccount = true;
+        allocationGroups.push({
+          groupIndex: allocationGroups.length,
+          dest,
+          sourceAccount: acc,
+          monthlyAllocation: alloc,
+        });
+      }
+    }
+    const hasAnyConfiguredSource =
+      dest.sourceAllocations &&
+      Object.values(dest.sourceAllocations).some((v) => Number(v || 0) > 0);
+    if (!matchedAnyAccount && !hasAnyConfiguredSource && (!enabledSet || scopedOperatingAccounts.length > 0)) {
+      allocationGroups.push({
+        groupIndex: allocationGroups.length,
+        dest,
+        sourceAccount: scopedOperatingAccounts[0],
+        monthlyAllocation: dest.monthlyAllocation || 0,
+      });
+    }
+  }
+
+  interface ExpectedSavingsInstallment {
+    groupIndex: number;
+    dest: DestinationAccount;
+    sourceAccount?: Account;
+    expectedDay: number;
+    amount: number;
+  }
+
+  const expectedSavingsInstallments: ExpectedSavingsInstallment[] = [];
+  const allMonthPaydayDays = Array.from(new Set(expectedPaydays.map((pd) => pd.expectedDay))).sort(
+    (a, b) => a - b
+  );
+
+  for (const grp of allocationGroups) {
+    const accountPaydays = grp.sourceAccount?.id !== undefined
+      ? Array.from(
+          new Set(
+            expectedPaydays
+              .filter((pd) => pd.stream.accountId === grp.sourceAccount!.id)
+              .map((pd) => pd.expectedDay)
+          )
+        ).sort((a, b) => a - b)
+      : [];
+
+    const candidateDays =
+      accountPaydays.length > 0
+        ? accountPaydays
+        : allMonthPaydayDays.length > 0
+        ? allMonthPaydayDays
+        : grp.monthlyAllocation >= 1000
+        ? [Math.min(daysInMonth, 15), daysInMonth]
+        : [Math.min(daysInMonth, 15)];
+
+    const installmentDays = candidateDays.slice(0, 2);
+    if (installmentDays.length === 1) {
+      expectedSavingsInstallments.push({
+        groupIndex: grp.groupIndex,
+        dest: grp.dest,
+        sourceAccount: grp.sourceAccount,
+        expectedDay: installmentDays[0],
+        amount: Math.round(grp.monthlyAllocation * 100) / 100,
+      });
+    } else if (installmentDays.length >= 2) {
+      const firstHalf = Math.round((grp.monthlyAllocation / 2) * 100) / 100;
+      const secondHalf = Math.round((grp.monthlyAllocation - firstHalf) * 100) / 100;
+      expectedSavingsInstallments.push({
+        groupIndex: grp.groupIndex,
+        dest: grp.dest,
+        sourceAccount: grp.sourceAccount,
+        expectedDay: installmentDays[0],
+        amount: firstHalf,
+      });
+      expectedSavingsInstallments.push({
+        groupIndex: grp.groupIndex,
+        dest: grp.dest,
+        sourceAccount: grp.sourceAccount,
+        expectedDay: installmentDays[1],
+        amount: secondHalf,
+      });
+    }
+  }
+
+  if (expectedSavingsInstallments.length > 0) {
+    const rawTxnsPool = allMonthTransactions || transactions;
+    const operatingCredits = rawTxnsPool.filter(
+      (t) =>
+        t.amount > 0 &&
+        (t.accountId === undefined || operatingAccountIds.size === 0 || operatingAccountIds.has(t.accountId))
+    );
+
+    const candidateSavingsTxns = rawTxnsPool.filter((t) => {
+      if (t.amount >= 0 || Math.abs(t.amount) < 100) return false;
+      if (enabledSet && t.accountId !== undefined && !enabledSet.has(t.accountId)) return false;
+      if (operatingAccountIds.size > 0 && t.accountId !== undefined && !operatingAccountIds.has(t.accountId)) {
+        return false;
+      }
+      const catLower = (t.category || '').toLowerCase();
+      const desc = t.description || '';
+      const isTransferCatOrDesc =
+        catLower.includes('transfer') ||
+        /\btransfer\b|to\s+savings|to\s+3234|fidelity|robinhood|vanguard|schwab/i.test(desc);
+      if (!isTransferCatOrDesc) return false;
+
+      if (
+        /credit\s*card|crd\s*\d|card\s*bill|venmo|zelle|cash\s*app|paypal|greenlight|gas\s*south|georgia\s*power|dekalb|mortgage|mobile\s*banking\s*payment|transfer\s+to\s+checking|transfer\s+to\s+5463|transfer\s+to\s+1770|transfer\s+to\s+6669/i.test(
+          desc
+        )
+      ) {
+        return false;
+      }
+
+      // Exclude internal checking-to-checking transfers that have an equal positive credit on another operating cash account within ±3 days
+      const tDay = Number(t.date.split('-')[2]) || 1;
+      const absAmt = Math.abs(t.amount);
+      const hasOppositeOperatingCredit = operatingCredits.some((c) => {
+        if (c.accountId === t.accountId) return false;
+        const cDay = Number(c.date.split('-')[2]) || 1;
+        return Math.abs(c.amount - absAmt) < 0.01 && Math.abs(cDay - tDay) <= 3;
+      });
+      if (hasOppositeOperatingCredit) return false;
+
+      return true;
+    });
+
+    interface SavingsMatchCandidate {
+      instIdx: number;
+      txn: Transaction;
+      score: number;
+    }
+    const savingsCandidates: SavingsMatchCandidate[] = [];
+
+    expectedSavingsInstallments.forEach((inst, instIdx) => {
+      for (const t of candidateSavingsTxns) {
+        if (inst.sourceAccount?.id !== undefined && t.accountId !== inst.sourceAccount.id) {
+          continue;
+        }
+        const tDay = Number(t.date.split('-')[2]) || 1;
+        const dayDiff = Math.abs(tDay - inst.expectedDay);
+        const absAmt = Math.abs(t.amount);
+        const relAmtDiff = Math.abs(absAmt - inst.amount) / Math.max(1, inst.amount);
+        if (dayDiff <= 12) {
+          const score = 100 - dayDiff * 3 - Math.min(35, relAmtDiff * 20);
+          savingsCandidates.push({ instIdx, txn: t, score });
+        }
+      }
+    });
+
+    savingsCandidates.sort((a, b) => b.score - a.score);
+
+    const matchedInstIndices = new Set<number>();
+    const matchedSavingsInfoByIdx = new Map<
+      number,
+      { actualAmount: number; actualDay: number; actualDescription: string; matchedTxnId?: number }
+    >();
+    const matchedSavingsTxnIds = new Set<number>();
+    const actualSumByGroup = new Map<number, number>();
+
+    for (const cand of savingsCandidates) {
+      if (matchedInstIndices.has(cand.instIdx)) continue;
+      if (cand.txn.id !== undefined && matchedSavingsTxnIds.has(cand.txn.id)) continue;
+
+      const inst = expectedSavingsInstallments[cand.instIdx];
+      const actualAmt = Math.round(Math.abs(cand.txn.amount) * 100) / 100;
+      const actualDay = Number(cand.txn.date.split('-')[2]) || inst.expectedDay;
+
+      matchedInstIndices.add(cand.instIdx);
+      matchedSavingsInfoByIdx.set(cand.instIdx, {
+        actualAmount: actualAmt,
+        actualDay,
+        actualDescription: cand.txn.description,
+        matchedTxnId: cand.txn.id,
+      });
+      actualSumByGroup.set(
+        inst.groupIndex,
+        (actualSumByGroup.get(inst.groupIndex) || 0) + actualAmt
+      );
+      if (cand.txn.id !== undefined) {
+        matchedSavingsTxnIds.add(cand.txn.id);
+        reconciledByTxnId.set(cand.txn.id, {
+          kind: 'savings',
+          expectedName: inst.dest.name,
+          expectedAmount: inst.amount,
+          expectedDay: inst.expectedDay,
+          actualAmount: actualAmt,
+          actualDay,
+          delta: Math.round((actualAmt - inst.amount) * 100) / 100,
+        });
+      }
+      reconciledSavingsActualTotal += actualAmt;
+      reconciledSavingsExpectedTotal += inst.amount;
+      reconciledSavingsCount++;
+    }
+
+    // Track remaining monthly allocation per group so we never project more than the group's monthlyAllocation
+    const remainingBudgetByGroup = new Map<number, number>();
+    for (const grp of allocationGroups) {
+      const actualSoFar = actualSumByGroup.get(grp.groupIndex) || 0;
+      remainingBudgetByGroup.set(
+        grp.groupIndex,
+        Math.max(0, Math.round((grp.monthlyAllocation - actualSoFar) * 100) / 100)
+      );
+    }
+
+    expectedSavingsInstallments.forEach((inst, idx) => {
+      const matchedInfo = matchedSavingsInfoByIdx.get(idx);
+      if (matchedInfo) {
+        const targetDay = Math.min(daysInMonth, Math.max(1, matchedInfo.actualDay));
+        const item: TimelineExpectedSavings = {
+          destinationId: inst.dest.id,
+          destinationName: inst.dest.name,
+          accountType: inst.dest.accountType || 'savings',
+          sourceAccountId: inst.sourceAccount?.id,
+          sourceAccountName: inst.sourceAccount?.name,
+          amount: matchedInfo.actualAmount,
+          expectedDay: inst.expectedDay,
+          status: 'filled',
+          actualAmount: matchedInfo.actualAmount,
+          actualDay: matchedInfo.actualDay,
+          actualDescription: matchedInfo.actualDescription,
+          matchedTxnId: matchedInfo.matchedTxnId,
+        };
+        allExpectedSavings.push(item);
+        const dayList = allExpectedSavingsByDay.get(targetDay) || [];
+        dayList.push(item);
+        allExpectedSavingsByDay.set(targetDay, dayList);
+        return;
+      }
+
+      if (!isCurrentMonth) return;
+
+      const groupRem = remainingBudgetByGroup.get(inst.groupIndex) || 0;
+      if (groupRem <= 0) return;
+
+      const effectiveAmt = Math.min(inst.amount, groupRem);
+      remainingBudgetByGroup.set(
+        inst.groupIndex,
+        Math.max(0, Math.round((groupRem - effectiveAmt) * 100) / 100)
+      );
+
+      const isDelayed = todayDay !== null && inst.expectedDay < todayDay;
+      const targetDay = Math.min(daysInMonth, Math.max(1, inst.expectedDay));
+      const item: TimelineExpectedSavings = {
+        destinationId: inst.dest.id,
+        destinationName: inst.dest.name,
+        accountType: inst.dest.accountType || 'savings',
+        sourceAccountId: inst.sourceAccount?.id,
+        sourceAccountName: inst.sourceAccount?.name,
+        amount: effectiveAmt,
+        expectedDay: inst.expectedDay,
+        isDelayed,
+        status: 'upcoming',
+      };
+      const list = upcomingSavingsByDay.get(targetDay) || [];
+      list.push(item);
+      upcomingSavingsByDay.set(targetDay, list);
+
+      allExpectedSavings.push(item);
+      const allList = allExpectedSavingsByDay.get(targetDay) || [];
+      allList.push(item);
+      allExpectedSavingsByDay.set(targetDay, allList);
+      unpaidSavingsIncluded++;
+    });
+
+    allExpectedSavings.sort((a, b) => a.expectedDay - b.expectedDay || b.amount - a.amount);
+  }
+
   return {
     upcomingBillsByDay,
     upcomingIncomeByDay,
+    upcomingSavingsByDay,
     allExpectedBills,
     allExpectedIncome,
+    allExpectedSavings,
     allExpectedBillsByDay,
     allExpectedIncomeByDay,
+    allExpectedSavingsByDay,
     reconciledByTxnId,
     reconciledBillsCount: matchedBillIndices.size,
     totalExpectedBillsCount: matchedBillIndices.size + (isCurrentMonth ? unpaidBillsIncluded : 0),
@@ -1582,6 +1945,10 @@ export function reconcileMonthTimeline({
     totalExpectedPaydaysCount: matchedPaydayIndices.size + (isCurrentMonth ? unpaidPaydaysIncluded : 0),
     reconciledIncomeActualTotal: Math.round(reconciledIncomeActualTotal * 100) / 100,
     reconciledIncomeExpectedTotal: Math.round(reconciledIncomeExpectedTotal * 100) / 100,
+    reconciledSavingsCount,
+    totalExpectedSavingsCount: reconciledSavingsCount + (isCurrentMonth ? unpaidSavingsIncluded : 0),
+    reconciledSavingsActualTotal: Math.round(reconciledSavingsActualTotal * 100) / 100,
+    reconciledSavingsExpectedTotal: Math.round(reconciledSavingsExpectedTotal * 100) / 100,
   };
 }
 

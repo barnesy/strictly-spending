@@ -25,6 +25,7 @@ import {
   reconcileMonthTimeline,
   type TimelineExpectedBill,
   type TimelineExpectedIncome,
+  type TimelineExpectedSavings,
 } from '../domain/forecastSpending';
 import { useForecastStore } from '../stores/forecastStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -74,6 +75,7 @@ export default function MonthTimelineView({
     [rawConsolidatedMerchants, recurrenceMap]
   );
   const incomeStreams = useForecastStore((s) => s.incomeStreams);
+  const destinations = useForecastStore((s) => s.destinations);
   const forecastTaxRate = useForecastStore((s) => s.taxRate);
 
   const [yearStr, monthNumStr] = currentMonth.split('-');
@@ -126,6 +128,12 @@ export default function MonthTimelineView({
     }
     return true;
   });
+  const [includeSavingsInCashFlow, setIncludeSavingsInCashFlow] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('dashboard:timelineIncludeSavings') !== 'false';
+    }
+    return true;
+  });
   const [selectedDay, setSelectedDay] = useState<number>(() => todayDay || 1);
   const [mobileListTab, setMobileListTab] = useState<'upcoming' | 'day'>(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('dashboard:timelineMobileTab') === 'day') {
@@ -145,6 +153,12 @@ export default function MonthTimelineView({
       localStorage.setItem('dashboard:timelineShowCashLine', String(showCashLineOverlay));
     }
   }, [showCashLineOverlay]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboard:timelineIncludeSavings', String(includeSavingsInCashFlow));
+    }
+  }, [includeSavingsInCashFlow]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -231,7 +245,7 @@ export default function MonthTimelineView({
     return cat?.color || '#64748b';
   };
 
-  // Educated-guess reconciliation of forecasted recurring bills & income streams vs actual transactions
+  // Educated-guess reconciliation of forecasted recurring bills, income streams & savings transfers vs actual transactions
   const reconciliation = useMemo(
     () =>
       reconcileMonthTimeline({
@@ -240,9 +254,12 @@ export default function MonthTimelineView({
         transactions: rawMonthTransactions.filter(
           (t) => !transferCategoryNames.has((t.category || '').toLowerCase())
         ),
+        allMonthTransactions: rawMonthTransactions,
         consolidatedMerchants,
         recurrenceMap,
         incomeStreams,
+        destinations,
+        accounts,
         taxRate: forecastTaxRate,
         disabledCategories: filters.disabledCategories || [],
         enabledAccountIds: filters.enabledAccountIds || [],
@@ -257,6 +274,8 @@ export default function MonthTimelineView({
       consolidatedMerchants,
       recurrenceMap,
       incomeStreams,
+      destinations,
+      accounts,
       forecastTaxRate,
       filters.disabledCategories,
       filters.enabledAccountIds,
@@ -268,8 +287,10 @@ export default function MonthTimelineView({
   const {
     upcomingBillsByDay,
     upcomingIncomeByDay,
+    upcomingSavingsByDay,
     allExpectedBillsByDay,
     allExpectedIncomeByDay,
+    allExpectedSavingsByDay,
     reconciledByTxnId,
   } = reconciliation;
 
@@ -344,16 +365,19 @@ export default function MonthTimelineView({
     let running = currentCashBalance;
     const realTodayDay = new Date().getDate();
 
-    // 1. Remaining unpaid bills & expected paydays in currentCalMonth (from today through end of currentCalMonth)
+    // 1. Remaining unpaid bills, expected paydays & savings transfers in currentCalMonth (from today through end of currentCalMonth)
     const calRec = reconcileMonthTimeline({
       monthKey: currentCalMonth,
       daysInMonth: calDaysInMonth,
       transactions: rawCalMonthTransactions.filter(
         (t) => !transferCategoryNames.has((t.category || '').toLowerCase())
       ),
+      allMonthTransactions: rawCalMonthTransactions,
       consolidatedMerchants,
       recurrenceMap,
       incomeStreams,
+      destinations,
+      accounts,
       taxRate: forecastTaxRate,
       disabledCategories: filters.disabledCategories || [],
       enabledAccountIds: filters.enabledAccountIds || [],
@@ -363,7 +387,10 @@ export default function MonthTimelineView({
     for (let d = realTodayDay; d <= calDaysInMonth; d++) {
       const incSum = (calRec.upcomingIncomeByDay.get(d) || []).reduce((s, inc) => s + inc.amount, 0);
       const billSum = (calRec.upcomingBillsByDay.get(d) || []).reduce((s, b) => s + b.amount, 0);
-      running += incSum - billSum;
+      const savSum = includeSavingsInCashFlow
+        ? (calRec.upcomingSavingsByDay.get(d) || []).reduce((s, sv) => s + sv.amount, 0)
+        : 0;
+      running += incSum - billSum - savSum;
     }
 
     // 2. Full monthly net flow for each intermediate future month strictly between currentCalMonth and currentMonth
@@ -378,9 +405,12 @@ export default function MonthTimelineView({
         monthKey: mKey,
         daysInMonth: mDays,
         transactions: [],
+        allMonthTransactions: [],
         consolidatedMerchants,
         recurrenceMap,
         incomeStreams,
+        destinations,
+        accounts,
         taxRate: forecastTaxRate,
         disabledCategories: filters.disabledCategories || [],
         enabledAccountIds: filters.enabledAccountIds || [],
@@ -390,7 +420,10 @@ export default function MonthTimelineView({
       for (let d = 1; d <= mDays; d++) {
         const incSum = (interRec.upcomingIncomeByDay.get(d) || []).reduce((s, inc) => s + inc.amount, 0);
         const billSum = (interRec.upcomingBillsByDay.get(d) || []).reduce((s, b) => s + b.amount, 0);
-        running += incSum - billSum;
+        const savSum = includeSavingsInCashFlow
+          ? (interRec.upcomingSavingsByDay.get(d) || []).reduce((s, sv) => s + sv.amount, 0)
+          : 0;
+        running += incSum - billSum - savSum;
       }
     }
 
@@ -408,6 +441,9 @@ export default function MonthTimelineView({
     consolidatedMerchants,
     recurrenceMap,
     incomeStreams,
+    destinations,
+    accounts,
+    includeSavingsInCashFlow,
     forecastTaxRate,
     filters.disabledCategories,
     filters.enabledAccountIds,
@@ -429,10 +465,14 @@ export default function MonthTimelineView({
       upcomingSpendTotal: number;
       upcomingIncome: TimelineExpectedIncome[];
       upcomingIncomeTotal: number;
+      upcomingSavings: TimelineExpectedSavings[];
+      upcomingSavingsTotal: number;
       allExpectedBills: TimelineExpectedBill[];
       allExpectedSpendTotal: number;
       allExpectedIncome: TimelineExpectedIncome[];
       allExpectedIncomeTotal: number;
+      allExpectedSavings: TimelineExpectedSavings[];
+      allExpectedSavingsTotal: number;
       spendTotal: number;
       incomeTotal: number;
       chargeCount: number;
@@ -476,16 +516,23 @@ export default function MonthTimelineView({
       const rawUpcomingSpend = rawUpcomingBills.reduce((s, b) => s + b.amount, 0);
       const rawUpcomingIncomeList = upcomingIncomeByDay.get(d) || [];
       const rawUpcomingIncome = rawUpcomingIncomeList.reduce((s, inc) => s + inc.amount, 0);
+      const rawUpcomingSavingsList = upcomingSavingsByDay.get(d) || [];
+      const rawUpcomingSavings = rawUpcomingSavingsList.reduce((s, sv) => s + sv.amount, 0);
 
       const upcomingBills = showExpectedRecurring ? rawUpcomingBills : [];
       const upcomingSpendTotal = upcomingBills.reduce((s, b) => s + b.amount, 0);
       const upcomingIncome = showExpectedRecurring ? rawUpcomingIncomeList : [];
       const upcomingIncomeTotal = upcomingIncome.reduce((s, inc) => s + inc.amount, 0);
+      const upcomingSavings = showExpectedRecurring && includeSavingsInCashFlow ? rawUpcomingSavingsList : [];
+      const upcomingSavingsTotal = upcomingSavings.reduce((s, sv) => s + sv.amount, 0);
 
       const dayAllExpectedBills = showExpectedRecurring ? allExpectedBillsByDay.get(d) || [] : [];
       const allExpectedSpendTotal = dayAllExpectedBills.reduce((s, b) => s + b.amount, 0);
       const dayAllExpectedIncome = showExpectedRecurring ? allExpectedIncomeByDay.get(d) || [] : [];
       const allExpectedIncomeTotal = dayAllExpectedIncome.reduce((s, inc) => s + inc.amount, 0);
+      const dayAllExpectedSavings =
+        showExpectedRecurring && includeSavingsInCashFlow ? allExpectedSavingsByDay.get(d) || [] : [];
+      const allExpectedSavingsTotal = dayAllExpectedSavings.reduce((s, sv) => s + sv.amount, 0);
 
       const reconciledBillTxns: Transaction[] = [];
       const variableSpendTxns: Transaction[] = [];
@@ -519,7 +566,9 @@ export default function MonthTimelineView({
       projCumIncome += dayIncome + upcomingIncomeTotal;
 
       const rawProjectedNetFlow =
-        rawDayActualIncome + rawUpcomingIncome - (rawDayActualSpend + rawUpcomingSpend);
+        rawDayActualIncome +
+        rawUpcomingIncome -
+        (rawDayActualSpend + rawUpcomingSpend + (includeSavingsInCashFlow ? rawUpcomingSavings : 0));
 
       days.push({
         day: d,
@@ -535,10 +584,14 @@ export default function MonthTimelineView({
         upcomingSpendTotal: Math.round(upcomingSpendTotal * 100) / 100,
         upcomingIncome,
         upcomingIncomeTotal: Math.round(upcomingIncomeTotal * 100) / 100,
+        upcomingSavings,
+        upcomingSavingsTotal: Math.round(upcomingSavingsTotal * 100) / 100,
         allExpectedBills: dayAllExpectedBills,
         allExpectedSpendTotal: Math.round(allExpectedSpendTotal * 100) / 100,
         allExpectedIncome: dayAllExpectedIncome,
         allExpectedIncomeTotal: Math.round(allExpectedIncomeTotal * 100) / 100,
+        allExpectedSavings: dayAllExpectedSavings,
+        allExpectedSavingsTotal: Math.round(allExpectedSavingsTotal * 100) / 100,
         spendTotal: Math.round(daySpend * 100) / 100,
         incomeTotal: Math.round(dayIncome * 100) / 100,
         chargeCount: dayTxns.filter((t) => t.amount < 0).length,
@@ -592,10 +645,14 @@ export default function MonthTimelineView({
           days[i].effectiveCashBalance = days[i].actualCashBalance!;
         }
 
-        // Include any still-unpaid expected bills/income on today + future days
+        // Include any still-unpaid expected bills/income/savings on today + future days
+        const anchorSavingsDelta = includeSavingsInCashFlow
+          ? (upcomingSavingsByDay.get(anchorIdx + 1) || []).reduce((s, sv) => s + sv.amount, 0)
+          : 0;
         const anchorRemainingDelta =
           (upcomingIncomeByDay.get(anchorIdx + 1) || []).reduce((s, inc) => s + inc.amount, 0) -
-          (upcomingBillsByDay.get(anchorIdx + 1) || []).reduce((s, b) => s + b.amount, 0);
+          (upcomingBillsByDay.get(anchorIdx + 1) || []).reduce((s, b) => s + b.amount, 0) -
+          anchorSavingsDelta;
         let projRunning = days[anchorIdx].actualCashBalance! + anchorRemainingDelta;
         if (anchorRemainingDelta !== 0) {
           days[anchorIdx].projectedCashBalance = Math.round(projRunning * 100) / 100;
@@ -624,10 +681,13 @@ export default function MonthTimelineView({
     transferCategoryNames,
     upcomingBillsByDay,
     upcomingIncomeByDay,
+    upcomingSavingsByDay,
     allExpectedBillsByDay,
     allExpectedIncomeByDay,
+    allExpectedSavingsByDay,
     reconciledByTxnId,
     showExpectedRecurring,
+    includeSavingsInCashFlow,
     currentCashBalance,
     startingFutureCashBalance,
     currentMonth,
@@ -678,6 +738,11 @@ export default function MonthTimelineView({
     [currentMonthDays]
   );
 
+  const totalUpcomingSavings = useMemo(
+    () => currentMonthDays.reduce((s, d) => s + d.upcomingSavingsTotal, 0),
+    [currentMonthDays]
+  );
+
   // Summary KPIs for current month (computed from full non-transfer month transactions)
   const totalMonthSpend = useMemo(
     () =>
@@ -711,6 +776,10 @@ export default function MonthTimelineView({
     0,
     reconciliation.totalExpectedPaydaysCount - reconciliation.reconciledPaydaysCount
   );
+  const remainingSavingsCount = Math.max(
+    0,
+    reconciliation.totalExpectedSavingsCount - reconciliation.reconciledSavingsCount
+  );
 
   // All expected bills across the month for the mobile reconciliation list
   const allMonthExpectedBills = useMemo(() => {
@@ -732,6 +801,20 @@ export default function MonthTimelineView({
     for (const d of currentMonthDays) {
       for (const inc of d.allExpectedIncome) {
         list.push({ ...inc, day: d.day, weekday: d.weekday });
+      }
+    }
+    return list.sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'upcoming' ? -1 : 1;
+      return a.day - b.day;
+    });
+  }, [currentMonthDays]);
+
+  // All expected savings transfers across the month for the mobile reconciliation list
+  const allMonthExpectedSavings = useMemo(() => {
+    const list: Array<TimelineExpectedSavings & { day: number; weekday: string }> = [];
+    for (const d of currentMonthDays) {
+      for (const sv of d.allExpectedSavings) {
+        list.push({ ...sv, day: d.day, weekday: d.weekday });
       }
     }
     return list.sort((a, b) => {
@@ -801,9 +884,13 @@ export default function MonthTimelineView({
     };
 
     if (chartMode === 'daily') {
-      // Stack by Category (Actual + Expected Bills stacked per day)
+      // Stack by Category (Actual + Expected Bills + Expected Savings stacked per day)
       const showExpectedBillsInCat =
         showSpend && showExpectedRecurring && (totalUpcomingBillsSpend > 0 || isActiveOrCurrentMonth);
+      const showExpectedSavingsInCat =
+        includeSavingsInCashFlow &&
+        showExpectedRecurring &&
+        (totalUpcomingSavings > 0 || isActiveOrCurrentMonth);
 
       if (showSpend) {
         const activeCategories = Array.from(
@@ -861,6 +948,39 @@ export default function MonthTimelineView({
             },
           });
         }
+      }
+
+      if (showExpectedSavingsInCat) {
+        seriesList.push({
+          name: 'Expected Savings',
+          type: 'bar',
+          stack: 'category_spend',
+          barMaxWidth: barMaxW,
+          label: {
+            show: !isMobile,
+            position: 'top' as const,
+            distance: 4,
+            hideOverlap: true,
+            color: isDark ? '#c4b5fd' : '#7c3aed',
+            fontSize: 10,
+            fontWeight: 700,
+            formatter: (p: any) => {
+              const val = Number(p.value || 0);
+              if (!val) return '';
+              return `Save\n-${formatCompactUsd(val)}`;
+            },
+          },
+          data: currentMonthDays.map((d) =>
+            d.upcomingSavingsTotal > 0 ? d.upcomingSavingsTotal : null
+          ),
+          itemStyle: {
+            color: 'rgba(139, 92, 246, 0.38)',
+            borderColor: '#8b5cf6',
+            borderWidth: 1.5,
+            borderType: 'dashed',
+            borderRadius: [4, 4, 0, 0],
+          },
+        });
       }
 
       if (showIncome) {
@@ -1135,7 +1255,9 @@ export default function MonthTimelineView({
           const borderMuted = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)';
           const subText = isDark ? '#94a3b8' : '#64748b';
           const totalExpectedCountOnDay =
-            dayEntry.allExpectedBills.length + dayEntry.allExpectedIncome.length;
+            dayEntry.allExpectedBills.length +
+            dayEntry.allExpectedIncome.length +
+            dayEntry.allExpectedSavings.length;
 
           let out = `<div style="width: ${isMobile ? '255px' : '360px'}; max-width: 100%; font-family: inherit;">`;
 
@@ -1164,6 +1286,10 @@ export default function MonthTimelineView({
             const allFilled = dayEntry.upcomingSpendTotal === 0;
             out += `<div style="font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; font-weight: 600;">Expected: -${usd.format(dayEntry.allExpectedSpendTotal)}${allFilled ? ' ✓' : ''}</div>`;
           }
+          if (dayEntry.allExpectedSavingsTotal > 0) {
+            const allFilled = dayEntry.upcomingSavingsTotal === 0;
+            out += `<div style="font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.16); color: ${isDark ? '#c4b5fd' : '#7c3aed'}; border: 1px dashed #8b5cf6; font-weight: 600;">Savings: -${usd.format(dayEntry.allExpectedSavingsTotal)}${allFilled ? ' ✓' : ''}</div>`;
+          }
           if (dayEntry.incomeTotal > 0) {
             out += `<div style="font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.14); color: #10b981; font-weight: 600;">Income: +${usd.format(dayEntry.incomeTotal)}</div>`;
           }
@@ -1174,6 +1300,7 @@ export default function MonthTimelineView({
           if (
             dayEntry.spendTotal === 0 &&
             dayEntry.allExpectedSpendTotal === 0 &&
+            dayEntry.allExpectedSavingsTotal === 0 &&
             dayEntry.incomeTotal === 0 &&
             dayEntry.allExpectedIncomeTotal === 0
           ) {
@@ -1181,16 +1308,47 @@ export default function MonthTimelineView({
           }
           out += `</div>`;
 
-          // 2. Expected Charges & Paydays on this Day (Both Upcoming and Reconciled/Filled)
-          if (dayEntry.allExpectedBills.length > 0 || dayEntry.allExpectedIncome.length > 0) {
+          // 2. Expected Charges, Paydays & Savings Transfers on this Day (Both Upcoming and Reconciled/Filled)
+          if (
+            dayEntry.allExpectedBills.length > 0 ||
+            dayEntry.allExpectedIncome.length > 0 ||
+            dayEntry.allExpectedSavings.length > 0
+          ) {
             out += `<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(245, 158, 11, 0.45);">`;
-            out += `<div style="font-size: 10.5px; font-weight: 600; color: #f59e0b; margin-bottom: 4px;">Expected Charges (${totalExpectedCountOnDay})</div>`;
+            out += `<div style="font-size: 10.5px; font-weight: 600; color: #f59e0b; margin-bottom: 4px;">Scheduled Cash Flow (${totalExpectedCountOnDay})</div>`;
 
             dayEntry.allExpectedIncome.forEach((inc) => {
               const isFilled = inc.status === 'filled';
               out += `<div style="margin-bottom: 3px; padding: 3px 6px; border-radius: 5px; background: ${isFilled ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.08)'}; display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 10.5px; color: #10b981;">`;
               out += `<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;">${isFilled ? '✓ ' : '⏳ '}${escapeHtml(inc.streamName)}</span>`;
               out += `<span style="font-weight: 600; flex-shrink: 0;">+${usd.format(inc.amount)}</span>`;
+              out += `</div>`;
+            });
+
+            dayEntry.allExpectedSavings.forEach((sv) => {
+              const isFilled = sv.status === 'filled';
+              const svColor = isDark ? '#c4b5fd' : '#7c3aed';
+              const svBg = isFilled
+                ? isDark
+                  ? 'rgba(139, 92, 246, 0.18)'
+                  : 'rgba(139, 92, 246, 0.10)'
+                : isDark
+                ? 'rgba(139, 92, 246, 0.14)'
+                : 'rgba(139, 92, 246, 0.08)';
+              const srcLabel = sv.sourceAccountName ? `from ${sv.sourceAccountName}` : 'Savings Transfer';
+              const subStatus = isFilled
+                ? `Transferred -${usd.format(sv.actualAmount ?? sv.amount)}${sv.actualDay && sv.actualDay !== sv.expectedDay ? ` on ${monthNum}/${sv.actualDay}` : ''}`
+                : `Scheduled ${monthNum}/${sv.expectedDay}`;
+
+              out += `<div style="margin-bottom: 3px; padding: 4px 6px; border-radius: 5px; background: ${svBg}; border: 1px dashed rgba(139, 92, 246, 0.45);">`;
+              out += `<div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 10.5px;">`;
+              out += `<span style="font-weight: 600; color: ${svColor}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${isFilled ? '✓ ' : '🏦 '}${escapeHtml(sv.destinationName)}</span>`;
+              out += `<span style="font-weight: 700; color: ${svColor}; flex-shrink: 0;">-${usd.format(sv.amount)}</span>`;
+              out += `</div>`;
+              out += `<div style="display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: ${subText}; margin-top: 1px;">`;
+              out += `<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(srcLabel)}</span>`;
+              out += `<span style="font-weight: 500; flex-shrink: 0;">${subStatus}</span>`;
+              out += `</div>`;
               out += `</div>`;
             });
 
@@ -1362,6 +1520,7 @@ export default function MonthTimelineView({
     currentMonthTransactions,
     chartMode,
     showCashLineOverlay,
+    includeSavingsInCashFlow,
     cashFlowStats,
     showSpend,
     showIncome,
@@ -1375,6 +1534,7 @@ export default function MonthTimelineView({
     todayDay,
     totalUpcomingBillsSpend,
     totalUpcomingIncome,
+    totalUpcomingSavings,
     filters.transactionType,
     reconciledByTxnId,
     categories,
@@ -1410,6 +1570,19 @@ export default function MonthTimelineView({
     projectedIncomeTotal > 0
       ? Math.min(Math.max(0, 100 - incomeActualPct), (totalUpcomingIncome / projectedIncomeTotal) * 100)
       : 0;
+
+  const totalMonthSavingsTransferred = reconciliation.reconciledSavingsActualTotal;
+  const projectedSavingsTotal = totalMonthSavingsTransferred + totalUpcomingSavings;
+  const savingsActualPct =
+    projectedSavingsTotal > 0 ? Math.min(100, (totalMonthSavingsTransferred / projectedSavingsTotal) * 100) : 0;
+  const savingsExpectedPct =
+    projectedSavingsTotal > 0
+      ? Math.min(Math.max(0, 100 - savingsActualPct), (totalUpcomingSavings / projectedSavingsTotal) * 100)
+      : 0;
+  const showSavingsCard =
+    includeSavingsInCashFlow && reconciliation.totalExpectedSavingsCount > 0;
+  const desktopCardColumns =
+    [showSpend, showIncome, showSavingsCard].filter(Boolean).length;
 
   return (
     <Box
@@ -1564,6 +1737,28 @@ export default function MonthTimelineView({
         </Stack>
 
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          {reconciliation.totalExpectedSavingsCount > 0 && (
+            <Tooltip title="Include forecasted savings & investment transfers out of checking in the projected Cash Balance">
+              <Chip
+                size="small"
+                label={
+                  includeSavingsInCashFlow
+                    ? `Savings Flow: ON${totalUpcomingSavings > 0 ? ` (-${formatCompactUsd(totalUpcomingSavings)})` : ''}`
+                    : 'Savings Flow: OFF'
+                }
+                color={includeSavingsInCashFlow ? 'secondary' : 'default'}
+                variant={includeSavingsInCashFlow ? 'filled' : 'outlined'}
+                onClick={() => setIncludeSavingsInCashFlow((v) => !v)}
+                sx={{
+                  height: 28,
+                  fontSize: '0.73rem',
+                  fontWeight: 700,
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                }}
+              />
+            </Tooltip>
+          )}
           {chartMode === 'daily' && (
             <Chip
               size="small"
@@ -1594,11 +1789,14 @@ export default function MonthTimelineView({
         </Stack>
       </Stack>
 
-      {/* 2. Prominent Spend & Income Reconciliation Cards */}
+      {/* 2. Prominent Spend, Income & Savings Reconciliation Cards */}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: showSpend && showIncome ? '1fr 1fr' : '1fr' },
+          gridTemplateColumns: {
+            xs: '1fr',
+            md: desktopCardColumns >= 3 ? '1fr 1fr 1fr' : desktopCardColumns === 2 ? '1fr 1fr' : '1fr',
+          },
           gap: { xs: 1.25, sm: 1.5 },
           flexShrink: 0,
         }}
@@ -1869,6 +2067,145 @@ export default function MonthTimelineView({
             </Box>
           </Box>
         )}
+
+        {/* Savings Transfer Schedule Card */}
+        {showSavingsCard && (
+          <Box
+            sx={{
+              p: { xs: 1.5, sm: 1.75 },
+              borderRadius: (t) => `${t.shape.borderRadius}px`,
+              bgcolor: (t) => (t.palette.mode === 'dark' ? 'rgba(139, 92, 246, 0.06)' : 'rgba(139, 92, 246, 0.03)'),
+              border: '1px solid',
+              borderColor: (t) => (t.palette.mode === 'dark' ? 'rgba(139, 92, 246, 0.28)' : 'rgba(139, 92, 246, 0.22)'),
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={0.5}>
+              <Typography
+                variant="overline"
+                sx={{
+                  fontWeight: 700,
+                  letterSpacing: '0.05em',
+                  lineHeight: 1.1,
+                  fontSize: { xs: '0.68rem', sm: '0.75rem' },
+                  color: (t) => (t.palette.mode === 'dark' ? '#c4b5fd' : '#7c3aed'),
+                }}
+              >
+                {isFutureMonth ? 'Forecasted Savings Transfers' : 'Savings Transfer Schedule'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>
+                {isFutureMonth ? (
+                  <>
+                    <strong>{remainingSavingsCount}</strong> payday transfers scheduled
+                  </>
+                ) : (
+                  <>
+                    <strong>{reconciliation.reconciledSavingsCount}/{reconciliation.totalExpectedSavingsCount}</strong> transferred ·{' '}
+                    <strong>{remainingSavingsCount}</strong> left
+                  </>
+                )}
+              </Typography>
+            </Stack>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr auto 1fr',
+                alignItems: 'center',
+                gap: { xs: 0.5, sm: 1.5 },
+              }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, fontSize: { xs: '0.68rem', sm: '0.75rem' } }} display="block" noWrap>
+                  Transferred ({reconciliation.reconciledSavingsCount})
+                </Typography>
+                <Typography
+                  variant="h5"
+                  sx={{
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                    lineHeight: 1.2,
+                    mt: 0.25,
+                    color: (t) => (t.palette.mode === 'dark' ? '#c4b5fd' : '#7c3aed'),
+                    fontSize: { xs: '1rem', sm: '1.35rem', md: '1.5rem' },
+                  }}
+                >
+                  -{usd.format(totalMonthSavingsTransferred)}
+                </Typography>
+              </Box>
+
+              <Typography variant="body1" color="text.disabled" sx={{ fontWeight: 700, userSelect: 'none', px: 0.25 }}>
+                +
+              </Typography>
+
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, fontSize: { xs: '0.68rem', sm: '0.75rem' } }} display="block" noWrap>
+                  Expected ({remainingSavingsCount})
+                </Typography>
+                <Typography
+                  variant="h5"
+                  sx={{
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                    lineHeight: 1.2,
+                    mt: 0.25,
+                    opacity: 0.85,
+                    color: (t) => (t.palette.mode === 'dark' ? '#c4b5fd' : '#7c3aed'),
+                    fontSize: { xs: '1rem', sm: '1.35rem', md: '1.5rem' },
+                  }}
+                >
+                  -{usd.format(totalUpcomingSavings)}
+                </Typography>
+              </Box>
+
+              <Typography variant="body1" color="text.disabled" sx={{ fontWeight: 700, userSelect: 'none', px: 0.25 }}>
+                =
+              </Typography>
+
+              <Box sx={{ textAlign: 'right', minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, fontSize: { xs: '0.68rem', sm: '0.75rem' } }} display="block" noWrap>
+                  Planned Outflow
+                </Typography>
+                <Typography
+                  variant="h5"
+                  sx={{
+                    fontWeight: 800,
+                    fontVariantNumeric: 'tabular-nums',
+                    lineHeight: 1.2,
+                    mt: 0.25,
+                    color: (t) => (t.palette.mode === 'dark' ? '#ddd6fe' : '#6d28d9'),
+                    fontSize: { xs: '1rem', sm: '1.35rem', md: '1.5rem' },
+                  }}
+                >
+                  -{usd.format(projectedSavingsTotal)}
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                display: 'flex',
+                height: 5,
+                width: '100%',
+                borderRadius: 3,
+                overflow: 'hidden',
+                bgcolor: 'action.hover',
+              }}
+            >
+              <Box sx={{ width: `${savingsActualPct}%`, bgcolor: '#8b5cf6', transition: 'width 0.25s ease' }} />
+              <Box
+                sx={{
+                  width: `${savingsExpectedPct}%`,
+                  bgcolor: '#8b5cf6',
+                  opacity: 0.45,
+                  transition: 'width 0.25s ease',
+                }}
+              />
+            </Box>
+          </Box>
+        )}
       </Box>
 
       {/* 3. Timeline Graph */}
@@ -1908,7 +2245,7 @@ export default function MonthTimelineView({
                 ? `Bills (${reconciliation.reconciledBillsCount}/${reconciliation.totalExpectedBillsCount})`
                 : !showSpend && showIncome
                 ? `Paydays (${reconciliation.reconciledPaydaysCount}/${reconciliation.totalExpectedPaydaysCount})`
-                : `Schedule (${reconciliation.reconciledBillsCount + reconciliation.reconciledPaydaysCount}/${reconciliation.totalExpectedBillsCount + reconciliation.totalExpectedPaydaysCount})`}
+                : `Schedule (${reconciliation.reconciledBillsCount + reconciliation.reconciledPaydaysCount + (includeSavingsInCashFlow ? reconciliation.reconciledSavingsCount : 0)}/${reconciliation.totalExpectedBillsCount + reconciliation.totalExpectedPaydaysCount + (includeSavingsInCashFlow ? reconciliation.totalExpectedSavingsCount : 0)})`}
             </ToggleButton>
             <ToggleButton value="day">
               Day {selectedDayEntry?.day || 1} ({monthName.slice(0, 3)} {selectedDayEntry?.day || 1})
@@ -1974,6 +2311,59 @@ export default function MonthTimelineView({
                 );
               })}
 
+            {includeSavingsInCashFlow &&
+              allMonthExpectedSavings.map((sv, idx) => {
+                const isFilled = sv.status === 'filled';
+                return (
+                  <Box
+                    key={`sav-${sv.destinationId}-${sv.day}-${idx}`}
+                    sx={{
+                      p: 1.25,
+                      borderRadius: 1.5,
+                      border: '1px solid',
+                      borderColor: isFilled ? 'divider' : 'rgba(139, 92, 246, 0.4)',
+                      bgcolor: isFilled
+                        ? 'background.paper'
+                        : isDark
+                        ? 'rgba(139, 92, 246, 0.08)'
+                        : 'rgba(139, 92, 246, 0.04)',
+                    }}
+                  >
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word' }}>
+                            {sv.destinationName}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={isFilled ? `✓ Transferred ${monthNum}/${sv.actualDay || sv.expectedDay}` : `🏦 Scheduled ${monthNum}/${sv.expectedDay}`}
+                            color="secondary"
+                            variant="outlined"
+                            sx={{ height: 19, fontSize: '0.66rem', fontWeight: 700 }}
+                          />
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                          {sv.sourceAccountName ? `Savings Transfer from ${sv.sourceAccountName}` : 'Savings Transfer'}
+                          {isFilled && sv.actualAmount !== undefined ? ` · Actual: -${usd.format(sv.actualAmount)}` : ''}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 700,
+                          fontVariantNumeric: 'tabular-nums',
+                          color: isFilled ? 'text.secondary' : isDark ? '#c4b5fd' : '#7c3aed',
+                          flexShrink: 0,
+                        }}
+                      >
+                        -{usd.format(sv.amount)}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                );
+              })}
+
             {showIncome &&
               allMonthExpectedIncome.map((inc, idx) => {
                 const isFilled = inc.status === 'filled';
@@ -2028,6 +2418,7 @@ export default function MonthTimelineView({
               })}
 
             {(!showSpend || allMonthExpectedBills.length === 0) &&
+              (!includeSavingsInCashFlow || allMonthExpectedSavings.length === 0) &&
               (!showIncome || allMonthExpectedIncome.length === 0) && (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
                   No recurring items scheduled for this filter in {monthName}.
@@ -2044,6 +2435,7 @@ export default function MonthTimelineView({
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                   {selectedDayEntry.transactions.length} actual ·{' '}
                   {(showSpend ? selectedDayEntry.allExpectedBills.length : 0) +
+                    (includeSavingsInCashFlow ? selectedDayEntry.allExpectedSavings.length : 0) +
                     (showIncome ? selectedDayEntry.allExpectedIncome.length : 0)}{' '}
                   expected
                 </Typography>
@@ -2070,6 +2462,27 @@ export default function MonthTimelineView({
                   </Stack>
                 ))}
 
+              {includeSavingsInCashFlow &&
+                selectedDayEntry.allExpectedSavings.map((sv, i) => (
+                  <Stack key={`exp-sav-${i}`} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+                      <Chip
+                        size="small"
+                        label={sv.status === 'filled' ? '✓ Transferred' : '🏦 Savings'}
+                        color="secondary"
+                        variant="outlined"
+                        sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                      />
+                      <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                        {sv.destinationName}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: isDark ? '#c4b5fd' : '#7c3aed', fontVariantNumeric: 'tabular-nums' }}>
+                      -{usd.format(sv.amount)}
+                    </Typography>
+                  </Stack>
+                ))}
+
               {showIncome &&
                 selectedDayEntry.allExpectedIncome.map((inc, i) => (
                   <Stack key={`exp-inc-${i}`} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
@@ -2092,6 +2505,7 @@ export default function MonthTimelineView({
                 ))}
 
               {((showSpend && selectedDayEntry.allExpectedBills.length > 0) ||
+                (includeSavingsInCashFlow && selectedDayEntry.allExpectedSavings.length > 0) ||
                 (showIncome && selectedDayEntry.allExpectedIncome.length > 0)) &&
                 selectedDayEntry.transactions.length > 0 && <Divider />}
 
@@ -2139,6 +2553,7 @@ export default function MonthTimelineView({
               ))}
 
               {(!showSpend || selectedDayEntry.allExpectedBills.length === 0) &&
+                (!includeSavingsInCashFlow || selectedDayEntry.allExpectedSavings.length === 0) &&
                 (!showIncome || selectedDayEntry.allExpectedIncome.length === 0) &&
                 selectedDayEntry.transactions.length === 0 && (
                   <Typography variant="caption" color="text.secondary" sx={{ py: 1, textAlign: 'center' }}>
