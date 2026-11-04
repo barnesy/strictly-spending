@@ -7,6 +7,7 @@ import {
   useHistoricalSpendByCategory,
   useHistoricalMonthlyIncome,
   useRecurrenceMap,
+  useTransactions,
 } from './queries';
 import { useFilters } from '../stores/store';
 import { useBudgetStore } from '../stores/budgetStore';
@@ -126,13 +127,6 @@ export function useSpendingForecast(options?: {
   );
   const recurrenceMap = options?.recurrenceMap || derivedRecurrenceMap;
 
-  const consolidatedMerchants = useMemo(() => {
-    const list = consolidateRecurringMerchants(rawConsolidatedMerchants, recurrenceMap);
-    if (!enabledAccountIds) return list;
-    const allowed = new Set(enabledAccountIds);
-    return list.filter((m) => m.accountId !== undefined && allowed.has(m.accountId));
-  }, [rawConsolidatedMerchants, recurrenceMap, enabledAccountIds]);
-
   const forecastRecurringIncome = useMemo(() => {
     const enabledSet = enabledAccountIds && enabledAccountIds.length > 0 ? new Set(enabledAccountIds) : null;
     const scopedSet =
@@ -212,6 +206,41 @@ export function useSpendingForecast(options?: {
     return maxDataMonth > sysMonth ? maxDataMonth : sysMonth;
   }, [historicalMonthlySpend, historicalMonthlyIncome]);
 
+  const recentWindowRange = useMemo(() => {
+    const [cy, cm] = currentCalMonth.split('-').map(Number);
+    const windowStart = new Date(cy || new Date().getFullYear(), (cm || 1) - 1, -45);
+    const startDate = `${windowStart.getFullYear()}-${String(windowStart.getMonth() + 1).padStart(2, '0')}-${String(windowStart.getDate()).padStart(2, '0')}`;
+    const endDate = `${currentCalMonth}-31`;
+    return { startDate, endDate };
+  }, [currentCalMonth]);
+
+  const { data: recentWindowTxns = [] } =
+    typeof useTransactions === 'function'
+      ? useTransactions(undefined, recentWindowRange)
+      : { data: [] };
+
+  const { currentMonthTransactions, pendingTransactions } = useMemo(() => {
+    const allowed = enabledAccountIds ? new Set(enabledAccountIds) : null;
+    const scoped = allowed
+      ? recentWindowTxns.filter((t) => t.accountId !== undefined && allowed.has(t.accountId))
+      : recentWindowTxns;
+    return {
+      currentMonthTransactions: scoped.filter((t) => t.date.startsWith(currentCalMonth)),
+      pendingTransactions: scoped.filter((t) => t.isPending === true),
+    };
+  }, [recentWindowTxns, enabledAccountIds, currentCalMonth]);
+
+  const consolidatedMerchants = useMemo(() => {
+    const list = consolidateRecurringMerchants(
+      rawConsolidatedMerchants,
+      recurrenceMap,
+      currentMonthTransactions
+    );
+    if (!enabledAccountIds) return list;
+    const allowed = new Set(enabledAccountIds);
+    return list.filter((m) => m.accountId !== undefined && allowed.has(m.accountId));
+  }, [rawConsolidatedMerchants, recurrenceMap, currentMonthTransactions, enabledAccountIds]);
+
   const incomeCategoryColor = useMemo(() => {
     const incCat = (categories || []).find((c) => c.type === 'income' || c.name === 'Income');
     return incCat?.color || '#2e7d32';
@@ -232,6 +261,7 @@ export function useSpendingForecast(options?: {
       historicalCategoryAnnualAvg,
       actualSpendByCategory: actualSpendMap,
       recurrenceMap,
+      currentMonthTransactions,
     });
   }, [
     categories,
@@ -245,6 +275,7 @@ export function useSpendingForecast(options?: {
     historicalMonthlySpend,
     historicalCategoryAnnualAvg,
     recurrenceMap,
+    currentMonthTransactions,
   ]);
 
   const currentMonthIncomeProjections = useMemo(() => {
@@ -420,6 +451,8 @@ export function useSpendingForecast(options?: {
     forecastRecurringIncome,
     monthlyBaselineIncome: forecastRecurringIncome > 0 ? forecastRecurringIncome : historicalAnnualAvgIncome,
     currentCalMonth,
+    currentMonthTransactions,
+    pendingTransactions,
     currentMonthProjections,
     currentMonthIncomeProjections,
     currentMonthForecastSummary,

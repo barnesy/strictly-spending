@@ -375,8 +375,17 @@ export default function MonthTimelineView({
 
   // Roll cash balance forward across remaining days of currentCalMonth + any intermediate future months before currentMonth
   const startingFutureCashBalance = useMemo(() => {
-    if (!isFutureMonth || monthsAhead <= 0) return currentCashBalance;
-    let running = currentCashBalance;
+    const pendingCalNetFlow = rawCalMonthTransactions
+      .filter(
+        (t) =>
+          t.isPending &&
+          (cashAccountIds.length === 0 ||
+            (t.accountId !== undefined && cashAccountIds.includes(t.accountId)))
+      )
+      .reduce((s, t) => s + t.amount, 0);
+    const effectiveNowCashBalance = currentCashBalance + pendingCalNetFlow;
+    if (!isFutureMonth || monthsAhead <= 0) return effectiveNowCashBalance;
+    let running = effectiveNowCashBalance;
     const realTodayDay = new Date().getDate();
 
     // 1. Remaining unpaid bills, expected paydays & savings transfers in currentCalMonth (from today through end of currentCalMonth)
@@ -446,6 +455,7 @@ export default function MonthTimelineView({
     isFutureMonth,
     monthsAhead,
     currentCashBalance,
+    cashAccountIds,
     currentCalMonth,
     calYear,
     calMonthNum,
@@ -640,13 +650,16 @@ export default function MonthTimelineView({
 
         // If viewing a past month, roll currentCashBalance backward across all checking transactions after that month's end date
         const monthEndDateStr = `${currentYear}-${monthNumStr}-${String(daysInMonth).padStart(2, '0')}`;
+        const pendingCashNetFlow = cashAccountTransactions
+          .filter((t) => t.isPending)
+          .reduce((s, t) => s + t.amount, 0);
         const postMonthNetFlow =
           currentMonth < currentCalMonth
             ? cashAccountTransactions
                 .filter((t) => t.date > monthEndDateStr)
                 .reduce((s, t) => s + t.amount, 0)
             : 0;
-        const anchorCashBalance = currentCashBalance - postMonthNetFlow;
+        const anchorCashBalance = currentCashBalance + pendingCashNetFlow - postMonthNetFlow;
 
         days[anchorIdx].actualCashBalance = Math.round(anchorCashBalance * 100) / 100;
         for (let i = anchorIdx - 1; i >= 0; i--) {

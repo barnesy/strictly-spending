@@ -49,6 +49,8 @@ export interface ConsolidatedMerchant {
   merchantKey: string;
   category: string;
   monthlyAverage: number;
+  accountId?: number;
+  lastDate?: string;
 }
 
 /**

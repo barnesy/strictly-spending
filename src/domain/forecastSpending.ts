@@ -91,7 +91,7 @@ export function getMerchantBillStatus(
   }
 
   const isPaidThisMonth = Boolean(targetMonthKey && lastDate && lastDate.startsWith(targetMonthKey));
-  const isExpectedThisMonth = !isPaidThisMonth && Boolean(lastDate);
+  const isStoppedOverride = info?.kind === 'none';
 
   let expectedDay: number | null = null;
   let lastPaidShortLabel: string | null = null;
@@ -100,6 +100,7 @@ export function getMerchantBillStatus(
   let daysSinceLastPaid: number | null = null;
   let daysUntilDue: number | null = null;
   let countdownText: string | null = null;
+  let missedPriorMonthCycle = false;
 
   const todayMidnight = new Date(
     referenceDate.getFullYear(),
@@ -124,9 +125,23 @@ export function getMerchantBillStatus(
           0,
           Math.round((todayMidnight.getTime() - lastMidnight.getTime()) / 86_400_000)
         );
+
+        // If evaluating the current month (or an earlier month) and a monthly merchant hasn't charged in >42 days
+        // and skipped the entire preceding calendar month, do not treat it as an active monthly bill due this month.
+        const refMonthKey = `${todayMidnight.getFullYear()}-${String(todayMidnight.getMonth() + 1).padStart(2, '0')}`;
+        if (!targetMonthKey || targetMonthKey <= refMonthKey) {
+          const [cmpY, cmpM] = (targetMonthKey || refMonthKey).split('-').map(Number);
+          const monthGap = (cmpY - lYear) * 12 + (cmpM - lMonth);
+          const cadence = info?.kind || 'monthly';
+          if (cadence === 'monthly' && monthGap >= 2 && daysSinceLastPaid > 42) {
+            missedPriorMonthCycle = true;
+          }
+        }
       }
     }
   }
+
+  const isExpectedThisMonth = !isPaidThisMonth && !isStoppedOverride && !missedPriorMonthCycle && Boolean(lastDate);
 
   if (expectedDay !== null && targetMonthKey && targetMonthKey.includes('-')) {
     const [tYear, tMonth] = targetMonthKey.split('-').map(Number);
@@ -195,6 +210,8 @@ export function computeCategoryProjections({
   historicalCategoryAnnualAvg,
   actualSpendByCategory,
   recurrenceMap,
+  currentMonthTransactions,
+  unitemizedHoldByAccountId,
 }: {
   categories: Category[];
   budgets: Budget[];
@@ -208,6 +225,8 @@ export function computeCategoryProjections({
   historicalCategoryAnnualAvg?: Map<string, number>;
   actualSpendByCategory?: Map<string, number>;
   recurrenceMap?: Map<string, RecurrenceInfo>;
+  currentMonthTransactions?: Transaction[];
+  unitemizedHoldByAccountId?: Map<number, number>;
 }): Map<string, CategoryProjection> {
   const disabledSet = new Set(disabledCategories);
 
@@ -216,7 +235,12 @@ export function computeCategoryProjections({
   const paidRecurringByCat = new Map<string, number>();
   const unpaidRecurringByCat = new Map<string, number>();
 
-  const dedupedMerchants = consolidateRecurringMerchants(consolidatedMerchants, recurrenceMap);
+  const dedupedMerchants = consolidateRecurringMerchants(
+    consolidatedMerchants,
+    recurrenceMap,
+    currentMonthTransactions,
+    unitemizedHoldByAccountId
+  );
 
   for (const m of dedupedMerchants) {
     if (
@@ -243,7 +267,7 @@ export function computeCategoryProjections({
       );
       if (status.isPaidThisMonth) {
         paidRecurringByCat.set(m.category, (paidRecurringByCat.get(m.category) || 0) + amt);
-      } else if (status.lastDate) {
+      } else if (status.isExpectedThisMonth && status.lastDate) {
         unpaidRecurringByCat.set(m.category, (unpaidRecurringByCat.get(m.category) || 0) + amt);
       }
     }
@@ -322,7 +346,7 @@ export function computeCategoryProjections({
       // Recurring categories are driven strictly by active consolidated recurring bills
       baselineTotal = recurring;
       basis = 'recurring';
-    } else if (hasExplicitBudget && !budgetEntry?.userSet && trailing > 0) {
+    } else if (hasExplicitBudget && !budgetEntry?.userSet && budget > 0 && trailing > 0) {
       // Auto-seeded (non-userSet) variable budget: always track the latest 3-month trailing actual average
       baselineTotal = Math.max(trailing, budget, recurring);
       basis = 'trailing';
@@ -364,7 +388,7 @@ export function computeCategoryProjections({
       basis = 'actual_exceeded';
     }
 
-    if (total > 0 || (actualToDate || 0) > 0 || trailing > 0) {
+    if (total > 0 || (actualToDate || 0) > 0 || (!hasExplicitBudget && trailing > 0)) {
       resultMap.set(cat.name, {
         category: cat.name,
         color: cat.color || '#bdbdbd',
@@ -864,6 +888,7 @@ const NOISE_WORDS = new Set([
   'nc',
   'mountain',
   'view',
+  'viewca',
   'decatur',
   'atlanta',
   'barnes',
@@ -880,6 +905,10 @@ const NOISE_WORDS = new Set([
   'syf',
   'paypalsi77',
   'wwp',
+  'id',
+  'co',
+  'iclub',
+  'fees',
 ]);
 
 /**
@@ -942,11 +971,16 @@ export function normalizeTimelineMerchantKey(raw: string): string {
   if (/^geico\b/.test(joined)) return 'geico';
   if (/^homesite\b/.test(joined)) return 'homesite';
   if (/^home\s+depot\b/.test(joined)) return 'home depot';
+  if (/^(us\s+)?(department|dept)\b.*?\b(ed|education)\b/.test(joined) || /\b(department|dept)\s+of\s+ed(ucation)?\b/.test(s)) {
+    return 'us department of';
+  }
   if (/^google\s+fi\b/.test(joined)) return 'google fi';
   if (/^google\s+(store|st)\b/.test(joined)) return 'google store';
-  if (/^google\s+workspace\b/.test(joined)) return 'google workspace';
+  if (/^google\s+worksp(ace)?\b/.test(joined)) return 'google workspace';
   if (/^google\s+services\b/.test(joined)) return 'google services';
   if (/^google$/.test(joined)) return 'google';
+  if (/^planet\s+fitness\b/.test(joined)) return 'planet fitness';
+  if (/^la\s+fitness\b/.test(joined)) return 'la fitness';
 
   return joined || raw.toLowerCase().trim().slice(0, 24);
 }
@@ -1004,6 +1038,110 @@ export function formatCleanMerchantName(raw: string): string {
     .join(' ');
 }
 
+const NON_BILL_RETAIL_CANON_REGEX =
+  /\b(home depot|lowe s|lowes|ace hardware|harbor freight|ikea|target|walmart|costco|sam s club|kroger|publix|whole foods|trader joe|aldi|savi provisions|chevron|shell|exxon|bp|qt|quiktrip|racetrac|wawa)\b/i;
+
+export interface SafeCheckingBalanceSummary {
+  postedBalance: number;
+  availableBalance: number;
+  pendingHoldAmount: number;
+  itemizedPendingOutflow: number;
+  unitemizedBankHold: number;
+  unitemizedHoldByAccountId: Map<number, number>;
+}
+
+/**
+ * Computes checking account balances accounting for both settled (`currentBalance` / `is_pending = 0`)
+ * and pending (`is_pending = 1` + bank `available_balance` holds) transactions without double-counting.
+ */
+export function computeSafeCheckingBalances({
+  accounts,
+  simplefinAccounts = [],
+  pendingTransactions = [],
+}: {
+  accounts: Account[];
+  simplefinAccounts?: Array<{
+    account_id?: string;
+    name: string;
+    balance?: number;
+    available_balance?: number | null;
+    strictly_account_id?: number | null;
+  }>;
+  pendingTransactions?: Transaction[];
+}): SafeCheckingBalanceSummary {
+  let postedBalance = 0;
+  let availableBalance = 0;
+  let itemizedPendingOutflow = 0;
+  let unitemizedBankHold = 0;
+  const unitemizedHoldByAccountId = new Map<number, number>();
+
+  const pendingOutflowByAccount = new Map<number, number>();
+  for (const tx of pendingTransactions) {
+    if (!tx.isPending || tx.amount >= 0) continue;
+    if (tx.accountId !== undefined) {
+      pendingOutflowByAccount.set(
+        tx.accountId,
+        (pendingOutflowByAccount.get(tx.accountId) || 0) + Math.abs(tx.amount)
+      );
+    }
+  }
+
+  for (const a of accounts) {
+    const posted = Number(a.currentBalance || 0);
+    postedBalance += posted;
+
+    const acctItemizedPending = a.id !== undefined ? pendingOutflowByAccount.get(a.id) || 0 : 0;
+    itemizedPendingOutflow += acctItemizedPending;
+
+    const sfMatch = simplefinAccounts.find(
+      (sf) =>
+        (a.id !== undefined && sf.strictly_account_id === a.id) ||
+        (a.last4 && sf.name.includes(a.last4)) ||
+        sf.name.toLowerCase() === a.name.toLowerCase()
+    );
+
+    const sfAvailable =
+      sfMatch && typeof sfMatch.available_balance === 'number' && !Number.isNaN(sfMatch.available_balance)
+        ? sfMatch.available_balance
+        : null;
+    const refPosted =
+      sfMatch && typeof sfMatch.balance === 'number' && !Number.isNaN(sfMatch.balance) && sfMatch.balance > 0
+        ? sfMatch.balance
+        : posted;
+
+    const bankReportedHold =
+      sfAvailable !== null && sfAvailable >= 0 && sfAvailable < refPosted
+        ? Math.max(0, refPosted - sfAvailable)
+        : 0;
+
+    // Never double-count: SimpleFIN's available_balance already deducts itemized pending transactions.
+    // Take the larger of itemized pending outflows vs. the bank's total hold.
+    const effectiveHold = Math.max(acctItemizedPending, bankReportedHold);
+    const acctUnitemizedHold = Math.max(0, bankReportedHold - acctItemizedPending);
+
+    availableBalance += posted - effectiveHold;
+    unitemizedBankHold += acctUnitemizedHold;
+    if (a.id !== undefined && acctUnitemizedHold > 0.01) {
+      unitemizedHoldByAccountId.set(a.id, Math.round(acctUnitemizedHold * 100) / 100);
+    }
+  }
+
+  postedBalance = Math.round(postedBalance * 100) / 100;
+  availableBalance = Math.round(availableBalance * 100) / 100;
+  itemizedPendingOutflow = Math.round(itemizedPendingOutflow * 100) / 100;
+  unitemizedBankHold = Math.round(unitemizedBankHold * 100) / 100;
+  const pendingHoldAmount = Math.max(0, Math.round((postedBalance - availableBalance) * 100) / 100);
+
+  return {
+    postedBalance,
+    availableBalance,
+    pendingHoldAmount,
+    itemizedPendingOutflow,
+    unitemizedBankHold,
+    unitemizedHoldByAccountId,
+  };
+}
+
 /**
  * Consolidates raw recurring merchant entries (from SQL `GROUP BY merchant_key, category`)
  * so CSV vs. SimpleFIN/Plaid variations (e.g. "google workspace" and "google_workspace_ca_recurring",
@@ -1012,7 +1150,9 @@ export function formatCleanMerchantName(raw: string): string {
  */
 export function consolidateRecurringMerchants(
   merchants: ConsolidatedMerchant[],
-  recurrenceMap?: Map<string, RecurrenceInfo>
+  recurrenceMap?: Map<string, RecurrenceInfo>,
+  currentMonthTransactions?: Transaction[],
+  unitemizedHoldByAccountId?: Map<number, number>
 ): ConsolidatedMerchant[] {
   if (!merchants || merchants.length === 0) return [];
 
@@ -1029,6 +1169,14 @@ export function consolidateRecurringMerchants(
     if (!m.merchantKey || (m.monthlyAverage || 0) <= 0) continue;
     const canon = normalizeTimelineMerchantKey(m.merchantKey) || m.merchantKey.toLowerCase();
     const recInfo = recurrenceMap?.get(m.merchantKey);
+    if ((recInfo?.kind as string | undefined) === 'none') continue;
+    if (
+      NON_BILL_RETAIL_CANON_REGEX.test(canon) &&
+      !(recInfo?.source === 'override' && (recInfo?.kind as string | undefined) !== 'none')
+    ) {
+      continue;
+    }
+
     const resolvedAccountId = m.accountId ?? recInfo?.accountId;
     const groupKey = `${m.category}::${canon}::${resolvedAccountId ?? 'any'}`;
     const status = getMerchantBillStatus(
@@ -1102,6 +1250,116 @@ export function consolidateRecurringMerchants(
       dup.expectedDay = entry.expectedDay;
     } else if (dup.merchant.accountId === undefined && entry.merchant.accountId !== undefined) {
       dup.merchant = { ...dup.merchant, accountId: entry.merchant.accountId };
+    }
+  }
+
+  // Reconcile current-month settled AND pending transactions 1-to-1 against recurring bills so neither
+  // pending nor settled charges are ever double-counted as still-unpaid bills.
+  const now = new Date();
+  const sysMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const todayStr = `${sysMonthPrefix}-${String(now.getDate()).padStart(2, '0')}`;
+
+  if (currentMonthTransactions && currentMonthTransactions.length > 0) {
+    const spendTxns = currentMonthTransactions
+      .filter(
+        (t) =>
+          t.amount < 0 &&
+          t.category !== 'Transfer' &&
+          t.category !== 'Credit Card Payment'
+      )
+      .sort((a, b) => a.date.localeCompare(b.date) || a.amount - b.amount);
+
+    const usedTxKeys = new Set<string | number>();
+    const sortedEntries = [...deduped].sort(
+      (a, b) => a.expectedDay - b.expectedDay || b.merchant.monthlyAverage - a.merchant.monthlyAverage
+    );
+
+    for (const entry of sortedEntries) {
+      const expAmt = entry.merchant.monthlyAverage;
+      let bestTx: Transaction | null = null;
+      let bestScore = Infinity;
+
+      for (let idx = 0; idx < spendTxns.length; idx++) {
+        const tx = spendTxns[idx];
+        const txKey = tx.id ?? `${tx.date}::${tx.amount}::${idx}`;
+        if (usedTxKeys.has(txKey)) continue;
+        if (
+          entry.merchant.accountId !== undefined &&
+          tx.accountId !== undefined &&
+          entry.merchant.accountId !== tx.accountId
+        ) {
+          continue;
+        }
+
+        const txCanon = normalizeTimelineMerchantKey(tx.merchantKey || tx.description || '');
+        const txAmt = Math.abs(tx.amount);
+        const txDay = Number(tx.date.slice(8, 10)) || 1;
+        const amtRatio = Math.abs(txAmt - expAmt) / Math.max(1, expAmt);
+        const dayDiff = Math.abs(txDay - entry.expectedDay);
+
+        const isCanonMatch =
+          txCanon.length >= 3 &&
+          entry.canon.length >= 3 &&
+          (txCanon === entry.canon ||
+            txCanon.includes(entry.canon) ||
+            entry.canon.includes(txCanon));
+
+        if (isCanonMatch && (amtRatio <= 0.65 || Math.abs(txAmt - expAmt) <= 35)) {
+          const score = amtRatio * 10 + dayDiff * 0.25;
+          if (score < bestScore) {
+            bestScore = score;
+            bestTx = tx;
+          }
+        } else if (
+          !isCanonMatch &&
+          tx.category === entry.merchant.category &&
+          expAmt >= 25 &&
+          amtRatio <= 0.12 &&
+          dayDiff <= 5
+        ) {
+          const score = 20 + amtRatio * 20 + dayDiff;
+          if (score < bestScore) {
+            bestScore = score;
+            bestTx = tx;
+          }
+        }
+      }
+
+      if (bestTx) {
+        const winIdx = spendTxns.indexOf(bestTx);
+        const winKey = bestTx.id ?? `${bestTx.date}::${bestTx.amount}::${winIdx}`;
+        usedTxKeys.add(winKey);
+        if (bestTx.date > entry.lastDate) {
+          entry.lastDate = bestTx.date;
+          entry.merchant = { ...entry.merchant, lastDate: bestTx.date };
+        }
+      }
+    }
+  }
+
+  // Reconcile un-itemized bank holds (where SimpleFIN's available_balance has already deducted a due bill
+  // before the bank itemizes the pending transaction row) so the bill is not subtracted a second time.
+  if (unitemizedHoldByAccountId && unitemizedHoldByAccountId.size > 0) {
+    const remainingHolds = new Map<number, number>(unitemizedHoldByAccountId);
+    const todayDay = now.getDate();
+    const dueEntries = [...deduped]
+      .filter(
+        (e) =>
+          e.merchant.accountId !== undefined &&
+          !e.lastDate.startsWith(sysMonthPrefix) &&
+          e.expectedDay <= todayDay + 2 &&
+          e.merchant.monthlyAverage >= 25
+      )
+      .sort((a, b) => a.expectedDay - b.expectedDay || b.merchant.monthlyAverage - a.merchant.monthlyAverage);
+
+    for (const entry of dueEntries) {
+      const acctId = entry.merchant.accountId!;
+      const remHold = remainingHolds.get(acctId) || 0;
+      if (remHold >= entry.merchant.monthlyAverage * 0.9) {
+        remainingHolds.set(acctId, Math.max(0, remHold - entry.merchant.monthlyAverage));
+        entry.lastDate = todayStr;
+        entry.merchant = { ...entry.merchant, lastDate: todayStr };
+      }
     }
   }
 

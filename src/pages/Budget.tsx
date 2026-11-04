@@ -12,6 +12,7 @@ import {
 } from '../hooks/queries';
 import { useSpendingForecast } from '../hooks/useSpendingForecast';
 import {
+  computeSafeCheckingBalances,
   consolidateRecurringMerchants,
   formatCleanMerchantName,
   getMerchantBillStatus,
@@ -78,6 +79,14 @@ export default function Budget() {
   const { data: accounts = [] } = useAccounts();
   const incomeStreams = useForecastStore((s) => s.incomeStreams);
   const simplefinAccounts = useSimpleFinStore((s) => s.accounts);
+  const fetchSimplefinAccounts = useSimpleFinStore((s) => s.fetchAccounts);
+
+  useEffect(() => {
+    if (simplefinAccounts.length === 0) {
+      fetchSimplefinAccounts(false).catch(() => {});
+    }
+  }, [simplefinAccounts.length, fetchSimplefinAccounts]);
+
   const checkingAccounts = useMemo(
     () => getOperatingCashAccounts(accounts, incomeStreams),
     [accounts, incomeStreams]
@@ -104,6 +113,8 @@ export default function Budget() {
   const {
     recurrenceMap,
     currentCalMonth,
+    currentMonthTransactions = [],
+    pendingTransactions = [],
     currentMonthProjections,
     currentMonthIncomeProjections,
     currentMonthForecastSummary,
@@ -119,9 +130,32 @@ export default function Budget() {
   const forecastTaxRate = useForecastStore((s) => s.taxRate);
   const useExactPaycheckCalendar = useForecastStore((s) => s.useExactPaycheckCalendar);
 
+  const activeScopedAccounts = isAllSelected ? checkingAccounts : selectedAccounts;
+
+  const safeBalanceSummary = useMemo(
+    () =>
+      computeSafeCheckingBalances({
+        accounts: activeScopedAccounts,
+        simplefinAccounts,
+        pendingTransactions,
+      }),
+    [activeScopedAccounts, simplefinAccounts, pendingTransactions]
+  );
+
   const consolidatedMerchants = useMemo(
-    () => consolidateRecurringMerchants(rawConsolidatedMerchants, recurrenceMap),
-    [rawConsolidatedMerchants, recurrenceMap]
+    () =>
+      consolidateRecurringMerchants(
+        rawConsolidatedMerchants,
+        recurrenceMap,
+        currentMonthTransactions,
+        safeBalanceSummary.unitemizedHoldByAccountId
+      ),
+    [
+      rawConsolidatedMerchants,
+      recurrenceMap,
+      currentMonthTransactions,
+      safeBalanceSummary.unitemizedHoldByAccountId,
+    ]
   );
 
   const isDataLoading = isCatLoading || isOverridesLoading || isBudgetsLoading || isTrailingLoading || isConsolidatedLoading || isLastMonthLoading || isCountLoading;
@@ -367,36 +401,18 @@ export default function Budget() {
     savingsTransferOut -
     trailingVariableAvg;
 
-  const activeScopedAccounts = isAllSelected ? checkingAccounts : selectedAccounts;
+  const currentAccountBalance = safeBalanceSummary.postedBalance;
+  const availableCheckingBalance = safeBalanceSummary.availableBalance;
+  const pendingHoldAmount = safeBalanceSummary.pendingHoldAmount;
 
-  const currentAccountBalance = activeScopedAccounts.reduce(
-    (sum, a) => sum + Number(a.currentBalance || 0),
-    0
+  const remainingMonthIncome = Math.max(
+    0,
+    expectedMonthlyIncome - currentMonthForecastSummary.actualIncome
   );
-
-  // Use SimpleFIN available_balance when lower than posted currentBalance (captures pending debit holds)
-  const availableCheckingBalance = activeScopedAccounts.reduce((sum, a) => {
-    const posted = Number(a.currentBalance || 0);
-    const sfMatch = simplefinAccounts.find(
-      (sf) =>
-        sf.strictly_account_id === a.id ||
-        (a.last4 && sf.name.includes(a.last4)) ||
-        sf.name.toLowerCase() === a.name.toLowerCase()
-    );
-    if (
-      sfMatch &&
-      typeof sfMatch.available_balance === 'number' &&
-      sfMatch.available_balance >= 0 &&
-      sfMatch.available_balance < posted
-    ) {
-      return sum + sfMatch.available_balance;
-    }
-    return sum + posted;
-  }, 0);
-
-  const pendingHoldAmount = Math.max(0, currentAccountBalance - availableCheckingBalance);
-  const projectedEndOfMonthBalance = currentAccountBalance + thisMonthAccountCashRemainder;
-  const projected6MoBalance = currentAccountBalance + thisMonthAccountCashRemainder + monthlyAccountCashRemainder * 5;
+  const remainingMonthNetFlow =
+    remainingMonthIncome - currentMonthForecastSummary.remainingSpend - savingsTransferOut;
+  const projectedEndOfMonthBalance = availableCheckingBalance + remainingMonthNetFlow;
+  const projected6MoBalance = projectedEndOfMonthBalance + monthlyAccountCashRemainder * 5;
 
   const nextPayday = currentMonthIncomeProjections
     .map((p) => p.nextExpectedDay)
@@ -461,7 +477,14 @@ export default function Budget() {
       )
       .map((m) => ({
         ...m,
-        status: getMerchantBillStatus(m.merchantKey, currentCalMonth, recurrenceMap),
+        status: getMerchantBillStatus(
+          m.merchantKey,
+          currentCalMonth,
+          recurrenceMap,
+          new Date(),
+          m.accountId,
+          m.lastDate
+        ),
       }))
       .filter((m) => {
         if (m.status.isPaidThisMonth || !m.status.isExpectedThisMonth) return false;
@@ -1952,7 +1975,14 @@ function RecurringBudgetCard({
             const enrichedMerchants = rawMerchants
               .map((m) => ({
                 item: m,
-                billStatus: getMerchantBillStatus(m.merchantKey, currentCalMonth, recurrenceMap),
+                billStatus: getMerchantBillStatus(
+                  m.merchantKey,
+                  currentCalMonth,
+                  recurrenceMap,
+                  new Date(),
+                  m.accountId,
+                  m.lastDate
+                ),
               }))
               .sort((a, b) => {
                 if (a.billStatus.isPaidThisMonth !== b.billStatus.isPaidThisMonth) {

@@ -924,6 +924,14 @@ pub async fn sync_transactions_core(
                     final_cat = "Transfers".to_string();
                 } else if let Some(rule) = crate::tools::match_best_prepared_rule(description, &merchant_key, &prepared_rules) {
                     final_cat = rule.category.clone();
+                } else if let Some(hist) = account_candidates.iter().find(|c| {
+                    !c.category.is_empty()
+                        && c.category != "Uncategorized"
+                        && c.category != "Income"
+                        && (sfin_descriptions_match(&c.description_norm, &desc_norm)
+                            || sfin_descriptions_match(&c.description_norm, &raw_desc_norm))
+                }) {
+                    final_cat = hist.category.clone();
                 }
             }
 

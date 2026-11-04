@@ -594,14 +594,25 @@ export async function analyzeQuestionAndFinances(
 
   // Recurring merchants & End-of-Month Bill Status
   const recurrenceMap = new Map<string, RecurrenceInfo>(Object.entries(recurrenceMapObj));
-  const consolidatedRecurring = consolidateRecurringMerchants(rawRecurringMerchants, recurrenceMap);
+  const consolidatedRecurring = consolidateRecurringMerchants(
+    rawRecurringMerchants,
+    recurrenceMap,
+    curMonthTxns
+  );
   const curDayOfMonth = anchor.getDate();
   const daysInCurMonth = new Date(curY, curM, 0).getDate();
   const daysRemainingInMonth = Math.max(0, daysInCurMonth - curDayOfMonth);
 
   const recurringWithStatus = consolidatedRecurring.map((m) => ({
     ...m,
-    status: getMerchantBillStatus(m.merchantKey, curMonthKey, recurrenceMap, anchor),
+    status: getMerchantBillStatus(
+      m.merchantKey,
+      curMonthKey,
+      recurrenceMap,
+      anchor,
+      m.accountId,
+      m.lastDate
+    ),
   }));
   const unpaidBills = recurringWithStatus
     .filter((b) => !b.status.isPaidThisMonth && b.status.isExpectedThisMonth)
@@ -622,16 +633,29 @@ export async function analyzeQuestionAndFinances(
     .filter((t) => t.amount < 0 && Math.abs(t.amount) >= 50)
     .sort((a, b) => a.amount - b.amount);
 
-  // Balance Sheet & Net Worth
-  const liquidCashDollars = activeAccounts
-    .filter((a) => a.type === 'checking' || a.type === 'savings')
-    .reduce((s, a) => s + (a.currentBalance || 0), 0);
-  const checkingCashDollars = activeAccounts
+  // Balance Sheet & Net Worth (deduct pending checking outflows so Safe-to-Spend never double-counts or misses pending holds)
+  const checkingAcctIds = new Set(
+    activeAccounts
+      .filter((a) => a.type === 'checking' && a.id !== undefined)
+      .map((a) => a.id!)
+  );
+  const pendingCheckingOutflowDollars = scopedAllTimeTxns
+    .filter(
+      (t) =>
+        t.isPending === true &&
+        t.amount < 0 &&
+        (checkingAcctIds.size === 0 || (t.accountId !== undefined && checkingAcctIds.has(t.accountId)))
+    )
+    .reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  const postedCheckingCashDollars = activeAccounts
     .filter((a) => a.type === 'checking')
     .reduce((s, a) => s + (a.currentBalance || 0), 0);
+  const checkingCashDollars = Math.round((postedCheckingCashDollars - pendingCheckingOutflowDollars) * 100) / 100;
   const savingsCashDollars = activeAccounts
     .filter((a) => a.type === 'savings')
     .reduce((s, a) => s + (a.currentBalance || 0), 0);
+  const liquidCashDollars = checkingCashDollars + savingsCashDollars;
   const investmentsDollars = activeAccounts
     .filter((a) => a.type === 'investment')
     .reduce((s, a) => s + (a.currentBalance || 0), 0);

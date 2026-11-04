@@ -1453,8 +1453,10 @@ async function handleIpc(cmd, args = {}) {
       }
 
       case 'simplefin_get_accounts': {
+        const forceRefresh = Boolean(args?.forceRefresh ?? args?.force_refresh ?? false);
+        const existingCount = db.prepare('SELECT COUNT(*) as cnt FROM simplefin_accounts').get()?.cnt || 0;
         const row = db.prepare("SELECT value FROM settings WHERE key = 'simplefin_config'").get();
-        if (row && row.value) {
+        if ((forceRefresh || existingCount === 0) && row && row.value) {
           try {
             const parsed = JSON.parse(row.value);
             const accessUrl = parsed.access_url || parsed.accessUrl;
@@ -1482,16 +1484,29 @@ async function handleIpc(cmd, args = {}) {
 
                 for (const acc of (sfinData.accounts || [])) {
                   const org = acc.org_name || (acc.conn_id && orgMap[acc.conn_id]) || acc.org?.name || 'Bank';
-                  const bal = acc.balance ? parseFloat(acc.balance) : 0;
+                  const bal = acc.balance !== undefined && acc.balance !== null ? parseFloat(acc.balance) : 0;
+                  const rawAvail = acc['available-balance'] ?? acc.available_balance;
+                  const avail = rawAvail !== undefined && rawAvail !== null ? parseFloat(rawAvail) : null;
+                  const balDate = acc['balance-date'] ?? acc.balance_date ?? null;
                   db.prepare(`
-                    INSERT INTO simplefin_accounts (account_id, org_name, name, currency, balance, strictly_account_id)
-                    VALUES (?, ?, ?, ?, ?, NULL)
+                    INSERT INTO simplefin_accounts (account_id, org_name, name, currency, balance, available_balance, balance_date, strictly_account_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
                     ON CONFLICT(account_id) DO UPDATE SET
                       org_name = COALESCE(excluded.org_name, simplefin_accounts.org_name),
                       name = excluded.name,
                       currency = excluded.currency,
-                      balance = excluded.balance
-                  `).run(acc.id, org, acc.name, acc.currency || 'USD', bal);
+                      balance = excluded.balance,
+                      available_balance = COALESCE(excluded.available_balance, simplefin_accounts.available_balance),
+                      balance_date = COALESCE(excluded.balance_date, simplefin_accounts.balance_date)
+                  `).run(
+                    acc.id,
+                    org,
+                    acc.name,
+                    acc.currency || 'USD',
+                    isNaN(bal) ? 0 : bal,
+                    avail !== null && !isNaN(avail) ? avail : null,
+                    balDate
+                  );
                 }
               }
             }
@@ -1500,15 +1515,23 @@ async function handleIpc(cmd, args = {}) {
           }
         }
 
-        const rows = db.prepare('SELECT id, account_id, org_name, name, currency, balance, strictly_account_id FROM simplefin_accounts ORDER BY name ASC').all();
+        const rows = db.prepare('SELECT id, account_id, org_name, name, currency, balance, available_balance, balance_date, strictly_account_id FROM simplefin_accounts ORDER BY name ASC').all();
         return rows.map(r => ({
           id: r.id,
+          account_id: r.account_id,
           accountId: r.account_id,
+          org_name: r.org_name,
           orgName: r.org_name,
           name: r.name,
           currency: r.currency,
           balance: r.balance,
-          strictlyAccountId: r.strictly_account_id
+          available_balance: r.available_balance ?? null,
+          availableBalance: r.available_balance ?? null,
+          balance_date: r.balance_date ?? null,
+          balanceDate: r.balance_date ?? null,
+          strictly_account_id: r.strictly_account_id ?? null,
+          strictlyAccountId: r.strictly_account_id ?? null,
+          latest_transaction_date: null
         }));
       }
 
@@ -1640,9 +1663,11 @@ async function handleIpc(cmd, args = {}) {
         const primaryAccounts = new Map();
         for (const acc of (sfinData.accounts || [])) {
           const bal = acc.balance !== undefined && acc.balance !== null ? parseFloat(acc.balance) : null;
-          const avail = acc.available_balance !== undefined && acc.available_balance !== null ? parseFloat(acc.available_balance) : null;
+          const rawAvail = acc['available-balance'] ?? acc.available_balance;
+          const avail = rawAvail !== undefined && rawAvail !== null ? parseFloat(rawAvail) : null;
+          const balDate = acc['balance-date'] ?? acc.balance_date ?? null;
           db.prepare('UPDATE simplefin_accounts SET balance = COALESCE(?, balance), available_balance = COALESCE(?, available_balance), balance_date = COALESCE(?, balance_date) WHERE account_id = ?')
-            .run(isNaN(bal) ? null : bal, isNaN(avail) ? null : avail, acc.balance_date ?? null, acc.id);
+            .run(bal !== null && !isNaN(bal) ? bal : null, avail !== null && !isNaN(avail) ? avail : null, balDate, acc.id);
 
           const strictlyId = accountMap[acc.id];
           if (!strictlyId) {
@@ -1714,6 +1739,17 @@ async function handleIpc(cmd, args = {}) {
                     finalCat = rule.category;
                     break;
                   }
+                }
+              }
+              if (finalCat === 'Uncategorized') {
+                const histMatch = accountCandidates.find(c =>
+                  c.category &&
+                  c.category !== 'Uncategorized' &&
+                  c.category !== 'Income' &&
+                  (sfinDescriptionsMatch(c.descNorm, descNorm) || sfinDescriptionsMatch(c.descNorm, rawDescNorm))
+                );
+                if (histMatch) {
+                  finalCat = histMatch.category;
                 }
               }
             }
@@ -1832,15 +1868,58 @@ async function handleIpc(cmd, args = {}) {
           }
         }
 
+        // Ensure transactions in recurring categories or matching existing recurring merchants inherit recurrence = 'recurring'
+        db.prepare(`
+          UPDATE transactions
+          SET recurrence = 'recurring'
+          WHERE recurrence = 'onetime'
+            AND recurrence_override IS NULL
+            AND category IN (SELECT name FROM categories WHERE default_recurrence = 'recurring')
+        `).run();
+        db.prepare(`
+          UPDATE transactions
+          SET recurrence = 'recurring'
+          WHERE recurrence = 'onetime'
+            AND recurrence_override IS NULL
+            AND amount < 0
+            AND EXISTS (
+              SELECT 1 FROM transactions t2
+              WHERE t2.account_id = transactions.account_id
+                AND t2.merchant_key = transactions.merchant_key
+                AND t2.recurrence = 'recurring'
+            )
+        `).run();
+
         const now = new Date().toISOString();
         parsed.last_synced_at = now;
         db.prepare("INSERT INTO settings (key, value) VALUES ('simplefin_config', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(parsed));
 
+        const updatedAccounts = db.prepare('SELECT id, account_id, org_name, name, currency, balance, available_balance, balance_date, strictly_account_id FROM simplefin_accounts ORDER BY name ASC').all().map(r => ({
+          id: r.id,
+          account_id: r.account_id,
+          accountId: r.account_id,
+          org_name: r.org_name,
+          orgName: r.org_name,
+          name: r.name,
+          currency: r.currency,
+          balance: r.balance,
+          available_balance: r.available_balance ?? null,
+          availableBalance: r.available_balance ?? null,
+          balance_date: r.balance_date ?? null,
+          balanceDate: r.balance_date ?? null,
+          strictly_account_id: r.strictly_account_id ?? null,
+          strictlyAccountId: r.strictly_account_id ?? null,
+          latest_transaction_date: null
+        }));
+
         return {
           added: addedCount,
+          accounts_synced: accountsSynced,
           accountsSynced,
+          last_synced_at: now,
           lastSyncedAt: now,
-          warnings
+          warnings,
+          accounts: updatedAccounts
         };
       }
 

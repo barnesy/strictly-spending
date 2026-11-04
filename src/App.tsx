@@ -401,6 +401,11 @@ export default function App() {
         const config = await simplefinGetConfig();
         if (!config?.access_url || !config.access_url.trim()) return;
 
+        // Always populate cached SimpleFIN accounts (and available_balance) in store on startup
+        if (useSimpleFinStore.getState().accounts.length === 0) {
+          await useSimpleFinStore.getState().fetchAccounts(false);
+        }
+
         if (config.last_synced_at) {
           const lastSyncMs = new Date(config.last_synced_at).getTime();
           if (!Number.isNaN(lastSyncMs) && Date.now() - lastSyncMs < TWELVE_HOURS_MS) {

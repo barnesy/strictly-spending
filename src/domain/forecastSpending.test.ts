@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeCategoryProjections,
   computeIncomeProjections,
+  computeSafeCheckingBalances,
   consolidateRecurringMerchants,
   getMerchantBillStatus,
   getStreamPaycheckSchedule,
@@ -517,5 +518,148 @@ describe('forecastSpending — educated-guess timeline reconciliation without du
     // Explicit $0 budget with $0 actual spend is excluded from projections rather than falling back to $600 prior-year spend
     const restProj = projections.get('Restaurants');
     expect(restProj).toBeUndefined();
+  });
+
+  it('computes safe checking balances with pending and settled transactions without double-counting', () => {
+    const accounts = [
+      { id: 33, name: 'Truist Checking 5463', type: 'checking', currentBalance: 1318.76, last4: '5463' } as any,
+      { id: 19, name: 'Bank of America 6669', type: 'checking', currentBalance: 3686.69, last4: '6669' } as any,
+    ];
+    const pendingTransactions = [
+      { id: 1, accountId: 33, date: '2026-11-03', amount: -197.33, isPending: true, merchantKey: 'department_of_education' } as any,
+      { id: 2, accountId: 33, date: '2026-11-02', amount: -122.64, isPending: true, merchantKey: 'savi_provisions' } as any,
+    ];
+
+    // 1. Even if simplefinAccounts is not yet loaded, itemized pending transactions are deducted from postedBalance
+    const withoutSf = computeSafeCheckingBalances({
+      accounts,
+      simplefinAccounts: [],
+      pendingTransactions,
+    });
+    expect(withoutSf.postedBalance).toBe(5005.45);
+    expect(withoutSf.itemizedPendingOutflow).toBe(319.97);
+    expect(withoutSf.availableBalance).toBe(4685.48);
+    expect(withoutSf.pendingHoldAmount).toBe(319.97);
+
+    // 2. When simplefinAccounts IS loaded, available_balance already includes the $319.97 pending txns on Truist 5463,
+    // so they are NOT subtracted a second time; meanwhile BoA 6669's un-itemized $2,340.99 hold is captured.
+    const withSf = computeSafeCheckingBalances({
+      accounts,
+      simplefinAccounts: [
+        { strictly_account_id: 33, name: 'Truist 5463', balance: 1318.76, available_balance: 998.79 },
+        { strictly_account_id: 19, name: 'Adv Plus Banking - 6669', balance: 3686.69, available_balance: 1345.70 },
+      ],
+      pendingTransactions,
+    });
+    expect(withSf.postedBalance).toBe(5005.45);
+    expect(withSf.availableBalance).toBe(2344.49); // 998.79 + 1345.70 (zero double-counting!)
+    expect(withSf.pendingHoldAmount).toBe(2660.96); // 319.97 + 2340.99
+    expect(withSf.unitemizedHoldByAccountId.get(33)).toBeUndefined();
+    expect(withSf.unitemizedHoldByAccountId.get(19)).toBe(2340.99);
+  });
+
+  it('reconciles pending and settled current-month charges and un-itemized holds against recurring bills so Safe-to-Spend never double-counts', () => {
+    const now = new Date();
+    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 3);
+    const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-03`;
+    const curChargeDate = `${curMonth}-03`;
+
+    const recurrenceMap = new Map<string, RecurrenceInfo>([
+      [
+        'us_department_of_education',
+        {
+          kind: 'monthly',
+          count: 4,
+          meanIntervalDays: 30,
+          meanAmount: 197.33,
+          estMonthlyCost: 197.33,
+          lastDate: prevMonthStr,
+          accountId: 33,
+          source: 'auto',
+        },
+      ],
+      [
+        'rocket_mortgage',
+        {
+          kind: 'monthly',
+          count: 4,
+          meanIntervalDays: 30,
+          meanAmount: 2272.21,
+          estMonthlyCost: 2272.21,
+          lastDate: prevMonthStr,
+          accountId: 19,
+          source: 'auto',
+        },
+      ],
+    ]);
+
+    const rawMerchants = [
+      {
+        merchantKey: 'us_department_of_education',
+        category: 'Student Loan',
+        monthlyAverage: 197.33,
+        occurrences: 4,
+        accountId: 33,
+        lastDate: prevMonthStr,
+      } as any,
+      {
+        merchantKey: 'rocket_mortgage',
+        category: 'Mortgage',
+        monthlyAverage: 2272.21,
+        occurrences: 4,
+        accountId: 19,
+        lastDate: prevMonthStr,
+      } as any,
+      {
+        merchantKey: 'the_home_depot',
+        category: 'Housing',
+        monthlyAverage: 450,
+        occurrences: 3,
+        accountId: 33,
+        lastDate: prevMonthStr,
+      } as any,
+    ];
+
+    const currentMonthTransactions = [
+      {
+        id: 101,
+        accountId: 33,
+        date: curChargeDate,
+        description: 'PENDING - DEPARTMENT OF EDUCATION',
+        merchantKey: 'department_of_education',
+        category: 'Uncategorized',
+        amount: -197.33,
+        isPending: true,
+      } as any,
+    ];
+
+    const unitemizedHolds = new Map<number, number>([[19, 2340.99]]);
+
+    const consolidated = consolidateRecurringMerchants(
+      rawMerchants,
+      recurrenceMap,
+      currentMonthTransactions,
+      unitemizedHolds
+    );
+
+    // Home Depot retail store in Housing category is filtered out of recurring bills
+    expect(consolidated.map((m) => m.merchantKey)).toEqual([
+      'rocket_mortgage',
+      'us_department_of_education',
+    ]);
+
+    // Both bills are recognized as paid/held this month so neither is subtracted a second time in Safe-to-Spend
+    for (const m of consolidated) {
+      const status = getMerchantBillStatus(
+        m.merchantKey,
+        curMonth,
+        recurrenceMap,
+        now,
+        m.accountId,
+        m.lastDate
+      );
+      expect(status.isPaidThisMonth).toBe(true);
+    }
   });
 });
