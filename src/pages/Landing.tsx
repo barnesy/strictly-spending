@@ -40,6 +40,19 @@ const DEMO_CHAPTERS: DemoChapter[] = [
   { id: 6, label: 'On-Device AI & Themes', time: 52.43 },
 ];
 
+const MOBILE_CHAPTERS: DemoChapter[] = [
+  { id: 1, label: 'Charts & Smart Search', time: 1.45 },
+  { id: 2, label: 'Timeline & Safe-to-Spend', time: 9.57 },
+  { id: 3, label: 'Pocket Sort & Forecast', time: 20.39 },
+  { id: 4, label: 'Balance Sheet & Ask AI', time: 33.61 },
+];
+
+const MOBILE_HIGHLIGHTS = [
+  'One-handed bottom tab bar for Dashboard, Budget, Forecast, Loans & Sort',
+  '100% local SQLite & IndexedDB storage with optional encrypted P2P sync',
+  'Install straight from Safari on iPhone or via APK / WebAPK on Android',
+];
+
 interface FeatureCardItem {
   title: string;
   description: string;
@@ -197,16 +210,16 @@ function PlatformDownloadGrid({
   );
 }
 
-function VideoShowcase({ onLaunchDemo }: { onLaunchDemo?: () => void }) {
+function useChapterPlayback(chapters: DemoChapter[]) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [activeChapterId, setActiveChapterId] = useState<number>(1);
+  const [activeChapterId, setActiveChapterId] = useState<number>(chapters[0]?.id ?? 1);
 
   const handleTimeUpdate = () => {
     const vid = videoRef.current;
     if (!vid) return;
     const t = vid.currentTime;
-    let current = DEMO_CHAPTERS[0].id;
-    for (const ch of DEMO_CHAPTERS) {
+    let current = chapters[0]?.id ?? 1;
+    for (const ch of chapters) {
       if (t + 0.15 >= ch.time) {
         current = ch.id;
       }
@@ -221,6 +234,57 @@ function VideoShowcase({ onLaunchDemo }: { onLaunchDemo?: () => void }) {
     vid.currentTime = chapter.time;
     void vid.play().catch(() => {});
   };
+
+  return { videoRef, activeChapterId, handleTimeUpdate, handleSelectChapter };
+}
+
+function ChapterChipBar({
+  chapters,
+  activeChapterId,
+  onSelect,
+  justify = 'center',
+}: {
+  chapters: DemoChapter[];
+  activeChapterId: number;
+  onSelect: (chapter: DemoChapter) => void;
+  justify?: 'center' | 'flex-start' | { xs?: string; sm?: string; md?: string };
+}) {
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: justify, gap: 1 }}>
+      {chapters.map((chapter) => {
+        const isActive = activeChapterId === chapter.id;
+        return (
+          <Chip
+            key={chapter.id}
+            label={`${chapter.id}. ${chapter.label}`}
+            size="small"
+            clickable
+            onClick={() => onSelect(chapter)}
+            sx={{
+              fontWeight: isActive ? 700 : 600,
+              fontSize: '0.78rem',
+              height: 30,
+              borderRadius: '8px',
+              bgcolor: isActive ? '#EFF6FF' : '#FFFFFF',
+              color: isActive ? '#1D4ED8' : '#374151',
+              border: '1px solid',
+              borderColor: isActive ? '#93C5FD' : '#E5E7EB',
+              boxShadow: isActive ? '0 1px 3px rgba(37,99,235,0.15)' : 'none',
+              '&:hover': {
+                bgcolor: isActive ? '#DBEAFE' : '#F3F4F6',
+                borderColor: isActive ? '#60A5FA' : '#D1D5DB',
+              },
+              transition: 'all 0.15s ease',
+            }}
+          />
+        );
+      })}
+    </Box>
+  );
+}
+
+function VideoShowcase({ onLaunchDemo }: { onLaunchDemo?: () => void }) {
+  const { videoRef, activeChapterId, handleTimeUpdate, handleSelectChapter } = useChapterPlayback(DEMO_CHAPTERS);
 
   return (
     <Box id="demo-video" sx={{ maxWidth: '1200px', mx: 'auto', width: '100%', scrollMarginTop: '24px' }}>
@@ -312,41 +376,218 @@ function VideoShowcase({ onLaunchDemo }: { onLaunchDemo?: () => void }) {
             borderTop: '1px solid #E5E7EB',
             px: { xs: 1.5, sm: 2.5 },
             py: 1.5,
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            gap: 1,
           }}
         >
-          {DEMO_CHAPTERS.map((chapter) => {
-            const isActive = activeChapterId === chapter.id;
-            return (
-              <Chip
-                key={chapter.id}
-                label={`${chapter.id}. ${chapter.label}`}
-                size="small"
-                clickable
-                onClick={() => handleSelectChapter(chapter)}
+          <ChapterChipBar
+            chapters={DEMO_CHAPTERS}
+            activeChapterId={activeChapterId}
+            onSelect={handleSelectChapter}
+          />
+        </Box>
+      </Paper>
+    </Box>
+  );
+}
+
+function MobileShowcase({
+  onOpenIos,
+  onLaunchDemo,
+}: {
+  onOpenIos: () => void;
+  onLaunchDemo?: () => void;
+}) {
+  const { videoRef, activeChapterId, handleTimeUpdate, handleSelectChapter } = useChapterPlayback(MOBILE_CHAPTERS);
+
+  return (
+    <Box
+      id="mobile-demo"
+      sx={{
+        mt: { xs: 12, md: 16 },
+        scrollMarginTop: '24px',
+        textAlign: { xs: 'center', md: 'left' },
+      }}
+    >
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 3, sm: 4.5, md: 6 },
+          borderRadius: '20px',
+          bgcolor: '#FFFFFF',
+          border: '1px solid #E5E7EB',
+          boxShadow: '0 20px 60px rgba(15, 23, 42, 0.05)',
+        }}
+      >
+        <Grid container spacing={{ xs: 4, md: 6 }} alignItems="center">
+          <Grid size={{ xs: 12, md: 7 }}>
+            <Chip
+              icon={<PhoneIphoneIcon sx={{ fontSize: 16, color: '#1D4ED8 !important' }} />}
+              label="Designed for iPhone & Android"
+              size="small"
+              sx={{
+                mb: 2,
+                bgcolor: 'rgba(37,99,235,0.08)',
+                color: '#1D4ED8',
+                fontWeight: 700,
+                border: '1px solid rgba(37,99,235,0.2)',
+              }}
+            />
+            <Typography
+              variant="h2"
+              sx={{
+                fontWeight: 800,
+                fontSize: { xs: '2rem', sm: '2.5rem', md: '3rem' },
+                lineHeight: 1.12,
+                mb: 2,
+                color: '#111827',
+              }}
+            >
+              Your entire budget in your pocket.
+            </Typography>
+            <Typography
+              sx={{
+                color: '#4B5563',
+                fontSize: { xs: '1.02rem', md: '1.125rem' },
+                lineHeight: 1.65,
+                mb: 3,
+              }}
+            >
+              Not a stripped-down companion app. Every chart, plain-English search filter, cashflow curve, Safe-to-Spend math breakdown, Pocket Sort card, and on-device AI check adapts effortlessly to a single thumb.
+            </Typography>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mb: 3.5, alignItems: { xs: 'center', md: 'flex-start' } }}>
+              {MOBILE_HIGHLIGHTS.map((item) => (
+                <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1.25, textAlign: 'left', maxWidth: 520 }}>
+                  <Box
+                    sx={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      bgcolor: 'rgba(16,185,129,0.12)',
+                      color: '#059669',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CheckIcon sx={{ fontSize: 14 }} />
+                  </Box>
+                  <Typography variant="body2" sx={{ color: '#374151', fontWeight: 500, lineHeight: 1.45 }}>
+                    {item}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: '#6B7280',
+                mb: 1.25,
+              }}
+            >
+              Jump to mobile scene
+            </Typography>
+            <Box sx={{ mb: 3.5 }}>
+              <ChapterChipBar
+                chapters={MOBILE_CHAPTERS}
+                activeChapterId={activeChapterId}
+                onSelect={handleSelectChapter}
+                justify={{ xs: 'center', md: 'flex-start' }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: { xs: 'center', md: 'flex-start' } }}>
+              <Button
+                variant="contained"
+                startIcon={<AppleIcon />}
+                onClick={onOpenIos}
                 sx={{
-                  fontWeight: isActive ? 700 : 600,
-                  fontSize: '0.78rem',
-                  height: 30,
-                  borderRadius: '8px',
-                  bgcolor: isActive ? '#EFF6FF' : '#FFFFFF',
-                  color: isActive ? '#1D4ED8' : '#374151',
-                  border: '1px solid',
-                  borderColor: isActive ? '#93C5FD' : '#E5E7EB',
-                  boxShadow: isActive ? '0 1px 3px rgba(37,99,235,0.15)' : 'none',
-                  '&:hover': {
-                    bgcolor: isActive ? '#DBEAFE' : '#F3F4F6',
-                    borderColor: isActive ? '#60A5FA' : '#D1D5DB',
-                  },
-                  transition: 'all 0.15s ease',
+                  borderRadius: '10px',
+                  px: 2.5,
+                  py: 1.15,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  bgcolor: '#111827',
+                  color: '#FFFFFF',
+                  '&:hover': { bgcolor: '#1F2937' },
+                }}
+              >
+                Install on iPhone
+              </Button>
+              {onLaunchDemo && (
+                <Button
+                  variant="outlined"
+                  startIcon={<PlayArrowIcon />}
+                  onClick={onLaunchDemo}
+                  sx={{
+                    borderRadius: '10px',
+                    px: 2.5,
+                    py: 1.15,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderColor: '#D1D5DB',
+                    color: '#111827',
+                    '&:hover': { bgcolor: '#F3F4F6', borderColor: '#9CA3AF' },
+                  }}
+                >
+                  Try Live Demo
+                </Button>
+              )}
+            </Box>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Box
+              sx={{
+                maxWidth: { xs: 280, sm: 315 },
+                mx: 'auto',
+                p: '11px',
+                borderRadius: '44px',
+                bgcolor: '#0F172A',
+                border: '2px solid #334155',
+                boxShadow: '0 28px 70px rgba(15, 23, 42, 0.22)',
+              }}
+            >
+              <Box
+                sx={{
+                  width: 58,
+                  height: 5,
+                  borderRadius: '99px',
+                  bgcolor: '#334155',
+                  mx: 'auto',
+                  mt: 0.25,
+                  mb: 1.25,
                 }}
               />
-            );
-          })}
-        </Box>
+              <Box
+                sx={{
+                  borderRadius: '33px',
+                  overflow: 'hidden',
+                  bgcolor: '#F6F5FA',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  lineHeight: 0,
+                }}
+              >
+                <video
+                  ref={videoRef}
+                  src={`${import.meta.env.BASE_URL}strictly-spending-mobile.mp4`}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  controls
+                  onTimeUpdate={handleTimeUpdate}
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+              </Box>
+            </Box>
+          </Grid>
+        </Grid>
       </Paper>
     </Box>
   );
@@ -538,6 +779,13 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
             sx={{ textTransform: 'none', fontWeight: 600, color: '#4B5563', '&:hover': { color: '#111827', bgcolor: 'rgba(0,0,0,0.04)' } }}
           >
             Features
+          </Button>
+          <Button
+            size="small"
+            onClick={() => scrollToSection('mobile-demo')}
+            sx={{ textTransform: 'none', fontWeight: 600, color: '#4B5563', '&:hover': { color: '#111827', bgcolor: 'rgba(0,0,0,0.04)' } }}
+          >
+            Mobile
           </Button>
           <Button
             size="small"
@@ -759,6 +1007,12 @@ export default function Landing({ onLaunchDemo }: LandingProps) {
             ))}
           </Grid>
         </Box>
+
+        {/* Mobile Walkthrough Showcase */}
+        <MobileShowcase
+          onOpenIos={() => setIosModalOpen(true)}
+          onLaunchDemo={onLaunchDemo}
+        />
 
         <Box id="download" sx={{ mt: 16, mb: 8, py: 8, borderTop: '1px solid rgba(0,0,0,0.08)', textAlign: 'center', scrollMarginTop: '24px' }}>
           <Typography variant="h4" sx={{ fontWeight: 700, mb: 4, color: '#111827' }}>
