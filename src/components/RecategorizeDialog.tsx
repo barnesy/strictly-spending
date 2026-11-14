@@ -134,6 +134,70 @@ export default function RecategorizeDialog({ txn, onClose }: Props) {
               Transaction
             </Typography>
             <Typography>{txn.description}</Typography>
+            {txn.isPending && txn.id != null && (
+              <Alert
+                severity="warning"
+                sx={{ mt: 1, mb: 0.5, py: 0.75, alignItems: 'center' }}
+                action={
+                  <Stack direction="row" spacing={0.75}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      disabled={saving}
+                      onClick={async () => {
+                        setSaving(true);
+                        try {
+                          await api.updateTransaction(txn.id!, {
+                            ...txn,
+                            isPending: false,
+                          });
+                          await queryClient.invalidateQueries();
+                          window.dispatchEvent(new Event('db-update'));
+                          onClose();
+                        } catch (e: unknown) {
+                          setError((e as Error)?.message || String(e));
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      sx={{ textTransform: 'none', fontSize: '0.72rem', py: 0.25, px: 1, whiteSpace: 'nowrap' }}
+                    >
+                      Mark Settled
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      disabled={saving}
+                      onClick={async () => {
+                        setSaving(true);
+                        try {
+                          await api.deleteTransaction(txn.id!);
+                          await queryClient.invalidateQueries();
+                          window.dispatchEvent(new Event('db-update'));
+                          onClose();
+                        } catch (e: unknown) {
+                          setError((e as Error)?.message || String(e));
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      sx={{ textTransform: 'none', fontSize: '0.72rem', py: 0.25, px: 1, whiteSpace: 'nowrap' }}
+                    >
+                      Delete Hold
+                    </Button>
+                  </Stack>
+                }
+              >
+                <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
+                  ⏳ Pending Authorization Hold
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>
+                  If this hold already settled under a different amount/description or was canceled, mark it settled or delete it.
+                </Typography>
+              </Alert>
+            )}
             <Typography variant="caption" color="text.secondary">
               {txn.date} · Currently:{' '}
               <strong>{txn.category}</strong>

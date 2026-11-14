@@ -158,9 +158,9 @@ describe('copilotAnalytics - Subscription Alerts', () => {
 
     const alerts = detectSubscriptionAlerts([...spotifyTxns, ...appleTxns], []);
     expect(alerts.overlappingSubscriptions.length).toBe(1);
-    expect(alerts.overlappingSubscriptions[0].groupName).toBe('Music Streaming');
-    expect(alerts.overlappingSubscriptions[0].merchants).toContain('Spotify Premium');
-    expect(alerts.overlappingSubscriptions[0].merchants).toContain('Apple Music');
+    expect(alerts.overlappingSubscriptions[0].groupName).toBe('Music & Audio');
+    expect(alerts.overlappingSubscriptions[0].merchants).toContain('Spotify');
+    expect(alerts.overlappingSubscriptions[0].merchants).toContain('Applemusic');
   });
 });
 

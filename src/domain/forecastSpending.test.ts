@@ -8,7 +8,11 @@ import {
   getStreamPaycheckSchedule,
   normalizeTimelineMerchantKey,
   reconcileMonthTimeline,
+  setBillManuallyMarkedPaid,
+  isBillManuallyMarkedPaid,
 } from './forecastSpending';
+import { toCents, fromCents, sumDollars, addDollars, subDollars } from './money';
+import { normalizeCategoryName, CANONICAL_CATEGORIES } from './categories';
 import type { RecurrenceInfo } from './recurrence';
 
 describe('forecastSpending — bill-aware current-month projections', () => {
@@ -661,5 +665,81 @@ describe('forecastSpending — educated-guess timeline reconciliation without du
       );
       expect(status.isPaidThisMonth).toBe(true);
     }
+  });
+
+  it('supports manual bill-paid overrides in getMerchantBillStatus and reconcileMonthTimeline', () => {
+    const recurrenceMap = new Map<string, RecurrenceInfo>([
+      [
+        'Water Utility',
+        {
+          kind: 'monthly',
+          count: 5,
+          meanIntervalDays: 30,
+          meanAmount: 65.5,
+          estMonthlyCost: 65.5,
+          lastDate: '2026-09-20',
+          accountId: 19,
+          source: 'auto',
+        },
+      ],
+    ]);
+
+    const refDate = new Date(2026, 9, 15);
+    const beforeStatus = getMerchantBillStatus('Water Utility', '2026-10', recurrenceMap, refDate, 19);
+    expect(beforeStatus.isPaidThisMonth).toBe(false);
+    expect(beforeStatus.isManuallyMarkedPaid).toBeFalsy();
+
+    setBillManuallyMarkedPaid('2026-10', 'Water Utility', true, 19);
+    expect(isBillManuallyMarkedPaid('2026-10', 'Water Utility', 19)).toBe(true);
+
+    const afterStatus = getMerchantBillStatus('Water Utility', '2026-10', recurrenceMap, refDate, 19);
+    expect(afterStatus.isPaidThisMonth).toBe(true);
+    expect(afterStatus.isManuallyMarkedPaid).toBe(true);
+    expect(afterStatus.countdownText).toBe('Marked paid');
+
+    const reconciled = reconcileMonthTimeline({
+      monthKey: '2026-10',
+      daysInMonth: 31,
+      transactions: [],
+      recurrenceMap,
+      consolidatedMerchants: [
+        {
+          merchantKey: 'Water Utility',
+          category: 'Utilities',
+          monthlyAverage: 65.5,
+          occurrences: 5,
+          accountId: 19,
+          lastDate: '2026-09-20',
+        } as any,
+      ],
+      incomeStreams: [],
+      taxRate: 0,
+      isCurrentMonth: true,
+      todayDay: 15,
+    });
+    expect(reconciled.upcomingBillsByDay.size).toBe(0);
+    expect(reconciled.allExpectedBills[0]?.status).toBe('filled');
+
+    // Clean up override
+    setBillManuallyMarkedPaid('2026-10', 'Water Utility', false, 19);
+    expect(isBillManuallyMarkedPaid('2026-10', 'Water Utility', 19)).toBe(false);
+  });
+});
+
+describe('money & categories domain helpers', () => {
+  it('performs exact integer-cents arithmetic without floating-point drift', () => {
+    expect(toCents(19.99)).toBe(1999);
+    expect(fromCents(1999 as any)).toBe(19.99);
+    expect(addDollars(0.1, 0.2)).toBe(0.3);
+    expect(subDollars(1000.0, 999.99)).toBe(0.01);
+    expect(sumDollars([1318.76, 3686.69])).toBe(5005.45);
+  });
+
+  it('normalizes legacy category aliases into canonical categories', () => {
+    expect(normalizeCategoryName('Gas Station')).toBe('Transportation');
+    expect(normalizeCategoryName('Dining')).toBe('Restaurants & Coffee');
+    expect(normalizeCategoryName('Student Loan')).toBe('Student Loans');
+    expect(normalizeCategoryName('Home Loan')).toBe('Mortgage');
+    expect(Object.keys(CANONICAL_CATEGORIES).length).toBeGreaterThan(15);
   });
 });

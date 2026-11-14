@@ -16,8 +16,10 @@ import {
   consolidateRecurringMerchants,
   formatCleanMerchantName,
   getMerchantBillStatus,
+  setBillManuallyMarkedPaid,
   type CategoryProjection,
 } from '../domain/forecastSpending';
+import SafeToSpendBreakdownPopover from '../components/SafeToSpendBreakdownPopover';
 import {
   getAccountSavingsTransferOut,
   getOperatingCashAccounts,
@@ -80,6 +82,13 @@ export default function Budget() {
   const incomeStreams = useForecastStore((s) => s.incomeStreams);
   const simplefinAccounts = useSimpleFinStore((s) => s.accounts);
   const fetchSimplefinAccounts = useSimpleFinStore((s) => s.fetchAccounts);
+  const [, setManualBillRev] = useState(0);
+
+  useEffect(() => {
+    const onManualBillChange = () => setManualBillRev((r) => r + 1);
+    window.addEventListener('manual-paid-bills-changed', onManualBillChange);
+    return () => window.removeEventListener('manual-paid-bills-changed', onManualBillChange);
+  }, []);
 
   useEffect(() => {
     if (simplefinAccounts.length === 0) {
@@ -839,6 +848,34 @@ export default function Budget() {
                         sx={{ height: 21, fontSize: '0.68rem', fontWeight: 600 }}
                       />
                     )}
+                    <SafeToSpendBreakdownPopover
+                      monthKey={currentCalMonth}
+                      scopeLabel={isAllSelected ? 'All Checking Accounts' : scopeLabel}
+                      postedBalance={currentAccountBalance}
+                      availableBalance={availableCheckingBalance}
+                      pendingHoldAmount={pendingHoldAmount}
+                      itemizedPendingOutflow={safeBalanceSummary.itemizedPendingOutflow}
+                      unitemizedBankHold={safeBalanceSummary.unitemizedBankHold}
+                      nextPaydayLabel={safeToSpendUntilPaydayInfo.nextPaydayLabel}
+                      daysUntilPayday={safeToSpendUntilPaydayInfo.daysUntilPayday}
+                      nextPaycheckAmount={safeToSpendUntilPaydayInfo.nextPaycheckAmount}
+                      billsDueBeforePayday={safeToSpendUntilPaydayInfo.billsDueBeforePayday.map((b) => ({
+                        merchantKey: b.merchantKey,
+                        category: b.category,
+                        accountId: b.accountId,
+                        amount: b.monthlyAverage,
+                        expectedShortLabel: b.status.expectedShortLabel,
+                        expectedDate: b.status.expectedDate,
+                      }))}
+                      billsDueBeforePaydayTotal={safeToSpendUntilPaydayInfo.billsDueBeforePaydayTotal}
+                      safeToSpend={safeToSpendUntilPaydayInfo.safeToSpend}
+                      dailyAllowance={safeToSpendUntilPaydayInfo.dailyAllowance}
+                      remainingMonthIncome={remainingMonthIncome}
+                      remainingMonthSpend={currentMonthForecastSummary.remainingSpend}
+                      savingsTransferOut={savingsTransferOut}
+                      projectedEndOfMonthBalance={projectedEndOfMonthBalance}
+                      onManualBillChange={() => setManualBillRev((r) => r + 1)}
+                    />
                   </Stack>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35, lineHeight: 1.4 }}>
                     Available Cash (<strong>{usd.format(availableCheckingBalance)}</strong>
@@ -2256,7 +2293,9 @@ function RecurringBudgetCard({
                                 {billStatus.isPaidThisMonth && (
                                   <Tooltip
                                     title={
-                                      billStatus.lastDate
+                                      billStatus.isManuallyMarkedPaid
+                                        ? 'Manually marked paid for this month — click to undo'
+                                        : billStatus.lastDate
                                         ? `Paid this month on ${billStatus.lastDate}`
                                         : 'Paid this month'
                                     }
@@ -2264,14 +2303,34 @@ function RecurringBudgetCard({
                                   >
                                     <Chip
                                       size="small"
+                                      onClick={
+                                        billStatus.isManuallyMarkedPaid
+                                          ? (e) => {
+                                              e.stopPropagation();
+                                              setBillManuallyMarkedPaid(
+                                                currentCalMonth,
+                                                item.merchantKey,
+                                                false,
+                                                item.accountId
+                                              );
+                                            }
+                                          : undefined
+                                      }
                                       label={
-                                        billStatus.lastPaidShortLabel
+                                        billStatus.isManuallyMarkedPaid
+                                          ? '✓ Paid (Manual · Undo)'
+                                          : billStatus.lastPaidShortLabel
                                           ? `✓ Paid ${billStatus.lastPaidShortLabel}`
                                           : '✓ Paid'
                                       }
                                       color="success"
                                       variant="outlined"
-                                      sx={{ height: 20, fontSize: '0.68rem', fontWeight: 600 }}
+                                      sx={{
+                                        height: 20,
+                                        fontSize: '0.68rem',
+                                        fontWeight: 600,
+                                        cursor: billStatus.isManuallyMarkedPaid ? 'pointer' : 'default',
+                                      }}
                                     />
                                   </Tooltip>
                                 )}
@@ -2281,13 +2340,22 @@ function RecurringBudgetCard({
                                     <Tooltip
                                       title={
                                         billStatus.expectedDate && billStatus.lastDate
-                                          ? `Expected around ${billStatus.expectedDate} based on last payment on ${billStatus.lastDate}`
-                                          : 'Expected this month based on recurring history'
+                                          ? `Expected around ${billStatus.expectedDate} (last paid ${billStatus.lastDate}) — click to mark paid for this month`
+                                          : 'Expected this month — click to mark paid for this month'
                                       }
                                       arrow
                                     >
                                       <Chip
                                         size="small"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setBillManuallyMarkedPaid(
+                                            currentCalMonth,
+                                            item.merchantKey,
+                                            true,
+                                            item.accountId
+                                          );
+                                        }}
                                         label={
                                           billStatus.countdownText
                                             ? `⏳ ${billStatus.countdownText}${billStatus.expectedShortLabel ? ` (~${billStatus.expectedShortLabel})` : ''}`
@@ -2297,7 +2365,7 @@ function RecurringBudgetCard({
                                         }
                                         color={isDueSoon ? 'error' : 'warning'}
                                         variant={isDueSoon ? 'filled' : 'outlined'}
-                                        sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+                                        sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer' }}
                                       />
                                     </Tooltip>
 

@@ -23,6 +23,7 @@ import { buildDashboardFilters, useConsolidatedRecurringMerchants } from '../hoo
 import {
   consolidateRecurringMerchants,
   reconcileMonthTimeline,
+  setBillManuallyMarkedPaid,
   type TimelineExpectedBill,
   type TimelineExpectedIncome,
   type TimelineExpectedSavings,
@@ -142,6 +143,13 @@ export default function MonthTimelineView({
     return true;
   });
   const [selectedDay, setSelectedDay] = useState<number>(() => todayDay || 1);
+  const [manualBillRev, setManualBillRev] = useState(0);
+
+  useEffect(() => {
+    const onManualBillChange = () => setManualBillRev((r) => r + 1);
+    window.addEventListener('manual-paid-bills-changed', onManualBillChange);
+    return () => window.removeEventListener('manual-paid-bills-changed', onManualBillChange);
+  }, []);
   const [mobileListTab, setMobileListTab] = useState<'upcoming' | 'day'>(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('dashboard:timelineMobileTab') === 'day') {
       return 'day';
@@ -288,6 +296,7 @@ export default function MonthTimelineView({
       filters.enabledAccountIds,
       isActiveOrCurrentMonth,
       todayDay,
+      manualBillRev,
     ]
   );
 
@@ -2310,13 +2319,46 @@ export default function MonthTimelineView({
                           <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-word' }}>
                             {b.displayName}
                           </Typography>
-                          <Chip
-                            size="small"
-                            label={isFilled ? `✓ Paid ${monthNum}/${b.actualDay || b.expectedDay}` : `⏳ Due ${monthNum}/${b.expectedDay}`}
-                            color={isFilled ? 'success' : 'warning'}
-                            variant="outlined"
-                            sx={{ height: 19, fontSize: '0.66rem', fontWeight: 700 }}
-                          />
+                          <Tooltip
+                            title={
+                              !isFilled
+                                ? 'Click to mark this bill paid for this month'
+                                : b.isManuallyMarkedPaid
+                                ? 'Manually marked paid — click to undo'
+                                : 'Matched to posted transaction'
+                            }
+                            arrow
+                          >
+                            <Chip
+                              size="small"
+                              onClick={
+                                !isFilled || b.isManuallyMarkedPaid
+                                  ? () =>
+                                      setBillManuallyMarkedPaid(
+                                        currentMonth,
+                                        b.merchantKey,
+                                        !isFilled,
+                                        b.accountId
+                                      )
+                                  : undefined
+                              }
+                              label={
+                                b.isManuallyMarkedPaid
+                                  ? '✓ Paid (Manual · Undo)'
+                                  : isFilled
+                                  ? `✓ Paid ${monthNum}/${b.actualDay || b.expectedDay}`
+                                  : `⏳ Due ${monthNum}/${b.expectedDay} · Mark Paid`
+                              }
+                              color={isFilled ? 'success' : 'warning'}
+                              variant="outlined"
+                              sx={{
+                                height: 19,
+                                fontSize: '0.66rem',
+                                fontWeight: 700,
+                                cursor: !isFilled || b.isManuallyMarkedPaid ? 'pointer' : 'default',
+                              }}
+                            />
+                          </Tooltip>
                         </Stack>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
                           {b.category}
@@ -2484,10 +2526,32 @@ export default function MonthTimelineView({
                     <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
                       <Chip
                         size="small"
-                        label={b.status === 'filled' ? '✓ Paid' : '⏳ Expected'}
+                        onClick={
+                          b.status !== 'filled' || b.isManuallyMarkedPaid
+                            ? () =>
+                                setBillManuallyMarkedPaid(
+                                  currentMonth,
+                                  b.merchantKey,
+                                  b.status !== 'filled',
+                                  b.accountId
+                                )
+                            : undefined
+                        }
+                        label={
+                          b.isManuallyMarkedPaid
+                            ? '✓ Paid (Undo)'
+                            : b.status === 'filled'
+                            ? '✓ Paid'
+                            : '⏳ Expected · Mark Paid'
+                        }
                         color={b.status === 'filled' ? 'success' : 'warning'}
                         variant="outlined"
-                        sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                        sx={{
+                          height: 18,
+                          fontSize: '0.65rem',
+                          fontWeight: 700,
+                          cursor: b.status !== 'filled' || b.isManuallyMarkedPaid ? 'pointer' : 'default',
+                        }}
                       />
                       <Box sx={{ minWidth: 0, flex: 1 }}>
                         <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>

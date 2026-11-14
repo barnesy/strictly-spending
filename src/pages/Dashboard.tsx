@@ -840,24 +840,39 @@ export default function Dashboard() {
                     );
                   })()}
                   {t.description}
-                  {t.isPending && (
-                    <Tooltip title="Pending bank authorization — final amount may update when settled (e.g. after tip or gas fill-up)">
-                      <Chip
-                        label="⏳ Pending"
-                        size="small"
-                        color="warning"
-                        variant="outlined"
-                        sx={{
-                          ml: 0.75,
-                          height: 18,
-                          fontSize: '0.65rem',
-                          fontWeight: 700,
-                          verticalAlign: 'middle',
-                          '& .MuiChip-label': { px: 0.6 },
-                        }}
-                      />
-                    </Tooltip>
-                  )}
+                  {t.isPending && (() => {
+                    const ageDays = Math.floor((Date.now() - new Date(`${t.date}T12:00:00`).getTime()) / 86400000);
+                    const isStaleHold = ageDays > 7;
+                    return (
+                      <Tooltip
+                        title={
+                          isStaleHold
+                            ? `Stale pending hold (${ageDays}d old) — click to mark settled or remove if superseded`
+                            : 'Pending bank authorization — click to manage or recategorize'
+                        }
+                      >
+                        <Chip
+                          label={isStaleHold ? '⚠️ Stale Hold' : '⏳ Pending'}
+                          size="small"
+                          color={isStaleHold ? 'error' : 'warning'}
+                          variant="outlined"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditTxn(t);
+                          }}
+                          sx={{
+                            ml: 0.75,
+                            height: 18,
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            verticalAlign: 'middle',
+                            cursor: 'pointer',
+                            '& .MuiChip-label': { px: 0.6 },
+                          }}
+                        />
+                      </Tooltip>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell sx={{ py: 0.75, px: 1 }}>
                   <Tooltip title="Click to recategorize">

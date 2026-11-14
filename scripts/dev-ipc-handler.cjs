@@ -14,7 +14,13 @@ function getDbPath() {
 }
 
 function getDb() {
-  return new DatabaseSync(getDbPath());
+  const db = new DatabaseSync(getDbPath());
+  try {
+    db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;');
+  } catch {
+    // ignore pragma error on read-only handles
+  }
+  return db;
 }
 
 function buildWhereClause(filters = {}) {
@@ -1640,7 +1646,7 @@ async function handleIpc(cmd, args = {}) {
 
         function isPendingToSettledMatch(pendingDate, pendingCents, pendingDesc, settledDate, settledCents, settledDesc, settledRawDesc) {
           const daysDiff = Math.round((new Date(settledDate).getTime() - new Date(pendingDate).getTime()) / 86400000);
-          if (isNaN(daysDiff) || daysDiff < -1 || daysDiff > 5) return false;
+          if (isNaN(daysDiff) || daysDiff < -1 || daysDiff > 7) return false;
           if ((pendingCents < 0) !== (settledCents < 0)) return false;
 
           const descMatches = sfinDescriptionsMatch(pendingDesc, settledDesc) || sfinDescriptionsMatch(pendingDesc, settledRawDesc);
@@ -1653,7 +1659,7 @@ async function handleIpc(cmd, args = {}) {
               if (diff > 0 && diff <= Math.max(5000, pAbs)) return true;
               if (pAbs <= 200 && sAbs > pAbs) return true;
             }
-          } else if (daysDiff >= 0 && daysDiff <= 4 && pendingCents === settledCents) {
+          } else if (daysDiff >= 0 && daysDiff <= 5 && pendingCents === settledCents) {
             return true;
           }
           return false;
@@ -1833,11 +1839,14 @@ async function handleIpc(cmd, args = {}) {
             }
           }
 
-          // Pass 4: Reconcile remaining unclaimed vanished pending rows whose settled counterpart is already in DB
+          // Pass 4: Reconcile remaining unclaimed vanished pending rows whose settled counterpart is already in DB,
+          // or clean up stale expired pending holds (>10 days old).
+          const stalePendingCutoff = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
           const snapshot = accountCandidates.map(c => ({ ...c }));
           for (const cand of accountCandidates) {
             if (cand.claimed || cand.id === 0) continue;
-            const isVanishedSfin = cand.dedupKey.startsWith('simplefin_') && !liveSfinKeys.has(cand.dedupKey) && cand.date >= transitionMinDate;
+            const isVanishedSfin = cand.dedupKey.startsWith('simplefin_') && !liveSfinKeys.has(cand.dedupKey) &&
+              (cand.date >= transitionMinDate || (cand.isPending && cand.date <= stalePendingCutoff));
             if (!cand.isPending && !isVanishedSfin) continue;
 
             const matchedSettled = snapshot.find(other => {

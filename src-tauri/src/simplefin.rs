@@ -504,7 +504,18 @@ fn sfin_descriptions_match(desc_a: &str, desc_b: &str) -> bool {
 fn is_generic_settled_description(desc_norm: &str) -> bool {
     matches!(
         desc_norm,
-        "return" | "debit card return" | "online transfer" | "truist online transfer" | "transfer"
+        "return"
+            | "debit card return"
+            | "online transfer"
+            | "truist online transfer"
+            | "online from truist recurring"
+            | "truist online recurring"
+            | "transfer"
+            | "mail telephone order"
+            | "point of sale debit"
+            | "pos debit"
+            | "checkcard"
+            | "purchase"
     )
 }
 
@@ -524,7 +535,10 @@ fn is_pending_to_settled_match(
         return false;
     };
     let days_diff = (s_nd - p_nd).num_days();
-    if !(-1..=5).contains(&days_diff) {
+    if !(-1..=7).contains(&days_diff) {
+        return false;
+    }
+    if (pending_cents < 0) != (settled_cents < 0) {
         return false;
     }
 
@@ -549,8 +563,8 @@ fn is_pending_to_settled_match(
                 return true;
             }
         }
-    } else if (0..=4).contains(&days_diff) && pending_cents == settled_cents {
-        // 2. Exact dollar-and-cent match within 0..4 days where pending description was a placeholder
+    } else if (0..=5).contains(&days_diff) && pending_cents == settled_cents {
+        // 2. Exact dollar-and-cent match within 0..5 days where pending description was a placeholder
         //    (e.g. "Mail Telephone Order" -> "AT&T", "UNIQLO" -> "Return", "Transfer From 4322" -> "Online Transfer")
         return true;
     }
@@ -1067,7 +1081,10 @@ pub async fn sync_transactions_core(
         }
 
         // Pass 4: Reconcile any remaining unclaimed vanished SimpleFIN pending rows whose settled
-        // counterpart was already inserted during an earlier sync.
+        // counterpart was already inserted during an earlier sync, or clean up stale expired holds (>10 days old).
+        let stale_pending_cutoff = (chrono::Utc::now().date_naive() - chrono::Duration::days(10))
+            .format("%Y-%m-%d")
+            .to_string();
         let snapshot = account_candidates.clone();
         for cand in account_candidates.iter_mut() {
             if cand.claimed || cand.id == 0 {
@@ -1075,7 +1092,7 @@ pub async fn sync_transactions_core(
             }
             let is_vanished_sfin = cand.dedup_key.starts_with("simplefin_")
                 && !live_sfin_keys.contains(&cand.dedup_key)
-                && cand.date >= transition_min_date;
+                && (cand.date >= transition_min_date || (cand.is_pending && cand.date <= stale_pending_cutoff));
             if !cand.is_pending && !is_vanished_sfin {
                 continue;
             }

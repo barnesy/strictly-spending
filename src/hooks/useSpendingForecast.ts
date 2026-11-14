@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import {
   useCategories,
   useBudgets,
@@ -246,7 +246,16 @@ export function useSpendingForecast(options?: {
     return incCat?.color || '#2e7d32';
   }, [categories]);
 
+  const [manualBillRev, setManualBillRev] = useState(0);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => setManualBillRev((r) => r + 1);
+    window.addEventListener('manual-paid-bills-changed', handler);
+    return () => window.removeEventListener('manual-paid-bills-changed', handler);
+  }, []);
+
   const currentMonthProjections = useMemo(() => {
+    void manualBillRev;
     const actualSpendMap = historicalMonthlySpend.get(currentCalMonth) || new Map<string, number>();
     return computeCategoryProjections({
       categories,
@@ -264,6 +273,7 @@ export function useSpendingForecast(options?: {
       currentMonthTransactions,
     });
   }, [
+    manualBillRev,
     categories,
     budgets,
     consolidatedMerchants,
